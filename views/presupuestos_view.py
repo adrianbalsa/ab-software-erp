@@ -1,3 +1,4 @@
+from services.verifactu_service import VerifactuService
 import streamlit as st
 import pandas as pd
 from fpdf import FPDF
@@ -180,7 +181,6 @@ def generar_pdf_completo(datos):
     pdf.set_text_color(0, 0, 0)
     return bytes(pdf.output(dest='S'))
 
-
 def render_presupuestos_view(db):
     st.title("💰 Área Comercial y Financiera")
 
@@ -188,6 +188,16 @@ def render_presupuestos_view(db):
     if not eid:
         st.error("Error Critico: No se ha detectado el ID de empresa en la sesion.")
         return
+
+    # NUEVO: cargar datos empresa una sola vez por sesión
+    if 'datos_empresa' not in st.session_state:
+        try:
+            res_emp = db.table('empresas').select(
+                'nif, nombre_legal, nombre_comercial, direccion, municipio, provincia'
+            ).eq('id', eid).single().execute()
+            st.session_state['datos_empresa'] = res_emp.data if res_emp.data else {}
+        except Exception:
+            st.session_state['datos_empresa'] = {}
 
 
     tab_creacion, tab_gestion = st.tabs(["✨ Editor de Presupuestos (Calculadora)", "🗂️ Gestión de Facturación"])
@@ -466,7 +476,11 @@ L'équipe commerciale."""
             with col_accion_fac:
                 st.markdown("### ⚡ Emitir Factura")
                 st.caption("Convierte un presupuesto aceptado en factura oficial.")
-
+                
+                pendientes = df_hist[
+                    (df_hist["estado"].isin(["Pendiente", "Aceptado"])) &
+                    (df_hist["bloqueado"].fillna(False) == False)
+                ]
                 if not pendientes.empty:
                     opcion_fac = st.selectbox(
                         "Selecciona Presupuesto a Facturar:",
