@@ -421,7 +421,7 @@ L'équipe commerciale."""
             res = db.table("presupuestos").select(
                 "id, fecha, cliente, titulo, total_final, total_neto, impuestos, "
                 "moneda, estado, num_factura, numero_secuencial, hash_factura, "
-                "nif_cliente, nif_empresa, items, observaciones"
+                "nif_cliente, nif_empresa, items, observaciones, bloqueado, tipo_factura"
             ).eq("empresa_id", eid).order("fecha", desc=True).execute()
 
             df_hist = pd.DataFrame(res.data)
