@@ -92,3 +92,4 @@ ab_software/
 | `presupuestos_view.py` | `df_hist.get('tipo_factura')` (pandas no tiene `.get()`) | `.fillna('NORMAL')` |
 | `verifactu_service.py` | Métodos `anular_factura()` y `crear_factura_rectificativa()` llamados pero no definidos | Implementados |
 | `verify_public.py` | Creaba nueva conexión DB redundante | Recibe `db` como parámetro |
+

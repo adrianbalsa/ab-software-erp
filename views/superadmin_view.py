@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
-
+from services.pdf_service import generar_pdf_factura
 
 def render_superadmin_view(db):
     if st.session_state.get("rol") != "admin":
@@ -12,7 +12,7 @@ def render_superadmin_view(db):
     st.caption("Gestión global de empresas, usuarios y métricas del SaaS")
 
     tab_empresas, tab_usuarios, tab_metricas, tab_auditoria = st.tabs(
-        ["🏢 Empresas", "👤 Usuarios", "📊 Métricas SaaS", "🔍 Auditoría"]
+        ["🏢 Empresas", "👤 Usuarios", "📊 Métricas SaaS", "🔍 Auditoría", "📄 Facturación"]
     )
 
     # ─────────────────────────────────────────
@@ -173,62 +173,42 @@ def render_superadmin_view(db):
     # ─────────────────────────────────────────
     # TAB 3: MÉTRICAS SAAS
     # ─────────────────────────────────────────
-    with tab_metricas:
-        st.subheader("Métricas del negocio")
+with tab_metricas:
+        st.subheader("📈 Rendimiento Financiero SaaS")
 
         try:
-            res_emp = db.table("empresas").select("id, activa, plan_suscripcion, fecha_registro").execute()
-            todas_empresas = res_emp.data or []
-        except Exception:
-            todas_empresas = []
+            # 1. Obtener datos de la tabla facturas
+            res_fac = db.table("facturas").select("total_factura, fecha_emision, cuota_iva").execute()
+            df_fac = pd.DataFrame(res_fac.data or [])
 
-        try:
-            res_fac = db.table("presupuestos").select("id, total_final, estado, fecha_factura, empresa_id").eq("estado", "Facturado").execute()
-            facturas = res_fac.data or []
-        except Exception:
-            facturas = []
+            if not df_fac.empty:
+                df_fac['fecha_emision'] = pd.to_datetime(df_fac['fecha_emision'])
+                
+                # Cálculos económicos
+                total_bruto = df_fac['total_factura'].sum()
+                total_iva = df_fac['cuota_iva'].sum()
+                ingreso_neto = total_bruto - total_iva
+                n_clientes = df_fac['total_factura'].count()
+                arpu = ingreso_neto / n_clientes if n_clientes > 0 else 0
 
-        try:
-            res_usr2 = db.table("usuarios").select("id, activo").execute()
-            todos_usuarios = res_usr2.data or []
-        except Exception:
-            todos_usuarios = []
+                # 2. KPIs Principales
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Ingresos Brutos", f"{total_bruto:,.2f} €")
+                c2.metric("IVA a Liquidar", f"{total_iva:,.2f} €")
+                c3.metric("Ingreso Neto (EBITDA)", f"{ingreso_neto:,.2f} €", delta="SaaS Revenue")
+                c4.metric("Clientes Pago", n_clientes)
 
-        empresas_activas = [e for e in todas_empresas if e.get("activa")]
-        total_facturado = sum(float(f.get("total_final", 0)) for f in facturas)
-
-        precios_plan = {"starter": 29, "professional": 79, "business": 149, "enterprise": 299}
-        mrr = sum(precios_plan.get(e.get("plan_suscripcion", "starter"), 0) for e in empresas_activas)
-
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("🏢 Empresas activas", len(empresas_activas), border=True)
-        col2.metric("👤 Usuarios activos", len([u for u in todos_usuarios if u.get("activo")]), border=True)
-        col3.metric("📄 Facturas emitidas", len(facturas), border=True)
-        col4.metric("💰 Total facturado", f"{total_facturado:,.2f}€", border=True)
-
-        st.divider()
-        st.metric("📈 MRR estimado", f"{mrr:,.0f}€/mes", help="Basado en plan de suscripción de cada empresa activa")
-        st.metric("📅 ARR estimado", f"{mrr * 12:,.0f}€/año")
-
-        st.divider()
-        st.markdown("**Distribución por plan**")
-        if todas_empresas:
-            from collections import Counter
-            planes = Counter(e.get("plan_suscripcion", "starter") for e in empresas_activas)
-            df_planes = pd.DataFrame(list(planes.items()), columns=["Plan", "Empresas"])
-            st.dataframe(df_planes, use_container_width=True, hide_index=True)
-
-        st.divider()
-        st.markdown("**Altas por mes**")
-        if todas_empresas:
-            try:
-                df_altas = pd.DataFrame(todas_empresas)
-                df_altas["mes"] = pd.to_datetime(df_altas["fecha_registro"]).dt.to_period("M").astype(str)
-                df_altas_mes = df_altas.groupby("mes").size().reset_index(name="altas")
-                st.dataframe(df_altas_mes.tail(12), use_container_width=True, hide_index=True)
-            except Exception:
-                st.info("Sin datos suficientes para mostrar altas por mes.")
-
+                # 3. Gráfico de Crecimiento
+                st.write("### Evolución de Ingresos (Netos)")
+                df_chart = df_fac.set_index('fecha_emision').resample('D')['total_factura'].sum().reset_index()
+                st.area_chart(data=df_chart, x='fecha_emision', y='total_factura')
+                
+                st.success(f"Ticket medio por cliente: {arpu:.2f} €")
+            else:
+                st.info("Esperando la primera venta para generar estadísticas...")
+                
+        except Exception as e:
+            st.error(f"Error calculando métricas financieras: {e}")
     # ─────────────────────────────────────────
     # TAB 4: AUDITORÍA
     # ─────────────────────────────────────────
@@ -272,3 +252,34 @@ def render_superadmin_view(db):
             )
         else:
             st.info("No hay registros de auditoría.")
+# ─────────────────────────────────────────
+    # TAB 5: FACTURACIÓN (Nueva sección)
+    # ─────────────────────────────────────────
+    with tab_facturacion:
+        st.subheader("Emisión y Descarga de Facturas")
+        st.markdown("Aquí se listarán las facturas generadas por Stripe.")
+        
+        # 1. Simulamos una factura para la prueba de hoy
+        factura_test = {
+            'numero_factura': 'FAC-2026-001',
+            'total_factura': 19.00
+        }
+        
+        # 2. El botón de descarga
+        if st.button(f"⬇️ Descargar PDF de prueba ({factura_test['numero_factura']})", type="primary"):
+            # Preparamos los datos
+            datos_emisor = {"nombre": "AB SOFTWARE ERP", "nif": "B12345678", "hash": "VERIFACTU-TEST-99"}
+            datos_receptor = {"nombre": st.session_state.username, "id": st.session_state.empresa_id}
+            conceptos = [{"nombre": "Suscripción Plan Pro", "precio": factura_test['total_factura']}]
+            
+            # Generamos y ofrecemos la descarga
+            try:
+                pdf_bytes = generar_pdf_factura(datos_emisor, datos_receptor, conceptos)
+                st.download_button(
+                    label="✅ Confirmar Descarga PDF",
+                    data=pdf_bytes,
+                    file_name=f"{factura_test['numero_factura']}.pdf",
+                    mime="application/pdf"
+                )
+            except Exception as e:
+                st.error(f"Falta el archivo pdf_service.py o hay un error: {e}")

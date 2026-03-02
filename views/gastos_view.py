@@ -5,6 +5,21 @@ import time
 
 
 def render_gastos_view(db):
+    # --- 🔒 INICIO DEL CERROJO (PLAN STARTER) ---
+    if st.session_state.get('plan', 'starter') == 'starter':
+        try:
+            # Ahora contamos en la tabla de gastos
+            conteo = db.table('gastos').select('id', count='exact').eq('empresa_id', st.session_state.empresa_id).execute()
+            total_reg = conteo.count if conteo.count is not None else 0
+            
+            if total_reg >= 100:
+                st.error(f"### 🛑 Límite de Plan Starter alcanzado ({total_reg}/100 gastos)")
+                st.warning("No puedes registrar más gastos operativos en el plan gratuito.")
+                st.info("👉 **Ve al menú lateral izquierdo y haz clic en 'Upgrade a Pro'** para continuar gestionando tu contabilidad.")
+                st.stop() 
+        except Exception as e:
+            pass
+    # --- 🔓 FIN DEL CERROJO ---
     st.title("💸 Gestión y Digitalización de Gastos")
 
        # Verificación de seguridad

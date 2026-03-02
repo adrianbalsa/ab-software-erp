@@ -182,6 +182,21 @@ def generar_pdf_completo(datos):
     return bytes(pdf.output(dest='S'))
 
 def render_presupuestos_view(db):
+    # --- 🔒 INICIO DEL CERROJO (PLAN STARTER) ---
+    if st.session_state.get('plan', 'starter') == 'starter':
+        try:
+            # Contamos cuántos presupuestos ha creado la empresa
+            conteo = db.table('presupuestos').select('id', count='exact').eq('empresa_id', st.session_state.empresa_id).execute()
+            total_reg = conteo.count if conteo.count is not None else 0
+            
+            if total_reg >= 100:
+                st.error(f"### 🛑 Límite de Plan Starter alcanzado ({total_reg}/100)")
+                st.warning("Tu empresa ha agotado el número máximo de presupuestos y facturas del plan gratuito.")
+                st.info("👉 **Ve al menú lateral izquierdo y haz clic en 'Upgrade a Pro'** para desbloquear registros ilimitados de inmediato.")
+                st.stop() # ⛔ Esto corta la ejecución. No se carga nada más de esta vista.
+        except Exception as e:
+            pass # Si hay error contando, le dejamos pasar temporalmente
+    # --- 🔓 FIN DEL CERROJO ---
     st.title("💰 Área Comercial y Financiera")
 
     eid = st.session_state.get("empresaid") or st.session_state.get("empresa_id")

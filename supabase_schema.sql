@@ -153,3 +153,28 @@ VALUES (
     'Administrador Demo',
     'empresa_demo_01'
 ) ON CONFLICT (username) DO NOTHING;
+
+-- Tablas clave Verifactu
+ALTER TABLE public.presupuestos
+    ADD COLUMN IF NOT EXISTS num_factura text,
+    ADD COLUMN IF NOT EXISTS hash_factura text,
+    ADD COLUMN IF NOT EXISTS numero_secuencial integer,
+    ADD COLUMN IF NOT EXISTS tipo_factura text DEFAULT 'NORMAL',
+    ADD COLUMN IF NOT EXISTS bloqueado boolean DEFAULT false;
+CREATE OR REPLACE FUNCTION public.set_empresa_context(p_empresa_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.empresa_id', p_empresa_id::text, true);
+END;
+$$;
+
+ALTER TABLE public.gastos ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY gastos_por_empresa
+ON public.gastos
+FOR ALL
+USING (empresa_id::text = current_setting('app.empresa_id', true))
+WITH CHECK (empresa_id::text = current_setting('app.empresa_id', true));
+
