@@ -24,6 +24,8 @@ st.markdown('''
 try:
     if 'SUPABASE_URL' in st.secrets and 'SUPABASE_KEY' in st.secrets:
         db = create_client(st.secrets['SUPABASE_URL'], st.secrets['SUPABASE_KEY'])
+        from services.db_context import DBContext
+        db = DBContext(db)
         db_admin = create_client(
             st.secrets['SUPABASE_URL'],
             st.secrets.get('SUPABASE_SERVICE_KEY', st.secrets['SUPABASE_KEY'])
