@@ -23,8 +23,8 @@ class QRHelper:
         """
         try:
             # URL verificación pública
-            url = f"{dominio}/verify?num={num_factura}&hash={hash_factura}"
-
+            url = f"{dominio}/?num={num_factura}&hash={hash_factura}"
+ 
             # Configurar QR
             qr = qrcode.QRCode(
                 version=1,  # Tamaño automático
