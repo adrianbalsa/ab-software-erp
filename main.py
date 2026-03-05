@@ -7,8 +7,8 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv()
-# Inicializa Stripe con tu clave secreta
-stripe.api_key = st.secrets["STRIPE_SECRET_KEY"]
+# Inicializa Stripe leyendo del .env local o de st.secrets si está en la nube
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY") or st.secrets.get("STRIPE_SECRET_KEY", "")
 
 def crear_checkout_session(price_id, empresa_id):
     """Crea una sesión única de pago en Stripe y devuelve la URL mágica"""
@@ -209,9 +209,9 @@ def main():
 
         # Navegación según el rol
         if st.session_state.get('rol') == 'admin':
-            opciones = ['Dashboard', 'Gastos', 'Presupuestos', 'Inventario', 'Flota', 'RRHH', 'Sostenibilidad', 'Admin']
+            opciones = ['Dashboard', 'Portes', 'Facturas', 'Gastos', 'Presupuestos', 'Inventario', 'Flota', 'RRHH', 'Sostenibilidad', 'Admin']
         else:
-            opciones = ['Dashboard', 'Gastos', 'Presupuestos', 'Inventario', 'Flota', 'RRHH', 'Sostenibilidad']
+            opciones = ['Dashboard', 'Portes', 'Facturas', 'Gastos', 'Presupuestos', 'Inventario', 'Flota', 'RRHH', 'Sostenibilidad']
 
         menu = st.radio('NAVEGACION', opciones, label_visibility='collapsed')
         st.markdown('---')
@@ -224,6 +224,12 @@ def main():
     try:
         if menu == 'Dashboard':
             render_dashboard(db)
+        elif menu == 'Portes':
+            from views.portes_view import render_portes_view
+            render_portes_view(db)
+        elif menu == "Facturas":
+            from views.facturas_view import render_facturas_view
+            render_facturas_view(db)
         elif menu == 'Gastos':
             render_gastos_view(db)
         elif menu == 'Presupuestos':
