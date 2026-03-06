@@ -1,14 +1,17 @@
 import streamlit as st
-from PIL import Image # IMPORTANTE: Faltaba esto para cargar tu logo
+from PIL import Image
 from supabase import create_client
-from services.auth_service import AuthService
 import time
 import stripe
 from dotenv import load_dotenv
 import os
-from scanner.views.landing import render_landing_page
+
 # 1. PAGE CONFIG SIEMPRE DEBE SER EL PRIMER COMANDO STREAMLIT
 st.set_page_config(page_title='AB Logistics OS', page_icon='📊', layout='wide')
+
+# IMPORTACIONES CORREGIDAS (Añadido el prefijo scanner a todo)
+from scanner.services.auth_service import AuthService
+from scanner.views.landing import render_landing_page
 
 load_dotenv()
 
@@ -31,7 +34,7 @@ st.markdown('''
 ''', unsafe_allow_html=True)
 
 # Inicializar Base de Datos
-from services.db_context import DBContext
+from scanner.services.db_context import DBContext
 try:
     if 'SUPABASE_URL' in st.secrets and 'SUPABASE_KEY' in st.secrets:
         db_admin = create_client(
@@ -46,7 +49,7 @@ except Exception as e:
     st.error(f'Error critico conectando a Supabase: {e}')
     st.stop()
 
-# Funciones Stripe (Las mantenemos igual)
+# Funciones Stripe
 def crear_checkout_session(price_id, empresa_id):
     try:
         session = stripe.checkout.Session.create(
@@ -81,14 +84,14 @@ def mostrar_ui_suscripcion(plan_actual, empresa_id):
     elif plan_actual == 'business':
         st.sidebar.success("Plan actual: **Business**")
 
-# Vistas
-from views.dashboard_view import render_dashboard
-from views.gastos_view import render_gastos_view
-from views.inventory_view import render_inventory_view
-from views.flota_view import render_flota_view
-from views.rrhh_view import render_rrhh_view
-from views.presupuestos_view import render_presupuestos_view
-from views.eco_view import render_eco_view
+# Vistas Globales Corregidas
+from scanner.views.dashboard_view import render_dashboard
+from scanner.views.gastos_view import render_gastos_view
+from scanner.views.inventory_view import render_inventory_view
+from scanner.views.flota_view import render_flota_view
+from scanner.views.rrhh_view import render_rrhh_view
+from scanner.views.presupuestos_view import render_presupuestos_view
+from scanner.views.eco_view import render_eco_view
 
 def main():
     # --- 1. HANDLER DE PAGOS STRIPE ---
@@ -101,23 +104,20 @@ def main():
         st.warning("❌ Pago cancelado.")
         st.query_params.clear()
 
-    # --- 2. VERIFICACIÓN PÚBLICA ---
+    # --- 2. VERIFICACIÓN PÚBLICA (Ruta Corregida) ---
     if 'num' in st.query_params and 'hash' in st.query_params:
-        from views.verify_public import render_verify_public
+        from scanner.views.verify_public import render_verify_public
         render_verify_public(db)
         return
 
     # --- 3. GESTIÓN DE SESIÓN Y LANDING PAGE ---
-    # Inicializamos las variables de estado
     if 'loggedin' not in st.session_state:
         st.session_state.loggedin = False
     if 'show_login' not in st.session_state:
         st.session_state.show_login = False
 
-    # Si NO está logueado, controlamos qué ve (Landing o Login)
     if not st.session_state.loggedin:
         if st.session_state.show_login:
-            # VISTA DE LOGIN
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 try:
@@ -157,17 +157,15 @@ def main():
                     except Exception as e:
                         st.error(f'Error de autenticación: {e}')
                 
-                # Botón para volver a la landing
                 if st.button("← Volver a Inicio"):
                     st.session_state.show_login = False
                     st.rerun()
         else:
-            # VISTA ESCAPARATE (LANDING PAGE)
             render_landing_page()
             
-        return # Cortamos la ejecución aquí si no está logueado
+        return
 
-    # --- 4. VERIFICACIÓN DE IMPAGOS (Muro de Pago) ---
+    # --- 4. VERIFICACIÓN DE IMPAGOS ---
     if st.session_state.get('estado_pago') == 'impago':
         st.error("### 🛑 Cuenta Suspendida")
         st.warning("No hemos podido procesar el cobro de tu suscripción.")
@@ -177,7 +175,7 @@ def main():
             st.rerun()
         st.stop()
 
-    # --- 5. SIDEBAR Y MENÚ DEL ERP (Solo si está logueado) ---
+    # --- 5. SIDEBAR Y MENÚ DEL ERP ---
     with st.sidebar:
         try:
             st.image('assets/logo.png', use_container_width=True)
@@ -197,17 +195,17 @@ def main():
         st.markdown('---')
         if st.button('CERRAR SESIÓN', use_container_width=True):
             st.session_state.loggedin = False
-            st.session_state.show_login = False # Para que al salir vuelva a la landing
+            st.session_state.show_login = False 
             st.rerun()
 
-    # --- 6. RENDERIZADO DE VISTAS ---
+    # --- 6. RENDERIZADO DE VISTAS (Rutas Corregidas) ---
     try:
         if menu == 'Dashboard': render_dashboard(db)
         elif menu == 'Portes': 
-            from views.portes_view import render_portes_view
+            from scanner.views.portes_view import render_portes_view
             render_portes_view(db)
         elif menu == "Facturas": 
-            from views.facturas_view import render_facturas_view
+            from scanner.views.facturas_view import render_facturas_view
             render_facturas_view(db)
         elif menu == 'Gastos': render_gastos_view(db)
         elif menu == 'Presupuestos': render_presupuestos_view(db)
@@ -216,7 +214,7 @@ def main():
         elif menu == 'RRHH': render_rrhh_view(db)
         elif menu == 'Sostenibilidad': render_eco_view(db)
         elif menu == 'Admin': 
-            from views.superadmin_view import render_superadmin_view
+            from scanner.views.superadmin_view import render_superadmin_view
             render_superadmin_view(db)
     except Exception as e:
         st.error(f'Error cargando el módulo {menu}: {e}')
