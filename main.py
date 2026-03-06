@@ -8,7 +8,15 @@ import os
 
 # 1. PAGE CONFIG SIEMPRE DEBE SER EL PRIMER COMANDO STREAMLIT
 st.set_page_config(page_title='AB Logistics OS', page_icon='📊', layout='wide')
-
+# CSS inyectado para ocultar el menú de Streamlit y el pie de página
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_index=True)
 # IMPORTACIONES LIMPIAS (Directo a la raíz)
 from services.auth_service import AuthService
 from views.landing import render_landing_page
@@ -36,14 +44,18 @@ st.markdown('''
 # Inicializar Base de Datos
 from services.db_context import DBContext
 try:
-    if 'SUPABASE_URL' in st.secrets and 'SUPABASE_KEY' in st.secrets:
-        db_admin = create_client(
-            st.secrets['SUPABASE_URL'],
-            st.secrets.get('SUPABASE_SERVICE_KEY', st.secrets['SUPABASE_KEY'])
-        )
+    # Usamos os.getenv para que funcione tanto en local, como en Railway o Streamlit
+    supabase_url = os.getenv('SUPABASE_URL') or st.secrets.get('SUPABASE_URL')
+    supabase_key = os.getenv('SUPABASE_KEY') or st.secrets.get('SUPABASE_KEY')
+    
+    # También obtenemos la service_key si existe, si no, usamos la normal
+    supabase_service_key = os.getenv('SUPABASE_SERVICE_KEY') or st.secrets.get('SUPABASE_SERVICE_KEY', supabase_key)
+
+    if supabase_url and supabase_key:
+        db_admin = create_client(supabase_url, supabase_service_key)
         db = DBContext(db_admin)
     else:
-        st.error('Faltan secretos: SUPABASE_URL / SUPABASE_KEY.')
+        st.error('Faltan variables de entorno: SUPABASE_URL / SUPABASE_KEY.')
         st.stop()
 except Exception as e:
     st.error(f'Error critico conectando a Supabase: {e}')
