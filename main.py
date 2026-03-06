@@ -9,9 +9,9 @@ import os
 # 1. PAGE CONFIG SIEMPRE DEBE SER EL PRIMER COMANDO STREAMLIT
 st.set_page_config(page_title='AB Logistics OS', page_icon='📊', layout='wide')
 
-# IMPORTACIONES CORREGIDAS (Añadido el prefijo scanner a todo)
-from scanner.services.auth_service import AuthService
-from scanner.views.landing import render_landing_page
+# IMPORTACIONES CORREGIDAS (Añadido el prefijo Scanner a todo)
+from Scanner.services.auth_service import AuthService
+from Scanner.views.landing import render_landing_page
 
 load_dotenv()
 
@@ -34,7 +34,7 @@ st.markdown('''
 ''', unsafe_allow_html=True)
 
 # Inicializar Base de Datos
-from scanner.services.db_context import DBContext
+from Scanner.services.db_context import DBContext
 try:
     if 'SUPABASE_URL' in st.secrets and 'SUPABASE_KEY' in st.secrets:
         db_admin = create_client(
@@ -85,13 +85,13 @@ def mostrar_ui_suscripcion(plan_actual, empresa_id):
         st.sidebar.success("Plan actual: **Business**")
 
 # Vistas Globales Corregidas
-from scanner.views.dashboard_view import render_dashboard
-from scanner.views.gastos_view import render_gastos_view
-from scanner.views.inventory_view import render_inventory_view
-from scanner.views.flota_view import render_flota_view
-from scanner.views.rrhh_view import render_rrhh_view
-from scanner.views.presupuestos_view import render_presupuestos_view
-from scanner.views.eco_view import render_eco_view
+from Scanner.views.dashboard_view import render_dashboard
+from Scanner.views.gastos_view import render_gastos_view
+from Scanner.views.inventory_view import render_inventory_view
+from Scanner.views.flota_view import render_flota_view
+from Scanner.views.rrhh_view import render_rrhh_view
+from Scanner.views.presupuestos_view import render_presupuestos_view
+from Scanner.views.eco_view import render_eco_view
 
 def main():
     # --- 1. HANDLER DE PAGOS STRIPE ---
@@ -106,7 +106,7 @@ def main():
 
     # --- 2. VERIFICACIÓN PÚBLICA (Ruta Corregida) ---
     if 'num' in st.query_params and 'hash' in st.query_params:
-        from scanner.views.verify_public import render_verify_public
+        from Scanner.views.verify_public import render_verify_public
         render_verify_public(db)
         return
 
@@ -202,10 +202,10 @@ def main():
     try:
         if menu == 'Dashboard': render_dashboard(db)
         elif menu == 'Portes': 
-            from scanner.views.portes_view import render_portes_view
+            from Scanner.views.portes_view import render_portes_view
             render_portes_view(db)
         elif menu == "Facturas": 
-            from scanner.views.facturas_view import render_facturas_view
+            from Scanner.views.facturas_view import render_facturas_view
             render_facturas_view(db)
         elif menu == 'Gastos': render_gastos_view(db)
         elif menu == 'Presupuestos': render_presupuestos_view(db)
@@ -214,7 +214,7 @@ def main():
         elif menu == 'RRHH': render_rrhh_view(db)
         elif menu == 'Sostenibilidad': render_eco_view(db)
         elif menu == 'Admin': 
-            from scanner.views.superadmin_view import render_superadmin_view
+            from Scanner.views.superadmin_view import render_superadmin_view
             render_superadmin_view(db)
     except Exception as e:
         st.error(f'Error cargando el módulo {menu}: {e}')
