@@ -1,77 +1,25 @@
 import streamlit as st
+from PIL import Image # IMPORTANTE: Faltaba esto para cargar tu logo
 from supabase import create_client
 from services.auth_service import AuthService
+from views.landing import render_landing_page
 import time
 import stripe
 from dotenv import load_dotenv
 import os
 
+# 1. PAGE CONFIG SIEMPRE DEBE SER EL PRIMER COMANDO STREAMLIT
+st.set_page_config(page_title='AB Logistics OS', page_icon='📊', layout='wide')
+
 load_dotenv()
-# Inicializa Stripe leyendo del .env local o de st.secrets si está en la nube
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY") or st.secrets.get("STRIPE_SECRET_KEY", "")
 
-def crear_checkout_session(price_id, empresa_id):
-    """Crea una sesión única de pago en Stripe y devuelve la URL mágica"""
-    try:
-        session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=[{'price': price_id, 'quantity': 1}],
-            mode='subscription',
-            # Cambia estas URLs por tu dominio real cuando pases a producción
-            success_url='http://localhost:8501/?pago=exito', 
-            cancel_url='http://localhost:8501/?pago=cancelado',
-            # ESTO ES CRÍTICO: Le dice a tu Webhook qué empresa acaba de pagar
-            client_reference_id=empresa_id 
-        )
-        return session.url
-    except Exception as e:
-        st.error(f"Error conectando con el banco: {e}")
-        return None
-
-def mostrar_ui_suscripcion(plan_actual, empresa_id):
-    """Muestra el panel de control de ventas en la sidebar"""
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🏢 Mi Suscripción")
-
-    # IDs de tus productos en Stripe
-    PRICE_PRO = "price_1T6tvXEnVY2TFI6OKL0Iu5gd"
-    PRICE_BUSINESS = "price_1T6twbEnVY2TFI6O2DUCRJen"
-
-    if plan_actual == 'starter' or not plan_actual:
-        st.sidebar.warning("Plan actual: **Starter** (Límite 100 reg.)")
-        st.sidebar.markdown("¿El negocio crece? Elimina los límites.")
-
-        if st.sidebar.button("🚀 Upgrade a Pro (19€/mes)"):
-            url = crear_checkout_session(PRICE_PRO, empresa_id)
-            if url:
-                st.sidebar.markdown(f"[💳 Haz clic aquí para pagar de forma segura]({url})")
-
-        if st.sidebar.button("💼 Upgrade a Business (49€/mes)"):
-            url = crear_checkout_session(PRICE_BUSINESS, empresa_id)
-            if url:
-                st.sidebar.markdown(f"[💳 Haz clic aquí para pagar de forma segura]({url})")
-
-    elif plan_actual == 'pro':
-        st.sidebar.success("Plan actual: **Pro** (Ilimitado)")
-        st.sidebar.markdown("Estás en el plan profesional.")
-        # Opcional: Botón para saltar a Business si tienes funciones extra
-
-    elif plan_actual == 'business':
-        st.sidebar.success("Plan actual: **Business** (VIP)")
-        st.sidebar.markdown("Cuentas con todas las funciones activas.")
-# Manejo de la key de Stripe asegurando que no rompa si no está configurada aún
+# Inicializa Stripe
 try:
-    stripe.api_key = os.getenv('STRIPE_SECRET_KEY') or st.secrets.get('STRIPE_SECRET_KEY')
+    stripe.api_key = os.getenv('STRIPE_SECRET_KEY') or st.secrets.get('STRIPE_SECRET_KEY', "")
 except Exception:
     pass 
 
-st.set_page_config(
-    page_title='AB Software Empresarial',
-    page_icon='S',
-    layout='wide',
-    initial_sidebar_state='expanded'
-)
-
+# CSS Global
 st.markdown('''
     <style>
         [data-testid=stSidebar] { min-width: 260px !important; max-width: 260px !important; }
@@ -83,8 +31,8 @@ st.markdown('''
     </style>
 ''', unsafe_allow_html=True)
 
+# Inicializar Base de Datos
 from services.db_context import DBContext
-
 try:
     if 'SUPABASE_URL' in st.secrets and 'SUPABASE_KEY' in st.secrets:
         db_admin = create_client(
@@ -99,6 +47,42 @@ except Exception as e:
     st.error(f'Error critico conectando a Supabase: {e}')
     st.stop()
 
+# Funciones Stripe (Las mantenemos igual)
+def crear_checkout_session(price_id, empresa_id):
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{'price': price_id, 'quantity': 1}],
+            mode='subscription',
+            success_url='http://localhost:8501/?pago=exito', 
+            cancel_url='http://localhost:8501/?pago=cancelado',
+            client_reference_id=empresa_id 
+        )
+        return session.url
+    except Exception as e:
+        st.error(f"Error conectando con el banco: {e}")
+        return None
+
+def mostrar_ui_suscripcion(plan_actual, empresa_id):
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🏢 Mi Suscripción")
+    PRICE_PRO = "price_1T6tvXEnVY2TFI6OKL0Iu5gd"
+    PRICE_BUSINESS = "price_1T6twbEnVY2TFI6O2DUCRJen"
+
+    if plan_actual == 'starter' or not plan_actual:
+        st.sidebar.warning("Plan actual: **Starter**")
+        if st.sidebar.button("🚀 Upgrade a Pro (19€/mes)"):
+            url = crear_checkout_session(PRICE_PRO, empresa_id)
+            if url: st.sidebar.markdown(f"[💳 Haz clic aquí para pagar]({url})")
+        if st.sidebar.button("💼 Upgrade a Business (49€/mes)"):
+            url = crear_checkout_session(PRICE_BUSINESS, empresa_id)
+            if url: st.sidebar.markdown(f"[💳 Haz clic aquí para pagar]({url})")
+    elif plan_actual == 'pro':
+        st.sidebar.success("Plan actual: **Pro**")
+    elif plan_actual == 'business':
+        st.sidebar.success("Plan actual: **Business**")
+
+# Vistas
 from views.dashboard_view import render_dashboard
 from views.gastos_view import render_gastos_view
 from views.inventory_view import render_inventory_view
@@ -111,20 +95,11 @@ def main():
     # --- 1. HANDLER DE PAGOS STRIPE ---
     if st.query_params.get('pago') == 'exito':
         st.balloons()
-        st.success("🎉 ¡Pago confirmado! Tu cuenta ha sido actualizada al Plan Pro con éxito.")
-        st.query_params.clear() # Limpiamos la URL
-        
-        # Si el usuario ya estaba logueado en esta pestaña, le actualizamos el plan en directo
-        if st.session_state.get('loggedin') and 'empresa_id' in st.session_state:
-            try:
-                emp_data = db_admin.table('empresas').select('plan').eq('id', st.session_state.empresa_id).execute()
-                if emp_data.data:
-                    st.session_state.plan = emp_data.data[0]['plan']
-            except:
-                pass
+        st.success("🎉 ¡Pago confirmado!")
+        st.query_params.clear()
 
     elif st.query_params.get('pago') == 'cancelado':
-        st.warning("❌ Pago cancelado o incompleto.")
+        st.warning("❌ Pago cancelado.")
         st.query_params.clear()
 
     # --- 2. VERIFICACIÓN PÚBLICA ---
@@ -133,121 +108,119 @@ def main():
         render_verify_public(db)
         return
 
-    # --- 3. GESTIÓN DE SESIÓN ---
+    # --- 3. GESTIÓN DE SESIÓN Y LANDING PAGE ---
+    # Inicializamos las variables de estado
     if 'loggedin' not in st.session_state:
         st.session_state.loggedin = False
+    if 'show_login' not in st.session_state:
+        st.session_state.show_login = False
 
+    # Si NO está logueado, controlamos qué ve (Landing o Login)
     if not st.session_state.loggedin:
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            try:
-                st.image('assets/logo_ext.png', use_container_width=True)
-            except Exception:
-                st.markdown('<h1 style=text-align:center>AB Software</h1>', unsafe_allow_html=True)
-
-            st.markdown('### Acceso al Sistema')
-            with st.form('login_master'):
-                u = st.text_input('Usuario', placeholder='admin')
-                p = st.text_input('Contrasena', type='password')
-                submitted = st.form_submit_button('ENTRAR', use_container_width=True)
-
-            if submitted:
+        if st.session_state.show_login:
+            # VISTA DE LOGIN
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
                 try:
-                    auth = AuthService(db_admin)
-                    res = auth.login(u, p)
-                    if res['success']:
-                        empresa_id = res['user']['empresa_id']
-                        st.session_state.loggedin = True
-                        st.session_state.username = u
-                        st.session_state.empresaid = empresa_id
-                        st.session_state.empresa_id = empresa_id
-                        st.session_state.rol = res['user'].get('rol', 'user')
-                        
-                        # 🔥 RECUPERAMOS PLAN Y ESTADO DE PAGO
-                        try:
-                            emp_data = db_admin.table('empresas').select('plan, estado_pago').eq('id', empresa_id).execute()
-                            if emp_data.data:
-                                st.session_state.plan = emp_data.data[0].get('plan') or 'starter'
-                                st.session_state.estado_pago = emp_data.data[0].get('estado_pago') or 'activo'
-                            else:
+                    logo = Image.open("assets/logo.png")
+                    st.image(logo, use_container_width=True)
+                except:
+                    st.title("AB Logistics OS")
+
+                st.markdown('### Acceso al Sistema')
+                with st.form('login_master'):
+                    u = st.text_input('Usuario (Email)', placeholder='admin@empresa.com')
+                    p = st.text_input('Contraseña', type='password')
+                    submitted = st.form_submit_button('ENTRAR', use_container_width=True)
+
+                if submitted:
+                    try:
+                        auth = AuthService(db_admin)
+                        res = auth.login(u, p)
+                        if res['success']:
+                            empresa_id = res['user']['empresa_id']
+                            st.session_state.loggedin = True
+                            st.session_state.username = u
+                            st.session_state.empresa_id = empresa_id
+                            st.session_state.rol = res['user'].get('rol', 'user')
+                            
+                            try:
+                                emp_data = db_admin.table('empresas').select('plan, estado_pago').eq('id', empresa_id).execute()
+                                if emp_data.data:
+                                    st.session_state.plan = emp_data.data[0].get('plan') or 'starter'
+                                    st.session_state.estado_pago = emp_data.data[0].get('estado_pago') or 'activo'
+                            except Exception:
                                 st.session_state.plan = 'starter'
                                 st.session_state.estado_pago = 'activo'
-                        except Exception:
-                            st.session_state.plan = 'starter'
-                            st.session_state.estado_pago = 'activo'
-                            
-                        st.rerun()
-                    else:
-                        st.error('Credenciales invalidas')
-                except Exception as e:
-                    st.error(f'Error de autenticacion: {e}')
-        return
+                            st.rerun()
+                        else:
+                            st.error('Credenciales inválidas')
+                    except Exception as e:
+                        st.error(f'Error de autenticación: {e}')
+                
+                # Botón para volver a la landing
+                if st.button("← Volver a Inicio"):
+                    st.session_state.show_login = False
+                    st.rerun()
+        else:
+            # VISTA ESCAPARATE (LANDING PAGE)
+            render_landing_page()
+            
+        return # Cortamos la ejecución aquí si no está logueado
 
     # --- 4. VERIFICACIÓN DE IMPAGOS (Muro de Pago) ---
     if st.session_state.get('estado_pago') == 'impago':
         st.error("### 🛑 Cuenta Suspendida")
-        st.warning("No hemos podido procesar el cobro de tu suscripción Pro.")
-        st.info("Para recuperar el acceso a tus datos y funciones, por favor actualiza tu método de pago.")
+        st.warning("No hemos podido procesar el cobro de tu suscripción.")
         st.link_button("💳 Gestionar Pago en Stripe", "https://billing.stripe.com/p/login/test_dRm28r8M1emrd9PbZucEw00")
         if st.button("Cerrar Sesión"):
             st.session_state.loggedin = False
             st.rerun()
-        st.stop() # 🛑 Detiene todo. No se renderiza nada más.
+        st.stop()
 
-    # --- 5. SIDEBAR Y MENÚ ---
+    # --- 5. SIDEBAR Y MENÚ DEL ERP (Solo si está logueado) ---
     with st.sidebar:
         try:
-            st.image('assets/logo_ext.png', use_container_width=True)
+            st.image('assets/logo.png', use_container_width=True)
         except Exception:
             st.markdown('### AB Software')
 
         st.markdown(f'**Usuario:** {st.session_state.username}')
-        st.markdown('---')
-
-        # Panel de Stripe
         mostrar_ui_suscripcion(st.session_state.get('plan', 'starter'), st.session_state.empresa_id)
 
-        # Navegación según el rol
         if st.session_state.get('rol') == 'admin':
             opciones = ['Dashboard', 'Portes', 'Facturas', 'Gastos', 'Presupuestos', 'Inventario', 'Flota', 'RRHH', 'Sostenibilidad', 'Admin']
         else:
             opciones = ['Dashboard', 'Portes', 'Facturas', 'Gastos', 'Presupuestos', 'Inventario', 'Flota', 'RRHH', 'Sostenibilidad']
 
-        menu = st.radio('NAVEGACION', opciones, label_visibility='collapsed')
+        menu = st.radio('NAVEGACIÓN', opciones, label_visibility='collapsed')
+        
         st.markdown('---')
-
-        if st.button('CERRAR SESION', use_container_width=True):
+        if st.button('CERRAR SESIÓN', use_container_width=True):
             st.session_state.loggedin = False
+            st.session_state.show_login = False # Para que al salir vuelva a la landing
             st.rerun()
 
-    # --- 6. RENDERIZADO DE VISTAS (Dejas lo que ya tenías abajo) ---
+    # --- 6. RENDERIZADO DE VISTAS ---
     try:
-        if menu == 'Dashboard':
-            render_dashboard(db)
-        elif menu == 'Portes':
+        if menu == 'Dashboard': render_dashboard(db)
+        elif menu == 'Portes': 
             from views.portes_view import render_portes_view
             render_portes_view(db)
-        elif menu == "Facturas":
+        elif menu == "Facturas": 
             from views.facturas_view import render_facturas_view
             render_facturas_view(db)
-        elif menu == 'Gastos':
-            render_gastos_view(db)
-        elif menu == 'Presupuestos':
-            render_presupuestos_view(db)
-        elif menu == 'Inventario':
-            render_inventory_view(db)
-        elif menu == 'Flota':
-            render_flota_view(db)
-        elif menu == 'RRHH':
-            render_rrhh_view(db)
-        elif menu == 'Sostenibilidad':
-            render_eco_view(db)
-        elif menu == 'Admin':
+        elif menu == 'Gastos': render_gastos_view(db)
+        elif menu == 'Presupuestos': render_presupuestos_view(db)
+        elif menu == 'Inventario': render_inventory_view(db)
+        elif menu == 'Flota': render_flota_view(db)
+        elif menu == 'RRHH': render_rrhh_view(db)
+        elif menu == 'Sostenibilidad': render_eco_view(db)
+        elif menu == 'Admin': 
             from views.superadmin_view import render_superadmin_view
             render_superadmin_view(db)
     except Exception as e:
-        st.error(f'Error cargando el modulo {menu}: {e}')
-        st.exception(e)
+        st.error(f'Error cargando el módulo {menu}: {e}')
 
 if __name__ == '__main__':
     main()

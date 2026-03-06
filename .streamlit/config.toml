@@ -1,0 +1,9 @@
+[theme]
+primaryColor = "#27AB83"          # Emerald Green (Acción)
+backgroundColor = "#FFFFFF"       # Blanco (Modo Claro)
+secondaryBackgroundColor = "#F0F4F8" # Gris azulado suave
+textColor = "#102A43"             # Navy (Texto)
+font = "sans serif"
+
+# Esta parte permite que Streamlit respete la configuración del sistema del usuario
+# o que tú puedas forzar el modo oscuro desde la web.
