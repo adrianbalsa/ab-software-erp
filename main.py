@@ -2,12 +2,11 @@ import streamlit as st
 from PIL import Image # IMPORTANTE: Faltaba esto para cargar tu logo
 from supabase import create_client
 from services.auth_service import AuthService
-from views.landing import render_landing_page
 import time
 import stripe
 from dotenv import load_dotenv
 import os
-
+from scanner.views.landing import render_landing_page
 # 1. PAGE CONFIG SIEMPRE DEBE SER EL PRIMER COMANDO STREAMLIT
 st.set_page_config(page_title='AB Logistics OS', page_icon='📊', layout='wide')
 
