@@ -16,7 +16,7 @@ hide_st_style = """
             header {visibility: hidden;}
             </style>
             """
-st.markdown(hide_st_style, unsafe_allow_index=True)
+st.markdown(hide_st_style, unsafe_allow_html=True)
 # IMPORTACIONES LIMPIAS (Directo a la raíz)
 from services.auth_service import AuthService
 from views.landing import render_landing_page
