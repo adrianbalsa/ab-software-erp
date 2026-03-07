@@ -44,23 +44,21 @@ st.markdown('''
 # Inicializar Base de Datos
 from services.db_context import DBContext
 try:
-    # Usamos os.getenv para que funcione tanto en local, como en Railway o Streamlit
-    supabase_url = os.getenv('SUPABASE_URL') or st.secrets.get('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_KEY') or st.secrets.get('SUPABASE_KEY')
+    # Usamos SOLO os.getenv. Ni rastro de st.secrets para que Streamlit no se queje.
+    supabase_url = os.getenv('SUPABASE_URL')
+    supabase_key = os.getenv('SUPABASE_KEY')
     
-    # También obtenemos la service_key si existe, si no, usamos la normal
-    supabase_service_key = os.getenv('SUPABASE_SERVICE_KEY') or st.secrets.get('SUPABASE_SERVICE_KEY', supabase_key)
+    supabase_service_key = os.getenv('SUPABASE_SERVICE_KEY') or supabase_key
 
     if supabase_url and supabase_key:
         db_admin = create_client(supabase_url, supabase_service_key)
         db = DBContext(db_admin)
     else:
-        st.error('Faltan variables de entorno: SUPABASE_URL / SUPABASE_KEY.')
+        st.error('Faltan variables de entorno: SUPABASE_URL / SUPABASE_KEY en Railway.')
         st.stop()
 except Exception as e:
     st.error(f'Error critico conectando a Supabase: {e}')
     st.stop()
-
 # Funciones Stripe
 def crear_checkout_session(price_id, empresa_id):
     try:
