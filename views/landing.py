@@ -1,151 +1,171 @@
 import streamlit as st
-import streamlit.components.v1 as components
+import pandas as pd
 
 def render_landing_page():
-    # CSS Inyectado para diseño premium (Estilo Holded/SaaS)
+    # --- 1. MOTOR CSS: HACKEANDO STREAMLIT PARA PARECER HOLDED ---
     st.markdown("""
         <style>
-        .main { background-color: #F8FAFC; font-family: 'Inter', sans-serif; }
-        .hero-section { padding: 4rem 0; text-align: center; }
-        .hero-title { font-size: 3.5rem; font-weight: 900; color: #102A43; line-height: 1.2; margin-bottom: 1rem; }
-        .hero-subtitle { font-size: 1.25rem; color: #486581; max-width: 800px; margin: 0 auto 2rem auto; }
-        .highlight-emerald { color: #27AB83; }
+        /* Importar fuente moderna tipo SaaS */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
         
-        .trust-badge { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 3rem; color: #829AB1; font-weight: 600; }
-        .stars { color: #00B67A; font-size: 1.2rem; } /* Color Trustpilot */
+        html, body, [class*="css"] {
+            font-family: 'Inter', sans-serif;
+            scroll-behavior: smooth;
+        }
+
+        /* Ocultar elementos sobrantes de Streamlit */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
         
-        .section-title { font-size: 2.5rem; font-weight: 800; color: #102A43; text-align: center; margin: 4rem 0 2rem 0; }
+        /* Ajuste de márgenes globales de Streamlit */
+        .block-container {
+            padding-top: 1rem !important;
+            padding-bottom: 0rem !important;
+            max-width: 1200px !important;
+        }
+
+        /* --- CLASES PERSONALIZADAS --- */
+        .navbar {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 1rem 0; border-bottom: 1px solid #E5E7EB; margin-bottom: 3rem;
+        }
+        .logo-text { font-size: 1.5rem; font-weight: 800; color: #111827; letter-spacing: -1px; }
         
-        .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; padding: 1rem; }
-        .feature-card { background: white; padding: 2.5rem; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.03); border: 1px solid #E2E8F0; transition: transform 0.2s; }
-        .feature-card:hover { transform: translateY(-5px); border-color: #27AB83; }
-        .feature-icon { font-size: 2.5rem; margin-bottom: 1rem; }
-        .feature-title { font-size: 1.3rem; font-weight: 700; color: #102A43; margin-bottom: 0.8rem; }
-        .feature-text { color: #627D98; line-height: 1.6; }
+        .hero-section {
+            text-align: center; padding: 4rem 1rem;
+            background: linear-gradient(180deg, #F8FAFC 0%, #FFFFFF 100%);
+            border-radius: 20px; margin-bottom: 4rem;
+        }
+        .hero-title { 
+            font-size: 4rem; font-weight: 800; color: #111827; 
+            line-height: 1.1; margin-bottom: 1.5rem; letter-spacing: -2px;
+        }
+        .hero-title span { color: #2563EB; } /* Azul corporativo */
+        .hero-subtitle { 
+            font-size: 1.25rem; color: #4B5563; max-width: 700px; 
+            margin: 0 auto 2.5rem auto; line-height: 1.6;
+        }
+
+        /* Grid de Features estilo SaaS */
+        .features-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem; margin: 4rem 0;
+        }
+        .feature-card {
+            background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 16px;
+            padding: 2.5rem 2rem; transition: all 0.3s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+        .feature-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            border-color: #2563EB;
+        }
+        .feature-icon { font-size: 2.5rem; margin-bottom: 1.5rem; }
+        .feature-title { font-size: 1.25rem; font-weight: 600; color: #111827; margin-bottom: 0.75rem; }
+        .feature-desc { color: #6B7280; line-height: 1.5; font-size: 0.95rem;}
+
+        /* Sección Trust (Logos ficticios o texto) */
+        .trust-section {
+            text-align: center; padding: 3rem 0; border-top: 1px solid #E5E7EB;
+            color: #6B7280; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;
+        }
         
-        .pricing-card { background: white; padding: 3rem; border-radius: 16px; text-align: center; border: 1px solid #E2E8F0; }
-        .pricing-card.pro { border: 2px solid #27AB83; box-shadow: 0 20px 25px -5px rgba(39, 171, 131, 0.1); position: relative; }
-        .badge-pro { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #27AB83; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; }
-        .price { font-size: 3rem; font-weight: 900; color: #102A43; margin: 1rem 0; }
-        .price span { font-size: 1rem; color: #829AB1; font-weight: normal; }
-        
-        .stButton>button { border-radius: 8px; font-weight: 600; padding: 0.5rem 1rem; height: auto; }
-        .btn-primary>button { background-color: #27AB83 !important; color: white !important; border: none !important; }
+        /* Footer */
+        .modern-footer {
+            margin-top: 5rem; padding: 3rem 0; border-top: 1px solid #E5E7EB;
+            text-align: center; color: #6B7280; font-size: 0.875rem;
+        }
         </style>
     """, unsafe_allow_html=True)
 
-    # --- 1. HERO SECTION ---
+    # --- 2. NAVEGACIÓN SUPERIOR (NAVBAR) ---
+    st.markdown("""
+        <div class="navbar">
+            <div class="logo-text">AB Logistics OS.</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # --- 3. SECCIÓN HERO ---
     st.markdown("""
         <div class="hero-section">
-            <h1 class="hero-title">El Sistema Operativo que<br><span class="highlight-emerald">Acelera tu Logística</span></h1>
-            <p class="hero-subtitle">Centraliza tus portes, automatiza la facturación VeriFactu y conecta con tu asesoría en tiempo real. Diseñado para maximizar el flujo de caja de flotas modernas.</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # Botones principales
-    col1, col2, col3, col4 = st.columns([1, 1.5, 1.5, 1])
-    with col2:
-        if st.button("Empieza Gratis 14 días", type="primary", use_container_width=True):
-            st.session_state.show_login = True
-            st.rerun()
-    with col3:
-        if st.button("Iniciar Sesión", use_container_width=True):
-            st.session_state.show_login = True
-            st.rerun()
-
-    # --- 2. SOCIAL PROOF (TRUSTPILOT MOCK) ---
-    st.markdown("""
-        <div class="trust-badge">
-            <span>Excelente</span>
-            <span class="stars">★★★★★</span>
-            <span>Basado en opiniones verificadas de transportistas</span>
-        </div>
-    """, unsafe_allow_html=True)
-    st.divider()
-
-    # --- 3. CARACTERÍSTICAS PRINCIPALES (Grid) ---
-    st.markdown('<h2 class="section-title">Todo lo que necesitas, en un solo lugar</h2>', unsafe_allow_html=True)
-    
-    f1, f2 = st.columns(2)
-    with f1:
-        st.markdown("""
-            <div class="feature-card">
-                <div class="feature-icon">🚚</div>
-                <div class="feature-title">Gestión de Portes Inteligente</div>
-                <div class="feature-text">Olvida el papel. Registra albaranes y viajes desde el móvil en la cabina del camión. Asigna conductores, vehículos y costes con un clic para tener rentabilidad por viaje en tiempo real.</div>
+            <div class="hero-title">Gestiona tu flota.<br><span>Protege tu margen.</span></div>
+            <div class="hero-subtitle">
+                El ERP financiero diseñado para transportistas. Automatiza la facturación VeriFactu, 
+                controla los costes por kilómetro y deja que los chóferes suban sus albaranes desde el móvil.
             </div>
-        """, unsafe_allow_html=True)
-        st.write("") # Espaciador
-        st.markdown("""
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Botones de llamada a la acción (CTA) usando Streamlit nativo para lógica
+    col_cta1, col_cta2, col_cta3 = st.columns([1, 1.5, 1.5, 1])
+    with col_cta2:
+        if st.button("Comenzar Prueba Gratuita →", type="primary", use_container_width=True):
+            st.session_state.show_login = True
+            st.rerun()
+    with col_cta3:
+        st.link_button("Contactar Ventas", "mailto:ventas@ablogistics-os.com", use_container_width=True)
+
+    st.markdown('<div class="trust-section">Diseñado bajo la nueva Ley Antifraude y Facturación Española 2026</div>', unsafe_allow_html=True)
+
+    # --- 4. HERRAMIENTA DE CAPTACIÓN: CALCULADORA ROI ---
+    st.markdown("<br><br><h2 style='text-align: center; font-weight: 800; color: #111827;'>Prueba nuestro motor de rentabilidad.</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #6B7280; margin-bottom: 2rem;'>Calcula el beneficio real de tu próximo viaje antes de arrancar el motor.</p>", unsafe_allow_html=True)
+
+    with st.container(border=True):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            tarifa = st.number_input("Ingreso del Viaje (€)", value=850.0, step=50.0)
+            km = st.number_input("Kilómetros totales", value=600, step=10)
+        with c2:
+            precio_gasoil = st.number_input("Precio Diésel (€/L)", value=1.42, step=0.01)
+            litros_100 = st.number_input("Consumo (L/100km)", value=32.0, step=1.0)
+        with c3:
+            peajes = st.number_input("Peajes / Dietas (€)", value=65.0, step=5.0)
+            coste_fijo_km = st.number_input("Coste Amortización/Km", value=0.15, step=0.01)
+
+        coste_combustible = (km / 100) * litros_100 * precio_gasoil
+        coste_total = coste_combustible + (km * coste_fijo_km) + peajes
+        beneficio = tarifa - coste_total
+        margen = (beneficio / tarifa) * 100 if tarifa > 0 else 0
+
+        st.markdown("---")
+        res1, res2, res3 = st.columns(3)
+        res1.metric("Coste Operativo Real", f"{coste_total:.2f} €")
+        
+        if beneficio > 0:
+            res2.metric("Beneficio Neto", f"{beneficio:.2f} €", f"Margen: {margen:.1f}%")
+        else:
+            res2.metric("Pérdida Neta", f"{beneficio:.2f} €", "No rentable", delta_color="inverse")
+            st.error("⚠️ Este viaje no cubre los costes fijos de amortización del camión. Rechazar o renegociar.")
+
+    # --- 5. GRID DE FUNCIONALIDADES (TRANSICIONES Y HOVER) ---
+    st.markdown("""
+        <div class="features-grid">
             <div class="feature-card">
                 <div class="feature-icon">⚖️</div>
-                <div class="feature-title">Facturación VeriFactu Nativa</div>
-                <div class="feature-text">Cumple con la Ley Antifraude española desde el día uno. Generación de facturas en PDF con huella digital, conexión directa con la AEAT y control de cobros para reducir la morosidad.</div>
+                <div class="feature-title">Certificación VeriFactu</div>
+                <div class="feature-desc">Emisión de facturas con hash encadenado y código QR. Cumple la Ley Antifraude de la Agencia Tributaria automáticamente, sin miedo a sanciones.</div>
             </div>
-        """, unsafe_allow_html=True)
-
-    with f2:
-        st.markdown("""
             <div class="feature-card">
-                <div class="feature-icon">🤝</div>
-                <div class="feature-title">Portal para Asesorías</div>
-                <div class="feature-text">Ahorra docenas de horas al trimestre. Tu gestor tiene su propio acceso limitado para descargar facturas de ingresos y gastos, listos para presentar los impuestos. Cero emails.</div>
+                <div class="feature-icon">📱</div>
+                <div class="feature-title">Portal del Conductor</div>
+                <div class="feature-desc">Tus chóferes no necesitan instalar nada. Escanean un QR y suben fotos de tickets de gasoil y albaranes firmados (CMR) que llegan directo al ERP.</div>
             </div>
-        """, unsafe_allow_html=True)
-        st.write("")
-        st.markdown("""
             <div class="feature-card">
                 <div class="feature-icon">📊</div>
-                <div class="feature-title">Control Financiero y Flota</div>
-                <div class="feature-text">Mantenimientos, caducidad de seguros, ITV y control de gastos (combustible, peajes). Un panel de control económico que te muestra dónde ganas y dónde pierdes dinero.</div>
+                <div class="feature-title">Dashboard de EBITDA</div>
+                <div class="feature-desc">Métricas en tiempo real. Descubre qué rutas son más rentables, controla el gasto en combustible y visualiza tus impuestos trimestrales.</div>
             </div>
-        """, unsafe_allow_html=True)
+        </div>
+    """, unsafe_allow_html=True)
 
-    st.divider()
-
-    # --- 4. SECCIÓN DE PRECIOS ---
-    st.markdown('<h2 class="section-title">Planes que escalan con tu flota</h2>', unsafe_allow_html=True)
-    
-    p1, p2, p3 = st.columns(3)
-    with p1:
-        st.markdown("""
-            <div class="pricing-card">
-                <h3>Starter</h3>
-                <div class="price">0€<span>/mes</span></div>
-                <p style="color: #627D98; margin-bottom: 2rem;">Para autónomos empezando</p>
-                <ul style="text-align: left; color: #486581; line-height: 2;">
-                    <li>✅ 15 portes al mes</li>
-                    <li>✅ Facturación básica</li>
-                    <li>❌ Portal de asesoría</li>
-                </ul>
-            </div>
-        """, unsafe_allow_html=True)
-    with p2:
-        st.markdown("""
-            <div class="pricing-card pro">
-                <div class="badge-pro">MÁS POPULAR</div>
-                <h3>Pro</h3>
-                <div class="price">19€<span>/mes</span></div>
-                <p style="color: #627D98; margin-bottom: 2rem;">Para transportistas consolidados</p>
-                <ul style="text-align: left; color: #486581; line-height: 2;">
-                    <li>✅ Portes ilimitados</li>
-                    <li>✅ Facturación VeriFactu</li>
-                    <li>✅ Portal de asesoría</li>
-                </ul>
-            </div>
-        """, unsafe_allow_html=True)
-    with p3:
-        st.markdown("""
-            <div class="pricing-card">
-                <h3>Business</h3>
-                <div class="price">49€<span>/mes</span></div>
-                <p style="color: #627D98; margin-bottom: 2rem;">Para flotas y agencias</p>
-                <ul style="text-align: left; color: #486581; line-height: 2;">
-                    <li>✅ Todo lo del plan Pro</li>
-                    <li>✅ Múltiples usuarios/choferes</li>
-                    <li>✅ Control de Flota y RRHH</li>
-                </ul>
-            </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("<br><p style='text-align: center; color: #829AB1; font-size: 0.9rem;'>© 2026 AB Logistics OS. Diseñado con estándares bancarios de seguridad.</p>", unsafe_allow_html=True)
+    # --- 6. FOOTER ---
+    st.markdown("""
+        <div class="modern-footer">
+            <p><b>AB Logistics OS</b> - Inteligencia Financiera para el Transporte</p>
+            <p>A Coruña, Galicia · <a href="mailto:info@ablogistics-os.com" style="color: #2563EB; text-decoration: none;">Contacto Comercial</a></p>
+            <p style="margin-top: 1rem; font-size: 0.75rem;">© 2026 Todos los derechos reservados. Cumplimiento RGPD y LOPD garantizado.</p>
+        </div>
+    """, unsafe_allow_html=True)
