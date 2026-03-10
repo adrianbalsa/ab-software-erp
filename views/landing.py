@@ -99,7 +99,7 @@ def render_landing_page():
     """, unsafe_allow_html=True)
 
     # Botones de llamada a la acción (CTA) usando Streamlit nativo para lógica
-    col_cta1, col_cta2, col_cta3 = st.columns([1, 1.5, 1.5, 1])
+    col_cta1, col_cta2, col_cta3, col_cta4 = st.columns([1, 1.5, 1.5, 1])
     with col_cta2:
         if st.button("Comenzar Prueba Gratuita →", type="primary", use_container_width=True):
             st.session_state.show_login = True
