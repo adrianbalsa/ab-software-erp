@@ -11,7 +11,8 @@ def render_superadmin_view(db):
     st.title("⚙️ Panel de Administración")
     st.caption("Gestión global de empresas, usuarios y métricas del SaaS")
 
-    tab_empresas, tab_usuarios, tab_metricas, tab_auditoria = st.tabs(
+    # CORRECCIÓN 1: Añadida la quinta pestaña (tab_facturacion)
+    tab_empresas, tab_usuarios, tab_metricas, tab_auditoria, tab_facturacion = st.tabs(
         ["🏢 Empresas", "👤 Usuarios", "📊 Métricas SaaS", "🔍 Auditoría", "📄 Facturación"]
     )
 
@@ -173,7 +174,8 @@ def render_superadmin_view(db):
     # ─────────────────────────────────────────
     # TAB 3: MÉTRICAS SAAS
     # ─────────────────────────────────────────
-with tab_metricas:
+    # CORRECCIÓN 2: Añadida la identación correcta a 'with tab_metricas:'
+    with tab_metricas:
         st.subheader("📈 Rendimiento Financiero SaaS")
 
         try:
@@ -209,9 +211,11 @@ with tab_metricas:
                 
         except Exception as e:
             st.error(f"Error calculando métricas financieras: {e}")
+
     # ─────────────────────────────────────────
     # TAB 4: AUDITORÍA
     # ─────────────────────────────────────────
+    # CORRECCIÓN 3: Ajuste de identación 
     with tab_auditoria:
         st.subheader("Registro de auditoría")
 
@@ -252,9 +256,11 @@ with tab_metricas:
             )
         else:
             st.info("No hay registros de auditoría.")
-# ─────────────────────────────────────────
+
+    # ─────────────────────────────────────────
     # TAB 5: FACTURACIÓN (Nueva sección)
     # ─────────────────────────────────────────
+    # CORRECCIÓN 4: Ajuste de identación 
     with tab_facturacion:
         st.subheader("Emisión y Descarga de Facturas")
         st.markdown("Aquí se listarán las facturas generadas por Stripe.")
