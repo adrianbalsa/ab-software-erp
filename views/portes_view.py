@@ -185,7 +185,7 @@ def render_portes_view(db):
                 cuota_iva = base_imponible * 0.21
                 total_factura = base_imponible + cuota_iva
                 
-                st.info(f"📊 **Base Imponible:** {base_imponible:.2f} € | **IVA (21%):** {cuota_iva:.2f} € | **TOTAL FACTURA:** {total_factura:.2f} €")
+             st.info(f"📊 **Base Imponible:** {base_imponible:.2f} € | **IVA (21%):** {cuota_iva:.2f} € | **TOTAL FACTURA:** {total_factura:.2f} €")
                 
                 # --- NUEVO: BOTÓN DE EXPORTACIÓN ---
                 st.markdown("---") 
