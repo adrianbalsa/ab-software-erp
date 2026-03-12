@@ -23,7 +23,7 @@ def render_superadmin_view(db):
 
         try:
             res = db.table("empresas").select(
-                "id, nif, nombre_legal, nombre_comercial, plan, activa, fecha_registro"
+                "id, nif, nombrelegal, nombre_comercial, plan, activa, fecha_registro"
             ).order("fecha_registro", desc=True).execute()
             empresas = res.data or []
         except Exception as e:
@@ -62,7 +62,7 @@ def render_superadmin_view(db):
                         try:
                             db.table("empresas").insert({
                                 "nif": nif.strip().upper(),
-                                "nombre_legal": nombre_legal.strip(),
+                                "nombrelegal": nombre_legal.strip(),
                                 "nombre_comercial": nombre_comercial.strip() or nombre_legal.strip(),
                                 "plan": plan,
                                 "email": email.strip() or None,
@@ -117,7 +117,6 @@ def render_superadmin_view(db):
         if usuarios:
             df_usr = pd.DataFrame(usuarios)
 
-            # Filtro por empresa
             try:
                 res_emp = db.table("empresas").select("id, nombre_comercial").execute()
                 mapa_empresas = {e["id"]: e["nombre_comercial"] for e in (res_emp.data or [])}
@@ -144,7 +143,6 @@ def render_superadmin_view(db):
 
         st.divider()
 
-        # Cambiar rol o estado de usuario
         if usuarios:
             st.markdown("**Modificar usuario**")
             nombres_usr = [f"{u.get('username', 'N/A')} ({u.get('email', '')})" for u in usuarios]
@@ -177,28 +175,24 @@ def render_superadmin_view(db):
         st.subheader("📈 Rendimiento Financiero SaaS")
 
         try:
-            # 1. Obtener datos de la tabla facturas
             res_fac = db.table("facturas").select("total_factura, fecha_emision, cuota_iva").execute()
             df_fac = pd.DataFrame(res_fac.data or [])
 
             if not df_fac.empty:
                 df_fac['fecha_emision'] = pd.to_datetime(df_fac['fecha_emision'])
                 
-                # Cálculos económicos
                 total_bruto = df_fac['total_factura'].sum()
                 total_iva = df_fac['cuota_iva'].sum()
                 ingreso_neto = total_bruto - total_iva
                 n_clientes = df_fac['total_factura'].count()
                 arpu = ingreso_neto / n_clientes if n_clientes > 0 else 0
 
-                # 2. KPIs Principales
                 c1, c2, c3, c4 = st.columns(4)
                 c1.metric("Ingresos Brutos", f"{total_bruto:,.2f} €")
                 c2.metric("IVA a Liquidar", f"{total_iva:,.2f} €")
                 c3.metric("Ingreso Neto (EBITDA)", f"{ingreso_neto:,.2f} €", delta="SaaS Revenue")
                 c4.metric("Clientes Pago", n_clientes)
 
-                # 3. Gráfico de Crecimiento
                 st.write("### Evolución de Ingresos (Netos)")
                 df_chart = df_fac.set_index('fecha_emision').resample('D')['total_factura'].sum().reset_index()
                 st.area_chart(data=df_chart, x='fecha_emision', y='total_factura')
@@ -255,26 +249,22 @@ def render_superadmin_view(db):
             st.info("No hay registros de auditoría.")
 
     # ─────────────────────────────────────────
-    # TAB 5: FACTURACIÓN (Nueva sección)
+    # TAB 5: FACTURACIÓN
     # ─────────────────────────────────────────
     with tab_facturacion:
         st.subheader("Emisión y Descarga de Facturas")
         st.markdown("Aquí se listarán las facturas generadas por Stripe.")
         
-        # 1. Simulamos una factura para la prueba de hoy
         factura_test = {
             'numero_factura': 'FAC-2026-001',
             'total_factura': 19.00
         }
         
-        # 2. El botón de descarga
         if st.button(f"⬇️ Descargar PDF de prueba ({factura_test['numero_factura']})", type="primary"):
-            # Preparamos los datos
             datos_emisor = {"nombre": "AB SOFTWARE ERP", "nif": "B12345678", "hash": "VERIFACTU-TEST-99"}
             datos_receptor = {"nombre": st.session_state.username, "id": st.session_state.empresa_id}
             conceptos = [{"nombre": "Suscripción Plan Pro", "precio": factura_test['total_factura']}]
             
-            # Generamos y ofrecemos la descarga
             try:
                 pdf_bytes = generar_pdf_factura(datos_emisor, datos_receptor, conceptos)
                 st.download_button(

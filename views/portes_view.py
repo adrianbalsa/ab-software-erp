@@ -161,7 +161,7 @@ def render_portes_view(db):
                 
                 st.info(f"📊 **Base Imponible:** {base_imponible:.2f} € | **IVA (21%):** {cuota_iva:.2f} € | **TOTAL FACTURA:** {total_factura:.2f} €")
                 
-                # --- BOTÓN DE EXPORTACIÓN ---
+                # --- BOTÓN DE EXPORTACIÓN LIMPIO ---
                 st.markdown("---") 
                 csv = df_cliente.to_csv(index=False).encode('utf-8')
                 st.download_button(
@@ -192,18 +192,4 @@ def render_portes_view(db):
                             
                         pdf_bytes = generar_pdf_portes(num_fact, cliente_a_facturar, df_mostrar, base_imponible, cuota_iva, total_factura)
                         
-                        st.success("✅ ¡Factura generada y viajes archivados!")
-                        st.balloons()
-                        
-                        st.download_button(
-                            label="📥 Descargar Factura (PDF)",
-                            data=pdf_bytes,
-                            file_name=f"{num_fact}_{cliente_a_facturar.replace(' ', '_')}.pdf",
-                            mime="application/pdf"
-                        )
-                    except Exception as e:
-                        st.error(f"Error procesando la facturación: {e}")
-            else:
-                st.success("🎉 ¡No hay viajes pendientes! Todo está facturado al día.")
-        except Exception as e:
-            st.error(f"Error cargando los datos: {e}")
+                        st.success("✅ ¡Factura generada y viajes archivados
