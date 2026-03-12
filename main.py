@@ -120,59 +120,53 @@ def main():
         render_verify_public(db)
         return
 
-    # --- 3. GESTIÓN DE SESIÓN Y LANDING PAGE ---
+# --- 3. GESTIÓN DE SESIÓN (LOGIN DIRECTO) ---
     if 'loggedin' not in st.session_state:
         st.session_state.loggedin = False
-    if 'show_login' not in st.session_state:
-        st.session_state.show_login = False
 
     if not st.session_state.loggedin:
-        if st.session_state.show_login:
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                try:
-                    logo = Image.open("assets/logo.png")
-                    st.image(logo, use_container_width=True)
-                except:
-                    st.title("AB Logistics OS")
+        # Diseño centrado y limpio para el Login
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.write("") # Espaciador
+            st.write("") 
+            try:
+                logo = Image.open("assets/logo.png")
+                st.image(logo, use_container_width=True)
+            except:
+                st.markdown("<h1 style='text-align: center;'>AB Logistics OS</h1>", unsafe_allow_html=True)
 
-                st.markdown('### Acceso al Sistema')
-                with st.form('login_master'):
-                    u = st.text_input('Usuario (Email)', placeholder='admin@empresa.com')
-                    p = st.text_input('Contraseña', type='password')
-                    submitted = st.form_submit_button('ENTRAR', use_container_width=True)
-
-                if submitted:
-                    try:
-                        auth = AuthService(db_admin)
-                        res = auth.login(u, p)
-                        if res['success']:
-                            empresa_id = res['user']['empresa_id']
-                            st.session_state.loggedin = True
-                            st.session_state.username = u
-                            st.session_state.empresa_id = empresa_id
-                            st.session_state.rol = res['user'].get('rol', 'user')
-                            
-                            try:
-                                emp_data = db_admin.table('empresas').select('plan, estado_pago').eq('id', empresa_id).execute()
-                                if emp_data.data:
-                                    st.session_state.plan = emp_data.data[0].get('plan') or 'starter'
-                                    st.session_state.estado_pago = emp_data.data[0].get('estado_pago') or 'activo'
-                            except Exception:
-                                st.session_state.plan = 'starter'
-                                st.session_state.estado_pago = 'activo'
-                            st.rerun()
-                        else:
-                            st.error('Credenciales inválidas')
-                    except Exception as e:
-                        st.error(f'Error de autenticación: {e}')
-                
-                if st.button("← Volver a Inicio"):
-                    st.session_state.show_login = False
-                    st.rerun()
-        else:
-            render_landing_page()
+            st.markdown("<h3 style='text-align: center; margin-bottom: 2rem;'>Acceso al Sistema</h3>", unsafe_allow_html=True)
             
+            with st.form('login_master'):
+                u = st.text_input('Usuario (Email)', placeholder='admin@empresa.com')
+                p = st.text_input('Contraseña', type='password')
+                submitted = st.form_submit_button('ENTRAR', use_container_width=True)
+
+            if submitted:
+                try:
+                    auth = AuthService(db_admin)
+                    res = auth.login(u, p)
+                    if res['success']:
+                        empresa_id = res['user']['empresa_id']
+                        st.session_state.loggedin = True
+                        st.session_state.username = u
+                        st.session_state.empresa_id = empresa_id
+                        st.session_state.rol = res['user'].get('rol', 'user')
+                        
+                        try:
+                            emp_data = db_admin.table('empresas').select('plan, estado_pago').eq('id', empresa_id).execute()
+                            if emp_data.data:
+                                st.session_state.plan = emp_data.data[0].get('plan') or 'starter'
+                                st.session_state.estado_pago = emp_data.data[0].get('estado_pago') or 'activo'
+                        except Exception:
+                            st.session_state.plan = 'starter'
+                            st.session_state.estado_pago = 'activo'
+                        st.rerun()
+                    else:
+                        st.error('Credenciales inválidas')
+                except Exception as e:
+                    st.error(f'Error de autenticación: {e}')
         return
 
     # --- 4. VERIFICACIÓN DE IMPAGOS ---
