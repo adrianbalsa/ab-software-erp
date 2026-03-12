@@ -7,7 +7,11 @@ from dotenv import load_dotenv
 import os
 
 # 1. PAGE CONFIG SIEMPRE DEBE SER EL PRIMER COMANDO STREAMLIT
-st.set_page_config(page_title='AB Logistics OS', page_icon='📊', layout='wide')
+st.set_page_config(
+    page_title='AB Logistics OS', 
+    page_icon='assets/favicon.ico', # <-- Aquí leemos tu archivo real
+    layout='wide'
+)
 # CSS inyectado para ocultar el menú de Streamlit y el pie de página
 hide_st_style = """
             <style>

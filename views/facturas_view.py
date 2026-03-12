@@ -70,7 +70,13 @@ def render_facturas_view(db):
             else:
                 st.warning("No se encontraron los portes detallados de esta factura.")
         else:
-            st.info("Aún no has emitido ninguna factura. Ve al módulo de Portes para facturar tu primer lote.")
+            # --- NUEVO: ESTADO VACÍO ELEGANTE ---
+            st.info("🧾 Aún no tienes facturas registradas en el sistema.")
+            st.markdown("""
+                **Empieza a facturar bajo la normativa VeriFactu:**
+                Ve al módulo de **Portes** para emitir tu primera factura por lotes. 
+                Todos los documentos generados estarán preparados para el cumplimiento normativo de 2026.
+            """)
 
     except Exception as e:
         st.error(f"Error cargando el historial: {e}")

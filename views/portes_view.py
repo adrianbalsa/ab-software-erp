@@ -187,6 +187,17 @@ def render_portes_view(db):
                 
                 st.info(f"📊 **Base Imponible:** {base_imponible:.2f} € | **IVA (21%):** {cuota_iva:.2f} € | **TOTAL FACTURA:** {total_factura:.2f} €")
                 
+                # --- NUEVO: BOTÓN DE EXPORTACIÓN ---
+                st.markdown("---") 
+                csv = df_cliente.to_csv(index=False).encode('utf-8')
+                
+                st.download_button(
+                    label=f"📥 Descargar Portes en Excel",
+                    data=csv,
+                    file_name=f'portes_{cliente_a_facturar.replace(" ", "_")}.csv',
+                    mime='text/csv',
+                    use_container_width=True 
+                )
                 # --- LA MAGIA DEL 1-CLIC ---
                 if st.button(f"🧾 Emitir Factura por {len(df_cliente)} viajes ({total_factura:.2f} €)", type="primary"):
                     num_fact = f"FAC-{int(date.today().strftime('%Y%m%d'))}-{str(len(portes_ids))[:4]}"

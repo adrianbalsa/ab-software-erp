@@ -79,47 +79,49 @@ def render_gastos_view(db):
 
             if st.form_submit_button("💾 REGISTRAR GASTO EN LIBRO"):
                 if total > 0 and prov:
-                    ruta_evidencia = None
-
-                    # Intento de subida de imagen
-                    if 'temp_ticket' in st.session_state:
-                        try:
-                            # Nombre único: ID_EMPRESA / TIMESTAMP_NOMBRE
-                            file_obj = st.session_state.temp_ticket
-                            file_obj.seek(0)
-                            filename = f"{eid}/{int(time.time())}_{file_obj.name}"
-
-                            db.storage.from_("tickets").upload(
-                                path=filename,
-                                file=file_obj.read(),
-                                file_options={"content-type": file_obj.type}
-                            )
-                            ruta_evidencia = filename
-                        except Exception as e:
-                            st.error(f"Error subiendo imagen (el gasto se guardará sin foto): {e}")
-
-                    # Insertar en DB
                     try:
-                        db.table("gastos").insert({
-                            "empresa_id": eid,
-                            "empleado": usuario_actual,  # <--- AQUÍ ESTABA EL ERROR (FALTABA ESTE CAMPO)
-                            "proveedor": prov,
-                            "fecha": str(fecha),
-                            "total_chf": total,
-                            "categoria": cat,
-                            "concepto": concepto,
-                            "moneda": moneda_base,
-                            "evidencia_url": ruta_evidencia
-                        }).execute()
+                        # --- NUEVO: SPINNER DE CARGA ---
+                        with st.spinner("Contabilizando gasto y subiendo evidencia a la nube..."):
+                            ruta_evidencia = None
 
+                            # Intento de subida de imagen
+                            if 'temp_ticket' in st.session_state:
+                                file_obj = st.session_state.temp_ticket
+                                file_obj.seek(0)
+                                filename = f"{eid}/{int(time.time())}_{file_obj.name}"
+
+                                db.storage.from_("tickets").upload(
+                                    path=filename,
+                                    file=file_obj.read(),
+                                    file_options={"content-type": file_obj.type}
+                                )
+                                ruta_evidencia = filename
+
+                            # Insertar en DB
+                            db.table("gastos").insert({
+                                "empresa_id": eid,
+                                "empleado": usuario_actual, 
+                                "proveedor": prov,
+                                "fecha": str(fecha),
+                                "total_chf": float(total),
+                                "categoria": cat,
+                                "concepto": concepto,
+                                "moneda": moneda_base,
+                                "evidencia_url": ruta_evidencia
+                            }).execute()
+
+                        # Éxito fuera del spinner
                         st.success("✅ Gasto contabilizado correctamente.")
+                        
                         # Limpieza
                         if 'temp_ticket' in st.session_state: del st.session_state.temp_ticket
                         if 'datos_gastos' in st.session_state: del st.session_state.datos_gastos
                         time.sleep(1)
                         st.rerun()
 
+                    except ValueError:
+                        st.error("❌ Error de formato: Verifica que los importes sean numéricos.")
                     except Exception as e:
-                        st.error(f"Error DB: {e}")
+                        st.error(f"🔌 Error de conexión al guardar el gasto: {e}")
                 else:
-                    st.warning("Debes indicar al menos Proveedor e Importe.")
+                    st.warning("⚠️ Debes indicar al menos Proveedor e Importe Total.")
