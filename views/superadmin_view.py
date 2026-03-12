@@ -11,7 +11,6 @@ def render_superadmin_view(db):
     st.title("⚙️ Panel de Administración")
     st.caption("Gestión global de empresas, usuarios y métricas del SaaS")
 
-    # CORRECCIÓN 1: Añadida la quinta pestaña (tab_facturacion)
     tab_empresas, tab_usuarios, tab_metricas, tab_auditoria, tab_facturacion = st.tabs(
         ["🏢 Empresas", "👤 Usuarios", "📊 Métricas SaaS", "🔍 Auditoría", "📄 Facturación"]
     )
@@ -24,7 +23,7 @@ def render_superadmin_view(db):
 
         try:
             res = db.table("empresas").select(
-                "id, nif, nombrelegal, nombre_comercial, plan_suscripcion, activa, fecha_registro"
+                "id, nif, nombre_legal, nombre_comercial, plan, activa, fecha_registro"
             ).order("fecha_registro", desc=True).execute()
             empresas = res.data or []
         except Exception as e:
@@ -33,7 +32,7 @@ def render_superadmin_view(db):
 
         if empresas:
             df_emp = pd.DataFrame(empresas)
-            cols_mostrar = [c for c in ["nombre_comercial", "nif", "plan_suscripcion", "activa", "fecha_registro"] if c in df_emp.columns]
+            cols_mostrar = [c for c in ["nombre_comercial", "nif", "plan", "activa", "fecha_registro"] if c in df_emp.columns]
             st.dataframe(df_emp[cols_mostrar], use_container_width=True, hide_index=True)
         else:
             st.info("No hay empresas registradas.")
@@ -63,9 +62,9 @@ def render_superadmin_view(db):
                         try:
                             db.table("empresas").insert({
                                 "nif": nif.strip().upper(),
-                                "nombrelegal": nombre_legal.strip(),
+                                "nombre_legal": nombre_legal.strip(),
                                 "nombre_comercial": nombre_comercial.strip() or nombre_legal.strip(),
-                                "plan_suscripcion": plan,
+                                "plan": plan,
                                 "email": email.strip() or None,
                                 "telefono": telefono.strip() or None,
                                 "direccion": direccion.strip() or None,
@@ -86,13 +85,13 @@ def render_superadmin_view(db):
             nuevo_plan = col_plan.selectbox(
                 "Nuevo plan",
                 ["starter", "professional", "business", "enterprise"],
-                index=["starter", "professional", "business", "enterprise"].index(empresa_sel.get("plan_suscripcion", "starter"))
+                index=["starter", "professional", "business", "enterprise"].index(empresa_sel.get("plan", "starter")) if empresa_sel.get("plan") in ["starter", "professional", "business", "enterprise"] else 0
             )
             nueva_activa = col_estado.checkbox("Empresa activa", value=bool(empresa_sel.get("activa", True)))
             if st.button("Guardar cambios", type="primary", use_container_width=True):
                 try:
                     db.table("empresas").update({
-                        "plan_suscripcion": nuevo_plan,
+                        "plan": nuevo_plan,
                         "activa": nueva_activa,
                     }).eq("id", empresa_sel["id"]).execute()
                     st.success("Actualizado correctamente.")
@@ -174,7 +173,6 @@ def render_superadmin_view(db):
     # ─────────────────────────────────────────
     # TAB 3: MÉTRICAS SAAS
     # ─────────────────────────────────────────
-    # CORRECCIÓN 2: Añadida la identación correcta a 'with tab_metricas:'
     with tab_metricas:
         st.subheader("📈 Rendimiento Financiero SaaS")
 
@@ -215,7 +213,6 @@ def render_superadmin_view(db):
     # ─────────────────────────────────────────
     # TAB 4: AUDITORÍA
     # ─────────────────────────────────────────
-    # CORRECCIÓN 3: Ajuste de identación 
     with tab_auditoria:
         st.subheader("Registro de auditoría")
 
@@ -260,7 +257,6 @@ def render_superadmin_view(db):
     # ─────────────────────────────────────────
     # TAB 5: FACTURACIÓN (Nueva sección)
     # ─────────────────────────────────────────
-    # CORRECCIÓN 4: Ajuste de identación 
     with tab_facturacion:
         st.subheader("Emisión y Descarga de Facturas")
         st.markdown("Aquí se listarán las facturas generadas por Stripe.")
