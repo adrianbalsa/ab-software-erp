@@ -24,7 +24,7 @@ def render_superadmin_view(db):
 
         try:
             res = db.table("empresas").select(
-                "id, nif, nombre_legal, nombre_comercial, plan_suscripcion, activa, fecha_registro"
+                "id, nif, nombrelegal, nombre_comercial, plan_suscripcion, activa, fecha_registro"
             ).order("fecha_registro", desc=True).execute()
             empresas = res.data or []
         except Exception as e:
@@ -63,7 +63,7 @@ def render_superadmin_view(db):
                         try:
                             db.table("empresas").insert({
                                 "nif": nif.strip().upper(),
-                                "nombre_legal": nombre_legal.strip(),
+                                "nombrelegal": nombre_legal.strip(),
                                 "nombre_comercial": nombre_comercial.strip() or nombre_legal.strip(),
                                 "plan_suscripcion": plan,
                                 "email": email.strip() or None,
