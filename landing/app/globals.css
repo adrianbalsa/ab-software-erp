@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+/* Alineado con frontend/src/app/globals.css (Enterprise SaaS) */
+:root {
+  --background: #f4f6fb;
+  --foreground: #0f172a;
+  --ab-primary: #2563eb;
+  --ab-primary-dark: #1d4ed8;
+  --ab-accent: #38bdf8;
+  --ab-sidebar: #0b1224;
+  --ab-card: #ffffff;
+  --ab-border: rgba(15, 23, 42, 0.08);
+  --ab-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(37, 99, 235, 0.06);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* CTA principal: Zinc + Esmeralda (marca unificada con dashboard) */
+.ab-cta {
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #3f3f46 0%, #27272a 42%, #059669 100%);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 10px 24px -4px rgba(24, 24, 27, 0.35), 0 4px 8px -4px rgba(5, 150, 105, 0.25);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+.ab-cta:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: 0 14px 28px -6px rgba(24, 24, 27, 0.4), 0 6px 12px -4px rgba(5, 150, 105, 0.3);
+}
+
+.ab-cta-outline {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(63, 63, 70, 0.35);
+  background: rgba(255, 255, 255, 0.85);
+  color: #3f3f46;
+  font-weight: 600;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.ab-cta-outline:hover {
+  border-color: rgba(5, 150, 105, 0.45);
+  background: #fff;
+  color: #047857;
+}
