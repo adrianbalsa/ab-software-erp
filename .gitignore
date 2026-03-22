@@ -1,4 +1,5 @@
 # Secretos - NUNCA subir a GitHub
+backend/tests/stress_config.json
 .streamlit/secrets.toml
 secrets.toml
 *.env

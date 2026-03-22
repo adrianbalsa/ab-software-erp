@@ -1,0 +1,16 @@
+# No analices el entorno virtual
+venv/
+.venv/
+env/
+
+# No analices dependencias de frontend
+node_modules/
+.next/
+dist/
+
+# Ignora archivos de sistema y logs
+.git/
+*.log
+*.pyc
+__pycache__/
+.DS_Store

@@ -1,0 +1,179 @@
+@import "tailwindcss";
+
+/* ─── AB Software / Enterprise SaaS (alineado con landing corporativa) ─── */
+:root {
+  --background: #f4f6fb;
+  --foreground: #0f172a;
+  --ab-primary: #2563eb;
+  --ab-primary-dark: #1d4ed8;
+  --ab-accent: #38bdf8;
+  --ab-sidebar: #0b1224;
+  --ab-card: #ffffff;
+  --ab-border: rgba(15, 23, 42, 0.08);
+  --ab-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(37, 99, 235, 0.06);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0c1222;
+    --foreground: #e8eef8;
+    --ab-card: rgba(15, 23, 42, 0.85);
+    --ab-border: rgba(148, 163, 184, 0.12);
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Utilidades de aplicación (Enterprise) */
+.ab-app-gradient {
+  background: linear-gradient(165deg, #f0f4ff 0%, #f8fafc 40%, #eef2ff 100%);
+}
+
+.ab-sidebar {
+  background: linear-gradient(180deg, var(--ab-sidebar) 0%, #060a14 100%);
+}
+
+.ab-header {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+}
+
+.ab-glass {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--ab-border);
+  box-shadow: var(--ab-shadow);
+}
+
+.ab-card {
+  background: var(--ab-card);
+  border: 1px solid var(--ab-border);
+  box-shadow: var(--ab-shadow);
+}
+
+.ab-alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.ab-input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #fff;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ab-input:focus {
+  border-color: var(--ab-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.ab-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin-bottom: 0.35rem;
+}
+
+.ab-btn-primary {
+  border-radius: 0.75rem;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, var(--ab-primary) 0%, var(--ab-primary-dark) 100%);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.ab-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+}
+
+.ab-btn-secondary {
+  border-radius: 0.75rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #334155;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+}
+.ab-btn-secondary:hover {
+  background: #f8fafc;
+}
+
+.ab-table thead {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+.ab-table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  border-bottom: 1px solid var(--ab-border);
+}
+.ab-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.05);
+}
+.ab-table tbody tr:hover {
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.ab-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--ab-primary-dark);
+}
+
+.ab-kpi {
+  border-radius: 1rem;
+  padding: 1.25rem;
+  background: var(--ab-card);
+  border: 1px solid var(--ab-border);
+  box-shadow: var(--ab-shadow);
+}
+.ab-kpi-accent {
+  border-color: rgba(37, 99, 235, 0.25);
+  background: linear-gradient(135deg, #fff 0%, #eff6ff 100%);
+}
+.ab-kpi-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-bottom: 0.35rem;
+}
+.ab-kpi-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
