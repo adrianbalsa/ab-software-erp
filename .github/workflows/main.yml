@@ -101,8 +101,8 @@ jobs:
       - name: Build and push (GHCR)
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./backend
+          file: ./backend/Dockerfile
           push: true
           tags: |
             ${{ steps.img.outputs.name }}:latest
