@@ -10,7 +10,7 @@ passlib[argon2]==1.7.4
 python-multipart==0.0.6
 pydantic[email]==2.5.3
 pydantic-settings==2.1.0
-supabase==2.3.7
+supabase>=2.4.5
 python-dotenv==1.0.0
 sqlalchemy>=2.0.0
 psycopg[binary]>=3.1.0
