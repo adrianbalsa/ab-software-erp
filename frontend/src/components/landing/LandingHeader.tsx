@@ -48,7 +48,7 @@ export function LandingHeader() {
             href="/login"
             className="rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-zinc-950 shadow-lg shadow-emerald-500/25 hover:from-emerald-400 hover:to-emerald-500 transition-all"
           >
-            Prueba gratis
+            Solicitar Acceso al Sistema
           </Link>
           <button
             type="button"

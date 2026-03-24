@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
 
 export function LandingHero() {
+  const trustSignals = ["Soporte en España", "Onboarding en 24h", "Adaptado a VeriFactu 2026"];
+
   return (
     <div className="relative overflow-hidden px-4 pt-16 pb-20 sm:pt-24 sm:pb-28">
       <div
@@ -25,15 +27,15 @@ export function LandingHero() {
           </span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-zinc-400 sm:text-lg">
-          Controla tu margen por kilómetro, cumple con VeriFactu 2026 y automatiza tu huella de carbono.
-          Todo en un solo dashboard.
+          Optimización del Margen Operativo (EBITDA), cumplimiento VeriFactu 2026 y trazabilidad financiera en un
+          único sistema de control para dirección.
         </p>
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <a
             href="#roi-simulator"
             className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-full bg-blue-500 px-8 py-3.5 text-base font-semibold text-white shadow-xl shadow-blue-500/30 transition hover:bg-blue-400"
           >
-            Calcula tu Ahorro
+            Auditar mi Flota
             <ArrowRight className="h-4 w-4" />
           </a>
           <Link
@@ -43,6 +45,14 @@ export function LandingHero() {
             Ver Demo
           </Link>
         </div>
+        <ul className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-zinc-300 sm:text-sm">
+          {trustSignals.map((signal) => (
+            <li key={signal} className="inline-flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+              <span>{signal}</span>
+            </li>
+          ))}
+        </ul>
         <p className="mt-10 text-xs sm:text-sm text-zinc-500 max-w-xl mx-auto leading-relaxed border border-zinc-800/80 rounded-lg px-4 py-2.5 bg-zinc-900/40">
           Preparado para la normativa AEAT 2026 (Ley Crea y Crece)
         </p>

@@ -20,7 +20,7 @@ const faqs = [
   },
   {
     q: "¿Puedo probar antes de comprometerme?",
-    a: "Sí. Puedes iniciar una prueba gratuita con acceso al dashboard y simuladores; sin tarjeta en el primer paso.",
+    a: "Sí. Puedes solicitar acceso al sistema para auditar tu operativa con dashboard y simuladores, sin fricción en el primer paso.",
   },
 ];
 

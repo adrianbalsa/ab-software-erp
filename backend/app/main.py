@@ -14,6 +14,8 @@ from app.middleware.json_access_log import JsonAccessLogMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.slow_request_log import SlowRequestLogMiddleware
 
+# 1. Importamos tu nuevo router de Stripe junto a los demás
+from app.api.v1 import stripe 
 
 def create_app() -> FastAPI:
     from app.core.logging_config import configure_app_logging
@@ -117,6 +119,9 @@ def create_app() -> FastAPI:
     app.include_router(eco.router, prefix="/eco", tags=["eco"])
     app.include_router(esg.router, prefix="/esg", tags=["esg"])
     app.include_router(flota.router, prefix="/flota", tags=["flota"])
+    
+    # 2. Registramos el router de Stripe dentro de la función constructora
+    app.include_router(stripe.router, prefix="/api/v1/stripe", tags=["Pagos"])
 
     return app
 
