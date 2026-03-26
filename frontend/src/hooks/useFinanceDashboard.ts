@@ -37,12 +37,17 @@ export type FinanceDashboard = {
   km_facturados_mes_anterior: number | null;
 };
 
-export function useFinanceDashboard() {
+export function useFinanceDashboard(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled !== false;
   const [data, setData] = useState<FinanceDashboard | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -78,11 +83,17 @@ export function useFinanceDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      setError(null);
+      setData(null);
+      return;
+    }
     void refresh();
-  }, [refresh]);
+  }, [enabled, refresh]);
 
   return { data, loading, error, refresh };
 }

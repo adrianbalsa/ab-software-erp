@@ -93,6 +93,19 @@ class SupabaseAsync:
 
         return await anyio.to_thread.run_sync(_call)
 
+    async def auth_admin_invite_user_by_email(
+        self,
+        *,
+        email: str,
+        options: dict[str, Any] | None = None,
+    ) -> Any:
+        def _call() -> Any:
+            if options is None:
+                return self._client.auth.admin.invite_user_by_email(email)
+            return self._client.auth.admin.invite_user_by_email(email, options)
+
+        return await anyio.to_thread.run_sync(_call)
+
 
 @dataclass(frozen=True, slots=True)
 class SupabaseDeps:

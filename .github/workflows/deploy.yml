@@ -1,10 +1,10 @@
-# Fase 4 — CI (backend + frontend), imagen Docker → GHCR, notificación webhook.
+# Fase 4 — CI/CD Enterprise: tests obligatorios (incl. Math Engine) + build + imagen API → GHCR.
 #
 # Secrets opcionales:
-#   CI_WEBHOOK_URL     — Slack (hooks.slack.com) o Discord (discord.com/api/webhooks/…)
+#   CI_WEBHOOK_URL     — Slack o Discord
 #   DOCKERHUB_USERNAME / DOCKERHUB_TOKEN — push adicional a Docker Hub (opcional)
 
-name: main
+name: deploy
 
 on:
   push:
@@ -17,10 +17,11 @@ permissions:
   packages: write
 
 env:
-  PYTHON_VERSION: "3.11"
+  PYTHON_VERSION: "3.12"
   NODE_VERSION: "20"
 
 jobs:
+  # Falla el pipeline si cualquier test falla (incl. tests/test_math_engine.py).
   backend-pytest:
     runs-on: ubuntu-latest
     defaults:
@@ -41,8 +42,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run pytest
-        run: pytest tests/ -q --tb=short
+      - name: Run pytest (suite completa; Math Engine incluido)
+        run: pytest tests/ -v --tb=short
         env:
           SUPABASE_URL: https://ci-placeholder.supabase.co
           SUPABASE_KEY: ci-anon-key

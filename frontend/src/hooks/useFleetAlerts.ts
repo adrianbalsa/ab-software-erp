@@ -16,12 +16,17 @@ export type FleetAlert = {
   km_restantes: number | null;
 };
 
-export function useFleetAlerts() {
+export function useFleetAlerts(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled !== false;
   const [alerts, setAlerts] = useState<FleetAlert[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -43,11 +48,17 @@ export function useFleetAlerts() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      setError(null);
+      setAlerts([]);
+      return;
+    }
     void refresh();
-  }, [refresh]);
+  }, [enabled, refresh]);
 
   return { alerts, loading, error, refresh };
 }

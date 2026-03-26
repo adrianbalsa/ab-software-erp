@@ -1,17 +1,64 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import os
+import sys
 from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+
+def _install_stripe_test_double() -> None:
+    """
+    Evita importar/configurar el SDK real de Stripe en pytest.
+    Debe ejecutarse antes de cargar ``app.main`` / ``stripe_pago`` (``import stripe``).
+    """
+    m = MagicMock(name="stripe_test_double")
+    m.api_key = None
+
+    SigErr = type("SignatureVerificationError", (Exception,), {})
+    m.error = MagicMock()
+    m.error.SignatureVerificationError = SigErr
+
+    checkout_session = MagicMock()
+    checkout_session.url = "https://checkout.stripe.test/mock-session"
+    m.checkout = MagicMock()
+    m.checkout.Session = MagicMock()
+    m.checkout.Session.create = MagicMock(return_value=checkout_session)
+
+    m.Webhook = MagicMock()
+    m.Webhook.construct_event = MagicMock(
+        return_value={"type": "checkout.session.completed", "data": {"object": {}}},
+    )
+
+    sys.modules["stripe"] = m
+
+
+_install_stripe_test_double()
+
 from app.core.security import create_access_token
 
 # Tenants fijos para suites multi-tenant / JWT de prueba
 EMPRESA_A_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 EMPRESA_B_ID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+
+
+@pytest.fixture(autouse=True)
+def _stripe_no_real_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Refuerzo por test: sin llamadas reales a Stripe (api_key + Session.create acotados).
+    """
+    import stripe as stripe_mod
+
+    monkeypatch.setattr(stripe_mod, "api_key", "sk_test_stub_no_network", raising=False)
+    sess = MagicMock()
+    sess.url = "https://checkout.stripe.test/mock-session"
+    create_mock = MagicMock(return_value=sess)
+    if hasattr(stripe_mod, "checkout") and hasattr(stripe_mod.checkout, "Session"):
+        monkeypatch.setattr(stripe_mod.checkout.Session, "create", create_mock, raising=False)
 
 
 @pytest.fixture(autouse=True)
@@ -22,6 +69,13 @@ def _test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SUPABASE_SERVICE_KEY", "test-service-role-key")
     monkeypatch.setenv("SUPABASE_JWT_SECRET", "unit-test-jwt-secret-at-least-32-chars")
     monkeypatch.setenv("JWT_SECRET_KEY", "unit-test-app-jwt-secret-32-characters!")
+    # Fernet (44 chars) para cifrado en reposo (IBAN / suites que usen encryption)
+    _fk = base64.urlsafe_b64encode(
+        hashlib.sha256(b"abl-scanner-unit-test-fernet-v1").digest(),
+    ).decode("ascii")
+    monkeypatch.setenv("ENCRYPTION_KEY", _fk)
+    monkeypatch.delenv("ENCRYPTION_SECRET_KEY", raising=False)
+    monkeypatch.delenv("BANK_TOKEN_ENCRYPTION_KEY", raising=False)
     monkeypatch.setenv("ENVIRONMENT", "development")
     monkeypatch.delenv("SENTRY_DSN", raising=False)
 

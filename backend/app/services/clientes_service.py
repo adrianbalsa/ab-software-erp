@@ -6,6 +6,7 @@ from uuid import UUID
 from app.db.soft_delete import filter_not_deleted, soft_delete_payload
 from app.db.supabase import SupabaseAsync
 from app.schemas.cliente import ClienteCreate, ClienteOut
+from app.core.crypto import pii_crypto
 
 
 def _eid(empresa_id: str | UUID) -> str:
@@ -28,7 +29,11 @@ class ClientesService:
         out: list[ClienteOut] = []
         for row in rows:
             try:
-                out.append(ClienteOut(**row))
+                rn = dict(row)
+                raw_nif = rn.get("nif")
+                if isinstance(raw_nif, str) and raw_nif.strip():
+                    rn["nif"] = pii_crypto.decrypt_pii(raw_nif) or raw_nif
+                out.append(ClienteOut(**rn))
             except Exception:
                 continue
         return out
@@ -43,14 +48,18 @@ class ClientesService:
         rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
         if not rows:
             return None
-        return ClienteOut(**rows[0])
+        rn = dict(rows[0])
+        raw_nif = rn.get("nif")
+        if isinstance(raw_nif, str) and raw_nif.strip():
+            rn["nif"] = pii_crypto.decrypt_pii(raw_nif) or raw_nif
+        return ClienteOut(**rn)
 
     async def create_cliente(self, *, empresa_id: str | UUID, payload: ClienteCreate) -> ClienteOut:
         eid = _eid(empresa_id)
         body: dict[str, Any] = {
             "empresa_id": eid,
             "nombre": payload.nombre.strip(),
-            "nif": (payload.nif or "").strip() or None,
+            "nif": pii_crypto.encrypt_pii((payload.nif or "").strip()) if payload.nif else None,
             "email": payload.email,
             "telefono": payload.telefono,
             "direccion": payload.direccion,
@@ -59,7 +68,11 @@ class ClientesService:
         rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
         if not rows:
             raise RuntimeError("Supabase insert clientes returned no rows")
-        return ClienteOut(**rows[0])
+        rn = dict(rows[0])
+        raw_nif = rn.get("nif")
+        if isinstance(raw_nif, str) and raw_nif.strip():
+            rn["nif"] = pii_crypto.decrypt_pii(raw_nif) or raw_nif
+        return ClienteOut(**rn)
 
     async def soft_delete_cliente(self, *, empresa_id: str | UUID, cliente_id: UUID) -> None:
         eid = _eid(empresa_id)

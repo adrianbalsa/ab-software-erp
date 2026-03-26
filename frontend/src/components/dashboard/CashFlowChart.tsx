@@ -68,7 +68,7 @@ export function CashFlowChart({ data, loading }: CashFlowChartProps) {
         (facturas marcadas como cobradas). El desfase refleja facturación pendiente
         de cobro.
       </p>
-      <div className="h-[300px] w-full min-w-0 mt-4">
+      <div className="mt-4 h-[min(260px,42vh)] min-h-[220px] sm:h-[300px] sm:min-h-[260px] w-full min-w-0">
         {!hasData ? (
           <p className="text-sm text-zinc-500 py-16 text-center">
             Sin datos de facturación en la ventana de 6 meses.

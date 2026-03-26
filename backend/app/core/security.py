@@ -129,6 +129,9 @@ def create_access_token(
     subject: str,
     expires_minutes: int | None = None,
     empresa_id: str | None = None,
+    rbac_role: str | None = None,
+    assigned_vehiculo_id: str | None = None,
+    cliente_id: str | None = None,
 ) -> str:
     """
     Create a signed JWT access token.
@@ -148,4 +151,13 @@ def create_access_token(
     }
     if empresa_id and str(empresa_id).strip():
         payload["empresa_id"] = str(empresa_id).strip()
+    rr = (rbac_role or "").strip().lower()
+    if rr in ("owner", "traffic_manager", "driver", "cliente"):
+        payload["rbac_role"] = rr
+    av = (assigned_vehiculo_id or "").strip()
+    if av:
+        payload["assigned_vehiculo_id"] = av
+    cj = (cliente_id or "").strip()
+    if rr == "cliente" and cj:
+        payload["cliente_id"] = cj
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)

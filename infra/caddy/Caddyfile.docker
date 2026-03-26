@@ -1,0 +1,39 @@
+# AB Logistics OS — proxy interno (HTTP) para Cloudflare Tunnel u origen privado.
+# Variables de entorno (docker-compose): APP_DOMAIN, API_DOMAIN
+# Cloudflare termina TLS; aquí añadimos cabeceras de seguridad hacia el cliente.
+
+{
+	admin off
+	auto_https off
+}
+
+:80 {
+	@app host {$APP_DOMAIN}
+	handle @app {
+		header {
+			Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+			X-Frame-Options "DENY"
+			X-Content-Type-Options "nosniff"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		}
+		encode gzip zstd
+		reverse_proxy frontend:3000
+	}
+
+	@api host {$API_DOMAIN}
+	handle @api {
+		header {
+			Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+			X-Frame-Options "DENY"
+			X-Content-Type-Options "nosniff"
+			Referrer-Policy "strict-origin-when-cross-origin"
+		}
+		encode gzip zstd
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		respond "AB Logistics OS — dominio no configurado en Caddy (APP_DOMAIN / API_DOMAIN)" 404
+	}
+}

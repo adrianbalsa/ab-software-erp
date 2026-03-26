@@ -15,7 +15,7 @@ router = APIRouter()
 
 @router.get("/", response_model=list[ClienteOut])
 async def list_clientes(
-    current_user: UserOut = Depends(deps.get_current_user),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     service: ClientesService = Depends(deps.get_clientes_service),
 ) -> list[ClienteOut]:
     return await service.list_clientes(empresa_id=current_user.empresa_id)
@@ -25,6 +25,7 @@ async def list_clientes(
 async def create_cliente(
     payload: ClienteCreate,
     current_user: UserOut = Depends(deps.bind_write_context),
+    _: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     service: ClientesService = Depends(deps.get_clientes_service),
 ) -> ClienteOut:
     try:
@@ -36,7 +37,7 @@ async def create_cliente(
 @router.get("/{cliente_id}", response_model=ClienteOut)
 async def get_cliente(
     cliente_id: UUID,
-    current_user: UserOut = Depends(deps.get_current_user),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     service: ClientesService = Depends(deps.get_clientes_service),
 ) -> ClienteOut:
     row = await service.get_cliente(empresa_id=current_user.empresa_id, cliente_id=cliente_id)
@@ -53,6 +54,7 @@ async def get_cliente(
 async def delete_cliente(
     cliente_id: UUID,
     current_user: UserOut = Depends(deps.bind_write_context),
+    _: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     service: ClientesService = Depends(deps.get_clientes_service),
 ) -> Response:
     await service.soft_delete_cliente(empresa_id=current_user.empresa_id, cliente_id=cliente_id)

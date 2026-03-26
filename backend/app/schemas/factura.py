@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Any, Optional
 from uuid import UUID
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_serializer
 
+from app.core.math_engine import as_float_fiat
 from app.schemas.cliente import ClienteOut
 
 
@@ -81,6 +82,30 @@ class FacturaOut(BaseModel):
     )
     hash_anterior: str | None = None
     bloqueado: bool | None = None
+    fingerprint: str | None = Field(
+        default=None,
+        description="Huella encadenada VeriFactu (post-finalización); puede diferir de hash_registro",
+    )
+    fingerprint_hash: str | None = Field(
+        default=None,
+        description="Hash de encadenamiento de factura (integridad inmutable por registro).",
+    )
+    prev_fingerprint: str | None = Field(
+        default=None,
+        description="Huella fingerprint de la factura finalizada anterior en la cadena",
+    )
+    previous_fingerprint: str | None = Field(
+        default=None,
+        description="Hash de la factura anterior en la cadena de fingerprint_hash.",
+    )
+    qr_code_url: str | None = Field(
+        default=None,
+        description="URL TIKE de cotejo AEAT codificada en el QR de registro",
+    )
+    is_finalized: bool | None = Field(
+        default=None,
+        description="TRUE cuando se completó POST finalizar (QR + cadena fingerprint)",
+    )
     xml_verifactu: str | None = Field(
         default=None,
         description="XML de alta VeriFactu (UTF-8) generado al emitir y sellar el hash",
@@ -111,8 +136,26 @@ class FacturaOut(BaseModel):
         default=None,
         description="Identificador del movimiento bancario emparejado (GoCardless / ref.)",
     )
+    aeat_sif_estado: str | None = Field(
+        default=None,
+        description="Estado remisión SIF AEAT: aceptado, aceptado_con_errores, rechazado, error_tecnico, omitido, pendiente",
+    )
+    aeat_sif_csv: str | None = Field(default=None, description="CSV o traza devuelta por la AEAT")
+    aeat_sif_codigo: str | None = Field(default=None)
+    aeat_sif_descripcion: str | None = Field(default=None)
+    aeat_sif_actualizado_en: datetime | None = Field(default=None)
 
     model_config = ConfigDict(extra="ignore")
+
+    @field_serializer("base_imponible", "cuota_iva", "total_factura", mode="plain")
+    def _ser_fiat_amounts(self, v: float) -> float:
+        return as_float_fiat(v)
+
+    @field_serializer("total_km_estimados_snapshot", mode="plain")
+    def _ser_km_snapshot(self, v: float | None) -> float | None:
+        if v is None:
+            return None
+        return as_float_fiat(v)
 
 
 class FacturaGenerateResult(BaseModel):
@@ -120,3 +163,111 @@ class FacturaGenerateResult(BaseModel):
     portes_facturados: list[UUID]
     pdf_base64: str | None = None
     pdf_storage_path: str | None = None
+
+
+class FacturaRecalculateIn(BaseModel):
+    """Opciones para recalcular totales desde el snapshot (sin persistir si no se indica)."""
+
+    global_discount: float = Field(default=0, ge=0, description="Descuento global en EUR")
+    aplicar_recargo_equivalencia: bool = False
+
+
+class FacturaRecalculateOut(BaseModel):
+    """Desglose MathEngine (ROUND_HALF_UP, coherente a céntimo)."""
+
+    factura_id: int
+    base_imponible: float
+    cuota_iva: float
+    cuota_recargo_equivalencia: float
+    total_factura: float
+    desglose_por_tipo: list[dict[str, Any]]
+    lineas: list[dict[str, Any]]
+    ajuste_centimos: float
+    importe_descuento_global_aplicado: float
+
+    @field_serializer(
+        "base_imponible",
+        "cuota_iva",
+        "cuota_recargo_equivalencia",
+        "total_factura",
+        "ajuste_centimos",
+        "importe_descuento_global_aplicado",
+        mode="plain",
+    )
+    def _ser_recalc(self, v: float) -> float:
+        return as_float_fiat(v)
+
+
+class FacturaPdfEmisorOut(BaseModel):
+    """Emisor fiscal para plantilla PDF comercial."""
+
+    nombre: str
+    nif: str
+    direccion: str | None = None
+
+
+class FacturaPdfReceptorOut(BaseModel):
+    nombre: str
+    nif: str | None = None
+
+
+class FacturaPdfLineaOut(BaseModel):
+    concepto: str
+    cantidad: float
+    precio_unitario: float
+    importe: float
+
+    @field_serializer("cantidad", "precio_unitario", "importe", mode="plain")
+    def _ser_linea_qty(self, v: float) -> float:
+        return as_float_fiat(v)
+
+
+class FacturaPdfDataOut(BaseModel):
+    """
+    Payload para ``@react-pdf/renderer``: totales redondeados con el Math Engine,
+    QR VeriFactu (TIKE) en Base64 y metadatos de auditoría.
+    """
+
+    factura_id: int
+    numero_factura: str
+    num_factura_verifactu: str | None = None
+    tipo_factura: str | None = None
+    fecha_emision: date
+    emisor: FacturaPdfEmisorOut
+    receptor: FacturaPdfReceptorOut
+    lineas: list[FacturaPdfLineaOut]
+    base_imponible: float
+    tipo_iva_porcentaje: float
+    cuota_iva: float
+    total_factura: float
+    verifactu_qr_base64: str = Field(
+        default="",
+        description="PNG del QR en Base64 (ASCII); vacío si no hay URL TIKE válida.",
+    )
+    verifactu_validation_url: str | None = Field(
+        default=None,
+        description="URL codificada en el QR (TIKE o reconstruida).",
+    )
+    verifactu_hash_audit: str = Field(
+        default="",
+        description="Primeros y últimos 8 caracteres del fingerprint o hash_registro para pie legal.",
+    )
+    fingerprint_completo: str | None = Field(
+        default=None,
+        description="Huella encadenada VeriFactu si la factura está finalizada.",
+    )
+    hash_registro: str | None = None
+    aeat_csv_ultimo_envio: str | None = Field(
+        default=None,
+        description="CSV/traza del último registro en ``verifactu_envios`` (si existe).",
+    )
+
+    @field_serializer(
+        "base_imponible",
+        "tipo_iva_porcentaje",
+        "cuota_iva",
+        "total_factura",
+        mode="plain",
+    )
+    def _ser_pdf_totals(self, v: float) -> float:
+        return as_float_fiat(v)

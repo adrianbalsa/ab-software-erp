@@ -18,6 +18,7 @@ from app.db import supabase as supabase_db
 from app.db.supabase import SupabaseAsync
 from app.schemas.flota import FlotaVehiculoIn
 from app.schemas.user import UserOut
+from app.core.rbac import VALID_ROLES, RoleChecker
 from app.services.auth_service import AuthService
 from app.services.clientes_service import ClientesService
 from app.services.refresh_token_service import RefreshTokenService
@@ -32,8 +33,15 @@ from app.services.portes_service import PortesService
 from app.services.presupuestos_service import PresupuestosService
 from app.services.report_service import ReportService
 from app.services.bank_service import BankService
+from app.services.payment_service import PaymentService
+from app.services.reconciliation_service import ReconciliationService
+from app.services.accounting_export import AccountingExportService
+from app.services.treasury_service import TreasuryService
+from app.services.webhooks_admin_service import WebhooksAdminService
+from app.services.fleet_maintenance_service import FleetMaintenanceService
 from app.services.stripe_service import assert_empresa_billing_active
 from app.services.ai_service import LogisAdvisorService
+from app.services.esg_audit_service import EsgAuditService
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -129,6 +137,10 @@ async def get_finance_service(db: SupabaseAsync = Depends(get_db)) -> FinanceSer
     return FinanceService(db)
 
 
+async def get_esg_audit_service(db: SupabaseAsync = Depends(get_db)) -> EsgAuditService:
+    return EsgAuditService(db)
+
+
 async def get_logis_advisor_service(
     finance: FinanceService = Depends(get_finance_service),
     facturas: FacturasService = Depends(get_facturas_service),
@@ -145,6 +157,30 @@ async def get_report_service(db: SupabaseAsync = Depends(get_db)) -> ReportServi
 
 async def get_bank_service(db: SupabaseAsync = Depends(get_db)) -> BankService:
     return BankService(db)
+
+
+async def get_payment_service(db: SupabaseAsync = Depends(get_db)) -> PaymentService:
+    return PaymentService(db)
+
+
+async def get_reconciliation_service(db: SupabaseAsync = Depends(get_db)) -> ReconciliationService:
+    return ReconciliationService(db)
+
+
+async def get_treasury_service(db: SupabaseAsync = Depends(get_db)) -> TreasuryService:
+    return TreasuryService(db)
+
+
+async def get_webhooks_admin_service(db: SupabaseAsync = Depends(get_db)) -> WebhooksAdminService:
+    return WebhooksAdminService(db)
+
+
+async def get_fleet_maintenance_service(db: SupabaseAsync = Depends(get_db)) -> FleetMaintenanceService:
+    return FleetMaintenanceService(db)
+
+
+async def get_accounting_export_service(db: SupabaseAsync = Depends(get_db)) -> AccountingExportService:
+    return AccountingExportService(db)
 
 
 async def get_current_user(
@@ -180,8 +216,39 @@ async def get_current_user(
         if user_out.empresa_id != expected:
             raise credentials_exc
 
+    jwt_cliente = payload.get("cliente_id")
+    if jwt_cliente is not None and str(jwt_cliente).strip():
+        try:
+            jc = UUID(str(jwt_cliente).strip())
+        except ValueError:
+            raise credentials_exc
+        if user_out.cliente_id is None or user_out.cliente_id != jc:
+            raise credentials_exc
+
     await auth_service.ensure_empresa_context(empresa_id=user_out.empresa_id)
+    await auth_service.ensure_rbac_context(user=user_out)
     return user_out
+
+
+def require_role(*allowed_roles: str):
+    """
+    Dependencia RBAC operativa (profiles.role). El JWT solo complementa UX;
+    la fuente de verdad es el perfil recargado vía ``get_current_user``.
+    """
+    allowed = frozenset(allowed_roles)
+    unknown = allowed - VALID_ROLES
+    if unknown:
+        raise ValueError(f"require_role: valores no válidos {sorted(unknown)}")
+
+    async def _dep(current_user: UserOut = Depends(get_current_user)) -> UserOut:
+        if current_user.rbac_role not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permiso denegado para su rol operativo.",
+            )
+        return current_user
+
+    return _dep
 
 
 async def get_current_active_user(
@@ -219,6 +286,7 @@ async def bind_write_context(
     (defensa en profundidad frente a fugas de contexto entre corrutinas / pool HTTP).
     """
     await auth_service.ensure_empresa_context(empresa_id=current_user.empresa_id)
+    await auth_service.ensure_rbac_context(user=current_user)
     return current_user
 
 
@@ -243,6 +311,21 @@ async def require_admin_write_user(
     return current_user
 
 
+async def require_portal_cliente(
+    _jwt_ok: dict = Depends(RoleChecker(["CLIENTE"])),
+    current_user: UserOut = Depends(get_current_user),
+) -> UserOut:
+    """
+    Usuario portal: JWT con rol cliente + perfil ``profiles.role=cliente`` y ``cliente_id`` obligatorio.
+    """
+    if current_user.rbac_role != "cliente" or current_user.cliente_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere cuenta de portal cliente (perfil incompleto).",
+        )
+    return current_user
+
+
 async def require_admin_active_write_user(
     current_user: UserOut = Depends(get_current_active_user),
     auth_service: AuthService = Depends(get_auth_service),
@@ -257,6 +340,7 @@ async def require_admin_active_write_user(
             detail="Acceso denegado: requiere rol admin",
         )
     await auth_service.ensure_empresa_context(empresa_id=current_user.empresa_id)
+    await auth_service.ensure_rbac_context(user=current_user)
     return current_user
 
 

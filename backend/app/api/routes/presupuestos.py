@@ -14,7 +14,7 @@ router = APIRouter()
 @router.post("/calcular", response_model=PresupuestoCalculoOut)
 async def calcular_presupuesto(
     payload: PresupuestoCalculoIn,
-    current_user: UserOut = Depends(deps.get_current_user),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     service: PresupuestosService = Depends(deps.get_presupuestos_service),
 ) -> PresupuestoCalculoOut:
     # Tenant desde JWT/cookie (ensure_empresa_context); nunca desde el body (anti-spoofing).

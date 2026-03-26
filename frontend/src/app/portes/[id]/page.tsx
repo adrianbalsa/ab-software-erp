@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { FileText, Loader2 } from "lucide-react";
 
+import { CmrPdfViewerModal } from "@/components/portes/CmrPdfViewerModal";
+import { generateCmrPdfBlob } from "@/components/portes/CmrPdfTemplate";
+import { API_BASE, authHeaders, getPorteCmrData } from "@/lib/api";
 import { RouteMap } from "@/components/maps/RouteMap";
-import { API_BASE, authHeaders } from "@/lib/api";
 
 type PorteDetail = {
   id: string;
@@ -25,6 +28,11 @@ export default function PorteDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [cmrOpen, setCmrOpen] = useState(false);
+  const [cmrPdfUrl, setCmrPdfUrl] = useState<string | null>(null);
+  const [cmrLoading, setCmrLoading] = useState(false);
+  const [cmrError, setCmrError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -35,7 +43,7 @@ export default function PorteDetailPage() {
         headers: { ...authHeaders() },
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = (await res.json().catch(() => ({}))) as { detail?: string };
         throw new Error(err?.detail || `HTTP ${res.status}`);
       }
       setPorte((await res.json()) as PorteDetail);
@@ -51,6 +59,41 @@ export default function PorteDetailPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    return () => {
+      if (cmrPdfUrl) URL.revokeObjectURL(cmrPdfUrl);
+    };
+  }, [cmrPdfUrl]);
+
+  const closeCmr = useCallback(() => {
+    setCmrOpen(false);
+    setCmrPdfUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setCmrError(null);
+  }, []);
+
+  const generarCmr = useCallback(async () => {
+    if (!id) return;
+    setCmrLoading(true);
+    setCmrError(null);
+    try {
+      const data = await getPorteCmrData(id);
+      const blob = await generateCmrPdfBlob(data);
+      setCmrPdfUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(blob);
+      });
+      setCmrOpen(true);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Error al generar CMR";
+      setCmrError(msg);
+    } finally {
+      setCmrLoading(false);
+    }
+  }, [id]);
+
   if (!id) {
     return (
       <div className="min-h-screen ab-app-gradient p-8">
@@ -61,8 +104,16 @@ export default function PorteDetailPage() {
 
   return (
     <div className="min-h-screen ab-app-gradient pb-12">
+      <CmrPdfViewerModal
+        open={cmrOpen}
+        onClose={closeCmr}
+        title="Carta de porte (CMR)"
+        pdfUrl={cmrPdfUrl}
+        fileBaseName={`cmr-${id.slice(0, 8)}`}
+      />
+
       <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-8">
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex flex-wrap items-center gap-4 mb-6">
           <Link
             href="/portes"
             className="text-sm font-medium text-blue-600 hover:text-blue-800"
@@ -83,11 +134,34 @@ export default function PorteDetailPage() {
           </div>
         )}
 
+        {cmrError && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {cmrError}
+          </div>
+        )}
+
         {porte && !loading && (
           <div className="space-y-6">
             <div className="ab-card rounded-2xl p-6">
-              <h1 className="text-xl font-bold text-slate-900">Detalle del porte</h1>
-              <p className="text-sm text-slate-500 mt-1 font-mono">{porte.id}</p>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h1 className="text-xl font-bold text-slate-900">Detalle del porte</h1>
+                  <p className="text-sm text-slate-500 mt-1 font-mono">{porte.id}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void generarCmr()}
+                  disabled={cmrLoading}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                >
+                  {cmrLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FileText className="w-4 h-4" />
+                  )}
+                  Generar CMR
+                </button>
+              </div>
               <dl className="mt-4 grid gap-2 text-sm">
                 <div className="flex items-baseline gap-2">
                   <dt className="text-slate-500 w-28 shrink-0">Fecha</dt>

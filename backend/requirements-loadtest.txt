@@ -1,0 +1,3 @@
+# Dependencias solo para pruebas de carga (Locust). No instalar en la imagen Docker de producción.
+# Uso: pip install -r requirements-loadtest.txt
+locust>=2.20.0,<3

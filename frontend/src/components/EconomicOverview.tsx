@@ -29,7 +29,7 @@ function formatEUR(n: number) {
 function OverviewSkeleton() {
   return (
     <div className="space-y-6 animate-pulse">
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="ab-card rounded-2xl p-6 space-y-4">
           <div className="h-4 bg-slate-200/90 rounded w-1/3" />
           <div className="h-[280px] bg-slate-200/70 rounded-xl" />
@@ -124,7 +124,7 @@ export function EconomicOverview() {
         </button>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="ab-card rounded-2xl p-6">
           <h3 className="text-sm font-bold text-slate-800 mb-1">
             Distribución de costes
@@ -132,7 +132,7 @@ export function EconomicOverview() {
           <p className="text-xs text-slate-500 mb-4">
             Gastos operativos por categoría (neto sin IVA)
           </p>
-          <div className="h-[280px] w-full min-w-0">
+          <div className="h-[min(260px,40vh)] min-h-[220px] sm:h-[280px] sm:min-h-[240px] w-full min-w-0">
             {donutData.length === 0 ? (
               <p className="text-sm text-slate-500 py-12 text-center">
                 Sin gastos clasificados para mostrar.
@@ -182,7 +182,7 @@ export function EconomicOverview() {
           <p className="text-xs text-slate-500 mb-4">
             Margen estimado = ingreso × (EBITDA ÷ ingresos)
           </p>
-          <div className="h-[280px] w-full min-w-0">
+          <div className="h-[min(260px,40vh)] min-h-[220px] sm:h-[280px] sm:min-h-[240px] w-full min-w-0">
             {barData.length === 0 ? (
               <p className="text-sm text-slate-500 py-12 text-center">
                 Sin facturas con cliente para rankear.
@@ -234,7 +234,7 @@ export function EconomicOverview() {
         <p className="text-xs text-slate-500 mb-4">
           Últimos 6 meses (ingresos por facturas; gastos por tickets)
         </p>
-        <div className="h-[300px] w-full min-w-0">
+        <div className="h-[min(280px,42vh)] min-h-[220px] sm:h-[300px] sm:min-h-[260px] w-full min-w-0">
           {!hasAreaData ? (
             <p className="text-sm text-slate-500 py-12 text-center">
               Sin movimientos en la ventana de 6 meses.

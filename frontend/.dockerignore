@@ -1,0 +1,15 @@
+# Contexto: carpeta frontend/
+node_modules
+.next
+out
+.git
+.gitignore
+*.md
+.env
+.env.*
+!.env.example
+npm-debug.log*
+.DS_Store
+coverage
+.turbo
+.vercel

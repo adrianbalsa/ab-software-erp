@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import datetime
 import hashlib
 import json
@@ -8,6 +9,22 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.db.supabase import SupabaseAsync
+from app.core.crypto import pii_crypto
+from app.services.aeat_qr_service import (
+    build_srei_verifactu_url,
+    build_tike_verifactu_url,
+    qr_png_bytes_from_url,
+)
+
+# Semilla de cadena de huellas ``fingerprint`` (primera factura finalizada de la empresa).
+# Distinta del encadenamiento ``hash_registro`` al emitir (allí ``hash_anterior`` vacío en el primero).
+VERIFACTU_CHAIN_SEED_HEX = hashlib.sha256(
+    b"VERIFACTU|FINGERPRINT_CHAIN|GENESIS|AB_SCANNER|v1"
+).hexdigest()
+
+# Génesis para cadena de ``hash_factura`` (inalterabilidad): cadena de ceros (64 hex = 256 bits).
+# Primera factura del tenant: ``hash_anterior`` = génesis; ``hash_factura`` = SHA-256(datos|génesis).
+VERIFACTU_INVOICE_GENESIS_HASH = "0" * 64
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +93,34 @@ class VerifactuService:
             return None
         t = str(value).strip()
         return t if t else None
+
+    @staticmethod
+    def generate_invoice_hash(invoice_data: dict[str, Any], previous_hash: str) -> str:
+        """
+        Huella de inalterabilidad para ``public.facturas.hash_factura`` (cadena dependiente del anterior).
+
+        Concatena (determinista): número, fecha ISO, NIF emisor, total con 2 decimales, y ``previous_hash``.
+        Si ``previous_hash`` viene vacío, se usa ``VERIFACTU_INVOICE_GENESIS_HASH``.
+        """
+        num = VerifactuService._norm_str(
+            invoice_data.get("num_factura") or invoice_data.get("numero_factura")
+        )
+        fecha = VerifactuService._norm_fecha_iso(
+            invoice_data.get("fecha_emision") or invoice_data.get("fecha")
+        )
+        nif_e = VerifactuService._norm_nif(
+            invoice_data.get("nif_emisor") or invoice_data.get("nif_empresa")
+        )
+        try:
+            total = float(invoice_data.get("total_factura") or invoice_data.get("total") or 0.0)
+        except (TypeError, ValueError):
+            total = 0.0
+        tot = "{:.2f}".format(total)
+        prev = str(previous_hash or "").strip()
+        if not prev:
+            prev = VERIFACTU_INVOICE_GENESIS_HASH
+        cadena = f"{num}|{fecha}|{nif_e}|{tot}|{prev}"
+        return hashlib.sha256(cadena.encode("utf-8")).hexdigest()
 
     @staticmethod
     def _cadena_para_hash_verifactu(
@@ -150,7 +195,7 @@ class VerifactuService:
     async def try_obtener_hash_anterior(self, *, empresa_id: str) -> str | None:
         """
         Último hash de encadenamiento: **misma fila** que el último ``numero_secuencial``.
-        Prefiere ``hash_registro`` (canónico VeriFactu), si no ``hash_factura`` (legacy).
+        Prefiere ``hash_factura``, si no ``hash_registro``. Si no hay facturas, ``None``.
         """
         prev, _seq = await self._ultima_factura_cadena_row(empresa_id=empresa_id)
         return prev
@@ -163,10 +208,10 @@ class VerifactuService:
         """
         Una sola lectura: última factura emitida por empresa (orden fiscal).
 
-        - ``hash`` para encadenar: ``hash_registro`` o, si falta, ``hash_factura``.
+        - ``hash`` para encadenar el **siguiente** registro: preferir ``hash_factura``, si no ``hash_registro``.
         - ``siguiente_secuencial``: ``max(numero_secuencial)+1``, o 1 si no hay filas / es nulo.
 
-        Desempate: ``fecha_emision`` DESC (misma secuencial teórica o datos legacy).
+        Desempate: ``fecha_emision`` DESC, ``id`` DESC.
         """
         eid = str(empresa_id or "").strip()
         if not eid:
@@ -174,10 +219,11 @@ class VerifactuService:
         try:
             q = (
                 self._db.table("facturas")
-                .select("hash_registro, hash_factura, numero_secuencial, fecha_emision")
+                .select("hash_registro, hash_factura, numero_secuencial, fecha_emision, id")
                 .eq("empresa_id", eid)
                 .order("numero_secuencial", desc=True)
                 .order("fecha_emision", desc=True)
+                .order("id", desc=True)
                 .limit(1)
             )
             res: Any = await self._db.execute(q)
@@ -185,7 +231,7 @@ class VerifactuService:
             if not rows:
                 return None, 1
             row = rows[0]
-            raw = row.get("hash_registro") or row.get("hash_factura")
+            raw = row.get("hash_factura") or row.get("hash_registro")
             h = VerifactuService._norm_hash_anterior(str(raw) if raw is not None else None)
             val = row.get("numero_secuencial")
             try:
@@ -197,16 +243,340 @@ class VerifactuService:
         except Exception:
             return None, 1
 
+    async def _hash_factura_por_secuencial(
+        self, *, empresa_id: str, numero_secuencial: int
+    ) -> str | None:
+        """Hash almacenado de la factura con ``numero_secuencial`` dado (encadenamiento)."""
+        eid = str(empresa_id or "").strip()
+        if not eid:
+            return None
+        try:
+            q = (
+                self._db.table("facturas")
+                .select("hash_factura, hash_registro")
+                .eq("empresa_id", eid)
+                .eq("numero_secuencial", int(numero_secuencial))
+                .limit(1)
+            )
+            res: Any = await self._db.execute(q)
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+            if not rows:
+                return None
+            raw = rows[0].get("hash_factura") or rows[0].get("hash_registro")
+            return VerifactuService._norm_hash_anterior(str(raw) if raw is not None else None)
+        except Exception:
+            return None
+
+    async def verificar_cadena_facturas(
+        self,
+        *,
+        empresa_id: str,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """
+        Recorre las últimas ``limit`` facturas (por ``numero_secuencial`` desc), re-calcula
+        ``generate_invoice_hash`` y comprueba coherencia con ``hash_anterior`` y ``hash_factura``.
+        """
+        eid = str(empresa_id or "").strip()
+        if not eid:
+            return {"ok": False, "error": "empresa_id vacío", "revisadas": 0, "discrepancies": []}
+
+        lim = max(1, min(500, int(limit)))
+        try:
+            q = (
+                self._db.table("facturas")
+                .select(
+                    "id,numero_secuencial,num_factura,numero_factura,fecha_emision,"
+                    "nif_emisor,total_factura,hash_factura,hash_registro,hash_anterior"
+                )
+                .eq("empresa_id", eid)
+                .order("numero_secuencial", desc=True)
+                .order("id", desc=True)
+                .limit(lim)
+            )
+            res: Any = await self._db.execute(q)
+            rows: list[dict[str, Any]] = list((res.data or []) if hasattr(res, "data") else [])
+        except Exception as exc:
+            return {
+                "ok": False,
+                "error": str(exc),
+                "empresa_id": eid,
+                "revisadas": 0,
+                "discrepancies": [],
+            }
+
+        rows.reverse()
+        discrepancies: list[dict[str, Any]] = []
+
+        if not rows:
+            return {
+                "ok": True,
+                "empresa_id": eid,
+                "revisadas": 0,
+                "discrepancies": [],
+            }
+
+        first = rows[0]
+        try:
+            seq0 = int(first.get("numero_secuencial") or 0)
+        except (TypeError, ValueError):
+            seq0 = 0
+
+        if seq0 <= 1:
+            prev_hash = VERIFACTU_INVOICE_GENESIS_HASH
+        else:
+            fetched = await self._hash_factura_por_secuencial(
+                empresa_id=eid, numero_secuencial=seq0 - 1
+            )
+            prev_hash = fetched if fetched else VERIFACTU_INVOICE_GENESIS_HASH
+
+        for row in rows:
+            ha_raw = row.get("hash_anterior")
+            ha = str(ha_raw if ha_raw is not None else "").strip()
+            if ha.lower() != prev_hash.lower():
+                discrepancies.append(
+                    {
+                        "factura_id": row.get("id"),
+                        "tipo": "hash_anterior",
+                        "esperado": prev_hash,
+                        "almacenado": ha or None,
+                    }
+                )
+
+            raw_nif = row.get("nif_emisor")
+            nif_plain = ""
+            if raw_nif is not None:
+                rn = str(raw_nif).strip()
+                nif_plain = pii_crypto.decrypt_pii(rn) or rn
+
+            num = str(row.get("num_factura") or row.get("numero_factura") or "").strip()
+            inv = {
+                "num_factura": num,
+                "fecha_emision": row.get("fecha_emision"),
+                "nif_emisor": nif_plain,
+                "total_factura": row.get("total_factura"),
+            }
+            expected = VerifactuService.generate_invoice_hash(inv, prev_hash)
+            stored = str(row.get("hash_factura") or row.get("hash_registro") or "").strip()
+            if stored.lower() != expected.lower():
+                discrepancies.append(
+                    {
+                        "factura_id": row.get("id"),
+                        "tipo": "hash_factura",
+                        "esperado": expected,
+                        "almacenado": stored or None,
+                    }
+                )
+
+            prev_hash = stored if stored else expected
+
+        return {
+            "ok": len(discrepancies) == 0,
+            "empresa_id": eid,
+            "revisadas": len(rows),
+            "discrepancies": discrepancies,
+        }
+
+    @staticmethod
+    def fingerprint_desde_eslabon_finalizado(
+        *,
+        prev_fingerprint_final: str | None,
+        nif_emisor: str,
+        nif_cliente: str,
+        num_factura: str,
+        fecha_emision: str,
+        total_factura: float,
+        tipo_factura: str | None = None,
+        num_factura_rectificada: str | None = None,
+    ) -> tuple[str, str | None]:
+        """
+        ``(fingerprint, prev_fingerprint)`` a partir del último eslabón **ya finalizado**
+        (o ``None`` si no hay ninguno → semilla ``VERIFACTU_CHAIN_SEED_HEX`` como hash anterior interno).
+        """
+        prev_norm = VerifactuService._norm_hash_anterior(prev_fingerprint_final)
+        hash_anterior = prev_norm if prev_norm else VERIFACTU_CHAIN_SEED_HEX
+        tipo = str(tipo_factura).strip().upper() if tipo_factura else None
+        tipo_arg = tipo if tipo == "R1" else None
+        rect_arg: str | None = None
+        if tipo_arg == "R1" and num_factura_rectificada:
+            rect_arg = str(num_factura_rectificada).strip() or None
+
+        fp = VerifactuService.generar_hash_factura(
+            nif_empresa=nif_emisor,
+            nif_cliente=nif_cliente,
+            num_factura=num_factura,
+            fecha=str(fecha_emision),
+            total=float(total_factura),
+            hash_anterior=hash_anterior,
+            tipo_factura=tipo_arg,
+            num_factura_rectificada=rect_arg,
+        )
+        return fp, prev_norm
+
+    async def ultima_fingerprint_factura_finalizada(self, *, empresa_id: str) -> str | None:
+        """
+        Huella ``fingerprint`` de la última factura con ``is_finalized`` para la empresa
+        (orden fiscal: ``numero_secuencial``, ``fecha_emision``, ``id``).
+        """
+        eid = str(empresa_id or "").strip()
+        if not eid:
+            return None
+        try:
+            q = (
+                self._db.table("facturas")
+                .select("fingerprint,numero_secuencial,fecha_emision,id")
+                .eq("empresa_id", eid)
+                .eq("is_finalized", True)
+                .not_.is_("fingerprint", "null")  # type: ignore[attr-defined]
+                .order("numero_secuencial", desc=True)
+                .order("fecha_emision", desc=True)
+                .order("id", desc=True)
+                .limit(1)
+            )
+            res: Any = await self._db.execute(q)
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+            if not rows:
+                return None
+            fp = rows[0].get("fingerprint")
+            t = str(fp).strip() if fp is not None else ""
+            return t if t else None
+        except Exception:
+            return None
+
+    async def chain_invoice(
+        self,
+        *,
+        empresa_id: str,
+        nif_emisor: str,
+        nif_cliente: str,
+        num_factura: str,
+        fecha_emision: str,
+        total_factura: float,
+        tipo_factura: str | None = None,
+        num_factura_rectificada: str | None = None,
+    ) -> tuple[str, str | None]:
+        """
+        Igual que ``fingerprint_desde_eslabon_finalizado`` pero resuelve ``prev_fingerprint``
+        leyendo la última factura finalizada de la empresa.
+        """
+        prev_fp = await self.ultima_fingerprint_factura_finalizada(empresa_id=empresa_id)
+        return self.fingerprint_desde_eslabon_finalizado(
+            prev_fingerprint_final=prev_fp,
+            nif_emisor=nif_emisor,
+            nif_cliente=nif_cliente,
+            num_factura=num_factura,
+            fecha_emision=fecha_emision,
+            total_factura=total_factura,
+            tipo_factura=tipo_factura,
+            num_factura_rectificada=num_factura_rectificada,
+        )
+
+    async def generate_aeat_url(self, invoice_id: int) -> str:
+        """
+        URL pública VeriFactu (SREI) para la factura: NIF emisor descifrado, número-serie,
+        fecha e importe total.
+        """
+        fid = int(invoice_id)
+        if fid < 1:
+            raise ValueError("Factura no encontrada")
+        res: Any = await self._db.execute(
+            self._db.table("facturas").select("*").eq("id", fid).limit(1)
+        )
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        if not rows:
+            raise ValueError("Factura no encontrada")
+        fr = dict(rows[0])
+        eid = str(fr.get("empresa_id") or "").strip()
+
+        nif_em = ""
+        raw_ne = fr.get("nif_emisor")
+        if raw_ne is not None:
+            rn = str(raw_ne).strip()
+            nif_em = (pii_crypto.decrypt_pii(rn) or rn).strip()
+        if not nif_em and eid:
+            try:
+                res_e: Any = await self._db.execute(
+                    self._db.table("empresas").select("nif").eq("id", eid).limit(1)
+                )
+                er = (res_e.data or []) if hasattr(res_e, "data") else []
+                if er:
+                    raw = er[0].get("nif")
+                    if raw is not None:
+                        s = str(raw).strip()
+                        nif_em = (pii_crypto.decrypt_pii(s) or s).strip()
+            except Exception:
+                pass
+
+        num_s = str(fr.get("num_factura") or fr.get("numero_factura") or "").strip()
+        fe_str = self._norm_fecha_iso(fr.get("fecha_emision"))
+        try:
+            total = float(fr.get("total_factura") or 0.0)
+        except (TypeError, ValueError):
+            total = 0.0
+
+        if not nif_em or not num_s or not fe_str:
+            raise ValueError(
+                "Datos insuficientes para URL VeriFactu (NIF emisor, número de factura o fecha)"
+            )
+        return build_srei_verifactu_url(nif_em, num_s, fe_str, total)
+
+    async def generate_verifactu_qr(
+        self,
+        *,
+        nif_emisor: str,
+        num_factura: str,
+        fecha: str,
+        importe_total: float,
+        fingerprint: str,
+        storage_bucket: str | None = "facturas",
+        storage_path: str | None = None,
+    ) -> dict[str, str | None]:
+        """
+        URL SREI VeriFactu y PNG en base64; opcionalmente sube el PNG a Supabase Storage.
+        El parámetro ``fingerprint`` se mantiene por compatibilidad de firma pero la URL
+        SREI no lo incluye en la URL.
+        """
+        _ = fingerprint  # reservado por compatibilidad histórica (TIKE incluía huella)
+        url = build_srei_verifactu_url(
+            nif_emisor,
+            num_factura,
+            fecha,
+            importe_total,
+        )
+        png = qr_png_bytes_from_url(url)
+        b64 = base64.b64encode(png).decode("ascii")
+        uploaded: str | None = None
+        if storage_bucket and storage_path:
+            try:
+                await self._db.storage_upload(
+                    bucket=storage_bucket,
+                    path=storage_path,
+                    content=png,
+                    content_type="image/png",
+                )
+                uploaded = storage_path
+            except Exception:
+                uploaded = None
+        return {
+            "verification_url": url,
+            "qr_png_base64": b64,
+            "storage_path": uploaded,
+        }
+
     async def obtener_ultimo_hash_y_secuencial(self, *, empresa_id: str) -> EslabonFacturaAnterior:
         """
         Recupera el eslabón anterior para la cadena VeriFactu en `facturas`:
 
-        - ``hash_anterior``: hash de la **última** factura de la empresa (por ``numero_secuencial``).
+        - ``hash_anterior``: ``hash_factura`` de la última factura emitida; si no hay facturas,
+          **génesis** (``VERIFACTU_INVOICE_GENESIS_HASH``).
         - ``siguiente_secuencial``: siguiente entero (1 si no hay facturas previas).
         """
         hash_anterior, siguiente = await self._ultima_factura_cadena_row(empresa_id=empresa_id)
+        chain_prev = (
+            VERIFACTU_INVOICE_GENESIS_HASH if hash_anterior is None else hash_anterior
+        )
         return EslabonFacturaAnterior(
-            hash_anterior=hash_anterior,
+            hash_anterior=chain_prev,
             siguiente_secuencial=int(siguiente),
         )
 
@@ -368,9 +738,16 @@ class VerifactuService:
                 or (base + impuestos)
             )
 
+            nif_empresa_plain = pii_crypto.decrypt_pii(nif_emisor) or nif_emisor
+            raw_nif_cliente = presupuesto_row.get("nif_cliente") or ""
+            nif_cliente_plain = (
+                pii_crypto.decrypt_pii(str(raw_nif_cliente).strip())
+                or str(raw_nif_cliente).strip()
+            )
+
             datos_hash = {
-                "nif_empresa": nif_emisor,
-                "nif_cliente": presupuesto_row.get("nif_cliente") or "",
+                "nif_empresa": nif_empresa_plain,
+                "nif_cliente": nif_cliente_plain,
                 "num_factura": num_factura,
                 "fecha": str(fecha),
                 "total": total,
@@ -481,14 +858,21 @@ class VerifactuService:
             num_factura_rect = "RECT-{}-{:06d}".format(anio, numero_secuencial)
 
             nif_empresa = factura_original.get("nif_empresa")
-            if not nif_empresa:
+            nif_empresa_plain = (
+                pii_crypto.decrypt_pii(str(nif_empresa).strip()) or str(nif_empresa).strip()
+            ) if nif_empresa is not None else ""
+
+            if not nif_empresa_plain:
                 res_emp: Any = await self._db.execute(
                     self._db.table("empresas").select("nif").eq("id", empresa_id).limit(1)
                 )
                 emp_rows: list[dict[str, Any]] = (
                     res_emp.data or [] if hasattr(res_emp, "data") else []
                 )
-                nif_empresa = emp_rows[0].get("nif", "") if emp_rows else ""
+                raw_emp_nif = emp_rows[0].get("nif", "") if emp_rows else ""
+                nif_empresa_plain = (
+                    pii_crypto.decrypt_pii(str(raw_emp_nif).strip()) or str(raw_emp_nif).strip()
+                )
 
             hash_anterior = await self.obtener_hash_anterior(empresa_id)
 
@@ -496,9 +880,15 @@ class VerifactuService:
             total_neto = float(cambios.get("total_neto") or (nuevo_total / 1.21))
             impuestos = float(cambios.get("impuestos") or (nuevo_total - total_neto))
 
+            raw_nif_cliente = cambios.get("nif_cliente", "") or factura_original.get("nif_cliente", "") or ""
+            nif_cliente_plain = (
+                pii_crypto.decrypt_pii(str(raw_nif_cliente).strip())
+                or str(raw_nif_cliente).strip()
+            )
+
             datos_hash = {
-                "nif_empresa": nif_empresa,
-                "nif_cliente": cambios.get("nif_cliente", ""),
+                "nif_empresa": nif_empresa_plain,
+                "nif_cliente": nif_cliente_plain,
                 "num_factura": num_factura_rect,
                 "fecha": str(datetime.date.today()),
                 "total": nuevo_total,
@@ -510,7 +900,7 @@ class VerifactuService:
                     {
                         "empresa_id": empresa_id,
                         "cliente": cambios.get("cliente", factura_original.get("cliente")),
-                        "nif_cliente": cambios.get("nif_cliente", factura_original.get("nif_cliente")),
+                        "nif_cliente": pii_crypto.encrypt_pii(nif_cliente_plain),
                         "titulo": "RECTIFICATIVA de {}".format(
                             factura_original.get("num_factura", "N/A")
                         ),
@@ -527,7 +917,7 @@ class VerifactuService:
                         "fecha_factura": str(datetime.date.today()),
                         "hash_factura": hash_rect,
                         "hash_anterior": hash_anterior,
-                        "nif_empresa": nif_empresa,
+                        "nif_empresa": pii_crypto.encrypt_pii(nif_empresa_plain),
                         "observaciones": "Rectificativa de {} | {}".format(
                             factura_original.get("num_factura"), cambios.get("motivo", "")
                         ),

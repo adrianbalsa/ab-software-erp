@@ -13,9 +13,12 @@ from app.schemas.flota import (
     AmortizacionLineaOut,
     FlotaAlertaOut,
     FlotaAlertaPrioridad,
+    FlotaEstadoActualOut,
+    FlotaLiveTrackingOut,
     FlotaMetricasOut,
     FlotaVehiculoIn,
     FlotaVehiculoOut,
+    LiveTrackingEstado,
     MantenimientoFlotaCreate,
 )
 
@@ -45,6 +48,12 @@ def _priority_days(days_left: int) -> FlotaAlertaPrioridad:
     if days_left <= 45:
         return "media"
     return "baja"
+
+
+def _norm_matricula_key(raw: Any) -> str:
+    """Clave estable para cruzar ``vehiculos.matricula`` con ``flota.matricula``."""
+    s = str(raw or "").strip().upper()
+    return "".join(c for c in s if c.isalnum())
 
 
 def _priority_km(km_remaining: float) -> FlotaAlertaPrioridad:
@@ -161,6 +170,126 @@ class FlotaService:
         for row in rows:
             try:
                 out.append(FlotaVehiculoOut(**row))
+            except Exception:
+                continue
+        return out
+
+    async def list_estado_actual(self, *, empresa_id: str) -> list[FlotaEstadoActualOut]:
+        """
+        Estado operativo para mapa en tiempo real.
+
+        Objetivo principal: JOIN lógico `vehiculos` + `portes_activos` con forma exacta de `FleetMapTruck`.
+        Fallback legacy: `flota` + `portes` (estado pendiente).
+        """
+        veh_rows: list[dict[str, Any]] = []
+        try:
+            qv = filter_not_deleted(
+                self._db.table("vehiculos")
+                .select("id,matricula,lat,lng,ultima_latitud,ultima_longitud,ultima_actualizacion_gps")
+                .eq("empresa_id", empresa_id)
+            )
+            rveh: Any = await self._db.execute(qv)
+            veh_rows = (rveh.data or []) if hasattr(rveh, "data") else []
+        except Exception:
+            try:
+                qv = filter_not_deleted(
+                    self._db.table("vehiculos").select("id,matricula,lat,lng").eq("empresa_id", empresa_id)
+                )
+                rveh = await self._db.execute(qv)
+                veh_rows = (rveh.data or []) if hasattr(rveh, "data") else []
+            except Exception:
+                qv = filter_not_deleted(
+                    self._db.table("flota").select("id,matricula,lat,lng").eq("empresa_id", empresa_id)
+                )
+                rveh = await self._db.execute(qv)
+                veh_rows = (rveh.data or []) if hasattr(rveh, "data") else []
+
+        veh_by_id: dict[str, dict[str, Any]] = {}
+        veh_ids: list[str] = []
+        for row in veh_rows:
+            vid = str(row.get("id") or "").strip()
+            if not vid:
+                continue
+            def _to_f(v: Any) -> float | None:
+                if v is None:
+                    return None
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    return None
+
+            ulat = _to_f(row.get("ultima_latitud"))
+            ulng = _to_f(row.get("ultima_longitud"))
+            plat = _to_f(row.get("lat"))
+            plng = _to_f(row.get("lng"))
+            lat = ulat if ulat is not None else plat
+            lng = ulng if ulng is not None else plng
+            if lat is None or lng is None:
+                continue
+            row = {**row, "lat": lat, "lng": lng}
+            veh_by_id[vid] = row
+            veh_ids.append(vid)
+
+        if not veh_ids:
+            return []
+
+        porte_rows: list[dict[str, Any]] = []
+        try:
+            qp = filter_not_deleted(
+                self._db.table("portes_activos")
+                .select("id,vehiculo_id,origen,destino,margen_estimado")
+                .eq("empresa_id", empresa_id)
+                .in_("vehiculo_id", veh_ids)
+            )
+            rp: Any = await self._db.execute(qp)
+            porte_rows = (rp.data or []) if hasattr(rp, "data") else []
+        except Exception:
+            qp = filter_not_deleted(
+                self._db.table("portes")
+                .select("id,vehiculo_id,origen,destino,precio_pactado")
+                .eq("empresa_id", empresa_id)
+                .eq("estado", "pendiente")
+                .in_("vehiculo_id", veh_ids)
+            )
+            rp = await self._db.execute(qp)
+            raw_rows = (rp.data or []) if hasattr(rp, "data") else []
+            porte_rows = []
+            for r in raw_rows:
+                # Fallback de margen estimado cuando no existe la vista `portes_activos`.
+                margen_estimado = float(r.get("precio_pactado") or 0.0)
+                merged = dict(r)
+                merged["margen_estimado"] = margen_estimado
+                porte_rows.append(merged)
+
+        # JOIN lógico vehículo -> primer porte activo asignado (1 camión = 1 porte en mapa operativo).
+        porte_by_veh_id: dict[str, dict[str, Any]] = {}
+        for row in porte_rows:
+            veh_id = str(row.get("vehiculo_id") or "").strip()
+            if not veh_id or veh_id in porte_by_veh_id:
+                continue
+            porte_by_veh_id[veh_id] = row
+
+        out: list[FlotaEstadoActualOut] = []
+        for veh_id, vrow in veh_by_id.items():
+            prow = porte_by_veh_id.get(veh_id)
+            if prow is None:
+                continue
+            try:
+                out.append(
+                    FlotaEstadoActualOut(
+                        id=veh_id,
+                        position={
+                            "lat": float(vrow.get("lat")),
+                            "lng": float(vrow.get("lng")),
+                        },
+                        porte={
+                            "id": str(prow.get("id") or ""),
+                            "origin": str(prow.get("origen") or ""),
+                            "destination": str(prow.get("destino") or ""),
+                            "estimatedMargin": float(prow.get("margen_estimado") or 0.0),
+                        },
+                    )
+                )
             except Exception:
                 continue
         return out
@@ -365,3 +494,187 @@ class FlotaService:
     async def export_estado_flota_csv_bytes(self, *, empresa_id: str) -> bytes:
         rows = await self._list_fleet_rows_raw(empresa_id=empresa_id)
         return self.export_estado_flota_csv(empresa_id=empresa_id, rows=rows)
+
+    async def update_ubicacion_gps(
+        self,
+        *,
+        empresa_id: str,
+        vehiculo_id: str,
+        latitud: float,
+        longitud: float,
+    ) -> None:
+        """Persiste última posición GPS en ``vehiculos`` (Fleet tracking)."""
+        from datetime import datetime, timezone
+
+        eid = str(empresa_id or "").strip()
+        vid = str(vehiculo_id or "").strip()
+        if not eid or not vid:
+            raise ValueError("empresa_id y vehiculo_id son obligatorios")
+
+        q = filter_not_deleted(
+            self._db.table("vehiculos").select("id").eq("empresa_id", eid).eq("id", vid).limit(1)
+        )
+        res: Any = await self._db.execute(q)
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        if not rows:
+            raise ValueError("Vehículo no encontrado")
+
+        ts = datetime.now(timezone.utc).isoformat()
+        payload = {
+            "ultima_latitud": float(latitud),
+            "ultima_longitud": float(longitud),
+            "ultima_actualizacion_gps": ts,
+        }
+        await self._db.execute(
+            filter_not_deleted(
+                self._db.table("vehiculos").update(payload).eq("empresa_id", eid).eq("id", vid)
+            )
+        )
+
+    async def list_live_tracking(self, *, empresa_id: str) -> list[FlotaLiveTrackingOut]:
+        """
+        Lista ultraligera de vehículos con última posición GPS y estado operativo
+        (Disponible / En Ruta / Taller). Conductor vía ``profiles.assigned_vehiculo_id`` → ``flota.id``
+        (misma matrícula que ``vehiculos``).
+        """
+        eid = str(empresa_id or "").strip()
+        if not eid:
+            return []
+
+        veh_rows: list[dict[str, Any]] = []
+        try:
+            qv = filter_not_deleted(
+                self._db.table("vehiculos")
+                .select(
+                    "id,matricula,lat,lng,ultima_latitud,ultima_longitud,ultima_actualizacion_gps"
+                )
+                .eq("empresa_id", eid)
+            )
+            rveh: Any = await self._db.execute(qv)
+            veh_rows = (rveh.data or []) if hasattr(rveh, "data") else []
+        except Exception:
+            return []
+
+        flota_by_mat: dict[str, dict[str, Any]] = {}
+        try:
+            qf = filter_not_deleted(
+                self._db.table("flota").select("id,matricula,estado").eq("empresa_id", eid)
+            )
+            rf: Any = await self._db.execute(qf)
+            for r in (rf.data or []) if hasattr(rf, "data") else []:
+                if not isinstance(r, dict):
+                    continue
+                k = _norm_matricula_key(r.get("matricula"))
+                if k and k not in flota_by_mat:
+                    flota_by_mat[k] = dict(r)
+        except Exception:
+            pass
+
+        porte_veh_ids: set[str] = set()
+        try:
+            qp = filter_not_deleted(
+                self._db.table("portes")
+                .select("vehiculo_id")
+                .eq("empresa_id", eid)
+                .eq("estado", "pendiente")
+            )
+            rp: Any = await self._db.execute(qp)
+            for r in (rp.data or []) if hasattr(rp, "data") else []:
+                if not isinstance(r, dict):
+                    continue
+                vid_p = str(r.get("vehiculo_id") or "").strip()
+                if vid_p:
+                    porte_veh_ids.add(vid_p)
+        except Exception:
+            pass
+
+        conductor_by_flota_id: dict[str, str] = {}
+        try:
+            qpr: Any = await self._db.execute(
+                self._db.table("profiles")
+                .select("assigned_vehiculo_id,username,email")
+                .eq("empresa_id", eid)
+            )
+            for pr in (qpr.data or []) if hasattr(qpr, "data") else []:
+                if not isinstance(pr, dict):
+                    continue
+                aid = pr.get("assigned_vehiculo_id")
+                if aid is None or not str(aid).strip():
+                    continue
+                fid = str(aid).strip()
+                name = str(pr.get("username") or pr.get("email") or "").strip()
+                if fid and name:
+                    conductor_by_flota_id[fid] = name
+        except Exception:
+            pass
+
+        def _to_f(v: Any) -> float | None:
+            if v is None:
+                return None
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return None
+
+        def _parse_ts(v: Any) -> datetime | None:
+            if v is None:
+                return None
+            if isinstance(v, datetime):
+                return v
+            s = str(v).strip()
+            if not s:
+                return None
+            try:
+                return datetime.fromisoformat(s.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+
+        out: list[FlotaLiveTrackingOut] = []
+        for row in veh_rows:
+            vid = str(row.get("id") or "").strip()
+            if not vid:
+                continue
+            mat = str(row.get("matricula") or "").strip()
+            mk = _norm_matricula_key(mat)
+            flota_row = flota_by_mat.get(mk) if mk else None
+            flota_id: str | None = None
+            if flota_row and flota_row.get("id") is not None:
+                flota_id = str(flota_row.get("id")).strip() or None
+
+            estado_flota = str(flota_row.get("estado") or "").strip() if flota_row else ""
+            estado: LiveTrackingEstado = "Disponible"
+            if estado_flota == "En Taller":
+                estado = "Taller"
+            elif estado_flota in ("Baja", "Vendido"):
+                estado = "Taller"
+            elif (flota_id and flota_id in porte_veh_ids) or (vid in porte_veh_ids):
+                estado = "En Ruta"
+
+            ulat = _to_f(row.get("ultima_latitud"))
+            ulng = _to_f(row.get("ultima_longitud"))
+            plat = _to_f(row.get("lat"))
+            plng = _to_f(row.get("lng"))
+            lat_o = ulat if ulat is not None else plat
+            lng_o = ulng if ulng is not None else plng
+
+            ts = _parse_ts(row.get("ultima_actualizacion_gps"))
+
+            conductor: str | None = None
+            if flota_id:
+                conductor = conductor_by_flota_id.get(flota_id)
+
+            try:
+                out.append(
+                    FlotaLiveTrackingOut(
+                        id=vid,
+                        matricula=mat or "—",
+                        estado=estado,
+                        ultima_latitud=lat_o,
+                        ultima_longitud=lng_o,
+                        ultima_actualizacion_gps=ts,
+                        conductor_nombre=conductor,
+                    )
+                )
+            except Exception:
+                continue
+        return out

@@ -1,13 +1,25 @@
 from __future__ import annotations
 
+import json
 import logging
+import os
+import re
 from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
+from uuid import UUID
+
+import anyio
 
 from app.db.supabase import SupabaseAsync
+from app.schemas.conciliacion import ConciliacionSugerenciaLLM, ConciliarAiOut
 
 _log = logging.getLogger(__name__)
+
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
 
 
 def _invoice_number(row: dict[str, Any]) -> str:
@@ -167,3 +179,495 @@ class ReconciliationService:
             )
 
         return len(pairs), detalle
+
+    # ── Conciliación asistida por IA (movimientos_bancarios) ─────────────────
+
+    async def _cargar_facturas_no_cobradas(self, *, empresa_id: str) -> list[dict[str, Any]]:
+        res: Any = await self._db.execute(
+            self._db.table("facturas")
+            .select("id, total_factura, numero_factura, num_factura, fecha_emision, estado_cobro, cliente")
+            .eq("empresa_id", empresa_id)
+        )
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            st = str(r.get("estado_cobro") or "").strip().lower()
+            if st == "cobrada" or st == "pagada":
+                continue
+            try:
+                tf = float(r.get("total_factura") or 0.0)
+            except (TypeError, ValueError):
+                tf = 0.0
+            if tf <= 0:
+                continue
+            out.append(dict(r))
+        return out
+
+    async def _enriquecer_nombres_cliente(
+        self, *, empresa_id: str, facturas: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        ids: set[str] = set()
+        for r in facturas:
+            cid = r.get("cliente")
+            if cid is not None:
+                ids.add(str(cid).strip())
+        if not ids:
+            return [{**r, "cliente_nombre": None} for r in facturas]
+        nombres: dict[str, str] = {}
+        try:
+            res: Any = await self._db.execute(
+                self._db.table("clientes")
+                .select("id, nombre, nombre_comercial")
+                .eq("empresa_id", empresa_id)
+                .in_("id", list(ids))
+            )
+            for row in (res.data or []) if hasattr(res, "data") else []:
+                i = str(row.get("id") or "").strip()
+                if not i:
+                    continue
+                nc = (row.get("nombre_comercial") or row.get("nombre") or "").strip()
+                nombres[i] = nc or i
+        except Exception:
+            pass
+        enriched: list[dict[str, Any]] = []
+        for r in facturas:
+            cid = str(r.get("cliente") or "").strip()
+            enriched.append({**r, "cliente_nombre": nombres.get(cid)})
+        return enriched
+
+    async def _cargar_movimientos_pendientes_positivos(self, *, empresa_id: str) -> list[dict[str, Any]]:
+        try:
+            res: Any = await self._db.execute(
+                self._db.table("movimientos_bancarios")
+                .select("id, fecha, concepto, importe, iban_origen, estado")
+                .eq("empresa_id", empresa_id)
+                .eq("estado", "Pendiente")
+            )
+        except Exception as exc:
+            _log.warning("movimientos_bancarios no disponible: %s", exc)
+            return []
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            try:
+                imp = float(r.get("importe") or 0.0)
+            except (TypeError, ValueError):
+                imp = 0.0
+            if imp <= 0:
+                continue
+            out.append(dict(r))
+        return out
+
+    @staticmethod
+    def _openai_configured() -> bool:
+        return bool((os.getenv("OPENAI_API_KEY") or "").strip())
+
+    @staticmethod
+    def _llm_model() -> str:
+        return (os.getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
+
+    def _llm_conciliacion_sync(
+        self,
+        *,
+        facturas_json: str,
+        movimientos_json: str,
+    ) -> str:
+        from openai import OpenAI
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY no configurada")
+
+        system = (
+            "Eres un contable experto en conciliación bancaria para transporte y logística. "
+            "Debes emparejar cada movimiento bancario entrante (importe > 0) con como mucho una factura "
+            "pendiente de cobro, o indicar que no hay emparejamiento razonable.\n"
+            "Criterios: importe exacto o muy cercano (tolerancia máxima 0,05 EUR salvo error redondeo), "
+            "nombre del cliente o número de factura reconocible en el concepto, fechas coherentes "
+            "(cobro posterior o cercano a emisión).\n"
+            "Responde SOLO con un JSON válido UTF-8 sin markdown, con esta forma exacta:\n"
+            '{"sugerencias":[{"movimiento_id":"<UUID del movimiento>","factura_id":<entero id factura>,'
+            '"confidence_score":0.0,"razonamiento":"texto breve en español"}]}\n'
+            "Si no hay ningún emparejamiento fiable, devuelve {\"sugerencias\":[]}.\n"
+            "Los movimiento_id y factura_id DEBEN copiarse exactamente de los listados proporcionados; "
+            "no inventes identificadores."
+        )
+        user = (
+            "FACTURAS_PENDIENTES_DE_COBRO (JSON):\n"
+            f"{facturas_json}\n\n"
+            "MOVIMIENTOS_BANCARIOS_PENDIENTES (JSON):\n"
+            f"{movimientos_json}"
+        )
+
+        client = OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model=self._llm_model(),
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+        choice = resp.choices[0]
+        content = (choice.message.content or "").strip()
+        if not content:
+            raise RuntimeError("LLM devolvió respuesta vacía")
+        return content
+
+    def _parsear_y_validar_sugerencias_llm(
+        self,
+        raw: str,
+        *,
+        movimientos: list[dict[str, Any]],
+        facturas: list[dict[str, Any]],
+    ) -> list[ConciliacionSugerenciaLLM]:
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"JSON inválido del LLM: {e}") from e
+
+        arr = data.get("sugerencias")
+        if arr is None:
+            raise ValueError("Falta clave 'sugerencias' en JSON del LLM")
+        if not isinstance(arr, list):
+            raise ValueError("'sugerencias' debe ser un array")
+
+        mov_by_id: dict[str, dict[str, Any]] = {}
+        for m in movimientos:
+            mid = str(m.get("id") or "").strip()
+            if mid:
+                mov_by_id[mid] = m
+        fac_by_id: dict[int, dict[str, Any]] = {}
+        for f in facturas:
+            try:
+                fid = int(f.get("id") or 0)
+            except (TypeError, ValueError):
+                continue
+            if fid > 0:
+                fac_by_id[fid] = f
+
+        out: list[ConciliacionSugerenciaLLM] = []
+        seen_mov: set[str] = set()
+        seen_fac: set[int] = set()
+
+        for i, item in enumerate(arr):
+            if not isinstance(item, dict):
+                raise ValueError(f"Elemento {i} no es un objeto")
+            mid_raw = str(item.get("movimiento_id") or "").strip()
+            if not _UUID_RE.match(mid_raw):
+                raise ValueError(f"movimiento_id inválido: {mid_raw!r}")
+            if mid_raw not in mov_by_id:
+                raise ValueError(f"movimiento_id no existe en el lote: {mid_raw}")
+            if mid_raw in seen_mov:
+                raise ValueError(f"movimiento duplicado en sugerencias: {mid_raw}")
+            seen_mov.add(mid_raw)
+
+            try:
+                fid = int(item.get("factura_id"))
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"factura_id inválido: {item.get('factura_id')!r}") from e
+            if fid not in fac_by_id:
+                raise ValueError(f"factura_id no existe en el lote: {fid}")
+            if fid in seen_fac:
+                raise ValueError(f"factura duplicada en sugerencias: {fid}")
+            seen_fac.add(fid)
+
+            try:
+                conf = float(item.get("confidence_score"))
+            except (TypeError, ValueError) as e:
+                raise ValueError("confidence_score inválido") from e
+            razon = str(item.get("razonamiento") or "").strip()
+            if not razon:
+                raise ValueError("razonamiento vacío")
+
+            out.append(
+                ConciliacionSugerenciaLLM(
+                    movimiento_id=UUID(mid_raw),
+                    factura_id=fid,
+                    confidence_score=min(1.0, max(0.0, conf)),
+                    razonamiento=razon[:4000],
+                )
+            )
+
+        return out
+
+    async def generar_sugerencias_conciliacion(self, *, empresa_id: str) -> list[ConciliacionSugerenciaLLM]:
+        """
+        Llama al LLM y valida contra los datos cargados. **No escribe en base de datos.**
+        Lanza ``ValueError`` o ``RuntimeError`` si el JSON es inválido o los IDs no cuadran.
+        """
+        eid = str(empresa_id or "").strip()
+        if not eid:
+            raise ValueError("empresa_id requerido")
+
+        facturas = await self._cargar_facturas_no_cobradas(empresa_id=eid)
+        movimientos = await self._cargar_movimientos_pendientes_positivos(empresa_id=eid)
+        facturas = await self._enriquecer_nombres_cliente(empresa_id=eid, facturas=facturas)
+
+        if not movimientos or not facturas:
+            return []
+
+        if not self._openai_configured():
+            raise RuntimeError("OPENAI_API_KEY no configurada para conciliación IA")
+
+        fac_payload: list[dict[str, Any]] = []
+        for f in facturas:
+            fe = f.get("fecha_emision")
+            fe_s = fe.isoformat()[:10] if hasattr(fe, "isoformat") else str(fe)[:10]
+            fac_payload.append(
+                {
+                    "id": int(f.get("id") or 0),
+                    "total_factura": float(f.get("total_factura") or 0.0),
+                    "numero_factura": str(f.get("numero_factura") or f.get("num_factura") or ""),
+                    "fecha_emision": fe_s,
+                    "estado_cobro": str(f.get("estado_cobro") or ""),
+                    "cliente_nombre": f.get("cliente_nombre"),
+                }
+            )
+
+        mov_payload: list[dict[str, Any]] = []
+        for m in movimientos:
+            fd = m.get("fecha")
+            fd_s = fd.isoformat()[:10] if hasattr(fd, "isoformat") else str(fd)[:10]
+            mov_payload.append(
+                {
+                    "id": str(m.get("id") or ""),
+                    "fecha": fd_s,
+                    "concepto": str(m.get("concepto") or "")[:2000],
+                    "importe": float(m.get("importe") or 0.0),
+                    "iban_origen": m.get("iban_origen"),
+                }
+            )
+
+        fac_json = json.dumps(fac_payload, ensure_ascii=False)
+        mov_json = json.dumps(mov_payload, ensure_ascii=False)
+
+        raw = await anyio.to_thread.run_sync(
+            self._llm_conciliacion_sync,
+            facturas_json=fac_json,
+            movimientos_json=mov_json,
+        )
+        return self._parsear_y_validar_sugerencias_llm(
+            raw,
+            movimientos=movimientos,
+            facturas=facturas,
+        )
+
+    async def persistir_sugerencias_ia(
+        self,
+        *,
+        empresa_id: str,
+        sugerencias: list[ConciliacionSugerenciaLLM],
+    ) -> list[dict[str, Any]]:
+        """Actualiza movimientos a estado Sugerido y vincula factura_id (metadatos IA)."""
+        eid = str(empresa_id or "").strip()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        detalle: list[dict[str, Any]] = []
+        for s in sugerencias:
+            payload = {
+                "estado": "Sugerido",
+                "factura_id": s.factura_id,
+                "confidence_score": float(s.confidence_score),
+                "razonamiento_ia": s.razonamiento,
+                "updated_at": now_iso,
+            }
+            await self._db.execute(
+                self._db.table("movimientos_bancarios")
+                .update(payload)
+                .eq("id", str(s.movimiento_id))
+                .eq("empresa_id", eid)
+                .eq("estado", "Pendiente")
+            )
+            detalle.append(
+                {
+                    "movimiento_id": str(s.movimiento_id),
+                    "factura_id": s.factura_id,
+                    "confidence_score": s.confidence_score,
+                    "razonamiento": s.razonamiento,
+                }
+            )
+        return detalle
+
+    async def ejecutar_conciliacion_ia_completa(self, *, empresa_id: str) -> ConciliarAiOut:
+        """
+        Genera sugerencias con LLM y persiste. Si el LLM o la validación fallan, **no modifica la BD**.
+        """
+        try:
+            sugerencias = await self.generar_sugerencias_conciliacion(empresa_id=empresa_id)
+        except (ValueError, RuntimeError):
+            _log.exception("conciliación IA: fallo en generación/validación (sin cambios en BD)")
+            raise
+
+        if not sugerencias:
+            return ConciliarAiOut(sugerencias_guardadas=0, detalle=[])
+
+        try:
+            detalle = await self.persistir_sugerencias_ia(empresa_id=empresa_id, sugerencias=sugerencias)
+        except Exception:
+            _log.exception("conciliación IA: fallo al persistir")
+            raise RuntimeError("No se pudieron guardar las sugerencias en base de datos.") from None
+
+        return ConciliarAiOut(sugerencias_guardadas=len(detalle), detalle=detalle)
+
+    async def listar_movimientos_sugeridos(self, *, empresa_id: str) -> list[dict[str, Any]]:
+        eid = str(empresa_id or "").strip()
+        res: Any = await self._db.execute(
+            self._db.table("movimientos_bancarios")
+            .select("*")
+            .eq("empresa_id", eid)
+            .eq("estado", "Sugerido")
+            .order("fecha", desc=True)
+        )
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            fid = r.get("factura_id")
+            extra: dict[str, Any] = {
+                "factura_numero": None,
+                "factura_total": None,
+                "factura_fecha": None,
+                "cliente_nombre": None,
+            }
+            if fid is not None:
+                try:
+                    rf: Any = await self._db.execute(
+                        self._db.table("facturas")
+                        .select("numero_factura, num_factura, total_factura, fecha_emision, cliente")
+                        .eq("empresa_id", eid)
+                        .eq("id", int(fid))
+                        .limit(1)
+                    )
+                    fr = (rf.data or []) if hasattr(rf, "data") else []
+                    if fr:
+                        frow = fr[0]
+                        extra["factura_numero"] = str(
+                            frow.get("numero_factura") or frow.get("num_factura") or ""
+                        )
+                        extra["factura_total"] = float(frow.get("total_factura") or 0.0)
+                        fe = frow.get("fecha_emision")
+                        extra["factura_fecha"] = (
+                            fe.isoformat()[:10] if hasattr(fe, "isoformat") else str(fe)[:10]
+                        )
+                        cid = frow.get("cliente")
+                        if cid:
+                            try:
+                                rc: Any = await self._db.execute(
+                                    self._db.table("clientes")
+                                    .select("nombre, nombre_comercial")
+                                    .eq("empresa_id", eid)
+                                    .eq("id", str(cid))
+                                    .limit(1)
+                                )
+                                cr = (rc.data or []) if hasattr(rc, "data") else []
+                                if cr:
+                                    extra["cliente_nombre"] = str(
+                                        cr[0].get("nombre_comercial") or cr[0].get("nombre") or ""
+                                    ).strip()
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+            fd = r.get("fecha")
+            out.append(
+                {
+                    "movimiento_id": str(r.get("id") or ""),
+                    "fecha": fd.isoformat()[:10] if hasattr(fd, "isoformat") else str(fd)[:10],
+                    "concepto": str(r.get("concepto") or ""),
+                    "importe": float(r.get("importe") or 0.0),
+                    "iban_origen": r.get("iban_origen"),
+                    "factura_id": int(fid) if fid is not None else None,
+                    "confidence_score": float(r.get("confidence_score") or 0.0)
+                    if r.get("confidence_score") is not None
+                    else None,
+                    "razonamiento_ia": r.get("razonamiento_ia"),
+                    **extra,
+                }
+            )
+        return out
+
+    async def confirmar_sugerencia(
+        self,
+        *,
+        empresa_id: str,
+        movimiento_id: UUID,
+        aprobar: bool,
+    ) -> None:
+        eid = str(empresa_id or "").strip()
+        res: Any = await self._db.execute(
+            self._db.table("movimientos_bancarios")
+            .select("id, factura_id, fecha, estado")
+            .eq("empresa_id", eid)
+            .eq("id", str(movimiento_id))
+            .limit(1)
+        )
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        if not rows:
+            raise ValueError("Movimiento no encontrado")
+        row = rows[0]
+        if str(row.get("estado") or "") != "Sugerido":
+            raise ValueError("El movimiento no está en estado Sugerido")
+        fid_raw = row.get("factura_id")
+        if fid_raw is None:
+            raise ValueError("Movimiento sin factura vinculada")
+        fid = int(fid_raw)
+        fecha_mov = row.get("fecha")
+        fecha_cobro = (
+            fecha_mov.isoformat()[:10]
+            if hasattr(fecha_mov, "isoformat")
+            else str(fecha_mov)[:10]
+        )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        if not aprobar:
+            await self._db.execute(
+                self._db.table("movimientos_bancarios")
+                .update(
+                    {
+                        "estado": "Pendiente",
+                        "factura_id": None,
+                        "confidence_score": None,
+                        "razonamiento_ia": None,
+                        "updated_at": now_iso,
+                    }
+                )
+                .eq("id", str(movimiento_id))
+                .eq("empresa_id", eid)
+            )
+            return
+
+        fac_chk: Any = await self._db.execute(
+            self._db.table("facturas")
+            .select("id, estado_cobro")
+            .eq("id", fid)
+            .eq("empresa_id", eid)
+            .limit(1)
+        )
+        fac_rows: list[dict[str, Any]] = (fac_chk.data or []) if hasattr(fac_chk, "data") else []
+        if not fac_rows:
+            raise ValueError("Factura no encontrada para esta empresa")
+        if str(fac_rows[0].get("estado_cobro") or "") == "cobrada":
+            raise ValueError("La factura ya está marcada como cobrada")
+
+        await self._db.execute(
+            self._db.table("facturas")
+            .update(
+                {
+                    "estado_cobro": "cobrada",
+                    "fecha_cobro_real": fecha_cobro,
+                    "pago_id": f"movimiento_bancario:{movimiento_id}",
+                }
+            )
+            .eq("id", fid)
+            .eq("empresa_id", eid)
+            .neq("estado_cobro", "cobrada")
+        )
+
+        await self._db.execute(
+            self._db.table("movimientos_bancarios")
+            .update({"estado": "Conciliado", "updated_at": now_iso})
+            .eq("id", str(movimiento_id))
+            .eq("empresa_id", eid)
+            .eq("estado", "Sugerido")
+        )

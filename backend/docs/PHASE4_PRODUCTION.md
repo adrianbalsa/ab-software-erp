@@ -34,4 +34,4 @@ Railway: `Dockerfile` en raíz, `PORT` inyectado por la plataforma.
 
 ## GitHub Actions
 
-`.github/workflows/main.yml` ejecuta `pytest` en `backend/` en cada push/PR a `main` o `master`.
+`.github/workflows/deploy.yml` ejecuta `pytest tests/ -v` en `backend/` en cada push/PR a `main` o `master` (bloquea despliegue si fallan los tests, incluido el Math Engine).

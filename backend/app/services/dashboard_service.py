@@ -89,3 +89,77 @@ class DashboardService:
             bultos_mes=bultos_mes,
         )
 
+    async def stats_operativos_sin_finanzas(
+        self,
+        *,
+        empresa_id: str,
+        today: date | None = None,
+    ) -> DashboardStatsOut:
+        """
+        KPIs operativos del mes (km / bultos) a nivel **empresa** (owner no usa este método;
+        traffic_manager sí). Sin consultar facturas, gastos ni importes de portes.
+        """
+        if today is None:
+            today = date.today()
+        m = _month_range(today)
+        res_mes: Any = await self._db.execute(
+            filter_not_deleted(
+                self._db.table("portes")
+                .select("km_estimados, bultos")
+                .eq("empresa_id", empresa_id)
+                .gte("fecha", m.start.isoformat())
+                .lt("fecha", m.next_start.isoformat())
+            )
+        )
+        mes_rows: list[dict[str, Any]] = (res_mes.data or []) if hasattr(res_mes, "data") else []
+        km_mes = float(sum(float(r.get("km_estimados") or 0.0) for r in mes_rows))
+        bultos_mes = int(sum(int(r.get("bultos") or 0) for r in mes_rows))
+        return DashboardStatsOut(
+            ebitda_estimado=0.0,
+            pendientes_cobro=0.0,
+            km_totales_mes=km_mes,
+            bultos_mes=bultos_mes,
+        )
+
+    async def stats_operativos_conductor(
+        self,
+        *,
+        empresa_id: str,
+        vehiculo_id: str,
+        today: date | None = None,
+    ) -> DashboardStatsOut:
+        """
+        KPIs operativos del mes **solo** para portes del vehículo indicado (rol driver).
+        Defensa en profundidad: ``vehiculo_id`` vacío → ceros sin consulta agregada global.
+        """
+        v = (vehiculo_id or "").strip()
+        if not v:
+            return DashboardStatsOut(
+                ebitda_estimado=0.0,
+                pendientes_cobro=0.0,
+                km_totales_mes=0.0,
+                bultos_mes=0,
+            )
+        if today is None:
+            today = date.today()
+        m = _month_range(today)
+        res_mes: Any = await self._db.execute(
+            filter_not_deleted(
+                self._db.table("portes")
+                .select("km_estimados, bultos")
+                .eq("empresa_id", empresa_id)
+                .eq("vehiculo_id", v)
+                .gte("fecha", m.start.isoformat())
+                .lt("fecha", m.next_start.isoformat())
+            )
+        )
+        mes_rows: list[dict[str, Any]] = (res_mes.data or []) if hasattr(res_mes, "data") else []
+        km_mes = float(sum(float(r.get("km_estimados") or 0.0) for r in mes_rows))
+        bultos_mes = int(sum(int(r.get("bultos") or 0) for r in mes_rows))
+        return DashboardStatsOut(
+            ebitda_estimado=0.0,
+            pendientes_cobro=0.0,
+            km_totales_mes=km_mes,
+            bultos_mes=bultos_mes,
+        )
+

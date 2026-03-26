@@ -3,6 +3,8 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { notifyJwtUpdated } from "@/lib/api";
+
 const WELCOME_FLAG = "abl_oauth_welcome";
 
 function AuthCallbackInner() {
@@ -19,6 +21,7 @@ function AuthCallbackInner() {
 
     try {
       localStorage.setItem("jwt_token", token.trim());
+      notifyJwtUpdated();
       sessionStorage.setItem(WELCOME_FLAG, "1");
     } catch {
       setError("No se pudo guardar la sesión en este navegador.");

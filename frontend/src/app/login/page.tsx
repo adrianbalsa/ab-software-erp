@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Building2, LogIn } from "lucide-react";
 
-import { API_BASE } from "@/lib/api";
+import { API_BASE, jwtRbacRole, notifyJwtUpdated } from "@/lib/api";
 
 function LoginForm() {
   const router = useRouter();
@@ -48,10 +48,13 @@ function LoginForm() {
       const data = await res.json();
       try {
         localStorage.setItem("jwt_token", data.access_token);
+        notifyJwtUpdated();
       } catch {
         /* ignore */
       }
-      router.replace(redirectTo);
+      const next =
+        jwtRbacRole() === "cliente" ? "/portal" : redirectTo;
+      router.replace(next);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Error de conexión");
     } finally {

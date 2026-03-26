@@ -3,18 +3,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
+import { RoleGuard } from "@/components/auth/RoleGuard";
+import { CotizadorInteligente } from "@/components/portes/CotizadorInteligente";
 import { AddressAutocomplete } from "@/components/maps/AddressAutocomplete";
 import { GoogleMapsProvider, mapsApiKeyAvailable } from "@/components/maps/GoogleMapsProvider";
-import { API_BASE } from "@/lib/api";
+import { useRole } from "@/hooks/useRole";
+import { API_BASE, jwtEmpresaId, notifyJwtUpdated } from "@/lib/api";
 
 type PorteOut = {
   id: string;
-  cliente_id: string;
+  cliente_id?: string | null;
   fecha: string;
   origen: string;
   destino: string;
   km_estimados?: number;
-  precio_pactado: number;
+  precio_pactado?: number | null;
   estado: string;
 };
 
@@ -42,6 +45,10 @@ function formatClienteLabel(id: string) {
 }
 
 export default function PortesPage() {
+  const { role } = useRole();
+  const canCreatePorte = role === "owner" || role === "traffic_manager";
+  const canFacturar = role === "owner";
+
   const [token, setToken] = useState<string | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -118,6 +125,7 @@ export default function PortesPage() {
       setToken(data.access_token);
       try {
         localStorage.setItem("jwt_token", data.access_token);
+        notifyJwtUpdated();
       } catch {
         // ignore
       }
@@ -155,7 +163,7 @@ export default function PortesPage() {
   }, [token]);
 
   const loadClientes = useCallback(async () => {
-    if (!token) return;
+    if (!token || !canCreatePorte) return;
     try {
       const res = await apiFetch("/clientes/", { method: "GET" });
       if (!res.ok) return;
@@ -169,7 +177,7 @@ export default function PortesPage() {
     } catch {
       setClientes([]);
     }
-  }, [token]);
+  }, [token, canCreatePorte]);
 
   useEffect(() => {
     void loadClientes();
@@ -245,12 +253,14 @@ export default function PortesPage() {
   );
 
   const totalSeleccionado = useMemo(
-    () => selectedPortes.reduce((acc, p) => acc + Number(p.precio_pactado || 0), 0),
+    () => selectedPortes.reduce((acc, p) => acc + Number(p.precio_pactado ?? 0), 0),
     [selectedPortes]
   );
 
   const clientesEnSeleccion = useMemo(() => {
-    const s = new Set(selectedPortes.map((p) => p.cliente_id));
+    const s = new Set(
+      selectedPortes.map((p) => p.cliente_id).filter((id): id is string => Boolean(id)),
+    );
     return s.size;
   }, [selectedPortes]);
 
@@ -286,6 +296,10 @@ export default function PortesPage() {
       return;
     }
     const clienteId = selectedPortes[0].cliente_id;
+    if (!clienteId) {
+      alert("No hay cliente asociado a la selección.");
+      return;
+    }
     const porte_ids = selectedPortes.map((p) => p.id);
 
     setFacturarBusy(true);
@@ -344,7 +358,7 @@ export default function PortesPage() {
     }
   };
 
-  const selectionOpen = selectedIds.size > 0;
+  const selectionOpen = canFacturar && selectedIds.size > 0;
 
   if (!token) {
     return (
@@ -454,6 +468,17 @@ export default function PortesPage() {
           </div>
         )}
 
+        {token ? (
+          <RoleGuard allowedRoles={["owner", "traffic_manager"]}>
+            {jwtEmpresaId() ? (
+              <div className="mb-8">
+                <CotizadorInteligente empresaId={jwtEmpresaId()!} />
+              </div>
+            ) : null}
+          </RoleGuard>
+        ) : null}
+
+        {canCreatePorte ? (
         <div className="mb-8 ab-card rounded-2xl p-6">
           <h2 className="text-lg font-bold text-slate-900">Nuevo porte</h2>
           <p className="text-sm text-slate-500 mt-1">
@@ -582,6 +607,7 @@ export default function PortesPage() {
             </div>
           </GoogleMapsProvider>
         </div>
+        ) : null}
 
         {clientesEnSeleccion > 1 && selectionOpen && (
           <div className="mb-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3">
@@ -628,10 +654,11 @@ export default function PortesPage() {
           </div>
         ) : (
           <div className="ab-card overflow-hidden rounded-2xl p-0">
-            <div className="overflow-x-auto">
-              <table className="ab-table w-full min-w-[640px] text-left text-sm">
+            <div className="w-full overflow-x-auto min-w-0">
+              <table className="ab-table w-full min-w-[800px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/90 text-slate-600">
+                    {canFacturar ? (
                     <th className="w-12 px-3 py-3">
                       <input
                         ref={headerCheckboxRef}
@@ -642,15 +669,18 @@ export default function PortesPage() {
                         aria-label="Seleccionar todos los portes pendientes"
                       />
                     </th>
-                    <th className="px-3 py-3 font-semibold whitespace-nowrap">
+                    ) : null}
+                    <th className="hidden md:table-cell px-3 py-3 font-semibold whitespace-nowrap">
                       Fecha
                     </th>
-                    <th className="px-3 py-3 font-semibold">Cliente</th>
-                    <th className="px-3 py-3 font-semibold">Origen / Destino</th>
-                    <th className="px-3 py-3 font-semibold text-right whitespace-nowrap">
+                    <th className="hidden md:table-cell px-3 py-3 font-semibold">Cliente</th>
+                    <th className="px-3 py-3 font-semibold">Origen</th>
+                    <th className="px-3 py-3 font-semibold">Destino</th>
+                    <th className="px-3 py-3 font-semibold whitespace-nowrap">Estado</th>
+                    <th className="hidden md:table-cell px-3 py-3 font-semibold text-right whitespace-nowrap">
                       Precio pactado
                     </th>
-                    <th className="px-3 py-3 font-semibold whitespace-nowrap w-24">
+                    <th className="hidden md:table-cell px-3 py-3 font-semibold whitespace-nowrap w-24">
                       Detalle
                     </th>
                   </tr>
@@ -663,6 +693,7 @@ export default function PortesPage() {
                         key={p.id}
                         className={`transition-colors hover:bg-slate-50/80 ${checked ? "bg-blue-50/40" : ""}`}
                       >
+                        {canFacturar ? (
                         <td className="px-3 py-3 align-middle">
                           <input
                             type="checkbox"
@@ -672,26 +703,35 @@ export default function PortesPage() {
                             aria-label={`Seleccionar porte ${p.id}`}
                           />
                         </td>
-                        <td className="px-3 py-3 align-middle whitespace-nowrap text-slate-800">
+                        ) : null}
+                        <td className="hidden md:table-cell px-3 py-3 align-middle whitespace-nowrap text-slate-800">
                           {p.fecha}
                         </td>
-                        <td className="px-3 py-3 align-middle">
+                        <td className="hidden md:table-cell px-3 py-3 align-middle">
                           <span
                             className="font-mono text-xs text-slate-700"
-                            title={p.cliente_id}
+                            title={p.cliente_id ?? undefined}
                           >
-                            {formatClienteLabel(p.cliente_id)}
+                            {p.cliente_id ? formatClienteLabel(p.cliente_id) : "—"}
                           </span>
                         </td>
-                        <td className="px-3 py-3 align-middle text-slate-800">
-                          <span className="text-slate-500">{p.origen}</span>
-                          <span className="mx-1.5 text-slate-300">→</span>
-                          <span>{p.destino}</span>
+                        <td className="px-3 py-3 align-middle text-slate-800 max-w-[200px] md:max-w-none">
+                          <span className="line-clamp-2 md:line-clamp-none">{p.origen}</span>
                         </td>
-                        <td className="px-3 py-3 align-middle text-right font-mono tabular-nums text-slate-900">
-                          {Number(p.precio_pactado).toFixed(2)} €
+                        <td className="px-3 py-3 align-middle text-slate-800 max-w-[200px] md:max-w-none">
+                          <span className="line-clamp-2 md:line-clamp-none">{p.destino}</span>
                         </td>
                         <td className="px-3 py-3 align-middle">
+                          <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium capitalize text-slate-700">
+                            {p.estado}
+                          </span>
+                        </td>
+                        <td className="hidden md:table-cell px-3 py-3 align-middle text-right font-mono tabular-nums text-slate-900">
+                          {p.precio_pactado != null
+                            ? `${Number(p.precio_pactado).toFixed(2)} €`
+                            : "—"}
+                        </td>
+                        <td className="hidden md:table-cell px-3 py-3 align-middle">
                           <Link
                             href={`/portes/${p.id}`}
                             className="text-sm font-medium text-blue-600 hover:underline"

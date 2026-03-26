@@ -35,6 +35,7 @@ class AmortizacionLinealOut(BaseModel):
 
 FlotaEstado = Literal["Operativo", "En Taller", "Baja", "Vendido"]
 FlotaTipoMotor = Literal["Diesel", "Gasolina", "Híbrido", "Eléctrico"]
+CertificacionEmisiones = Literal["Euro V", "Euro VI", "Electrico", "Hibrido"]
 
 
 class FlotaVehiculoIn(BaseModel):
@@ -51,10 +52,17 @@ class FlotaVehiculoIn(BaseModel):
     tipo_motor: FlotaTipoMotor
     itv_vencimiento: Optional[date] = None
     seguro_vencimiento: Optional[date] = None
+    fecha_itv: Optional[date] = None
+    fecha_seguro: Optional[date] = None
+    fecha_tacografo: Optional[date] = None
     km_proximo_servicio: Optional[float] = Field(
         default=None,
         ge=0,
         description="Km en el que toca revisión (legacy km_proximo_servicio)",
+    )
+    certificacion_emisiones: CertificacionEmisiones = Field(
+        default="Euro VI",
+        description="Norma de emisiones (ESG auditoría)",
     )
 
 
@@ -91,6 +99,46 @@ class FlotaMetricasOut(BaseModel):
     disponibles: int
     pct_disponible: float
     pct_riesgo_parada: float
+
+
+class FlotaEstadoActualPorteOut(BaseModel):
+    id: str
+    origin: str
+    destination: str
+    estimatedMargin: float
+
+
+class FlotaEstadoActualPositionOut(BaseModel):
+    lat: float
+    lng: float
+
+
+class FlotaEstadoActualOut(BaseModel):
+    """Contrato exacto para `FleetMapTruck` en frontend."""
+
+    id: str
+    position: FlotaEstadoActualPositionOut
+    porte: FlotaEstadoActualPorteOut
+
+
+LiveTrackingEstado = Literal["Disponible", "En Ruta", "Taller"]
+
+
+class FlotaLiveTrackingOut(BaseModel):
+    """Posición GPS ligera + estado operativo para centro de mando (Traffic Manager)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    matricula: str
+    estado: LiveTrackingEstado
+    ultima_latitud: float | None = None
+    ultima_longitud: float | None = None
+    ultima_actualizacion_gps: datetime | None = None
+    conductor_nombre: str | None = Field(
+        default=None,
+        description="Nombre visible del perfil asignado al vehículo (inventario flota), si existe.",
+    )
 
 
 MantenimientoTipo = Literal[

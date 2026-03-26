@@ -106,3 +106,43 @@ class FinanceSummaryOut(BaseModel):
         ...,
         description="Ingresos netos (sin IVA) − Gastos netos (sin IVA)",
     )
+
+
+class TreasuryRiskTrendPointOut(BaseModel):
+    """Punto mensual para series de tesorería/riesgo (6 meses)."""
+
+    periodo: str = Field(..., description="YYYY-MM")
+    cobrado: float = Field(..., ge=0, description="Importe cobrado del mes")
+    pendiente: float = Field(..., ge=0, description="Importe pendiente del mes")
+
+
+class TreasuryRiskDashboardOut(BaseModel):
+    """KPIs ejecutivos de tesorería y riesgo de cobro."""
+
+    total_pendiente: float = Field(..., ge=0, description="Total pendiente de cobro")
+    garantizado_sepa: float = Field(
+        ...,
+        ge=0,
+        description="Pendiente de clientes con mandato SEPA activo",
+    )
+    en_riesgo_alto: float = Field(
+        ...,
+        ge=0,
+        description="Pendiente asociado a clientes con score de riesgo > 7",
+    )
+    cashflow_trend: list[TreasuryRiskTrendPointOut] = Field(
+        default_factory=list,
+        description="Serie últimos 6 meses con cobrado y pendiente",
+    )
+    fuente_datos: str = Field(
+        ...,
+        description="Origen del agregado: facturas o portes (fallback)",
+    )
+
+
+class EsgMonthlyReportOut(BaseModel):
+    """Reporte ESG financiero del mes en curso."""
+
+    periodo: str = Field(..., description="YYYY-MM")
+    total_co2_kg: float = Field(..., ge=0, description="Suma mensual de huella (kg CO2)")
+    total_portes: int = Field(..., ge=0, description="Cantidad de portes incluidos")

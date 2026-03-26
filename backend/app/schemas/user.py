@@ -28,7 +28,19 @@ class UserOut(BaseModel):
 
     username: str
     empresa_id: UUID
-    rol: str = Field(default="user", description="Rol desde profiles o usuarios")
+    rol: str = Field(default="user", description="Rol legado panel admin (profiles.rol / usuarios.rol)")
+    rbac_role: str = Field(
+        default="owner",
+        description="Rol RBAC operativo: owner | traffic_manager | driver | cliente (profiles.role)",
+    )
+    cliente_id: UUID | None = Field(
+        default=None,
+        description="Maestro clientes (portal autoservicio) cuando rbac_role=cliente",
+    )
+    assigned_vehiculo_id: UUID | None = Field(
+        default=None,
+        description="Vehículo asignado al chófer (profiles.assigned_vehiculo_id)",
+    )
     usuario_id: UUID | None = Field(
         default=None,
         description="Identificador de perfil (profiles.id) o None si solo hay login legacy",

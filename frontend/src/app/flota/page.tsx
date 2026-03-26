@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
 import {
   Car,
   Download,
+  Fuel,
   Loader2,
   RefreshCw,
   Wrench,
@@ -165,7 +167,21 @@ export default function FlotaPage() {
             Estado de vehículos, vencimientos y disponibilidad
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href="/flota/combustible"
+            className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-900 hover:bg-emerald-100"
+          >
+            <Fuel className="w-4 h-4" />
+            Combustible (CSV)
+          </Link>
+          <Link
+            href="/flota/mantenimiento"
+            className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-900 hover:bg-amber-100"
+          >
+            <Wrench className="w-4 h-4" />
+            Taller / mantenimiento
+          </Link>
           <button
             type="button"
             onClick={() => void exportCsv()}

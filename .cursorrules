@@ -1,0 +1,4 @@
+# Reglas para Supabase
+- Siempre usa public.app_current_empresa_id() para el RLS.
+- Las funciones deben estar en el esquema 'public'.
+- Antes de sugerir un cambio en el schema, consulta la estructura actual usando el MCP de Supabase.

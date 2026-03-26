@@ -30,8 +30,12 @@ async def test_porte_de_otro_tenant_devuelve_404(client, mock_user_empresa_a, mo
     async def fake_ensure(self: AuthService, *, empresa_id: object) -> None:
         return None
 
+    async def fake_rbac(self: AuthService, *, user: UserOut) -> None:
+        return None
+
     monkeypatch.setattr(AuthService, "get_profile_by_subject", fake_profile)
     monkeypatch.setattr(AuthService, "ensure_empresa_context", fake_ensure)
+    monkeypatch.setattr(AuthService, "ensure_rbac_context", fake_rbac)
 
     porte_empresa_b = "33333333-3333-3333-3333-333333333333"
     res = await client.get(

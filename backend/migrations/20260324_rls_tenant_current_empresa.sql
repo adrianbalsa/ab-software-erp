@@ -70,8 +70,8 @@ BEGIN
     DROP POLICY IF EXISTS portes_tenant_all ON public.portes;
     CREATE POLICY portes_tenant_all ON public.portes
       FOR ALL
-      USING (empresa_id::text = public.app_current_empresa_id())
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text)
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
   ELSE
     RAISE NOTICE 'Omitido RLS portes: tabla public.portes no existe';
   END IF;
@@ -88,8 +88,8 @@ BEGIN
     DROP POLICY IF EXISTS facturas_tenant_all ON public.facturas;
     CREATE POLICY facturas_tenant_all ON public.facturas
       FOR ALL
-      USING (empresa_id::text = public.app_current_empresa_id())
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text)
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
   END IF;
 END $$;
 
@@ -99,16 +99,16 @@ DROP POLICY IF EXISTS gastos_por_empresa ON public.gastos;
 DROP POLICY IF EXISTS gastos_tenant_all ON public.gastos;
 CREATE POLICY gastos_tenant_all ON public.gastos
   FOR ALL
-  USING (empresa_id::text = public.app_current_empresa_id())
-  WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+  USING (empresa_id::text = public.app_current_empresa_id()::text)
+  WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
 
 -- FLOTA
 ALTER TABLE public.flota ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS flota_tenant_all ON public.flota;
 CREATE POLICY flota_tenant_all ON public.flota
   FOR ALL
-  USING (empresa_id::text = public.app_current_empresa_id())
-  WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+  USING (empresa_id::text = public.app_current_empresa_id()::text)
+  WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
 
 -- AUDITORÍA (filas sin empresa_id no visibles con tenant)
 ALTER TABLE public.auditoria ENABLE ROW LEVEL SECURITY;
@@ -117,11 +117,11 @@ CREATE POLICY auditoria_tenant_all ON public.auditoria
   FOR ALL
   USING (
     empresa_id IS NOT NULL
-    AND empresa_id::text = public.app_current_empresa_id()
+    AND empresa_id::text = public.app_current_empresa_id()::text
   )
   WITH CHECK (
     empresa_id IS NOT NULL
-    AND empresa_id::text = public.app_current_empresa_id()
+    AND empresa_id::text = public.app_current_empresa_id()::text
   );
 
 -- PRESUPUESTOS
@@ -129,8 +129,8 @@ ALTER TABLE public.presupuestos ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS presupuestos_tenant_all ON public.presupuestos;
 CREATE POLICY presupuestos_tenant_all ON public.presupuestos
   FOR ALL
-  USING (empresa_id::text = public.app_current_empresa_id())
-  WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+  USING (empresa_id::text = public.app_current_empresa_id()::text)
+  WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
 
 -- INVENTARIO / EMPLEADOS / ECO (si existen)
 DO $$
@@ -139,22 +139,22 @@ BEGIN
     ALTER TABLE public.inventario ENABLE ROW LEVEL SECURITY;
     DROP POLICY IF EXISTS inventario_tenant_all ON public.inventario;
     CREATE POLICY inventario_tenant_all ON public.inventario FOR ALL
-      USING (empresa_id::text = public.app_current_empresa_id())
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text)
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
   END IF;
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'empleados') THEN
     ALTER TABLE public.empleados ENABLE ROW LEVEL SECURITY;
     DROP POLICY IF EXISTS empleados_tenant_all ON public.empleados;
     CREATE POLICY empleados_tenant_all ON public.empleados FOR ALL
-      USING (empresa_id::text = public.app_current_empresa_id())
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text)
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
   END IF;
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'eco_registros') THEN
     ALTER TABLE public.eco_registros ENABLE ROW LEVEL SECURITY;
     DROP POLICY IF EXISTS eco_registros_tenant_all ON public.eco_registros;
     CREATE POLICY eco_registros_tenant_all ON public.eco_registros FOR ALL
-      USING (empresa_id::text = public.app_current_empresa_id())
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text)
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
   END IF;
 END $$;
 
@@ -168,7 +168,7 @@ BEGIN
     ALTER TABLE public.mantenimiento_flota ENABLE ROW LEVEL SECURITY;
     DROP POLICY IF EXISTS mantenimiento_flota_tenant_all ON public.mantenimiento_flota;
     CREATE POLICY mantenimiento_flota_tenant_all ON public.mantenimiento_flota FOR ALL
-      USING (empresa_id::text = public.app_current_empresa_id())
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text)
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
   END IF;
 END $$;

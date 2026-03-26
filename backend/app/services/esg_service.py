@@ -3,6 +3,7 @@ from __future__ import annotations
 import calendar
 from collections import defaultdict
 from datetime import date
+import os
 from typing import Any
 
 from app.db.soft_delete import filter_not_deleted
@@ -168,7 +169,13 @@ class EsgService:
             destino = str(r.get("destino") or "").strip()
             km_real = 0.0
             try:
-                km_real = float(await self._maps.get_distance_km(origen, destino))
+                km_real = float(
+                    await self._maps.get_distance_km(
+                        origen,
+                        destino,
+                        tenant_empresa_id=eid,
+                    )
+                )
             except Exception:
                 km_real = float(r.get("km_estimados") or 0.0)
 
@@ -229,3 +236,39 @@ class EsgService:
             ahorro_estimado_rutas_optimizadas_kg=round(ahorro, 6),
             por_vehiculo=por_v,
         )
+
+    def calculate_emissions(
+        self,
+        litros: float,
+        tipo_combustible: str = "Diesel A",
+        *,
+        certificacion_emisiones: str | None = None,
+    ) -> float:
+        """
+        CO2 para combustible consumido.
+
+        - Factor estándar: 1 litro Diesel A ≈ 2,67 kg CO2
+        - Bonus Euro VI: si `certificacion_emisiones` es Euro VI, se reduce CO2
+          según un % configurable (default: 15%).
+
+        Nota: `certificacion_emisiones` se recomienda pasarlo desde `flota` para
+        evitar consultas extra por fila.
+        """
+        try:
+            l = max(0.0, float(litros))
+        except (TypeError, ValueError):
+            l = 0.0
+
+        t = (tipo_combustible or "").strip().lower()
+        # Hoy solo se usa Diesel A; mantenemos un fallback razonable.
+        factor_kg_co2_por_litro = 2.67 if "diesel" in t else 2.67
+
+        co2_kg = l * factor_kg_co2_por_litro
+
+        cert = (certificacion_emisiones or "").strip()
+        if cert.casefold() == "euro vi":
+            bonus_pct = float(os.getenv("ESG_EUROVI_EMISSIONS_BONUS_PCT", "15"))
+            bonus_pct = max(0.0, min(100.0, bonus_pct))
+            co2_kg *= 1.0 - (bonus_pct / 100.0)
+
+        return round(co2_kg, 6)

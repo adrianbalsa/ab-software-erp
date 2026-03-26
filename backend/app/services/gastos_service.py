@@ -7,6 +7,7 @@ from app.db.soft_delete import filter_not_deleted, soft_delete_payload
 from app.db.supabase import SupabaseAsync
 from app.schemas.gasto import GastoCreate, GastoOCRHint, GastoOut
 from app.services.ocr_service import OCRService
+from app.core.crypto import pii_crypto
 
 
 class GastosService:
@@ -42,7 +43,11 @@ class GastosService:
         out: list[GastoOut] = []
         for row in rows:
             try:
-                out.append(GastoOut(**row))
+                rn = dict(row)
+                raw_nif = rn.get("nif_proveedor")
+                if isinstance(raw_nif, str) and raw_nif.strip():
+                    rn["nif_proveedor"] = pii_crypto.decrypt_pii(raw_nif) or raw_nif
+                out.append(GastoOut(**rn))
             except Exception:
                 continue
         return out
@@ -93,7 +98,7 @@ class GastosService:
             "evidencia_url": evidencia_url,
         }
         if gasto_in.nif_proveedor is not None:
-            payload["nif_proveedor"] = gasto_in.nif_proveedor
+            payload["nif_proveedor"] = pii_crypto.encrypt_pii(gasto_in.nif_proveedor)
         if gasto_in.iva is not None:
             payload["iva"] = float(gasto_in.iva)
         if total_eur is not None:
@@ -103,7 +108,11 @@ class GastosService:
         rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
         if not rows:
             raise RuntimeError("Supabase insert gasto returned no rows")
-        return GastoOut(**rows[0])
+        rn = dict(rows[0])
+        raw_nif = rn.get("nif_proveedor")
+        if isinstance(raw_nif, str) and raw_nif.strip():
+            rn["nif_proveedor"] = pii_crypto.decrypt_pii(raw_nif) or raw_nif
+        return GastoOut(**rn)
 
     async def soft_delete_gasto(self, *, empresa_id: str, gasto_id: str) -> None:
         eid = self._require_empresa_id(empresa_id)

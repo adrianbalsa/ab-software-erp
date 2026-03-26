@@ -13,7 +13,7 @@ router = APIRouter()
 
 @router.get("/summary", response_model=FinanceSummaryOut)
 async def finance_summary(
-    current_user: UserOut = Depends(deps.get_current_user),
+    current_user: UserOut = Depends(deps.require_role("owner")),
     service: FinanceService = Depends(deps.get_finance_service),
 ) -> FinanceSummaryOut:
     """
@@ -26,7 +26,7 @@ async def finance_summary(
 
 @router.get("/dashboard", response_model=FinanceDashboardOut)
 async def finance_dashboard(
-    current_user: UserOut = Depends(deps.get_current_user),
+    current_user: UserOut = Depends(deps.require_role("owner")),
     service: FinanceService = Depends(deps.get_finance_service),
 ) -> FinanceDashboardOut:
     """

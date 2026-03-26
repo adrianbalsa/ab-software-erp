@@ -66,8 +66,8 @@ BEGIN
     DROP POLICY IF EXISTS empresa_bank_accounts_tenant_all ON public.empresa_bank_accounts;
     CREATE POLICY empresa_bank_accounts_tenant_all ON public.empresa_bank_accounts
       FOR ALL
-      USING (empresa_id::text = public.app_current_empresa_id())
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text)
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
   END IF;
 END $$;
 
@@ -81,7 +81,7 @@ BEGIN
     DROP POLICY IF EXISTS bank_transactions_tenant_all ON public.bank_transactions;
     CREATE POLICY bank_transactions_tenant_all ON public.bank_transactions
       FOR ALL
-      USING (empresa_id::text = public.app_current_empresa_id())
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text)
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
   END IF;
 END $$;

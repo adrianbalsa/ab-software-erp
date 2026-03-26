@@ -58,7 +58,7 @@ export function CostBreakdownPie({ data, loading }: CostBreakdownPieProps) {
       <p className="text-xs text-zinc-500 mb-4">
         Últimos 6 meses · categorías operativas (neto sin IVA)
       </p>
-      <div className="h-[280px] w-full min-w-0">
+      <div className="h-[min(260px,40vh)] min-h-[220px] sm:h-[280px] sm:min-h-[240px] w-full min-w-0">
         {chartData.length === 0 ? (
           <p className="text-sm text-zinc-500 py-14 text-center">
             Sin gastos en el periodo para clasificar.

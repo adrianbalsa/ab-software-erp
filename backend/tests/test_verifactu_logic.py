@@ -13,7 +13,7 @@ import pytest
 
 from app.schemas.factura import FacturaCreateFromPortes
 from app.services.facturas_service import FacturasService
-from app.services.verifactu_service import VerifactuService
+from app.services.verifactu_service import VERIFACTU_INVOICE_GENESIS_HASH, VerifactuService
 
 
 def _data(rows: list[object]) -> SimpleNamespace:
@@ -28,13 +28,14 @@ async def test_emitir_f1_genera_hash_registro_correcto() -> None:
     porte_id = "11111111-1111-1111-1111-111111111111"
 
     fixed = date(2026, 3, 19)
-    expected_hash = VerifactuService.generar_hash_factura(
-        nif_empresa="B12345678",
-        nif_cliente="A87654321",
-        num_factura="FAC-2026-000001",
-        fecha=fixed.isoformat(),
-        total=121.0,
-        hash_anterior=None,
+    expected_hash = VerifactuService.generate_invoice_hash(
+        {
+            "num_factura": "FAC-2026-000001",
+            "fecha_emision": fixed.isoformat(),
+            "nif_emisor": "B12345678",
+            "total_factura": 121.0,
+        },
+        VERIFACTU_INVOICE_GENESIS_HASH,
     )
 
     porte_row = {
@@ -70,10 +71,11 @@ async def test_emitir_f1_genera_hash_registro_correcto() -> None:
         "cuota_iva": 21.0,
         "fecha_emision": fixed.isoformat(),
         "numero_secuencial": 1,
-        "hash_anterior": None,
+        "hash_anterior": VERIFACTU_INVOICE_GENESIS_HASH,
         "hash_registro": expected_hash,
         "hash_factura": expected_hash,
         "bloqueado": True,
+        "is_finalized": False,
         "porte_lineas_snapshot": [],
         "total_km_estimados_snapshot": 10.0,
     }
@@ -198,6 +200,7 @@ async def test_emitir_r1_rectificativa_vincula_f1_e_importes_negativos() -> None
         "motivo_rectificacion": "Error en base imponible",
         "porte_lineas_snapshot": [],
         "bloqueado": True,
+        "is_finalized": False,
     }
 
     exec_responses = [

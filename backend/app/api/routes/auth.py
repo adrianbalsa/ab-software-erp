@@ -109,7 +109,13 @@ async def login(
             detail="Credenciales incorrectas",
         )
 
-    access_token = create_access_token(subject=user.username, empresa_id=user.empresa_id)
+    access_token = create_access_token(
+        subject=user.username,
+        empresa_id=user.empresa_id,
+        rbac_role=user.rbac_role,
+        assigned_vehiculo_id=str(user.assigned_vehiculo_id) if user.assigned_vehiculo_id else None,
+        cliente_id=str(user.cliente_id) if user.cliente_id else None,
+    )
     await auth_service.ensure_empresa_context(empresa_id=user.empresa_id)
 
     raw_refresh: str | None = None
@@ -156,6 +162,7 @@ async def refresh_session(
         user_agent=request.headers.get("user-agent"),
     )
     await auth_service.ensure_empresa_context(empresa_id=user_out.empresa_id)
+    await auth_service.ensure_rbac_context(user=user_out)
 
     body = Token(access_token=access_token, token_type=TOKEN_TYPE).model_dump()
     response = JSONResponse(content=body)
@@ -334,7 +341,13 @@ async def oauth_google_callback(
             detail="Usuario sin empresa asignada",
         )
 
-    access_token = create_access_token(subject=user_out.username, empresa_id=user_out.empresa_id)
+    access_token = create_access_token(
+        subject=user_out.username,
+        empresa_id=user_out.empresa_id,
+        rbac_role=user_out.rbac_role,
+        assigned_vehiculo_id=str(user_out.assigned_vehiculo_id) if user_out.assigned_vehiculo_id else None,
+        cliente_id=str(user_out.cliente_id) if user_out.cliente_id else None,
+    )
     await auth_service.ensure_empresa_context(empresa_id=user_out.empresa_id)
 
     raw_refresh: str | None = None

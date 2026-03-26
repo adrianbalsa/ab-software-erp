@@ -20,7 +20,11 @@ async def distance_km(
     Distancia en km (Distance Matrix + caché). Útil para previsualizar en formularios.
     """
     try:
-        km = await maps.get_distance_km(origin, destination)
+        km = await maps.get_distance_km(
+            origin,
+            destination,
+            tenant_empresa_id=current_user.empresa_id,
+        )
         return {"distance_km": km}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e

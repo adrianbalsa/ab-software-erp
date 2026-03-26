@@ -11,7 +11,9 @@ import {
   LogOut,
 } from "lucide-react";
 
+import { RoleGuard } from "@/components/auth/RoleGuard";
 import { AppShell } from "@/components/AppShell";
+import { AuditLogsViewer } from "@/components/security/AuditLogsViewer";
 import { API_BASE, authHeaders } from "@/lib/api";
 
 type ActiveSession = {
@@ -272,6 +274,14 @@ export default function SeguridadPage() {
               )}
             </div>
           </section>
+        )}
+
+        {token && (
+          <RoleGuard allowedRoles={["owner"]}>
+            <div className="mt-10 max-w-4xl w-full">
+              <AuditLogsViewer />
+            </div>
+          </RoleGuard>
         )}
       </main>
 

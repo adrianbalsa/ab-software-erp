@@ -3,7 +3,7 @@
 -- para portes, vehículos/flota y auditoría; bloqueo de cambio de empresa_id en profiles.
 -- =============================================================================
 -- Requisitos: Supabase (auth.jwt(), auth.uid(), auth.role()).
--- Contexto tenant: public.app_current_empresa_id() (ver migración 20260324).
+-- Contexto tenant: public.app_current_empresa_id()::text (ver migración 20260324).
 -- =============================================================================
 
 -- ─── PORTES: cuatro políticas explícitas ───────────────────────────────────
@@ -22,20 +22,20 @@ BEGIN
 
     CREATE POLICY portes_select_tenant ON public.portes
       FOR SELECT
-      USING (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text);
 
     CREATE POLICY portes_insert_tenant ON public.portes
       FOR INSERT
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
 
     CREATE POLICY portes_update_tenant ON public.portes
       FOR UPDATE
-      USING (empresa_id::text = public.app_current_empresa_id())
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text)
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
 
     CREATE POLICY portes_delete_tenant ON public.portes
       FOR DELETE
-      USING (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text);
   END IF;
 END $$;
 
@@ -55,20 +55,20 @@ BEGIN
 
     CREATE POLICY vehiculos_select_tenant ON public.vehiculos
       FOR SELECT
-      USING (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text);
 
     CREATE POLICY vehiculos_insert_tenant ON public.vehiculos
       FOR INSERT
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
 
     CREATE POLICY vehiculos_update_tenant ON public.vehiculos
       FOR UPDATE
-      USING (empresa_id::text = public.app_current_empresa_id())
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text)
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
 
     CREATE POLICY vehiculos_delete_tenant ON public.vehiculos
       FOR DELETE
-      USING (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text);
   END IF;
 END $$;
 
@@ -88,20 +88,20 @@ BEGIN
 
     CREATE POLICY flota_select_tenant ON public.flota
       FOR SELECT
-      USING (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text);
 
     CREATE POLICY flota_insert_tenant ON public.flota
       FOR INSERT
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
 
     CREATE POLICY flota_update_tenant ON public.flota
       FOR UPDATE
-      USING (empresa_id::text = public.app_current_empresa_id())
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text)
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
 
     CREATE POLICY flota_delete_tenant ON public.flota
       FOR DELETE
-      USING (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text);
   END IF;
 END $$;
 
@@ -123,32 +123,32 @@ BEGIN
       FOR SELECT
       USING (
         empresa_id IS NOT NULL
-        AND empresa_id::text = public.app_current_empresa_id()
+        AND empresa_id::text = public.app_current_empresa_id()::text
       );
 
     CREATE POLICY auditoria_insert_tenant ON public.auditoria
       FOR INSERT
       WITH CHECK (
         empresa_id IS NOT NULL
-        AND empresa_id::text = public.app_current_empresa_id()
+        AND empresa_id::text = public.app_current_empresa_id()::text
       );
 
     CREATE POLICY auditoria_update_tenant ON public.auditoria
       FOR UPDATE
       USING (
         empresa_id IS NOT NULL
-        AND empresa_id::text = public.app_current_empresa_id()
+        AND empresa_id::text = public.app_current_empresa_id()::text
       )
       WITH CHECK (
         empresa_id IS NOT NULL
-        AND empresa_id::text = public.app_current_empresa_id()
+        AND empresa_id::text = public.app_current_empresa_id()::text
       );
 
     CREATE POLICY auditoria_delete_tenant ON public.auditoria
       FOR DELETE
       USING (
         empresa_id IS NOT NULL
-        AND empresa_id::text = public.app_current_empresa_id()
+        AND empresa_id::text = public.app_current_empresa_id()::text
       );
   END IF;
 END $$;

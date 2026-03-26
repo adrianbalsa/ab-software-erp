@@ -37,6 +37,11 @@ class EmpresaCreate(BaseModel):
     email: str | None = Field(default=None, max_length=255)
     telefono: str | None = Field(default=None, max_length=50)
     direccion: str | None = Field(default=None, max_length=255)
+    iban: str | None = Field(
+        default=None,
+        max_length=34,
+        description="IBAN (se persiste cifrado en aplicación; columna opcional en BD)",
+    )
     activa: bool = True
 
 
@@ -55,6 +60,11 @@ class EmpresaUpdate(BaseModel):
     email: str | None = Field(default=None, max_length=255)
     telefono: str | None = Field(default=None, max_length=50)
     direccion: str | None = Field(default=None, max_length=255)
+    iban: str | None = Field(
+        default=None,
+        max_length=34,
+        description="IBAN; se cifra antes de guardar",
+    )
 
 
 class EmpresaOut(BaseModel):
@@ -76,6 +86,11 @@ class EmpresaOut(BaseModel):
     email: str | None = None
     telefono: str | None = None
     direccion: str | None = None
+    iban: str | None = Field(
+        default=None,
+        max_length=34,
+        description="IBAN en claro hacia el cliente (descifrado tras lectura BD)",
+    )
     deleted_at: Optional[datetime] = Field(
         default=None,
         description="NULL = activa; timestamp = archivada (soft delete)",

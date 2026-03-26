@@ -19,7 +19,7 @@ _PERIODO_YYYY_MM = re.compile(r"^\d{4}-\d{2}$")
 @router.get("/facturas/{factura_id}/pdf")
 async def descargar_factura_pdf_inmutable(
     factura_id: int,
-    current_user: UserOut = Depends(deps.get_current_user),
+    current_user: UserOut = Depends(deps.require_role("owner")),
     report_service: ReportService = Depends(deps.get_report_service),
 ) -> StreamingResponse:
     """
@@ -46,7 +46,7 @@ async def descargar_factura_pdf_inmutable(
 @router.get("/esg/certificado-huella")
 async def descargar_certificado_huella_co2(
     periodo: str = Query(..., description="Mes calendario YYYY-MM"),
-    current_user: UserOut = Depends(deps.get_current_user),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     report_service: ReportService = Depends(deps.get_report_service),
     eco_service: EcoService = Depends(deps.get_eco_service),
 ) -> StreamingResponse:

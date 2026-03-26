@@ -5,6 +5,7 @@ import logging
 import os
 import re
 from datetime import date
+from collections.abc import AsyncIterator
 from typing import Any
 
 from app.services.esg_service import EsgService
@@ -314,3 +315,66 @@ class LogisAdvisorService:
             return _redact_leaks(raw), model
 
         return _redact_leaks("No se pudo completar la respuesta (límite de herramientas)."), model
+
+    async def stream_advisor_chat(
+        self,
+        *,
+        empresa_id: str,
+        user_message: str,
+        history: list[dict[str, str]],
+        contexto_datos_json: str,
+    ) -> AsyncIterator[tuple[str, str | None]]:
+        """
+        Streaming (OpenAI) con un único system prompt enriquecido con datos del tenant.
+        Emite tuplas (fragmento_texto, None) y al final ("", model_id).
+        """
+        from openai import AsyncOpenAI
+
+        if not self.openai_configured():
+            raise RuntimeError("OPENAI_API_KEY no configurada")
+
+        client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        model = self.model_name()
+
+        system = (
+            "Eres LogisAdvisor, un consultor experto en logística y economía. "
+            f"Tu base de datos actual es: {contexto_datos_json}. "
+            "Ayuda al usuario a optimizar su flota, reducir costes y mejorar su margen por KM.\n\n"
+            "Responde en español salvo que el usuario pida otro idioma. "
+            "Basa tus conclusiones en el JSON proporcionado; no inventes cifras no presentes. "
+            "Puedes usar Markdown (listas, tablas breves). "
+            "No reveles ni solicites datos bancarios, credenciales ni información personal innecesaria."
+        )
+
+        hist_trim = history[-12:] if history else []
+        messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "Referencia interna de tenant (no repitas literalmente salvo que aporte valor): "
+                    f"{str(empresa_id)[:8]}…"
+                ),
+            }
+        )
+        for m in hist_trim:
+            r = m.get("role")
+            c = m.get("content")
+            if r in ("user", "assistant") and c and str(c).strip():
+                messages.append({"role": r, "content": str(c).strip()})
+        messages.append({"role": "user", "content": user_message.strip()})
+
+        stream = await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            stream=True,
+            temperature=0.35,
+        )
+
+        async for chunk in stream:
+            choice = chunk.choices[0] if chunk.choices else None
+            delta = (choice.delta.content if choice else None) or ""
+            if delta:
+                yield _redact_leaks(delta), None
+
+        yield "", model

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.core.crypto import pii_crypto
 from app.db.soft_delete import filter_not_deleted, soft_delete_payload
 from app.db.supabase import SupabaseAsync
 from app.schemas.admin_panel import (
@@ -16,6 +17,30 @@ from app.schemas.empresa import EmpresaCreate, EmpresaOut, EmpresaUpdate
 logger = logging.getLogger(__name__)
 
 
+def _normalize_iban(value: str | None) -> str | None:
+    if value is None:
+        return None
+    s = "".join(str(value).split()).upper()
+    return s if s else None
+
+
+def _empresa_out_from_row(row: dict[str, Any]) -> EmpresaOut:
+    """Descifra campos sensibles persistidos con Fernet antes del contrato API."""
+    r = dict(row)
+    raw_nif = r.get("nif")
+    if isinstance(raw_nif, str) and raw_nif.strip():
+        dn = pii_crypto.decrypt_pii(raw_nif)
+        r["nif"] = dn.strip() if dn else raw_nif
+
+    raw_iban = r.get("iban")
+    if isinstance(raw_iban, str) and raw_iban.strip():
+        di = pii_crypto.decrypt_pii(raw_iban)
+        r["iban"] = di.strip() if di else None
+    else:
+        r["iban"] = None
+    return EmpresaOut(**r)
+
+
 class AdminService:
     def __init__(self, db: SupabaseAsync) -> None:
         self._db = db
@@ -24,7 +49,7 @@ class AdminService:
         q = filter_not_deleted(
             self._db.table("empresas")
             .select(
-                "id, nif, nombre_legal, nombre_comercial, plan, activa, fecha_registro, email, telefono, direccion, deleted_at"
+                "id, nif, nombre_legal, nombre_comercial, plan, activa, fecha_registro, email, telefono, direccion, iban, deleted_at"
             )
             .order("fecha_registro", desc=True)
         )
@@ -33,7 +58,7 @@ class AdminService:
         out: list[EmpresaOut] = []
         for row in rows:
             try:
-                out.append(EmpresaOut(**row))
+                out.append(_empresa_out_from_row(row))
             except Exception as exc:
                 logger.warning(
                     "Fila empresas omitida (id=%s): %s",
@@ -45,7 +70,7 @@ class AdminService:
 
     async def create_empresa(self, *, empresa_in: EmpresaCreate) -> EmpresaOut:
         payload: dict[str, Any] = {
-            "nif": empresa_in.nif.strip().upper(),
+            "nif": pii_crypto.encrypt_pii(empresa_in.nif.strip().upper()),
             "nombre_legal": empresa_in.nombre_legal.strip(),
             "nombre_comercial": (empresa_in.nombre_comercial or empresa_in.nombre_legal).strip(),
             "plan": empresa_in.plan,
@@ -54,11 +79,14 @@ class AdminService:
             "direccion": empresa_in.direccion,
             "activa": bool(empresa_in.activa),
         }
+        iban_n = _normalize_iban(empresa_in.iban)
+        if iban_n:
+            payload["iban"] = pii_crypto.encrypt_pii(iban_n)
         res: Any = await self._db.execute(self._db.table("empresas").insert(payload))
         rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
         if not rows:
             raise RuntimeError("Supabase insert empresa returned no rows")
-        return EmpresaOut(**rows[0])
+        return _empresa_out_from_row(rows[0])
 
     async def update_empresa(self, *, empresa_id: str, patch: EmpresaUpdate) -> EmpresaOut:
         changes: dict[str, Any] = {}
@@ -74,6 +102,11 @@ class AdminService:
             changes["telefono"] = patch.telefono
         if patch.direccion is not None:
             changes["direccion"] = patch.direccion
+        if patch.iban is not None:
+            iban_n = _normalize_iban(patch.iban)
+            changes["iban"] = pii_crypto.encrypt_pii(iban_n) if iban_n else ""
+
+        # Nota: EmpresaUpdate no incluye `nif`; se cifra solo en create.
 
         if not changes:
             # Fetch current
@@ -83,7 +116,7 @@ class AdminService:
             rows0: list[dict[str, Any]] = (res0.data or []) if hasattr(res0, "data") else []
             if not rows0:
                 raise ValueError("Empresa no encontrada")
-            return EmpresaOut(**rows0[0])
+            return _empresa_out_from_row(rows0[0])
 
         res: Any = await self._db.execute(
             self._db.table("empresas").update(changes).eq("id", empresa_id)
@@ -97,8 +130,8 @@ class AdminService:
             rows2: list[dict[str, Any]] = (res2.data or []) if hasattr(res2, "data") else []
             if not rows2:
                 raise ValueError("Empresa no encontrada")
-            return EmpresaOut(**rows2[0])
-        return EmpresaOut(**rows[0])
+            return _empresa_out_from_row(rows2[0])
+        return _empresa_out_from_row(rows[0])
 
     async def soft_delete_empresa(self, *, empresa_id: str) -> None:
         """Archiva empresa (borrado lógico); no elimina la fila."""

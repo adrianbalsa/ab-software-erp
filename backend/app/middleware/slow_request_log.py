@@ -20,9 +20,7 @@ def _should_skip_slow_log(path: str) -> bool:
         return True
     if path.startswith("/health/"):
         return True
-    if path.startswith("/docs") or path.startswith("/redoc"):
-        return True
-    if path == "/openapi.json":
+    if path.startswith("/openapi/"):
         return True
     return False
 

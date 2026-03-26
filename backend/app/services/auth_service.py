@@ -4,6 +4,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from app.core.rbac import normalize_rbac_role
 from app.core.security import hash_password_argon2id, verify_password_against_stored
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserInDB, UserOut
@@ -47,6 +48,8 @@ class AuthService:
             username=user.username,
             empresa_id=user.empresa_id,
             rol=user.rol,
+            rbac_role=normalize_rbac_role(None, legacy_rol=user.rol),
+            cliente_id=None,
             usuario_id=None,
         )
 
@@ -95,6 +98,8 @@ class AuthService:
             username=username,
             empresa_id=UUID(empresa_id),
             rol=rol,
+            rbac_role=normalize_rbac_role(None, legacy_rol=rol),
+            cliente_id=None,
             usuario_id=None,
         )
 
@@ -222,10 +227,18 @@ class AuthService:
         username = str(row.get("username") or row.get("email") or subject).strip()
         if not username:
             username = subject
-        rol_raw = row.get("rol") if row.get("rol") is not None else row.get("role")
-        rol = str(rol_raw).strip() if rol_raw is not None else "user"
+        legacy_rol_raw = row.get("rol")
+        rol = str(legacy_rol_raw).strip() if legacy_rol_raw is not None else "user"
         if not rol:
             rol = "user"
+        rbac_role = normalize_rbac_role(row.get("role"), legacy_rol=rol)
+        raw_vid = row.get("assigned_vehiculo_id")
+        assigned_vid: UUID | None = None
+        if raw_vid is not None and str(raw_vid).strip():
+            try:
+                assigned_vid = UUID(str(raw_vid).strip())
+            except ValueError:
+                assigned_vid = None
         raw_uid = row.get("id")
         usuario_uuid: UUID | None = None
         if raw_uid is not None and str(raw_uid).strip():
@@ -233,10 +246,20 @@ class AuthService:
                 usuario_uuid = UUID(str(raw_uid).strip())
             except ValueError:
                 usuario_uuid = None
+        raw_cid = row.get("cliente_id")
+        cliente_uuid: UUID | None = None
+        if raw_cid is not None and str(raw_cid).strip():
+            try:
+                cliente_uuid = UUID(str(raw_cid).strip())
+            except ValueError:
+                cliente_uuid = None
         return UserOut(
             username=username,
             empresa_id=empresa_uuid,
             rol=rol,
+            rbac_role=rbac_role,
+            cliente_id=cliente_uuid,
+            assigned_vehiculo_id=assigned_vid,
             usuario_id=usuario_uuid,
         )
 
@@ -283,6 +306,22 @@ class AuthService:
             logger.debug("Tenant context RPC ok (empresa_id prefix=%s…)", eid[:12])
         except Exception as exc:
             logger.warning("set_empresa_context RPC falló: %s", exc)
+
+    async def ensure_rbac_context(self, *, user: UserOut) -> None:
+        """Publica app.rbac_role, app.assigned_vehiculo_id y app.current_profile_id (RLS conductores)."""
+        vid = user.assigned_vehiculo_id
+        uid = user.usuario_id
+        cid = user.cliente_id
+        params: dict[str, object] = {
+            "p_rbac_role": user.rbac_role,
+            "p_assigned_vehiculo_id": str(vid) if vid is not None else None,
+            "p_profile_id": str(uid) if uid is not None else None,
+            "p_cliente_id": str(cid) if cid is not None else None,
+        }
+        try:
+            await self._db.rpc("set_rbac_session", params)
+        except Exception as exc:
+            logger.warning("set_rbac_session RPC falló: %s", exc)
 
     async def try_set_empresa_context(self, *, empresa_id: str | UUID) -> None:
         """Alias retrocompatible de ``ensure_empresa_context``."""

@@ -1,0 +1,20 @@
+# Ejemplo: túnel Cloudflare con archivo de configuración (sin TUNNEL_TOKEN).
+# 1) cloudflared tunnel create abl-prod
+# 2) Copia el UUID del túnel y sustituye <TUNNEL_ID>
+# 3) cloudflared tunnel route dns abl-prod app.tu-dominio.com
+# 4) Monta este archivo y usa: tunnel --config /etc/cloudflared/config.yml run
+#
+# En Zero Trust, el origen debe apuntar al servicio Caddy del compose: http://caddy:80
+
+tunnel: <TUNNEL_ID>
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  - hostname: app.tu-dominio.com
+    service: http://caddy:80
+    originRequest:
+      noHappyEyeballs: true
+      connectTimeout: 30s
+  - hostname: api.tu-dominio.com
+    service: http://caddy:80
+  - service: http_status:404

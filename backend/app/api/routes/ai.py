@@ -17,7 +17,7 @@ router = APIRouter()
 @router.post("/chat", response_model=AiChatResponse)
 async def ai_chat(
     payload: AiChatRequest,
-    current_user: UserOut = Depends(deps.get_current_user),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     service: LogisAdvisorService = Depends(deps.get_logis_advisor_service),
 ) -> AiChatResponse:
     """

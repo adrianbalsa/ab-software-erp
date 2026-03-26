@@ -36,7 +36,7 @@ BEGIN
     DROP POLICY IF EXISTS empresa_banco_sync_tenant_all ON public.empresa_banco_sync;
     CREATE POLICY empresa_banco_sync_tenant_all ON public.empresa_banco_sync
       FOR ALL
-      USING (empresa_id::text = public.app_current_empresa_id())
-      WITH CHECK (empresa_id::text = public.app_current_empresa_id());
+      USING (empresa_id::text = public.app_current_empresa_id()::text)
+      WITH CHECK (empresa_id::text = public.app_current_empresa_id()::text);
   END IF;
 END $$;

@@ -1,0 +1,55 @@
+# AB Logistics OS — API producción (multi-stage, Gunicorn + UvicornWorker, no-root)
+# Build: docker build -f Dockerfile.prod -t abl-backend:prod ./backend
+
+FROM python:3.12-slim-bookworm AS builder
+
+WORKDIR /build
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ─── Runtime ───────────────────────────────────────────────────────────────
+FROM python:3.12-slim-bookworm AS runtime
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/venv /opt/venv
+
+COPY . .
+
+RUN useradd --create-home --shell /bin/bash --uid 1000 appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8000
+
+# WEB_CONCURRENCY: workers Uvicorn (defecto razonable en VPS 2–4 vCPU)
+ENV WEB_CONCURRENCY=4 \
+    GUNICORN_TIMEOUT=120 \
+    GUNICORN_GRACEFUL_TIMEOUT=30
+
+HEALTHCHECK --interval=30s --timeout=8s --start-period=25s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8000/ready || exit 1
+
+CMD ["/bin/sh", "-c", "exec gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w ${WEB_CONCURRENCY:-4} -b 0.0.0.0:8000 --timeout ${GUNICORN_TIMEOUT:-120} --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-30} --worker-tmp-dir /dev/shm --access-logfile - --error-logfile - --capture-output"]

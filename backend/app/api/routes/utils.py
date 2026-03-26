@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 
 from app.services.health_service import perform_full_health_check
 
-router = APIRouter(prefix="/health", tags=["health"])
+router = APIRouter(prefix="/health")
 
 
 @router.get("/status")

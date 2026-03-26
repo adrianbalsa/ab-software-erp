@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fpdf import FPDF
+from PIL import Image
 
 from app.services.pdf_fonts import register_brand_fonts
 
@@ -500,6 +501,131 @@ def generar_pdf_certificado_ruta_esg(
     pdf.set_text_color(*ZINC_500)
     pdf.set_font(body, "", 7)
     pdf.cell(0, 4, f"Emitido {fecha_hoy} | AB Logistics OS", align="C", ln=1)
+
+    return _pdf_output_bytes(pdf)
+
+
+def _strip_data_url_b64(raw: str) -> str:
+    s = str(raw or "").strip()
+    if s.startswith("data:") and "," in s:
+        return s.split(",", 1)[1].strip()
+    return s
+
+
+def _fmt_firma_entrega_exacta(iso_s: str) -> str:
+    """Fecha/hora legible en UTC para el pie de firma del POD."""
+    try:
+        s = str(iso_s).strip().replace("Z", "+00:00")
+        dt = datetime.datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        else:
+            dt = dt.astimezone(datetime.timezone.utc)
+        return dt.strftime("%d/%m/%Y %H:%M:%S") + " UTC"
+    except Exception:
+        return str(iso_s)[:48]
+
+
+def generar_albaran_entrega_pdf(
+    *,
+    datos_empresa: dict[str, Any],
+    datos_porte: dict[str, Any],
+    nombre_consignatario: str,
+    firma_b64: str,
+    fecha_entrega_iso: str,
+    dni_consignatario: str | None = None,
+) -> bytes:
+    """
+    Albarán de entrega digital (POD) con firma incrustada (PNG Base64).
+    """
+    raw_b64 = _strip_data_url_b64(firma_b64)
+    try:
+        img_bytes = base64.b64decode(raw_b64, validate=True)
+    except Exception as e:
+        raise ValueError("Firma Base64 inválida") from e
+
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=16)
+    body, _mono = register_brand_fonts(pdf)
+    pdf.add_page()
+    pdf.set_margin(14)
+
+    em = str(datos_empresa.get("nombre_comercial") or datos_empresa.get("nombre_legal") or "—")
+    nif_em = str(datos_empresa.get("nif") or "—")
+
+    origen = str(datos_porte.get("origen") or "—")
+    destino = str(datos_porte.get("destino") or "—")
+    desc = str(datos_porte.get("descripcion") or "—")
+    try:
+        bultos = int(datos_porte.get("bultos") or 0)
+    except (TypeError, ValueError):
+        bultos = 0
+    pid = str(datos_porte.get("id") or "—")
+
+    pdf.set_font(body, "B", 16)
+    pdf.set_text_color(*EMERALD_600)
+    pdf.cell(0, 10, "Carta de porte / Albarán de entrega (POD)", ln=1)
+    pdf.set_font(body, "", 9)
+    pdf.set_text_color(*ZINC_500)
+    pdf.cell(0, 5, f"Porte {pid} | AB Logistics OS", ln=1)
+    pdf.ln(4)
+
+    pdf.set_font(body, "B", 10)
+    pdf.set_text_color(*ZINC_800)
+    pdf.cell(0, 6, "Transportista", ln=1)
+    pdf.set_font(body, "", 9)
+    pdf.multi_cell(0, 5, f"{em}\nNIF: {nif_em}")
+    pdf.ln(2)
+
+    pdf.set_font(body, "B", 10)
+    pdf.cell(0, 6, "Entrega", ln=1)
+    pdf.set_font(body, "", 9)
+    pdf.multi_cell(0, 5, f"Origen: {origen}\nDestino: {destino}\nMercancía: {desc}\nBultos: {bultos}")
+    pdf.ln(4)
+
+    pdf.set_font(body, "B", 10)
+    pdf.set_text_color(*ZINC_800)
+    pdf.cell(0, 6, "Firma del consignatario", ln=1)
+    pdf.ln(2)
+
+    y_img = pdf.get_y()
+    max_w = min(120.0, float(pdf.w - 28))
+    display_h = 40.0
+    try:
+        with Image.open(io.BytesIO(img_bytes)) as im:
+            w_px, h_px = im.size
+            if w_px > 0 and h_px > 0:
+                display_h = max_w * (float(h_px) / float(w_px))
+        pdf.image(io.BytesIO(img_bytes), x=14, y=y_img, w=max_w, type="PNG")
+    except Exception:
+        pdf.set_font(body, "", 8)
+        pdf.set_text_color(180, 0, 0)
+        pdf.multi_cell(0, 4, "(No se pudo incrustar la imagen de firma.)")
+        display_h = 8.0
+
+    pdf.set_y(y_img + display_h + 5)
+    fecha_txt = _fmt_firma_entrega_exacta(fecha_entrega_iso)
+    dni = (dni_consignatario or "").strip()
+    dni_part = f" (DNI/NIE {dni})" if dni else ""
+    linea_firma = f"Firmado por: {nombre_consignatario}{dni_part} el {fecha_txt}"
+    pdf.set_font(body, "B", 9)
+    pdf.set_text_color(*ZINC_800)
+    pdf.multi_cell(0, 5, linea_firma)
+
+    pdf.ln(6)
+    pdf.set_font(body, "", 7)
+    pdf.set_text_color(*ZINC_500)
+    pdf.multi_cell(
+        0,
+        4,
+        "Documento generado electrónicamente. La firma reproduce el trazo recogido en dispositivo del "
+        "destinatario. Conserve este albarán como acuse de entrega.",
+        align="L",
+    )
+    pdf.set_y(-12)
+    pdf.set_font(body, "", 7)
+    pdf.set_text_color(*EMERALD_600)
+    pdf.cell(0, 4, "AB Logistics OS — Entrega digital", align="C", ln=1)
 
     return _pdf_output_bytes(pdf)
 

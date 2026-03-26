@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AppProviders } from "@/components/AppProviders";
 import { SentryInit } from "@/components/SentryInit";
 import "./globals.css";
 
@@ -29,7 +30,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <SentryInit />
-        {children}
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

@@ -43,12 +43,21 @@ class Settings:
     # GoCardless Bank Account Data (ex-Nordigen); opcional — sin credenciales no hay /bancos/*
     GOCARDLESS_SECRET_ID: Optional[str]
     GOCARDLESS_SECRET_KEY: Optional[str]
-    # Fernet (44 chars base64). Preferir ENCRYPTION_SECRET_KEY en nuevas instalaciones.
+    # GoCardless Pro (pagos) — token API y entorno
+    GOCARDLESS_ACCESS_TOKEN: Optional[str]
+    GOCARDLESS_ENV: str
+    # GoCardless Payments webhooks (firma HMAC-SHA256 del body crudo)
+    GOCARDLESS_WEBHOOK_SECRET: Optional[str]
+    # Fernet (44 chars base64 url-safe). Prioridad en ``app.core.encryption``: ENCRYPTION_KEY → ENCRYPTION_SECRET_KEY → …
+    ENCRYPTION_KEY: Optional[str]
+    # Alias / compatibilidad con despliegues existentes.
     ENCRYPTION_SECRET_KEY: Optional[str]
     # Alias histórico; si falta ENCRYPTION_SECRET_KEY, se usa para cifrar requisition_id / tokens.
     BANK_TOKEN_ENCRYPTION_KEY: Optional[str]
     # SQLAlchemy / Postgres (opcional). En producción suele apuntar a PgBouncer :6432.
     DATABASE_URL: Optional[str]
+    # Redis (rate limiting, colas); opcional — sin URL el rate limit usa almacenamiento en memoria.
+    REDIS_URL: Optional[str]
     # Google OAuth (authlib OIDC); opcional — sin credenciales no hay flujo /auth/oauth/google/*
     GOOGLE_CLIENT_ID: Optional[str]
     GOOGLE_CLIENT_SECRET: Optional[str]
@@ -56,6 +65,16 @@ class Settings:
     GOOGLE_OAUTH_REDIRECT_URI: Optional[str]
     # Firma de cookies de sesión (OAuth state/nonce); en producción conviene rotación independiente del JWT
     SESSION_SECRET_KEY: str
+    # AEAT VeriFactu / SIF (opcional; sin activar no se llama a la AEAT)
+    AEAT_VERIFACTU_ENABLED: bool
+    AEAT_VERIFACTU_USE_PRODUCTION: bool
+    AEAT_BLOQUEAR_PROD_EN_DESARROLLO: bool
+    AEAT_VERIFACTU_SUBMIT_URL_TEST: Optional[str]
+    AEAT_VERIFACTU_SUBMIT_URL_PROD: Optional[str]
+    AEAT_CLIENT_CERT_PATH: Optional[str]
+    AEAT_CLIENT_KEY_PATH: Optional[str]
+    AEAT_CLIENT_P12_PATH: Optional[str]
+    AEAT_CLIENT_P12_PASSWORD: Optional[str]
 
 
 def _require_env(name: str) -> str:
@@ -186,6 +205,11 @@ def get_settings() -> Settings:
     email_from = _opt("EMAIL_FROM_ADDRESS")
     gc_sid = _opt("GOCARDLESS_SECRET_ID")
     gc_skey = _opt("GOCARDLESS_SECRET_KEY")
+    gc_access_token = _opt("GOCARDLESS_ACCESS_TOKEN")
+    gc_env_raw = (getenv("GOCARDLESS_ENV") or "sandbox").strip().lower()
+    gc_env = gc_env_raw if gc_env_raw in ("sandbox", "live") else "sandbox"
+    gc_wh_secret = _opt("GOCARDLESS_WEBHOOK_SECRET")
+    enc_primary = _opt("ENCRYPTION_KEY")
     enc_secret = _opt("ENCRYPTION_SECRET_KEY")
     bank_enc = _opt("BANK_TOKEN_ENCRYPTION_KEY")
     google_cid = _opt("GOOGLE_CLIENT_ID")
@@ -200,6 +224,23 @@ def get_settings() -> Settings:
     session_secret = str(session_secret_raw).strip()
 
     database_url = _build_database_url(environment=environment)
+    redis_url = _opt("REDIS_URL")
+
+    def _env_bool(name: str, default: bool = False) -> bool:
+        raw = getenv(name)
+        if raw is None or str(raw).strip() == "":
+            return default
+        return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+    aeat_enabled = _env_bool("AEAT_VERIFACTU_ENABLED", False)
+    aeat_use_prod = _env_bool("AEAT_VERIFACTU_USE_PRODUCTION", False)
+    aeat_block_dev = _env_bool("AEAT_BLOQUEAR_PROD_EN_DESARROLLO", True)
+    aeat_url_test = _opt("AEAT_VERIFACTU_SUBMIT_URL_TEST")
+    aeat_url_prod = _opt("AEAT_VERIFACTU_SUBMIT_URL_PROD")
+    aeat_cert = _opt("AEAT_CLIENT_CERT_PATH")
+    aeat_key = _opt("AEAT_CLIENT_KEY_PATH")
+    aeat_p12 = _opt("AEAT_CLIENT_P12_PATH")
+    aeat_p12_pwd = _opt("AEAT_CLIENT_P12_PASSWORD")
 
     # ─── CORS: producción estricta (dominio oficial); desarrollo incluye localhost ───
     official = (getenv("OFFICIAL_FRONTEND_ORIGIN") or "").strip().rstrip("/")
@@ -275,12 +316,26 @@ def get_settings() -> Settings:
         EMAIL_FROM_ADDRESS=email_from,
         GOCARDLESS_SECRET_ID=gc_sid,
         GOCARDLESS_SECRET_KEY=gc_skey,
+        GOCARDLESS_ACCESS_TOKEN=gc_access_token,
+        GOCARDLESS_ENV=gc_env,
+        GOCARDLESS_WEBHOOK_SECRET=gc_wh_secret,
+        ENCRYPTION_KEY=enc_primary,
         ENCRYPTION_SECRET_KEY=enc_secret,
         BANK_TOKEN_ENCRYPTION_KEY=bank_enc,
         DATABASE_URL=database_url,
+        REDIS_URL=redis_url,
         GOOGLE_CLIENT_ID=google_cid,
         GOOGLE_CLIENT_SECRET=google_sec,
         GOOGLE_OAUTH_REDIRECT_URI=google_redirect,
         SESSION_SECRET_KEY=session_secret,
+        AEAT_VERIFACTU_ENABLED=aeat_enabled,
+        AEAT_VERIFACTU_USE_PRODUCTION=aeat_use_prod,
+        AEAT_BLOQUEAR_PROD_EN_DESARROLLO=aeat_block_dev,
+        AEAT_VERIFACTU_SUBMIT_URL_TEST=aeat_url_test,
+        AEAT_VERIFACTU_SUBMIT_URL_PROD=aeat_url_prod,
+        AEAT_CLIENT_CERT_PATH=aeat_cert,
+        AEAT_CLIENT_KEY_PATH=aeat_key,
+        AEAT_CLIENT_P12_PATH=aeat_p12,
+        AEAT_CLIENT_P12_PASSWORD=aeat_p12_pwd,
     )
 

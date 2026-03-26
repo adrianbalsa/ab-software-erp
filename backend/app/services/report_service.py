@@ -16,6 +16,7 @@ from reportlab.platypus import Image as RLImage
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.db.supabase import SupabaseAsync
+from app.core.crypto import pii_crypto
 
 # Paleta Enterprise (RGB 0–1 para ReportLab)
 AB_PRIMARY = colors.HexColor("#2563eb")
@@ -70,7 +71,8 @@ def render_factura_inmutable_pdf_sync(
         factura_row.get("num_factura") or factura_row.get("numero_factura") or ""
     )
     fecha = str(factura_row.get("fecha_emision") or "")[:10]
-    nif_emisor = str(factura_row.get("nif_emisor") or "")
+    raw_nif_emisor = str(factura_row.get("nif_emisor") or "")
+    nif_emisor = pii_crypto.decrypt_pii(raw_nif_emisor) or raw_nif_emisor
     hash_reg = factura_row.get("hash_registro") or factura_row.get("hash_factura")
     hash_str = str(hash_reg or "").strip()
     fid = str(factura_row.get("id") or "")
@@ -117,7 +119,9 @@ def render_factura_inmutable_pdf_sync(
     story.append(Paragraph(f"NIF: {nif_emisor}", styles["Normal"]))
     story.append(Spacer(1, 3 * mm))
     story.append(Paragraph(f"<b>Cliente</b> · {cliente_nombre}", styles["Normal"]))
-    story.append(Paragraph(f"NIF: {nif_cliente or '—'}", styles["Normal"]))
+    raw_nif_cliente = str(nif_cliente or "")
+    nif_cliente_plain = pii_crypto.decrypt_pii(raw_nif_cliente) or raw_nif_cliente
+    story.append(Paragraph(f"NIF: {nif_cliente_plain or '—'}", styles["Normal"]))
     story.append(Spacer(1, 6 * mm))
 
     story.append(Paragraph("<b>Detalle (snapshot fiscal, no datos vivos de portes)</b>", styles["Heading2"]))
