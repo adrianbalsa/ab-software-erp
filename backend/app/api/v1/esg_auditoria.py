@@ -1,15 +1,25 @@
 from __future__ import annotations
 
 from datetime import date
+import io
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from fastapi.responses import StreamingResponse
 
 from app.api import deps
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
+from app.schemas.esg import (
+    EsgAnnualMemoryExecutiveOut,
+    EsgAnnualMemoryNormativaOut,
+    EsgAnnualMemoryOut,
+    EsgAnnualMemoryTopClienteOut,
+    EsgAuditReadyOut,
+)
 from app.schemas.user import UserOut
+from app.core.esg_engine import calculate_co2_emissions, calculate_nox_emissions
 
 router = APIRouter(prefix="/esg")
 
@@ -133,5 +143,215 @@ async def esg_reporte_anual_fuel(
         total_co2_baseline_kg=round(total_baseline, 4),
         total_co2_ahorro_kg=round(total_ahorro, 4),
         meses=meses_out,
+    )
+
+
+@router.get(
+    "/audit-ready",
+    response_model=EsgAuditReadyOut,
+    summary="Reporte ESG audit-ready por cliente y periodo",
+)
+async def esg_audit_ready_report(
+    fecha_inicio: date = Query(..., description="Inicio del periodo (inclusive)"),
+    fecha_fin: date = Query(..., description="Fin del periodo (inclusive)"),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
+    service=Depends(deps.get_esg_service),
+) -> EsgAuditReadyOut:
+    if fecha_fin < fecha_inicio:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="fecha_fin debe ser mayor o igual que fecha_inicio.",
+        )
+    return await service.audit_ready_summary(
+        empresa_id=str(current_user.empresa_id),
+        fecha_inicio=fecha_inicio,
+        fecha_fin=fecha_fin,
+    )
+
+
+@router.get(
+    "/audit-ready/export",
+    summary="Exportación ESG audit-ready (CSV)",
+)
+async def esg_audit_ready_export(
+    fecha_inicio: date = Query(..., description="Inicio del periodo (inclusive)"),
+    fecha_fin: date = Query(..., description="Fin del periodo (inclusive)"),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
+    service=Depends(deps.get_esg_service),
+):
+    if fecha_fin < fecha_inicio:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="fecha_fin debe ser mayor o igual que fecha_inicio.",
+        )
+    csv_bytes = await service.audit_ready_summary_csv(
+        empresa_id=str(current_user.empresa_id),
+        fecha_inicio=fecha_inicio,
+        fecha_fin=fecha_fin,
+    )
+    filename = f"esg_audit_ready_{fecha_inicio.isoformat()}_{fecha_fin.isoformat()}.csv"
+    return StreamingResponse(
+        io.BytesIO(csv_bytes),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/suggest-vehicle",
+    summary="Sugerencia ESG de vehículo para un porte (min CO2)",
+)
+async def esg_suggest_vehicle(
+    km_estimados: float = Query(..., ge=0, description="KM estimados del porte"),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
+    service=Depends(deps.get_esg_service),
+) -> dict[str, str | float | None]:
+    return await service.suggest_vehicle_for_porte(
+        empresa_id=str(current_user.empresa_id),
+        km_estimados=km_estimados,
+    )
+
+
+@router.get(
+    "/annual-memory",
+    response_model=EsgAnnualMemoryOut,
+    summary="Memoria Anual de Sostenibilidad (JSON)",
+)
+async def esg_annual_memory(
+    year: int = Query(date.today().year, ge=2000, le=2100),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
+    db: SupabaseAsync = Depends(deps.get_db),
+) -> EsgAnnualMemoryOut:
+    empresa_id = str(current_user.empresa_id)
+    fi = date(year, 1, 1).isoformat()
+    ff = date(year, 12, 31).isoformat()
+
+    # Portes facturados del año
+    q = filter_not_deleted(
+        db.table("portes")
+        .select("id,cliente_id,vehiculo_id,km_estimados,co2_emitido,fecha")
+        .eq("empresa_id", empresa_id)
+        .eq("estado", "facturado")
+        .gte("fecha", fi)
+        .lte("fecha", ff)
+    )
+    res: Any = await db.execute(q)
+    porte_rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+
+    # Flota para normativa EURO
+    veh_ids = {str(r.get("vehiculo_id")) for r in porte_rows if r.get("vehiculo_id")}
+    flota_by_id: dict[str, dict[str, Any]] = {}
+    if veh_ids:
+        try:
+            rf: Any = await db.execute(
+                filter_not_deleted(
+                    db.table("flota")
+                    .select("id,normativa_euro")
+                    .eq("empresa_id", empresa_id)
+                    .in_("id", list(veh_ids))
+                )
+            )
+            flota_by_id = {
+                str(r.get("id")): r
+                for r in (rf.data or [])
+                if isinstance(r, dict) and r.get("id") is not None
+            }
+        except Exception:
+            flota_by_id = {}
+
+    # Nombres clientes
+    cliente_ids = {str(r.get("cliente_id")) for r in porte_rows if r.get("cliente_id")}
+    nombres: dict[str, str] = {}
+    if cliente_ids:
+        try:
+            rc: Any = await db.execute(
+                filter_not_deleted(
+                    db.table("clientes")
+                    .select("id,nombre_comercial,nombre")
+                    .eq("empresa_id", empresa_id)
+                    .in_("id", list(cliente_ids))
+                )
+            )
+            for r in (rc.data or []) if hasattr(rc, "data") else []:
+                cid = str(r.get("id") or "").strip()
+                if not cid:
+                    continue
+                nc = str(r.get("nombre_comercial") or "").strip()
+                nm = str(r.get("nombre") or "").strip()
+                nombres[cid] = nc or nm or cid
+        except Exception:
+            pass
+
+    total_km = 0.0
+    total_co2 = 0.0
+    total_nox = 0.0
+    km_euro_iii = 0.0
+    km_euro_vi = 0.0
+    co2_by_cliente: dict[str, float] = {}
+
+    for r in porte_rows:
+        km = float(r.get("km_estimados") or 0.0)
+        total_km += max(0.0, km)
+        vid = str(r.get("vehiculo_id") or "").strip()
+        norma = str(flota_by_id.get(vid, {}).get("normativa_euro") or "Euro VI")
+
+        if norma == "Euro III":
+            km_euro_iii += max(0.0, km)
+        if norma == "Euro VI":
+            km_euro_vi += max(0.0, km)
+
+        co2_raw = r.get("co2_emitido")
+        if co2_raw is not None:
+            try:
+                co2 = max(0.0, float(co2_raw))
+            except (TypeError, ValueError):
+                co2 = 0.0
+        else:
+            co2 = calculate_co2_emissions(km, norma)
+        nox = calculate_nox_emissions(km, norma)
+
+        total_co2 += co2
+        total_nox += nox
+
+        cid = str(r.get("cliente_id") or "").strip()
+        if cid:
+            co2_by_cliente[cid] = co2_by_cliente.get(cid, 0.0) + co2
+
+    eficiencia = (total_co2 / total_km) if total_km > 0 else 0.0
+
+    pct_iii = (km_euro_iii / total_km) * 100.0 if total_km > 0 else 0.0
+    pct_vi = (km_euro_vi / total_km) * 100.0 if total_km > 0 else 0.0
+
+    top = sorted(co2_by_cliente.items(), key=lambda x: x[1], reverse=True)[:5]
+    top_clientes = [
+        EsgAnnualMemoryTopClienteOut(
+            cliente_id=cid,
+            cliente_nombre=nombres.get(cid),
+            co2_kg=round(val, 4),
+        )
+        for cid, val in top
+    ]
+
+    metodologia = (
+        "Factores de emisión basados en normativa EURO (III–VI). "
+        "CO2: kg/km por normativa. NOx: g/km por normativa convertido a kg. "
+        "KM estimados de portes facturados."
+    )
+
+    return EsgAnnualMemoryOut(
+        year=year,
+        empresa_id=empresa_id,
+        resumen_ejecutivo=EsgAnnualMemoryExecutiveOut(
+            total_co2_kg=round(total_co2, 4),
+            total_nox_kg=round(total_nox, 4),
+            total_km=round(total_km, 4),
+            eficiencia_media_kg_co2_km=round(eficiencia, 4),
+        ),
+        desglose_normativa=EsgAnnualMemoryNormativaOut(
+            pct_euro_iii=round(pct_iii, 4),
+            pct_euro_vi=round(pct_vi, 4),
+        ),
+        top_clientes=top_clientes,
+        metodologia=metodologia,
     )
 

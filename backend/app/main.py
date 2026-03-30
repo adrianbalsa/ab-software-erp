@@ -37,6 +37,7 @@ from app.api.routes import (
 from app.api.v1 import analytics as analytics_v1
 from app.api.v1 import bancos_conciliacion as bancos_conciliacion_v1
 from app.api.v1 import chat as chat_v1
+from app.api.v1 import chatbot as chatbot_v1
 from app.api.v1 import clientes as clientes_v1
 from app.api.v1 import economic_dashboard as economic_dashboard_v1
 from app.api.v1 import esg_auditoria as esg_auditoria_v1
@@ -53,6 +54,7 @@ from app.api.v1 import payments_gocardless as payments_gocardless_v1
 from app.api.v1 import portal_cliente as portal_cliente_v1
 from app.api.v1 import portal_onboarding as portal_onboarding_v1
 from app.api.v1 import portes as portes_v1
+from app.api.v1 import routes_optimizer as routes_optimizer_v1
 from app.api.v1 import stripe
 from app.api.v1 import treasury as treasury_v1
 from app.api.v1 import verifactu as verifactu_v1
@@ -200,6 +202,7 @@ def create_app() -> FastAPI:
     app.include_router(esg_reports_v1.router, prefix="/api/v1", tags=["ESG"])
     app.include_router(esg_auditoria_v1.router, prefix="/api/v1", tags=["ESG - Auditoría"])
     app.include_router(chat_v1.router, prefix="/api/v1/chat", tags=["IA y chat"])
+    app.include_router(chatbot_v1.router, prefix="/api/v1/chatbot", tags=["IA y chat"])
     app.include_router(bancos_conciliacion_v1.router, prefix="/api/v1/bancos", tags=["Bancos y conciliación"])
     app.include_router(treasury_v1.router, prefix="/api/v1/treasury", tags=["Tesorería"])
     app.include_router(export_v1.router, prefix="/api/v1/export", tags=["Exportación"])
@@ -208,6 +211,7 @@ def create_app() -> FastAPI:
     app.include_router(gastos_combustible_v1.router, prefix="/api/v1/gastos", tags=["Gastos"])
     app.include_router(finance_dashboard_v1.router, prefix="/api/v1/finance", tags=["Finanzas"])
     app.include_router(verifactu_v1.router, prefix="/api/v1/verifactu", tags=["Fiscal (AEAT)"])
+    app.include_router(routes_optimizer_v1.router, prefix="/api/v1/routes", tags=["Optimización de rutas"])
     app.include_router(audit_logs.router, prefix="/api/v1/audit-logs", tags=["Auditoría API"])
     app.include_router(webhooks_v1.router, prefix="/api/v1/webhooks", tags=["Webhooks B2B"])
     app.include_router(

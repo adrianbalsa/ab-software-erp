@@ -34,6 +34,8 @@ RATE_LIMIT_EXEMPT_PATHS: frozenset[str] = frozenset(
 RATE_LIMIT_EXEMPT_PREFIXES: tuple[str, ...] = (
     "/payments/webhook",
     "/api/v1/stripe/webhook",
+    "/api/v1/routes",
+    "/api/v1/chatbot",
 )
 
 # Login / refresh: fuerza bruta por IP.

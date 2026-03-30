@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 class NormativaEuro(StrEnum):
     """Normativa de emisiones EURO aplicable al factor CO₂ (kg/km) del motor ESG."""
 
+    EURO_III = "Euro III"
     EURO_IV = "Euro IV"
     EURO_V = "Euro V"
     EURO_VI = "Euro VI"
@@ -24,5 +25,5 @@ class Vehiculo(BaseModel):
     empresa_id: UUID | None = None
     normativa_euro: NormativaEuro = Field(
         default=NormativaEuro.EURO_VI,
-        description='Normativa EURO real para cálculo CO₂: "Euro IV", "Euro V" o "Euro VI".',
+        description='Normativa EURO real para cálculo CO₂: "Euro III", "Euro IV", "Euro V" o "Euro VI".',
     )

@@ -78,13 +78,31 @@ function showNavItem(
     | "clientes",
   role: AppRbacRole,
 ): boolean {
+  // Solo owner y developer pueden ver clientes
   if (key === "clientes") {
-    return role === "owner";
+    return role === "owner" || role === "developer";
   }
+  
+  // Solo owner y developer pueden ver finanzas y admin (roles ADMIN/SUPERADMIN)
+  // Los roles traffic_manager, driver, cliente son equivalentes a STAFF
+  if (key === "finanzas" || key === "admin") {
+    return role === "owner" || role === "developer";
+  }
+  
+  // Owner puede ver todo
   if (role === "owner") return true;
-  if (role === "traffic_manager") {
-    return key === "flota" || key === "sostenibilidad";
+  
+  // Developer puede ver casi todo excepto operaciones de flota (driver-specific)
+  if (role === "developer") {
+    return key !== "flota" && key !== "sostenibilidad";
   }
+  
+  // Traffic manager (STAFF operativo) puede ver flota y sostenibilidad
+  if (role === "traffic_manager") {
+    return key === "flota" || key === "sostenibilidad" || key === "facturas" || key === "gastos";
+  }
+  
+  // Driver y cliente: acceso muy limitado
   return false;
 }
 

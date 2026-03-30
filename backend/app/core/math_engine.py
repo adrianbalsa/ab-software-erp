@@ -1,15 +1,16 @@
 """
-Motor de precisión financiera: ``decimal`` exclusivo, redondeo contable (HALF_UP)
+Motor de precisión financiera: ``decimal`` exclusivo, redondeo contable (HALF_EVEN)
 a 2 decimales (EUR), división segura y validaciones de dominio.
 
-La clase :class:`MathEngine` usa **ROUND_HALF_UP** (redondeo financiero habitual en contabilidad
-española) y cuantía **0,01 €**, alineada con ``numeric(12,2)`` en PostgreSQL/Supabase.
+La clase :class:`MathEngine` usa **ROUND_HALF_EVEN** (redondeo bancario) y cuantía **0,01 €**,
+alineada con ``numeric(12,2)`` en PostgreSQL/Supabase.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import (
+    ROUND_HALF_EVEN,
     ROUND_HALF_UP,
     Context,
     Decimal,
@@ -20,8 +21,8 @@ from typing import Any
 
 FIAT_QUANT = Decimal("0.01")
 
-# Contexto financiero: precisión amplia y redondeo HALF_UP al cuantificar a céntimos.
-_MATH_CTX = Context(prec=28, rounding=ROUND_HALF_UP)
+# Contexto financiero: precisión amplia y redondeo HALF_EVEN al cuantificar a céntimos.
+_MATH_CTX = Context(prec=28, rounding=ROUND_HALF_EVEN)
 
 
 class FinancialDomainError(ValueError):
@@ -48,9 +49,17 @@ def to_decimal(value: float | str | Decimal | None) -> Decimal:
         raise FinancialDomainError(f"Importe no numérico: {value!r}") from e
 
 
+def quantize_currency(value: Decimal) -> Decimal:
+    """
+    Cuantiza un Decimal a **2 decimales** exactos (EUR) con ``ROUND_HALF_EVEN``.
+    """
+    with localcontext(_MATH_CTX):
+        return value.quantize(FIAT_QUANT, rounding=ROUND_HALF_EVEN)
+
+
 def round_fiat(value: float | str | Decimal | None) -> Decimal:
     """
-    Redondeo contable a **2 decimales** exactos (EUR) con ``ROUND_HALF_UP``.
+    Redondeo contable a **2 decimales** exactos (EUR) con ``ROUND_HALF_EVEN``.
     """
     try:
         d = to_decimal(value)
@@ -58,7 +67,7 @@ def round_fiat(value: float | str | Decimal | None) -> Decimal:
         raise
     except Exception as e:
         raise FinancialDomainError(f"No se pudo interpretar el importe: {value!r}") from e
-    return d.quantize(FIAT_QUANT, rounding=ROUND_HALF_UP)
+    return quantize_currency(d)
 
 
 def as_float_fiat(value: float | str | Decimal | None) -> float:
@@ -117,10 +126,10 @@ def compute_f1_totals(*, base_imponible: Decimal, iva_porcentaje: float | Decima
     Base + cuota IVA + total con redondeo fiat en cada paso.
     ``iva_porcentaje`` es el tanto por ciento (p. ej. 21).
     """
-    base = round_fiat(base_imponible)
-    pct = round_fiat(iva_porcentaje)
-    cuota = round_fiat(base * (pct / Decimal("100")))
-    total = round_fiat(base + cuota)
+    base = quantize_currency(to_decimal(base_imponible))
+    pct = to_decimal(iva_porcentaje)
+    cuota = quantize_currency(base * (pct / Decimal("100")))
+    total = quantize_currency(base + cuota)
     return base, cuota, total
 
 
@@ -135,23 +144,21 @@ def negate_fiat_for_rectificativa(value: Any) -> Decimal:
 
 
 def quantize_financial(value: float | str | Decimal | None) -> Decimal:
-    """Cuantía a 2 decimales con **ROUND_HALF_UP** (contabilidad / MathEngine)."""
+    """Cuantía a 2 decimales con **ROUND_HALF_EVEN** (contabilidad / MathEngine)."""
     try:
         d = to_decimal(value)
     except FinancialDomainError:
         raise
     except Exception as e:
         raise FinancialDomainError(f"No se pudo interpretar el importe: {value!r}") from e
-    with localcontext(_MATH_CTX):
-        return d.quantize(FIAT_QUANT, rounding=ROUND_HALF_UP)
+    return quantize_currency(d)
 
 
 def decimal_to_db_numeric(value: Decimal) -> Decimal:
     """
     Salida estable para columnas ``numeric(12,2)``: siempre 2 decimales, HALF_UP.
     """
-    with localcontext(_MATH_CTX):
-        return value.quantize(FIAT_QUANT, rounding=ROUND_HALF_UP)
+    return quantize_currency(value)
 
 
 # Recargo de equivalencia (sobre base imponible del grupo) — tipos generales AEAT habituales.
@@ -165,7 +172,7 @@ RECARGO_EQUIVALENCIA_POR_IVA_PCT: dict[str, Decimal] = {
 
 def _iva_rate_key(pct: Decimal) -> str:
     with localcontext(_MATH_CTX):
-        return str(pct.quantize(FIAT_QUANT, rounding=ROUND_HALF_UP))
+        return str(pct.quantize(FIAT_QUANT, rounding=ROUND_HALF_EVEN))
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,7 +211,7 @@ class InvoiceTotalsResult:
 
 class MathEngine:
     """
-    Cálculos **exclusivamente** con :class:`decimal.Decimal` y redondeo **ROUND_HALF_UP**
+    Cálculos **exclusivamente** con :class:`decimal.Decimal` y redondeo **ROUND_HALF_EVEN**
     a céntimos, para cuadrar base, IVA y total sin deriva.
     """
 

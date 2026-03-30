@@ -5,6 +5,7 @@ from fastapi.responses import Response
 
 from app.api import deps
 from app.db.supabase import SupabaseAsync
+from app.middleware.rbac_middleware import require_admin
 from app.schemas.admin_panel import (
     AuditoriaAdminRow,
     MetricasSaaSFacturacionOut,
@@ -25,7 +26,7 @@ async def _get_admin_service(db: SupabaseAsync = Depends(deps.get_db)) -> AdminS
 
 @router.get("/empresas", response_model=list[EmpresaOut])
 async def list_empresas(
-    admin_user: UserOut = Depends(deps.require_admin_user),
+    admin_user: UserOut = Depends(require_admin),
     service: AdminService = Depends(_get_admin_service),
 ) -> list[EmpresaOut]:
     _ = admin_user
@@ -35,7 +36,7 @@ async def list_empresas(
 @router.post("/empresas", response_model=EmpresaOut, status_code=status.HTTP_201_CREATED)
 async def create_empresa(
     empresa_in: EmpresaCreate,
-    admin_user: UserOut = Depends(deps.require_admin_write_user),
+    admin_user: UserOut = Depends(require_admin),
     service: AdminService = Depends(_get_admin_service),
 ) -> EmpresaOut:
     _ = admin_user
@@ -52,7 +53,7 @@ async def create_empresa(
 )
 async def delete_empresa(
     empresa_id: str,
-    admin_user: UserOut = Depends(deps.require_admin_write_user),
+    admin_user: UserOut = Depends(require_admin),
     service: AdminService = Depends(_get_admin_service),
 ) -> Response:
     """Archiva la empresa (`deleted_at`); no borra físicamente."""
@@ -68,7 +69,7 @@ async def delete_empresa(
 async def update_empresa(
     empresa_id: str,
     patch: EmpresaUpdate,
-    admin_user: UserOut = Depends(deps.require_admin_write_user),
+    admin_user: UserOut = Depends(require_admin),
     service: AdminService = Depends(_get_admin_service),
 ) -> EmpresaOut:
     _ = admin_user
@@ -82,7 +83,7 @@ async def update_empresa(
 
 @router.get("/usuarios", response_model=list[UsuarioAdminOut])
 async def list_usuarios(
-    admin_user: UserOut = Depends(deps.require_admin_user),
+    admin_user: UserOut = Depends(require_admin),
     service: AdminService = Depends(_get_admin_service),
 ) -> list[UsuarioAdminOut]:
     _ = admin_user
@@ -93,7 +94,7 @@ async def list_usuarios(
 async def update_usuario(
     usuario_id: str,
     patch: UsuarioAdminPatch,
-    admin_user: UserOut = Depends(deps.require_admin_write_user),
+    admin_user: UserOut = Depends(require_admin),
     service: AdminService = Depends(_get_admin_service),
 ) -> UsuarioAdminOut:
     _ = admin_user
@@ -108,7 +109,7 @@ async def update_usuario(
 @router.get("/auditoria", response_model=list[AuditoriaAdminRow])
 async def list_auditoria(
     limit: int = Query(100, ge=10, le=500),
-    admin_user: UserOut = Depends(deps.require_admin_user),
+    admin_user: UserOut = Depends(require_admin),
     service: AdminService = Depends(_get_admin_service),
 ) -> list[AuditoriaAdminRow]:
     _ = admin_user
@@ -117,7 +118,7 @@ async def list_auditoria(
 
 @router.get("/metricas/facturacion", response_model=MetricasSaaSFacturacionOut)
 async def metricas_saas_facturacion(
-    admin_user: UserOut = Depends(deps.require_admin_user),
+    admin_user: UserOut = Depends(require_admin),
     service: AdminService = Depends(_get_admin_service),
 ) -> MetricasSaaSFacturacionOut:
     _ = admin_user

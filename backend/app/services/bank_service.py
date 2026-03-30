@@ -4,6 +4,7 @@ import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_EVEN
 from typing import Any
 
 import httpx
@@ -11,7 +12,7 @@ import httpx
 from app.core.config import get_settings
 from app.core.encryption import decrypt_str, encrypt_str
 from app.db.supabase import SupabaseAsync
-from app.services.reconciliation_service import ReconciliationService
+from app.services.reconciliation_service import ReconciliationService, match_invoice_transaction_pair
 
 _log = logging.getLogger(__name__)
 
@@ -318,6 +319,102 @@ class BankService:
             .update({"account_id_enc": encrypt_str(aid), "updated_at": now})
             .eq("empresa_id", empresa_id)
         )
+
+    async def get_bank_transactions(self, account_id: str) -> list[dict[str, Any]]:
+        """
+        Scaffold SEPA/Open Banking:
+        devuelve los movimientos persistidos para una cuenta de empresa.
+        """
+        account_id_clean = str(account_id or "").strip()
+        if not account_id_clean:
+            return []
+        res: Any = await self._db.execute(
+            self._db.table("bank_transactions")
+            .select("*")
+            .eq("account_id", account_id_clean)
+            .order("booked_date", desc=True)
+        )
+        return (res.data or []) if hasattr(res, "data") else []
+
+    @staticmethod
+    def _quantize_half_even(value: Any) -> Decimal:
+        try:
+            return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+        except Exception:
+            return Decimal("0.00")
+
+    async def match_invoice_to_transaction(self, invoice_id: int, tx_id: str) -> dict[str, Any]:
+        """
+        Match manual invoice<->transaction con reglas de conciliaci?n (importe + referencia/concepto).
+        [cite: 2026-03-30]
+        """
+        inv_id = int(invoice_id)
+        tx_id_clean = str(tx_id or "").strip()
+        if not tx_id_clean:
+            raise ValueError("tx_id es obligatorio")
+
+        res_inv: Any = await self._db.execute(
+            self._db.table("facturas")
+            .select("id, empresa_id, total_factura, numero_factura, num_factura")
+            .eq("id", inv_id)
+            .limit(1)
+        )
+        inv_rows: list[dict[str, Any]] = (res_inv.data or []) if hasattr(res_inv, "data") else []
+        if not inv_rows:
+            raise ValueError("Factura no encontrada")
+        invoice = dict(inv_rows[0])
+
+        res_tx: Any = await self._db.execute(
+            self._db.table("bank_transactions")
+            .select("empresa_id, transaction_id, amount, description, reference, concept, concepto, booked_date")
+            .eq("transaction_id", tx_id_clean)
+            .limit(1)
+        )
+        tx_rows: list[dict[str, Any]] = (res_tx.data or []) if hasattr(res_tx, "data") else []
+        if not tx_rows:
+            raise ValueError("Transacci?n no encontrada")
+        tx = dict(tx_rows[0])
+
+        if str(invoice.get("empresa_id") or "") != str(tx.get("empresa_id") or ""):
+            raise ValueError("Factura y transacci?n no pertenecen a la misma empresa")
+
+        if not match_invoice_transaction_pair(invoice=invoice, transaction=tx):
+            raise ValueError("No cumple reglas de conciliaci?n por importe y referencia/concepto")
+
+        fecha = tx.get("booked_date")
+        fecha_cobro_real = (
+            fecha.isoformat()[:10] if hasattr(fecha, "isoformat") else str(fecha or "")[:10]
+        ) or date.today().isoformat()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await self._db.execute(
+            self._db.table("facturas")
+            .update(
+                {
+                    "estado_cobro": "cobrada",
+                    "payment_status": "PAID",
+                    "pago_id": tx_id_clean,
+                    "matched_transaction_id": tx_id_clean,
+                    "fecha_cobro_real": fecha_cobro_real,
+                }
+            )
+            .eq("id", inv_id)
+            .eq("empresa_id", str(invoice.get("empresa_id") or ""))
+        )
+        await self._db.execute(
+            self._db.table("bank_transactions")
+            .update({"reconciled": True, "updated_at": now_iso})
+            .eq("empresa_id", str(tx.get("empresa_id") or ""))
+            .eq("transaction_id", tx_id_clean)
+        )
+
+        return {
+            "invoice_id": inv_id,
+            "transaction_id": tx_id_clean,
+            "payment_status": "PAID",
+            "importe_factura": float(self._quantize_half_even(invoice.get("total_factura"))),
+            "importe_transaccion": float(self._quantize_half_even(tx.get("amount"))),
+            "matched": True,
+        }
 
     def _api_tx_to_db_row(self, empresa_id: str, tx: dict[str, Any]) -> dict[str, Any] | None:
         tid = _stable_tx_id(tx)

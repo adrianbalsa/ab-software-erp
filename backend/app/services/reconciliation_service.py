@@ -5,7 +5,7 @@ import logging
 import os
 import re
 from datetime import date, datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_EVEN
 from typing import Any
 from uuid import UUID
 
@@ -28,9 +28,36 @@ def _invoice_number(row: dict[str, Any]) -> str:
 
 def _two_dec(value: Any) -> Decimal:
     try:
-        return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
     except Exception:
         return Decimal("0.00")
+
+
+def _tx_context_empresa(transaction: dict[str, Any]) -> str:
+    """
+    Devuelve el contexto de empresa propagado por conectores de banca.
+    Prioriza ``dummy_empresa_id`` cuando existe (tests de estrés), y cae a ``empresa_id``.
+    """
+    dummy = str(transaction.get("dummy_empresa_id") or "").strip()
+    if dummy:
+        return dummy
+    return str(transaction.get("empresa_id") or "").strip()
+
+
+def _tx_reference_blob(transaction: dict[str, Any]) -> str:
+    """
+    Texto agregado para detectar referencias de factura en distintos formatos de bancos.
+    """
+    parts = [
+        str(transaction.get("description") or ""),
+        str(transaction.get("reference") or ""),
+        str(transaction.get("concept") or ""),
+        str(transaction.get("concepto") or ""),
+        str(transaction.get("remittance_information") or ""),
+        str(transaction.get("end_to_end_id") or ""),
+        str(transaction.get("transaction_id") or ""),
+    ]
+    return " ".join(parts).casefold()
 
 
 def match_unreconciled_to_invoices(
@@ -65,23 +92,16 @@ def match_unreconciled_to_invoices(
         tx_id = str(tx.get("transaction_id") or "").strip()
         if not tx_id or tx_id in matched_tx:
             continue
-        amt = _two_dec(tx.get("amount"))
-        desc = str(tx.get("description") or "")
-        desc_fold = desc.casefold()
 
         for inv in invs:
             fid = int(inv.get("id") or 0)
             if fid in matched_inv:
                 continue
-            total = _two_dec(inv.get("total_factura"))
-            if total != amt:
-                continue
-            num = _invoice_number(inv)
-            if not num:
-                continue
-            if num.casefold() not in desc_fold:
+            if not match_invoice_transaction_pair(invoice=inv, transaction=tx):
                 continue
 
+            total = _two_dec(inv.get("total_factura"))
+            amt = _two_dec(tx.get("amount"))
             matched_inv.add(fid)
             matched_tx.add(tx_id)
             bd = tx.get("booked_date")
@@ -103,6 +123,35 @@ def match_unreconciled_to_invoices(
     return result
 
 
+def match_invoice_transaction_pair(
+    *,
+    invoice: dict[str, Any],
+    transaction: dict[str, Any],
+) -> bool:
+    """
+    Regla base de conciliación para scaffold Open Banking/SEPA:
+    - Importe factura == importe movimiento con cuantización a 2 decimales (ROUND_HALF_EVEN).
+    - Referencia/concepto contiene el número de factura (case-insensitive).
+    [cite: 2026-03-30]
+    """
+    total = _two_dec(invoice.get("total_factura"))
+    amount = _two_dec(transaction.get("amount"))
+    if total <= 0 or amount <= 0 or total != amount:
+        return False
+
+    inv_ctx = str(invoice.get("dummy_empresa_id") or invoice.get("empresa_id") or "").strip()
+    tx_ctx = _tx_context_empresa(transaction)
+    if inv_ctx and tx_ctx and inv_ctx != tx_ctx:
+        return False
+
+    numero = _invoice_number(invoice)
+    if not numero:
+        return False
+
+    hay_numero = numero.casefold() in _tx_reference_blob(transaction)
+    return hay_numero
+
+
 class ReconciliationService:
     """Conciliación automática facturas ↔ bank_transactions."""
 
@@ -116,7 +165,7 @@ class ReconciliationService:
         """
         res_tx: Any = await self._db.execute(
             self._db.table("bank_transactions")
-            .select("transaction_id, amount, description, booked_date, reconciled")
+            .select("*")
             .eq("empresa_id", empresa_id)
             .eq("reconciled", False)
         )
@@ -124,7 +173,9 @@ class ReconciliationService:
 
         res_f: Any = await self._db.execute(
             self._db.table("facturas")
-            .select("id, total_factura, numero_factura, num_factura, estado_cobro")
+            .select(
+                "id, total_factura, numero_factura, num_factura, estado_cobro, empresa_id"
+            )
             .eq("empresa_id", empresa_id)
             .eq("estado_cobro", "emitida")
         )
@@ -179,6 +230,32 @@ class ReconciliationService:
             )
 
         return len(pairs), detalle
+
+    async def auto_reconcile_all(self) -> tuple[int, dict[str, int]]:
+        """
+        Ejecuta conciliación automática para todas las empresas con facturas o movimientos bancarios.
+        """
+        empresas: set[str] = set()
+
+        res_f: Any = await self._db.execute(self._db.table("facturas").select("empresa_id"))
+        for row in (res_f.data or []) if hasattr(res_f, "data") else []:
+            eid = str(row.get("empresa_id") or "").strip()
+            if eid:
+                empresas.add(eid)
+
+        res_b: Any = await self._db.execute(self._db.table("bank_transactions").select("empresa_id"))
+        for row in (res_b.data or []) if hasattr(res_b, "data") else []:
+            eid = str(row.get("empresa_id") or "").strip()
+            if eid:
+                empresas.add(eid)
+
+        total = 0
+        per_empresa: dict[str, int] = {}
+        for eid in sorted(empresas):
+            n, _ = await self.auto_reconcile_invoices(eid)
+            per_empresa[eid] = n
+            total += n
+        return total, per_empresa
 
     # ── Conciliación asistida por IA (movimientos_bancarios) ─────────────────
 

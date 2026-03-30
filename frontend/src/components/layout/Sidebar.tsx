@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { LogOut, Webhook } from "lucide-react";
 import { useMemo } from "react";
-import { jwtSubject, type AppRbacRole } from "@/lib/api";
+import { jwtPayload, jwtSubject, type AppRbacRole } from "@/lib/api";
 import { logout } from "@/lib/auth";
 import { useRole } from "@/hooks/useRole";
 
@@ -61,10 +61,25 @@ function initialsFromSubject(sub: string): string {
   return local.slice(0, 2).toUpperCase();
 }
 
+const DEMO_EMPRESA_CODE = "DEMO-LOGISTICS-001";
+const DEMO_EMPRESA_UUID = "406d68d7-52d8-5eb2-bff1-0a03095f7f6f";
+
 /** Pie de sidebar: avatar, nombre, rol y cierre de sesión (estilo bunker). */
 export function SidebarUserSection() {
   const { role } = useRole();
   const displayName = jwtSubject() || "Usuario";
+  const payload = jwtPayload();
+  const empresaClaim = String(
+    payload?.empresa_id ??
+      payload?.empresaId ??
+      payload?.tenant_id ??
+      payload?.tenantId ??
+      "",
+  ).trim();
+  const isDemoMode =
+    empresaClaim === DEMO_EMPRESA_CODE ||
+    empresaClaim === DEMO_EMPRESA_UUID ||
+    (typeof window !== "undefined" && window.localStorage.getItem("ab.demo_mode") === "1");
   const initials = useMemo(() => initialsFromSubject(displayName), [displayName]);
 
   return (
@@ -83,6 +98,11 @@ export function SidebarUserSection() {
           <p className="truncate text-[11px] font-medium uppercase tracking-wide text-slate-500">
             {ROLE_LABELS[role] ?? role}
           </p>
+          {isDemoMode && (
+            <span className="mt-1 inline-flex items-center rounded-md border border-amber-700/60 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
+              Modo Demo
+            </span>
+          )}
         </div>
       </div>
       <button

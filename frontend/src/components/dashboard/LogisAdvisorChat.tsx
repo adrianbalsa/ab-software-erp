@@ -5,11 +5,16 @@ import { Bot, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { streamAdvisorChat, type AiChatMessage } from "@/lib/api";
+import { jwtPayload, streamAdvisorChat, type AiChatMessage } from "@/lib/api";
 
 type ChatTurn = AiChatMessage;
 
 const QUICK_ACTIONS: { label: string; prompt: string }[] = [
+  {
+    label: "Resumen Demo",
+    prompt:
+      "Dame un resumen ejecutivo del entorno demo (flota, rutas, facturas, conciliación y margen EBITDA).",
+  },
   {
     label: "Punto de equilibrio",
     prompt: "¿Cuál es mi punto de equilibrio hoy según mis datos?",
@@ -24,10 +29,36 @@ const QUICK_ACTIONS: { label: string; prompt: string }[] = [
   },
 ];
 
+const DEMO_EMPRESA_CODE = "DEMO-LOGISTICS-001";
+const DEMO_EMPRESA_UUID = "406d68d7-52d8-5eb2-bff1-0a03095f7f6f";
+const DEMO_PRELOAD = [
+  "Sandbox cargado para demo:",
+  "- Empresa: DEMO-LOGISTICS-001",
+  "- Flota: 10 camiones (Euro III a Euro VI)",
+  "- Rutas: 50 rutas validadas por Maps API",
+  "- Facturación: 100 facturas encadenadas VeriFactu",
+  "- Reconciliación: 10 cobros conciliados + 5 pendientes",
+  "- EBITDA objetivo: margen operativo 15-20%",
+].join("\n");
+
 export function LogisAdvisorChat() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<ChatTurn[]>([]);
+  const payload = jwtPayload();
+  const empresaClaim = String(
+    payload?.empresa_id ??
+      payload?.empresaId ??
+      payload?.tenant_id ??
+      payload?.tenantId ??
+      "",
+  ).trim();
+  const isDemoMode =
+    empresaClaim === DEMO_EMPRESA_CODE ||
+    empresaClaim === DEMO_EMPRESA_UUID ||
+    (typeof window !== "undefined" && window.localStorage.getItem("ab.demo_mode") === "1");
+  const [messages, setMessages] = useState<ChatTurn[]>(
+    isDemoMode ? [{ role: "assistant", content: DEMO_PRELOAD }] : [],
+  );
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);

@@ -1,14 +1,25 @@
 from __future__ import annotations
 
 import calendar
+import csv
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 import os
 from typing import Any
 
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
-from app.schemas.esg import HuellaCarbonoMensualOut, VehiculoHuellaMesOut
+from app.schemas.esg import (
+    EsgAuditReadyOut,
+    EsgAuditReadyRow,
+    HuellaCarbonoMensualOut,
+    VehiculoHuellaMesOut,
+)
+from app.core.esg_engine import (
+    calculate_co2_emissions,
+    calculate_nox_emissions,
+    get_co2_factor_kg_per_km,
+)
 from app.services.eco_service import (
     factor_emision_huella_porte_default,
     peso_ton_desde_porte_row,
@@ -88,7 +99,9 @@ class EsgService:
             res: Any = await self._db.execute(
                 filter_not_deleted(
                     self._db.table("flota")
-                    .select("id, matricula, vehiculo, tipo_motor, factor_emision_co2_tkm")
+                    .select(
+                        "id, matricula, vehiculo, tipo_motor, factor_emision_co2_tkm, normativa_euro"
+                    )
                     .eq("empresa_id", eid)
                     .in_("id", list(ids))
                 )
@@ -236,6 +249,276 @@ class EsgService:
             ahorro_estimado_rutas_optimizadas_kg=round(ahorro, 6),
             por_vehiculo=por_v,
         )
+
+    async def audit_ready_summary(
+        self,
+        *,
+        empresa_id: str,
+        fecha_inicio: date,
+        fecha_fin: date,
+    ) -> EsgAuditReadyOut:
+        """
+        Resumen audit-ready por cliente y periodo (YYYY-MM).
+        Usa `co2_emitido` si existe; si no, estima CO2/NOx según normativa EURO y km.
+        """
+        eid = str(empresa_id or "").strip()
+        fi = fecha_inicio.isoformat()
+        ff = fecha_fin.isoformat()
+        if not eid:
+            now = datetime.utcnow().isoformat()
+            return EsgAuditReadyOut(
+                empresa_id="",
+                fecha_inicio=fi,
+                fecha_fin=ff,
+                generado_en=now,
+                total_portes=0,
+                total_km_estimados=0.0,
+                total_co2_kg=0.0,
+                total_nox_kg=0.0,
+                rows=[],
+            )
+
+        try:
+            q = filter_not_deleted(
+                self._db.table("portes")
+                .select("id, cliente_id, vehiculo_id, km_estimados, co2_emitido, fecha")
+                .eq("empresa_id", eid)
+                .eq("estado", "facturado")
+                .gte("fecha", fi)
+                .lte("fecha", ff)
+            )
+            res: Any = await self._db.execute(q)
+            porte_rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        except Exception:
+            porte_rows = []
+
+        vids: set[str] = set()
+        cliente_ids: set[str] = set()
+        for r in porte_rows:
+            vid = r.get("vehiculo_id")
+            if vid is not None and str(vid).strip():
+                vids.add(str(vid).strip())
+            cid = r.get("cliente_id")
+            if cid is not None and str(cid).strip():
+                cliente_ids.add(str(cid).strip())
+
+        flota_por_id = await self._cargar_flota_por_ids(empresa_id=eid, ids=vids)
+
+        nombres: dict[str, str] = {}
+        if cliente_ids:
+            try:
+                rc: Any = await self._db.execute(
+                    filter_not_deleted(
+                        self._db.table("clientes")
+                        .select("id, nombre_comercial, nombre")
+                        .eq("empresa_id", eid)
+                        .in_("id", list(cliente_ids))
+                    )
+                )
+                rows = (rc.data or []) if hasattr(rc, "data") else []
+                for r in rows:
+                    cid = str(r.get("id") or "").strip()
+                    if not cid:
+                        continue
+                    nc = str(r.get("nombre_comercial") or "").strip()
+                    nm = str(r.get("nombre") or "").strip()
+                    nombres[cid] = nc or nm or cid
+            except Exception:
+                pass
+
+        def _periodo(val: Any) -> str:
+            if val is None:
+                return date.today().strftime("%Y-%m")
+            s = str(val).strip()[:10]
+            try:
+                return date.fromisoformat(s).strftime("%Y-%m")
+            except ValueError:
+                return date.today().strftime("%Y-%m")
+
+        agg: dict[tuple[str, str], dict[str, Any]] = defaultdict(
+            lambda: {
+                "total_portes": 0,
+                "total_km": 0.0,
+                "total_co2": 0.0,
+                "total_nox": 0.0,
+            }
+        )
+
+        for r in porte_rows:
+            cid = str(r.get("cliente_id") or "").strip() or "sin_cliente"
+            periodo = _periodo(r.get("fecha"))
+            km = float(r.get("km_estimados") or 0.0)
+            co2_raw = r.get("co2_emitido")
+            if co2_raw is not None:
+                try:
+                    co2 = max(0.0, float(co2_raw))
+                except (TypeError, ValueError):
+                    co2 = 0.0
+            else:
+                vid = str(r.get("vehiculo_id") or "").strip()
+                frow = flota_por_id.get(vid)
+                norma = str(frow.get("normativa_euro") or "Euro VI") if frow else "Euro VI"
+                co2 = calculate_co2_emissions(km, norma)
+            vid = str(r.get("vehiculo_id") or "").strip()
+            frow = flota_por_id.get(vid)
+            norma = str(frow.get("normativa_euro") or "Euro VI") if frow else "Euro VI"
+            nox = calculate_nox_emissions(km, norma)
+
+            key = (periodo, cid)
+            agg[key]["total_portes"] += 1
+            agg[key]["total_km"] += max(0.0, km)
+            agg[key]["total_co2"] += co2
+            agg[key]["total_nox"] += nox
+
+        metodologia = (
+            "CO2: usa co2_emitido si existe; si no, km_estimados × factor EURO (kg/km). "
+            "NOx: km_estimados × factor EURO (g/km) convertido a kg."
+        )
+
+        rows_out: list[EsgAuditReadyRow] = []
+        total_portes = 0
+        total_km = 0.0
+        total_co2 = 0.0
+        total_nox = 0.0
+
+        for (periodo, cid), v in sorted(agg.items()):
+            total_portes += int(v["total_portes"])
+            total_km += float(v["total_km"])
+            total_co2 += float(v["total_co2"])
+            total_nox += float(v["total_nox"])
+            rows_out.append(
+                EsgAuditReadyRow(
+                    periodo=periodo,
+                    cliente_id=cid,
+                    cliente_nombre=nombres.get(cid),
+                    total_portes=int(v["total_portes"]),
+                    total_km_estimados=round(float(v["total_km"]), 3),
+                    total_co2_kg=round(float(v["total_co2"]), 6),
+                    total_nox_kg=round(float(v["total_nox"]), 6),
+                    metodologia=metodologia,
+                )
+            )
+
+        return EsgAuditReadyOut(
+            empresa_id=eid,
+            fecha_inicio=fi,
+            fecha_fin=ff,
+            generado_en=datetime.utcnow().isoformat(),
+            total_portes=total_portes,
+            total_km_estimados=round(total_km, 3),
+            total_co2_kg=round(total_co2, 6),
+            total_nox_kg=round(total_nox, 6),
+            rows=rows_out,
+        )
+
+    async def audit_ready_summary_csv(
+        self,
+        *,
+        empresa_id: str,
+        fecha_inicio: date,
+        fecha_fin: date,
+    ) -> bytes:
+        report = await self.audit_ready_summary(
+            empresa_id=empresa_id,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+        )
+        # Use manual buffer to keep dependencies minimal
+        import io
+
+        s = io.StringIO()
+        w = csv.writer(s, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+        w.writerow(
+            [
+                "periodo",
+                "cliente_id",
+                "cliente_nombre",
+                "total_portes",
+                "total_km_estimados",
+                "total_co2_kg",
+                "total_nox_kg",
+                "metodologia",
+            ]
+        )
+        for row in report.rows:
+            w.writerow(
+                [
+                    row.periodo,
+                    row.cliente_id,
+                    row.cliente_nombre or "",
+                    row.total_portes,
+                    f"{row.total_km_estimados:.3f}",
+                    f"{row.total_co2_kg:.6f}",
+                    f"{row.total_nox_kg:.6f}",
+                    row.metodologia,
+                ]
+            )
+        return ("\ufeff" + s.getvalue()).encode("utf-8")
+
+    async def suggest_vehicle_for_porte(
+        self,
+        *,
+        empresa_id: str,
+        km_estimados: float,
+        long_route_km: float | None = None,
+    ) -> dict[str, Any]:
+        """
+        Sugiere vehículo con menor CO₂ estimado (kg) para un porte.
+        Prioriza Euro VI en rutas largas.
+        """
+        eid = str(empresa_id or "").strip()
+        if not eid:
+            return {"vehiculo_id": None, "reason": "empresa_id inválido"}
+
+        try:
+            res: Any = await self._db.execute(
+                filter_not_deleted(
+                    self._db.table("flota")
+                    .select("id, matricula, vehiculo, normativa_euro")
+                    .eq("empresa_id", eid)
+                )
+            )
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        except Exception:
+            rows = []
+
+        if not rows:
+            return {"vehiculo_id": None, "reason": "sin flota disponible"}
+
+        km = max(0.0, float(km_estimados or 0.0))
+        long_km = float(long_route_km or os.getenv("ESG_LONG_ROUTE_KM", "350"))
+
+        best: dict[str, Any] | None = None
+        for r in rows:
+            norma = str(r.get("normativa_euro") or "Euro VI")
+            factor = get_co2_factor_kg_per_km(norma)
+            co2 = km * factor
+            penalty = 0.0
+            if km >= long_km and norma != "Euro VI":
+                penalty = co2 * 0.08
+            score = co2 + penalty
+            candidate = {
+                "vehiculo_id": str(r.get("id") or ""),
+                "matricula": str(r.get("matricula") or ""),
+                "vehiculo": str(r.get("vehiculo") or ""),
+                "normativa_euro": norma,
+                "co2_estimado_kg": round(co2, 6),
+                "score": round(score, 6),
+            }
+            if best is None or candidate["score"] < best["score"]:
+                best = candidate
+
+        if best is None:
+            return {"vehiculo_id": None, "reason": "sin candidatos"}
+
+        return {
+            "vehiculo_id": best["vehiculo_id"],
+            "matricula": best["matricula"],
+            "vehiculo": best["vehiculo"],
+            "normativa_euro": best["normativa_euro"],
+            "co2_estimado_kg": best["co2_estimado_kg"],
+            "reason": "min_co2_with_eurovi_bias" if km >= long_km else "min_co2",
+        }
 
     def calculate_emissions(
         self,

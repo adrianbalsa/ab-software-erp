@@ -36,3 +36,57 @@ class HuellaCarbonoMensualOut(BaseModel):
         default_factory=list,
         description="Desglose por vehículo (ordenado por emisiones desc.)",
     )
+
+
+class EsgAuditReadyRow(BaseModel):
+    """Fila de reporte ESG audit-ready por cliente y periodo."""
+
+    periodo: str = Field(..., description="YYYY-MM")
+    cliente_id: str = Field(..., description="UUID del cliente")
+    cliente_nombre: str | None = Field(default=None, description="Nombre comercial/razón social")
+    total_portes: int = Field(..., ge=0)
+    total_km_estimados: float = Field(..., ge=0)
+    total_co2_kg: float = Field(..., ge=0)
+    total_nox_kg: float = Field(..., ge=0)
+    metodologia: str = Field(..., description="Resumen de metodología de cálculo")
+
+
+class EsgAuditReadyOut(BaseModel):
+    """Reporte ESG audit-ready: resumen por cliente y periodo."""
+
+    empresa_id: str
+    fecha_inicio: str
+    fecha_fin: str
+    generado_en: str
+    total_portes: int = Field(..., ge=0)
+    total_km_estimados: float = Field(..., ge=0)
+    total_co2_kg: float = Field(..., ge=0)
+    total_nox_kg: float = Field(..., ge=0)
+    rows: list[EsgAuditReadyRow] = Field(default_factory=list)
+
+
+class EsgAnnualMemoryExecutiveOut(BaseModel):
+    total_co2_kg: float = Field(..., ge=0)
+    total_nox_kg: float = Field(..., ge=0)
+    total_km: float = Field(..., ge=0)
+    eficiencia_media_kg_co2_km: float = Field(..., ge=0)
+
+
+class EsgAnnualMemoryNormativaOut(BaseModel):
+    pct_euro_iii: float = Field(..., ge=0, le=100)
+    pct_euro_vi: float = Field(..., ge=0, le=100)
+
+
+class EsgAnnualMemoryTopClienteOut(BaseModel):
+    cliente_id: str
+    cliente_nombre: str | None = None
+    co2_kg: float = Field(..., ge=0)
+
+
+class EsgAnnualMemoryOut(BaseModel):
+    year: int
+    empresa_id: str
+    resumen_ejecutivo: EsgAnnualMemoryExecutiveOut
+    desglose_normativa: EsgAnnualMemoryNormativaOut
+    top_clientes: list[EsgAnnualMemoryTopClienteOut]
+    metodologia: str

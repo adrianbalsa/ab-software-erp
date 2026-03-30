@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 from app.db.supabase import SupabaseAsync
 from app.schemas.audit_log import AuditLogOut
@@ -39,3 +40,138 @@ class AuditLogsService:
             except Exception:
                 continue
         return out
+
+    async def log_sensitive_action(
+        self,
+        *,
+        empresa_id: str | UUID,
+        table_name: str,
+        record_id: str,
+        action: str,
+        old_value: dict[str, Any] | None = None,
+        new_value: dict[str, Any] | None = None,
+        user_id: str | UUID | None = None,
+    ) -> None:
+        """
+        Registra una acción sensible en la tabla audit_logs.
+
+        Args:
+            empresa_id: ID de la empresa
+            table_name: Nombre de la tabla afectada
+            record_id: ID del registro afectado
+            action: Acción realizada (INSERT, UPDATE, DELETE, CUSTOM)
+            old_value: Valor anterior del registro (para UPDATE/DELETE)
+            new_value: Valor nuevo del registro (para INSERT/UPDATE)
+            user_id: ID del usuario que realizó la acción
+
+        Example:
+            await audit_service.log_sensitive_action(
+                empresa_id=empresa_id,
+                table_name="vehiculos",
+                record_id=vehiculo_id,
+                action="DELETE",
+                old_value={"matricula": "ABC123", "estado": "activo"},
+                user_id=current_user.usuario_id,
+            )
+        """
+        try:
+            audit_data = {
+                "empresa_id": str(empresa_id),
+                "table_name": str(table_name).strip(),
+                "record_id": str(record_id),
+                "action": action.upper(),
+                "old_data": old_value,
+                "new_data": new_value,
+                "changed_by": str(user_id) if user_id else None,
+            }
+
+            await self._db.execute(
+                self._db.table("audit_logs").insert(audit_data)
+            )
+        except Exception as e:
+            # No fallar la operación principal si falla el audit log
+            # Solo registrar el error para investigación
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Error al registrar audit log: {e}",
+                exc_info=True,
+            )
+
+    async def log_vehiculo_deletion(
+        self,
+        *,
+        empresa_id: str | UUID,
+        vehiculo_id: str | UUID,
+        vehiculo_data: dict[str, Any],
+        user_id: str | UUID | None = None,
+    ) -> None:
+        """Helper específico para registrar eliminación de vehículos."""
+        await self.log_sensitive_action(
+            empresa_id=empresa_id,
+            table_name="flota",
+            record_id=str(vehiculo_id),
+            action="DELETE",
+            old_value=vehiculo_data,
+            user_id=user_id,
+        )
+
+    async def log_precio_porte_change(
+        self,
+        *,
+        empresa_id: str | UUID,
+        porte_id: str | UUID,
+        old_precio: float,
+        new_precio: float,
+        user_id: str | UUID | None = None,
+    ) -> None:
+        """Helper específico para registrar cambio de precio en portes."""
+        await self.log_sensitive_action(
+            empresa_id=empresa_id,
+            table_name="portes",
+            record_id=str(porte_id),
+            action="UPDATE",
+            old_value={"precio_pactado": old_precio},
+            new_value={"precio_pactado": new_precio},
+            user_id=user_id,
+        )
+
+    async def log_factura_modification(
+        self,
+        *,
+        empresa_id: str | UUID,
+        factura_id: str | UUID,
+        old_data: dict[str, Any],
+        new_data: dict[str, Any],
+        user_id: str | UUID | None = None,
+    ) -> None:
+        """Helper específico para registrar modificaciones en facturas."""
+        await self.log_sensitive_action(
+            empresa_id=empresa_id,
+            table_name="facturas",
+            record_id=str(factura_id),
+            action="UPDATE",
+            old_value=old_data,
+            new_value=new_data,
+            user_id=user_id,
+        )
+
+    async def log_cliente_data_change(
+        self,
+        *,
+        empresa_id: str | UUID,
+        cliente_id: str | UUID,
+        action: str,
+        old_data: dict[str, Any] | None = None,
+        new_data: dict[str, Any] | None = None,
+        user_id: str | UUID | None = None,
+    ) -> None:
+        """Helper específico para registrar cambios en datos de clientes."""
+        await self.log_sensitive_action(
+            empresa_id=empresa_id,
+            table_name="clientes",
+            record_id=str(cliente_id),
+            action=action,
+            old_value=old_data,
+            new_value=new_data,
+            user_id=user_id,
+        )

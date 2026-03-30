@@ -48,6 +48,26 @@ function resolveApiBase(): string {
 
 export const API_BASE = resolveApiBase();
 
+export async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers ?? {});
+  if (typeof window !== "undefined") {
+    const token = window.localStorage.getItem("token");
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+  }
+
+  const res = await fetch(input, { ...init, headers });
+  if (res.status === 401 || res.status === 403) {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("token");
+      window.location.href = "/login?expired=true";
+    }
+    throw new Error(`HTTP ${res.status}`);
+  }
+  return res;
+}
+
 /**
  * Renueva el access JWT usando la cookie HttpOnly del refresh token.
  * Requiere `credentials: 'include'` también en el login.
@@ -1009,49 +1029,28 @@ export type VerifactuQrPreview = {
 };
 
 export async function getTreasuryRisk(): Promise<TreasuryRiskResponse> {
-  async function doFetch(): Promise<Response> {
-    return fetch(`${API_BASE}/api/v1/finance/treasury-risk`, {
-      credentials: "include",
-      headers: authHeaders(),
-    });
-  }
-  let res = await doFetch();
-  if (res.status === 401) {
-    const t = await refreshAccessToken();
-    if (t) res = await doFetch();
-  }
+  const res = await apiFetch(`${API_BASE}/api/v1/finance/treasury-risk`, {
+    credentials: "include",
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error(await parseApiError(res));
   return (await res.json()) as TreasuryRiskResponse;
 }
 
 export async function getRiskRanking(): Promise<RiskRankingRow[]> {
-  async function doFetch(): Promise<Response> {
-    return fetch(`${API_BASE}/api/v1/finance/risk-ranking`, {
-      credentials: "include",
-      headers: authHeaders(),
-    });
-  }
-  let res = await doFetch();
-  if (res.status === 401) {
-    const t = await refreshAccessToken();
-    if (t) res = await doFetch();
-  }
+  const res = await apiFetch(`${API_BASE}/api/v1/finance/risk-ranking`, {
+    credentials: "include",
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error(await parseApiError(res));
   return (await res.json()) as RiskRankingRow[];
 }
 
 export async function getRouteMarginRanking(): Promise<RouteMarginRow[]> {
-  async function doFetch(): Promise<Response> {
-    return fetch(`${API_BASE}/api/v1/finance/margin-ranking`, {
-      credentials: "include",
-      headers: authHeaders(),
-    });
-  }
-  let res = await doFetch();
-  if (res.status === 401) {
-    const t = await refreshAccessToken();
-    if (t) res = await doFetch();
-  }
+  const res = await apiFetch(`${API_BASE}/api/v1/finance/margin-ranking`, {
+    credentials: "include",
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error(await parseApiError(res));
   return (await res.json()) as RouteMarginRow[];
 }
@@ -1091,49 +1090,28 @@ export async function postFinancialSimulation(payload: SimulationInput): Promise
 }
 
 export async function getCreditAlerts(): Promise<CreditAlert[]> {
-  async function doFetch(): Promise<Response> {
-    return fetch(`${API_BASE}/api/v1/finance/credit-alerts`, {
-      credentials: "include",
-      headers: authHeaders(),
-    });
-  }
-  let res = await doFetch();
-  if (res.status === 401) {
-    const t = await refreshAccessToken();
-    if (t) res = await doFetch();
-  }
+  const res = await apiFetch(`${API_BASE}/api/v1/finance/credit-alerts`, {
+    credentials: "include",
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error(await parseApiError(res));
   return (await res.json()) as CreditAlert[];
 }
 
 export async function getFinanceEsgReport(): Promise<FinanceEsgReport> {
-  async function doFetch(): Promise<Response> {
-    return fetch(`${API_BASE}/api/v1/finance/esg-report`, {
-      credentials: "include",
-      headers: authHeaders(),
-    });
-  }
-  let res = await doFetch();
-  if (res.status === 401) {
-    const t = await refreshAccessToken();
-    if (t) res = await doFetch();
-  }
+  const res = await apiFetch(`${API_BASE}/api/v1/finance/esg-report`, {
+    credentials: "include",
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error(await parseApiError(res));
   return (await res.json()) as FinanceEsgReport;
 }
 
 export async function downloadFinanceEsgCertificatePdf(): Promise<void> {
-  async function doFetch(): Promise<Response> {
-    return fetch(`${API_BASE}/api/v1/finance/esg-report/download`, {
-      credentials: "include",
-      headers: authHeaders(),
-    });
-  }
-  let res = await doFetch();
-  if (res.status === 401) {
-    const t = await refreshAccessToken();
-    if (t) res = await doFetch();
-  }
+  const res = await apiFetch(`${API_BASE}/api/v1/finance/esg-report/download`, {
+    credentials: "include",
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error(await parseApiError(res));
   const blob = await res.blob();
   const cd = res.headers.get("Content-Disposition");

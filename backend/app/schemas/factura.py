@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_serializer
 
 from app.core.math_engine import as_float_fiat
+from app.models.invoice import PaymentStatus
 from app.schemas.cliente import ClienteOut
 
 
@@ -99,6 +100,10 @@ class FacturaOut(BaseModel):
         default=None,
         description="Hash de la factura anterior en la cadena de fingerprint_hash.",
     )
+    previous_invoice_hash: str | None = Field(
+        default=None,
+        description="Hash SHA-256 de la factura anterior en la cadena VeriFactu (Ley Antifraude).",
+    )
     qr_code_url: str | None = Field(
         default=None,
         description="URL TIKE de cotejo AEAT codificada en el QR de registro",
@@ -136,6 +141,10 @@ class FacturaOut(BaseModel):
     pago_id: str | None = Field(
         default=None,
         description="Identificador del movimiento bancario emparejado (GoCardless / ref.)",
+    )
+    payment_status: PaymentStatus = Field(
+        default=PaymentStatus.PENDING,
+        description="Estado de pago normalizado para integración bancaria (PENDING | PAID | OVERDUE)",
     )
     aeat_sif_estado: str | None = Field(
         default=None,

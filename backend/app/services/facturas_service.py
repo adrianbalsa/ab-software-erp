@@ -16,6 +16,7 @@ from starlette.background import BackgroundTasks
 
 from app.core.config import get_settings
 from app.core.verifactu import GENESIS_HASH, generate_invoice_hash
+from app.core.fiscal_logic import compute_invoice_fingerprint
 from app.core.math_engine import (
     MathEngine,
     as_float_fiat,
@@ -894,16 +895,17 @@ class FacturasService:
             ) from e
 
         previous_fingerprint = await self._get_last_fingerprint_hash(empresa_id=eid)
-        fingerprint_hash = generate_invoice_hash(
+        fingerprint_hash = compute_invoice_fingerprint(
             {
-                "factura_id": num_fact,
-                "fecha_hora": datetime.now(timezone.utc).isoformat(),
-                "emisor": nif_emisor,
-                "receptor": nif_cliente,
-                "importe_total": total_factura,
+                "nif_emisor": nif_emisor,
+                "nif_receptor": nif_cliente,
+                "numero_factura": num_fact,
+                "fecha_emision": fecha_iso,
+                "total_factura": float(total_factura),
             },
             previous_fingerprint,
         )
+        previous_invoice_hash = previous_fingerprint
 
         # Campos alineados con VeriFactu / SIF (tipo F1, huella y encadenamiento)
         factura_payload: dict[str, Any] = {
@@ -923,11 +925,13 @@ class FacturasService:
             "hash_factura": hash_registro,
             "fingerprint_hash": fingerprint_hash,
             "previous_fingerprint": previous_fingerprint,
+            "previous_invoice_hash": previous_invoice_hash,
             "bloqueado": True,
             "is_finalized": False,
             "porte_lineas_snapshot": porte_lineas_snapshot,
             "total_km_estimados_snapshot": total_km_estimados_snapshot,
             "estado_cobro": "emitida",
+            "payment_status": "PENDING",
         }
         try:
             factura_payload["xml_verifactu"] = generar_xml_alta_factura(
@@ -1272,16 +1276,17 @@ class FacturasService:
         )
 
         previous_fingerprint = await self._get_last_fingerprint_hash(empresa_id=eid)
-        fingerprint_hash = generate_invoice_hash(
+        fingerprint_hash = compute_invoice_fingerprint(
             {
-                "factura_id": num_fact_r,
-                "fecha_hora": datetime.now(timezone.utc).isoformat(),
-                "emisor": nif_emisor,
-                "receptor": nif_cliente,
-                "importe_total": total_r,
+                "nif_emisor": nif_emisor,
+                "nif_receptor": nif_cliente,
+                "numero_factura": num_fact_r,
+                "fecha_emision": fecha_iso,
+                "total_factura": float(total_r),
             },
             previous_fingerprint,
         )
+        previous_invoice_hash = previous_fingerprint
 
         porte_snap = _clone_snapshot_con_importes_negativos(orig.get("porte_lineas_snapshot"))
         km_snap = orig.get("total_km_estimados_snapshot")
@@ -1307,6 +1312,7 @@ class FacturasService:
             "hash_factura": hash_registro,
             "fingerprint_hash": fingerprint_hash,
             "previous_fingerprint": previous_fingerprint,
+            "previous_invoice_hash": previous_invoice_hash,
             "bloqueado": True,
             "is_finalized": False,
             "porte_lineas_snapshot": porte_snap,
@@ -1314,6 +1320,7 @@ class FacturasService:
             "factura_rectificada_id": fid,
             "motivo_rectificacion": str(motivo).strip(),
             "estado_cobro": "emitida",
+            "payment_status": "PENDING",
         }
         emp_row_r1: dict[str, Any] = {}
         try:

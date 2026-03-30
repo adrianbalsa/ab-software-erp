@@ -43,6 +43,7 @@ from app.services.fleet_maintenance_service import FleetMaintenanceService
 from app.services.stripe_service import assert_empresa_billing_active
 from app.services.ai_service import LogisAdvisorService
 from app.services.esg_audit_service import EsgAuditService
+from app.services.audit_logs_service import AuditLogsService
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -140,6 +141,10 @@ async def get_finance_service(db: SupabaseAsync = Depends(get_db)) -> FinanceSer
 
 async def get_esg_audit_service(db: SupabaseAsync = Depends(get_db)) -> EsgAuditService:
     return EsgAuditService(db)
+
+
+async def get_audit_logs_service(db: SupabaseAsync = Depends(get_db)) -> AuditLogsService:
+    return AuditLogsService(db)
 
 
 async def get_logis_advisor_service(
