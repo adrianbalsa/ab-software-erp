@@ -16,7 +16,7 @@ from app.services.health_service import log_slow_http_request
 
 
 def _should_skip_slow_log(path: str) -> bool:
-    if path in ("/ready", "/health"):
+    if path in ("/ready", "/health", "/health/deep"):
         return True
     if path.startswith("/health/"):
         return True

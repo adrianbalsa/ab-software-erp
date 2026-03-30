@@ -13,6 +13,7 @@ import { CostBreakdownPie } from "@/components/dashboard/CostBreakdownPie";
 import { EfficiencyKpiCard } from "@/components/dashboard/EfficiencyKpiCard";
 import { AdvancedCharts } from "@/components/dashboard/AdvancedCharts";
 import { EconomicAdvancedDashboard } from "@/components/dashboard/EconomicAdvancedDashboard";
+import { SupportCard } from "@/components/docs/SupportCard";
 import { EconomicOverview } from "@/components/EconomicOverview";
 import { EmissionBadge } from "@/components/esg/EmissionBadge";
 import { ToastHost, type ToastPayload } from "@/components/ui/ToastHost";
@@ -132,6 +133,8 @@ export default function Dashboard() {
 
           {isOwner ? (
             <>
+              <SupportCard />
+
               <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="ab-card p-6 rounded-2xl">
                   <div className="flex justify-between items-start">

@@ -1,0 +1,29 @@
+# Imagen de desarrollo / ejecución de tests (mismas libs que API + pytest-cov).
+# Uso típico:
+#   docker build -f Dockerfile.dev -t abl-backend-dev .
+#   docker run --rm -v "$PWD":/app abl-backend-dev pytest tests/ -q
+#
+FROM python:3.12-slim-bookworm
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    libxml2-dev \
+    libxslt1-dev \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements-dev.txt
+
+COPY . .
+
+CMD ["pytest", "tests/", "-q", "--tb=short"]

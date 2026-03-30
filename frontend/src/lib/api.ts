@@ -1,9 +1,36 @@
-/** URL del backend. Prioridad: API_URL → API_BASE_URL → API_BASE → localhost. */
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_BASE ||
-  "http://localhost:8000";
+/**
+ * Origen del backend (HTTPS recomendado en prod: `https://api.ablogistics-os.com`).
+ * Prioridad: NEXT_PUBLIC_API_BASE_URL → NEXT_PUBLIC_API_URL → NEXT_PUBLIC_API_BASE → localhost.
+ * Si el env termina en `/api/v1`, se normaliza (las rutas ya añaden `/api/v1/...`).
+ */
+function resolveApiBase(): string {
+  const raw = (
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_API_BASE ||
+    ""
+  ).trim();
+  if (!raw) {
+    return "http://localhost:8000";
+  }
+  let base = raw.replace(/\/$/, "").replace(/\/api\/v1$/i, "");
+
+  // Conmutación robusta por hostname:
+  // Si el env apunta a app.ablogistics-os.com, las llamadas de datos deben ir a api.ablogistics-os.com
+  // para evitar colisiones con rutas de Next.
+  try {
+    const u = base.startsWith("http://") || base.startsWith("https://") ? new URL(base) : null;
+    if (u && u.hostname.toLowerCase() === "app.ablogistics-os.com") {
+      u.hostname = "api.ablogistics-os.com";
+      base = u.toString().replace(/\/api\/v1$/i, "");
+    }
+  } catch {
+    // Si no se puede parsear, mantenemos el valor original.
+  }
+  return base;
+}
+
+export const API_BASE = resolveApiBase();
 
 /** Authorization desde `localStorage` (misma sesión que el resto del front). */
 export function authHeaders(): Record<string, string> {
@@ -57,7 +84,12 @@ export function jwtEmpresaId(): string | null {
 }
 
 /** Roles RBAC operativos (claim `rbac_role` del JWT emitido por esta API). */
-export type AppRbacRole = "owner" | "traffic_manager" | "driver" | "cliente";
+export type AppRbacRole =
+  | "owner"
+  | "traffic_manager"
+  | "driver"
+  | "cliente"
+  | "developer";
 
 export function jwtPayload(): Record<string, unknown> | null {
   if (typeof window === "undefined") return null;
@@ -82,7 +114,13 @@ export function jwtRbacRole(): AppRbacRole {
   const p = jwtPayload();
   if (!p) return "driver";
   const r = p?.rbac_role;
-  if (r === "owner" || r === "traffic_manager" || r === "driver" || r === "cliente") {
+  if (
+    r === "owner" ||
+    r === "traffic_manager" ||
+    r === "driver" ||
+    r === "cliente" ||
+    r === "developer"
+  ) {
     return r;
   }
   return "owner";
@@ -112,6 +150,106 @@ export type PortalFacturaRow = {
   estado_pago: string;
 };
 
+/** Listado de facturas (alineado con `FacturaOut` y con `VeriFactuBadge`: aeat_sif_*). */
+export type Factura = {
+  id: number;
+  empresa_id?: string;
+  numero_factura: string;
+  fecha_emision: string;
+  total_factura: number;
+  hash_registro?: string | null;
+  tipo_factura?: string | null;
+  is_finalized?: boolean | null;
+  fingerprint?: string | null;
+  aeat_sif_estado?:
+    | "aceptado"
+    | "aceptado_con_errores"
+    | "rechazado"
+    | "error_tecnico"
+    | string
+    | null;
+  aeat_sif_csv?: string | null;
+  aeat_sif_descripcion?: string | null;
+};
+
+/** Filtros opcionales; `estado_aeat` se envía al backend si el endpoint lo admite. */
+export type FacturaFilters = {
+  empresa_id?: string;
+  /** Coincide con `aeat_sif_estado` (query `estado_aeat` en GET /api/v1/facturas). */
+  estado_aeat?: string;
+};
+
+export async function getFacturas(filters?: FacturaFilters): Promise<Factura[]> {
+  const sp = new URLSearchParams();
+  const ea = filters?.estado_aeat?.trim();
+  if (ea) sp.set("estado_aeat", ea);
+  const qs = sp.toString();
+  const url = `${API_BASE}/api/v1/facturas${qs ? `?${qs}` : ""}`;
+
+  async function doFetch(): Promise<Response> {
+    return fetch(url, {
+      credentials: "include",
+      headers: { ...authHeaders() },
+    });
+  }
+  let res = await doFetch();
+  if (res.status === 401) {
+    const t = await refreshAccessToken();
+    if (t) res = await doFetch();
+  }
+  if (!res.ok) throw new Error(await parseApiError(res));
+  let rows = (await res.json()) as Factura[];
+  const eid = filters?.empresa_id?.trim();
+  if (eid) {
+    rows = rows.filter((r) => String(r.empresa_id ?? "") === eid);
+  }
+  return rows;
+}
+
+/** Respuesta de ``POST /api/v1/facturas/{id}/enviar`` (envío SMTP). */
+export type FacturaEmailEnviadaResponse = {
+  factura_id: number;
+  numero_factura: string;
+  destinatario: string;
+  enviado_en: string;
+  mensaje: string;
+  auditoria?: Record<string, unknown>;
+};
+
+/** Error HTTP al enviar factura por correo (incluye ``status`` para 400/503/502). */
+export class FacturaEmailSendError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "FacturaEmailSendError";
+    this.status = status;
+  }
+}
+
+/** POST /api/v1/facturas/{id}/enviar — adjunta PDF por SMTP (configuración en el servidor). */
+export async function sendFacturaByEmail(facturaId: number): Promise<FacturaEmailEnviadaResponse> {
+  const id = encodeURIComponent(String(facturaId));
+  const url = `${API_BASE}/api/v1/facturas/${id}/enviar`;
+  async function doFetch(): Promise<Response> {
+    return fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+    });
+  }
+  let res = await doFetch();
+  if (res.status === 401) {
+    const t = await refreshAccessToken();
+    if (t) res = await doFetch();
+  }
+  if (!res.ok) {
+    const msg = await parseApiError(res);
+    throw new FacturaEmailSendError(msg, res.status);
+  }
+  return (await res.json()) as FacturaEmailEnviadaResponse;
+}
+
 export type PortalRiskAssessment = {
   score: number;
   creditLimitEur: number;
@@ -127,6 +265,10 @@ export type OnboardingDashboardRow = {
   email: string;
   limite_credito: number;
   estado: OnboardingClienteEstado;
+  fecha_invitacion?: string | null;
+  riesgo_aceptado?: boolean;
+  mandato_activo?: boolean;
+  is_blocked?: boolean;
 };
 
 export type OnboardingDashboardData = {
@@ -200,6 +342,28 @@ export async function fetchClientesOnboardingDashboard(): Promise<OnboardingDash
   }
   if (!res.ok) throw new Error(await parseApiError(res));
   return (await res.json()) as OnboardingDashboardData;
+}
+
+export async function resendClienteInvite(
+  clienteId: string,
+): Promise<{ message: string }> {
+  async function doFetch(): Promise<Response> {
+    return fetch(
+      `${API_BASE}/api/v1/clientes/${encodeURIComponent(clienteId)}/resend-invite`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+      },
+    );
+  }
+  let res = await doFetch();
+  if (res.status === 401) {
+    const t = await refreshAccessToken();
+    if (t) res = await doFetch();
+  }
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as { message: string };
 }
 
 export function portalAlbaranPdfUrl(porteId: string): string {
@@ -745,10 +909,71 @@ export type TreasuryRiskResponse = {
   fuente_datos: "facturas" | "portes" | string;
 };
 
+/** GET /api/v1/finance/risk-ranking — ranking V_r por cliente */
+export type RiskRankingRow = {
+  cliente_id: string;
+  nombre: string;
+  saldo_pendiente: number;
+  riesgo_score: number;
+  valor_riesgo: number;
+  mandato_sepa_activo: boolean;
+};
+
+/** GET /api/v1/finance/margin-ranking — margen neto por ruta (M_n) */
+export type RouteMarginRow = {
+  ruta: string;
+  total_portes: number;
+  ingresos_totales: number;
+  costes_totales: number;
+  margen_neto: number;
+  margen_porcentual: number;
+};
+
+/** GET /api/v1/finance/credit-alerts — consumo ≥80 % del límite */
+export type CreditAlert = {
+  cliente_id: string;
+  nombre_cliente: string;
+  saldo_pendiente: number;
+  limite_credito: number;
+  porcentaje_consumo: number;
+  nivel_alerta: "WARNING" | "CRITICAL";
+};
+
+/** GET /api/v1/analytics/cip-matrix — Margen Neto vs Emisiones CO2 */
+export type CIPMatrixPoint = {
+  ruta: string;
+  margen_neto: number;
+  emisiones_co2: number;
+  total_portes: number;
+};
+
 export type FinanceEsgReport = {
   periodo: string;
   total_co2_kg: number;
   total_portes: number;
+};
+
+export type SimulationInput = {
+  cambio_combustible_pct: number;
+  cambio_salarios_pct: number;
+  cambio_peajes_pct: number;
+};
+
+export type SimulationResult = {
+  periodo_meses: number;
+  ingresos_base_eur: number;
+  gastos_base_eur: number;
+  ebitda_base_eur: number;
+  ebitda_simulado_eur: number;
+  impacto_ebitda_eur: number;
+  impacto_ebitda_pct: number;
+  impacto_mensual_estimado_eur: number;
+  costes_categoria_base: Record<string, number>;
+  costes_categoria_simulada: Record<string, number>;
+  break_even: {
+    tarifa_incremento_pct: number;
+    incremento_ingresos_eur: number;
+  };
 };
 
 export type VerifactuChainAudit = {
@@ -766,6 +991,8 @@ export type VerifactuQrPreview = {
   fecha_emision?: string;
   total_factura?: number;
   fingerprint_hash?: string | null;
+  /** URL SREI AEAT exactamente codificada en el QR (mismo importe con 2 decimales). */
+  aeat_url?: string;
   qr_png_base64?: string;
 };
 
@@ -783,6 +1010,88 @@ export async function getTreasuryRisk(): Promise<TreasuryRiskResponse> {
   }
   if (!res.ok) throw new Error(await parseApiError(res));
   return (await res.json()) as TreasuryRiskResponse;
+}
+
+export async function getRiskRanking(): Promise<RiskRankingRow[]> {
+  async function doFetch(): Promise<Response> {
+    return fetch(`${API_BASE}/api/v1/finance/risk-ranking`, {
+      credentials: "include",
+      headers: authHeaders(),
+    });
+  }
+  let res = await doFetch();
+  if (res.status === 401) {
+    const t = await refreshAccessToken();
+    if (t) res = await doFetch();
+  }
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as RiskRankingRow[];
+}
+
+export async function getRouteMarginRanking(): Promise<RouteMarginRow[]> {
+  async function doFetch(): Promise<Response> {
+    return fetch(`${API_BASE}/api/v1/finance/margin-ranking`, {
+      credentials: "include",
+      headers: authHeaders(),
+    });
+  }
+  let res = await doFetch();
+  if (res.status === 401) {
+    const t = await refreshAccessToken();
+    if (t) res = await doFetch();
+  }
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as RouteMarginRow[];
+}
+
+export async function getCIPMatrix(): Promise<CIPMatrixPoint[]> {
+  async function doFetch(): Promise<Response> {
+    return fetch(`${API_BASE}/api/v1/analytics/cip-matrix`, {
+      credentials: "include",
+      headers: authHeaders(),
+    });
+  }
+  let res = await doFetch();
+  if (res.status === 401) {
+    const t = await refreshAccessToken();
+    if (t) res = await doFetch();
+  }
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as CIPMatrixPoint[];
+}
+
+export async function postFinancialSimulation(payload: SimulationInput): Promise<SimulationResult> {
+  async function doFetch(): Promise<Response> {
+    return fetch(`${API_BASE}/api/v1/analytics/simulate`, {
+      method: "POST",
+      credentials: "include",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }
+  let res = await doFetch();
+  if (res.status === 401) {
+    const t = await refreshAccessToken();
+    if (t) res = await doFetch();
+  }
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as SimulationResult;
+}
+
+export async function getCreditAlerts(): Promise<CreditAlert[]> {
+  async function doFetch(): Promise<Response> {
+    return fetch(`${API_BASE}/api/v1/finance/credit-alerts`, {
+      credentials: "include",
+      headers: authHeaders(),
+    });
+  }
+  let res = await doFetch();
+  if (res.status === 401) {
+    const t = await refreshAccessToken();
+    if (t) res = await doFetch();
+  }
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as CreditAlert[];
 }
 
 export async function getFinanceEsgReport(): Promise<FinanceEsgReport> {
@@ -872,15 +1181,121 @@ export async function getVerifactuQrPreview(
   return (await res.json()) as VerifactuQrPreview;
 }
 
+/** Eventos webhook multi-endpoint (catálogo backend). */
+export type WebhookEventType =
+  | "credit.limit_exceeded"
+  | "verifactu.invoice_signed"
+  | "esg.certificate_generated";
+
+/** Endpoint registrado (sin `secret_key` en listados). */
+export type WebhookEndpoint = {
+  id: string;
+  empresa_id: string;
+  url: string;
+  event_types: string[];
+  is_active: boolean;
+  created_at: string | null;
+};
+
+export type WebhookEndpointCreatePayload = {
+  url: string;
+  /** `['*']` suscribe todos los eventos del catálogo. */
+  event_types: WebhookEventType[] | ["*"];
+};
+
+export type WebhookEndpointCreated = WebhookEndpoint & { secret_key: string };
+
+async function webhooksFetchJson<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
+  async function doFetch(): Promise<Response> {
+    return fetch(`${API_BASE}${path}`, {
+      ...init,
+      credentials: "include",
+      headers: {
+        ...authHeaders(),
+        ...(init?.headers as Record<string, string> | undefined),
+      },
+    });
+  }
+  let res = await doFetch();
+  if (res.status === 401) {
+    const t = await refreshAccessToken();
+    if (t) res = await doFetch();
+  }
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as T;
+}
+
+export async function webhooksGetEndpoints(): Promise<WebhookEndpoint[]> {
+  return webhooksFetchJson<WebhookEndpoint[]>("/api/v1/webhooks/endpoints");
+}
+
+export async function webhooksCreateEndpoint(
+  data: WebhookEndpointCreatePayload,
+): Promise<WebhookEndpointCreated> {
+  return webhooksFetchJson<WebhookEndpointCreated>("/api/v1/webhooks/endpoints", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function webhooksDeleteEndpoint(id: string): Promise<void> {
+  async function doFetch(): Promise<Response> {
+    return fetch(
+      `${API_BASE}/api/v1/webhooks/endpoints/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        credentials: "include",
+        headers: authHeaders(),
+      },
+    );
+  }
+  let res = await doFetch();
+  if (res.status === 401) {
+    const t = await refreshAccessToken();
+    if (t) res = await doFetch();
+  }
+  if (!res.ok) throw new Error(await parseApiError(res));
+}
+
+export async function webhooksGetEndpointSecret(id: string): Promise<{ secret_key: string }> {
+  return webhooksFetchJson<{ secret_key: string }>(
+    `/api/v1/webhooks/endpoints/${encodeURIComponent(id)}/secret`,
+  );
+}
+
 export const api = {
+  clientes: {
+    resendInvite: resendClienteInvite,
+  },
+  facturas: {
+    getAll: getFacturas,
+    sendByEmail: sendFacturaByEmail,
+  },
   finance: {
     fetchTreasuryRisk: getTreasuryRisk,
+    getRiskRanking: getRiskRanking,
+    getRouteMarginRanking: getRouteMarginRanking,
+    getCreditAlerts: getCreditAlerts,
     fetchEsgReport: getFinanceEsgReport,
     downloadEsgCertificatePdf: downloadFinanceEsgCertificatePdf,
+  },
+  analytics: {
+    getCIPMatrix: getCIPMatrix,
+    simulateImpact: postFinancialSimulation,
   },
   verifactu: {
     verifyChain: getVerifactuChainAudit,
     getQrPreview: getVerifactuQrPreview,
+  },
+  webhooks: {
+    getEndpoints: webhooksGetEndpoints,
+    createEndpoint: webhooksCreateEndpoint,
+    deleteEndpoint: webhooksDeleteEndpoint,
+    getEndpointSecret: webhooksGetEndpointSecret,
   },
 } as const;
 

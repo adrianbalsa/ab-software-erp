@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Copy, Loader2, ShieldCheck } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
 import { RoleGuard } from "@/components/auth/RoleGuard";
@@ -15,6 +15,7 @@ export default function AuditoriaFiscalPage() {
   const [facturaIdInput, setFacturaIdInput] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [preview, setPreview] = useState<VerifactuQrPreview | null>(null);
+  const [urlCopied, setUrlCopied] = useState(false);
 
   const onVerify = async () => {
     setLoading(true);
@@ -38,6 +39,7 @@ export default function AuditoriaFiscalPage() {
     }
     setPreviewLoading(true);
     setError(null);
+    setUrlCopied(false);
     try {
       const res = await api.verifactu.getQrPreview(idNum);
       setPreview(res);
@@ -143,8 +145,8 @@ export default function AuditoriaFiscalPage() {
               </div>
 
               {preview?.found && preview.qr_png_base64 ? (
-                <div className="rounded-lg border border-zinc-200 p-4 bg-white">
-                  <p className="text-sm text-zinc-700 mb-2">
+                <div className="rounded-lg border border-zinc-200 p-4 bg-white space-y-4">
+                  <p className="text-sm text-zinc-700">
                     Factura {preview.numero_factura} · Hash:{" "}
                     <code className="text-xs">{preview.fingerprint_hash ?? "N/A"}</code>
                   </p>
@@ -153,6 +155,35 @@ export default function AuditoriaFiscalPage() {
                     alt="QR VeriFactu"
                     className="w-44 h-44 border border-zinc-200 rounded"
                   />
+                  {preview.aeat_url ? (
+                    <div>
+                      <p className="text-xs font-medium text-zinc-500 mb-2">
+                        URL de Cotejo Generada (Estándar SREI AEAT)
+                      </p>
+                      <div className="flex gap-2 rounded-lg border border-zinc-200 bg-zinc-100 p-3 dark:bg-zinc-800/60 dark:border-zinc-700">
+                        <p className="min-w-0 flex-1 break-all font-mono text-[11px] leading-relaxed text-zinc-800 dark:text-zinc-200">
+                          {preview.aeat_url}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(preview.aeat_url ?? "").then(() => {
+                              setUrlCopied(true);
+                              window.setTimeout(() => setUrlCopied(false), 2000);
+                            });
+                          }}
+                          className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-md border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                          title="Copiar URL"
+                          aria-label="Copiar URL de cotejo"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                      </div>
+                      {urlCopied ? (
+                        <p className="mt-1 text-xs text-emerald-600">Copiado al portapapeles</p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </CardContent>

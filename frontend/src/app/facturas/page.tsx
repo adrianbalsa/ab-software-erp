@@ -2,69 +2,28 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Download, FileText, RefreshCw, FileWarning, ShieldCheck } from "lucide-react";
+import { Download, FileText, RefreshCw, FileWarning, Stamp } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
-import { API_BASE, authHeaders } from "@/lib/api";
+import { VeriFactuBadge } from "@/components/dashboard/VeriFactuBadge";
+import { SendInvoiceButton } from "@/components/facturas/SendInvoiceButton";
+import { ToastHost, type ToastPayload } from "@/components/ui/ToastHost";
+import { API_BASE, api, authHeaders, type Factura } from "@/lib/api";
 
-type FacturaRow = {
-  id: string;
-  numero_factura: string;
-  fecha_emision: string;
-  total_factura: number;
-  hash_registro?: string | null;
-  tipo_factura?: string | null;
-  is_finalized?: boolean | null;
-  fingerprint?: string | null;
-  aeat_sif_estado?: string | null;
-};
-
-function aeatEstadoBadge(estado: string | null | undefined): { label: string; className: string } {
-  const e = (estado ?? "").toLowerCase();
-  if (e === "aceptado" || e === "enviado_ok") {
-    return {
-      label: "AEAT: enviado",
-      className: "border border-emerald-200 bg-emerald-50 text-emerald-900",
-    };
-  }
-  if (e === "rechazado" || e === "error_tecnico") {
-    return {
-      label: "AEAT: error",
-      className: "border border-red-200 bg-red-50 text-red-900",
-    };
-  }
-  if (e === "omitido") {
-    return {
-      label: "AEAT: sin URL/cert",
-      className: "border border-amber-200 bg-amber-50 text-amber-950",
-    };
-  }
-  if (e === "aceptado_con_errores") {
-    return {
-      label: "AEAT: avisos",
-      className: "border border-amber-200 bg-amber-50 text-amber-950",
-    };
-  }
-  return {
-    label: "AEAT: pendiente",
-    className: "border border-amber-200 bg-amber-50 text-amber-950",
-  };
-}
-
-function puedeReenviarAeat(r: FacturaRow): boolean {
+function puedeReenviarAeat(r: Factura): boolean {
   if (!r.is_finalized || !r.fingerprint) return false;
   const e = (r.aeat_sif_estado ?? "").toLowerCase();
   return e === "error_tecnico" || e === "rechazado" || e === "omitido" || e === "aceptado_con_errores";
 }
 
 export default function FacturasPage() {
-  const [rows, setRows] = useState<FacturaRow[]>([]);
+  const [rows, setRows] = useState<Factura[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastPayload | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [rectTarget, setRectTarget] = useState<FacturaRow | null>(null);
+  const [rectTarget, setRectTarget] = useState<Factura | null>(null);
   const [motivo, setMotivo] = useState("");
   const [rectBusy, setRectBusy] = useState(false);
   const [rectError, setRectError] = useState<string | null>(null);
@@ -72,21 +31,15 @@ export default function FacturasPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
-      const res = await fetch(`${API_BASE}/facturas/`, {
-        credentials: "include",
-        headers: { ...authHeaders() },
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(typeof err?.detail === "string" ? err.detail : `HTTP ${res.status}`);
-      }
-      const json = (await res.json()) as FacturaRow[];
-      setRows(json);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Error");
+      setRows(await api.facturas.getAll());
+    } catch {
       setRows([]);
+      setToast({
+        id: Date.now(),
+        tone: "error",
+        message: "Error al recuperar el listado de facturas.",
+      });
     } finally {
       setLoading(false);
     }
@@ -96,7 +49,7 @@ export default function FacturasPage() {
     void load();
   }, [load]);
 
-  const openRectificar = (r: FacturaRow) => {
+  const openRectificar = (r: Factura) => {
     setRectTarget(r);
     setMotivo("");
     setRectError(null);
@@ -144,10 +97,11 @@ export default function FacturasPage() {
     }
   };
 
-  const reenviarAeat = async (r: FacturaRow) => {
-    setAeatBusyId(r.id);
+  const reenviarAeat = async (r: Factura) => {
+    const idStr = String(r.id);
+    setAeatBusyId(idStr);
     try {
-      const res = await fetch(`${API_BASE}/facturas/${r.id}/reenviar-aeat`, {
+      const res = await fetch(`${API_BASE}/facturas/${idStr}/reenviar-aeat`, {
         method: "POST",
         credentials: "include",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
@@ -190,8 +144,18 @@ export default function FacturasPage() {
     }
   };
 
+  const copyAeatCsv = useCallback(async (csv: string) => {
+    try {
+      await navigator.clipboard.writeText(csv);
+      setToast({ id: Date.now(), tone: "success", message: "CSV copiado" });
+    } catch {
+      setToast({ id: Date.now(), tone: "error", message: "No se pudo copiar el CSV" });
+    }
+  }, []);
+
   return (
     <AppShell active="facturas">
+      <ToastHost toast={toast} onDismiss={() => setToast(null)} durationMs={3200} />
       <header className="h-16 ab-header border-b border-slate-200/80 flex items-center justify-between px-8 shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Facturas</h1>
@@ -211,12 +175,6 @@ export default function FacturasPage() {
       </header>
 
       <main className="p-8 flex-1 overflow-y-auto">
-        {error && (
-          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            {error}
-          </div>
-        )}
-
         <div className="ab-card rounded-2xl overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2 bg-slate-50/80">
             <FileText className="w-5 h-5 text-[#2563eb]" />
@@ -250,10 +208,10 @@ export default function FacturasPage() {
                   </tr>
                 ) : (
                   rows.map((r) => (
-                    <tr key={r.id}>
+                    <tr key={String(r.id)}>
                       <td className="font-medium text-slate-800">
                         <Link
-                          href={`/facturas/${r.id}`}
+                          href={`/facturas/${String(r.id)}`}
                           className="text-[#2563eb] hover:underline"
                         >
                           {r.numero_factura}
@@ -268,13 +226,23 @@ export default function FacturasPage() {
                         })}
                       </td>
                       <td className="text-left align-middle">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold ${aeatEstadoBadge(r.aeat_sif_estado).className}`}
-                          title={r.aeat_sif_estado ?? "pendiente"}
-                        >
-                          <ShieldCheck className="w-3 h-3 shrink-0 opacity-80" />
-                          {aeatEstadoBadge(r.aeat_sif_estado).label}
-                        </span>
+                        <div className="inline-flex items-center gap-2">
+                          <VeriFactuBadge
+                            estado={r.aeat_sif_estado}
+                            descripcion={r.aeat_sif_descripcion}
+                          />
+                          {r.aeat_sif_csv && (
+                            <button
+                              type="button"
+                              onClick={() => void copyAeatCsv(r.aeat_sif_csv || "")}
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
+                              title="Copiar CSV AEAT"
+                              aria-label="Copiar CSV AEAT"
+                            >
+                              <Stamp className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="font-mono text-xs text-slate-500 max-w-[200px] truncate">
                         {r.hash_registro ? `${r.hash_registro.slice(0, 14)}…` : "—"}
@@ -284,11 +252,11 @@ export default function FacturasPage() {
                           {puedeReenviarAeat(r) && (
                             <button
                               type="button"
-                              disabled={aeatBusyId === r.id}
+                              disabled={aeatBusyId === String(r.id)}
                               onClick={() => void reenviarAeat(r)}
                               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
                             >
-                              <RefreshCw className={`w-3.5 h-3.5 ${aeatBusyId === r.id ? "animate-spin" : ""}`} />
+                              <RefreshCw className={`w-3.5 h-3.5 ${aeatBusyId === String(r.id) ? "animate-spin" : ""}`} />
                               Reenviar AEAT
                             </button>
                           )}
@@ -302,14 +270,20 @@ export default function FacturasPage() {
                               Rectificar
                             </button>
                           )}
+                          <SendInvoiceButton
+                            facturaId={r.id}
+                            onToast={(message, tone) =>
+                              setToast({ id: Date.now(), message, tone })
+                            }
+                          />
                           <button
                             type="button"
-                            disabled={downloadingId === r.id}
-                            onClick={() => void descargarPdfInmutable(r.id)}
+                            disabled={downloadingId === String(r.id)}
+                            onClick={() => void descargarPdfInmutable(String(r.id))}
                             className="inline-flex items-center gap-1.5 rounded-lg bg-[#2563eb] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-50"
                           >
                             <Download className="w-3.5 h-3.5" />
-                            {downloadingId === r.id ? "…" : "PDF"}
+                            {downloadingId === String(r.id) ? "…" : "PDF"}
                           </button>
                         </div>
                       </td>

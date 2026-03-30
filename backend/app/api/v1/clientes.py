@@ -10,6 +10,7 @@ from pydantic import EmailStr, TypeAdapter, ValidationError
 from app.api import deps
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserOut
+from app.services.clientes_service import ClientesService
 
 router = APIRouter()
 
@@ -191,7 +192,7 @@ async def onboarding_dashboard(
     try:
         res: Any = await db.execute(
             db.table("clientes")
-            .select("id,nombre,email,limite_credito,fecha_invitacion,riesgo_aceptado,mandato_activo,deleted_at")
+            .select("id,nombre,email,limite_credito,fecha_invitacion,riesgo_aceptado,mandato_activo,deleted_at,is_blocked")
             .eq("empresa_id", empresa_id)
             .is_("deleted_at", "null")
         )
@@ -237,6 +238,10 @@ async def onboarding_dashboard(
                 "email": str(row.get("email") or ""),
                 "limite_credito": limite_credito_num,
                 "estado": estado,
+                "fecha_invitacion": fecha_invitacion,
+                "riesgo_aceptado": riesgo_aceptado,
+                "mandato_activo": mandato_activo,
+                "is_blocked": _to_bool(row.get("is_blocked")),
             }
         )
 
@@ -249,4 +254,21 @@ async def onboarding_dashboard(
         },
         "clientes": clientes,
     }
+
+
+@router.post(
+    "/{cliente_id}/resend-invite",
+    status_code=status.HTTP_200_OK,
+    summary="Reenviar invitación de onboarding a cliente pendiente",
+)
+async def resend_onboarding_invite(
+    cliente_id: UUID,
+    _: UserOut = Depends(deps.require_role("owner")),
+    current_user: UserOut = Depends(deps.bind_write_context),
+    clientes_service: ClientesService = Depends(deps.get_clientes_service),
+) -> dict[str, str]:
+    return await clientes_service.resend_onboarding_invite(
+        cliente_id=str(cliente_id),
+        empresa_id=str(current_user.empresa_id),
+    )
 

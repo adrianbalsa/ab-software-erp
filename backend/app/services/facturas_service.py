@@ -281,7 +281,12 @@ class FacturasService:
         except Exception:
             return GENESIS_HASH
 
-    async def list_facturas(self, *, empresa_id: str | UUID) -> list[FacturaOut]:
+    async def list_facturas(
+        self,
+        *,
+        empresa_id: str | UUID,
+        estado_aeat: str | None = None,
+    ) -> list[FacturaOut]:
         eid = _as_empresa_id_str(empresa_id)
         q = (
             self._db.table("facturas")
@@ -289,6 +294,8 @@ class FacturasService:
             .eq("empresa_id", eid)
             .order("fecha_emision", desc=True)
         )
+        if estado_aeat is not None and str(estado_aeat).strip():
+            q = q.eq("aeat_sif_estado", str(estado_aeat).strip())
         res: Any = await self._db.execute(q)
         rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
         out: list[FacturaOut] = []
@@ -1565,6 +1572,52 @@ class FacturasService:
     ) -> bytes:
         pdf_data = await self.get_factura_pdf_data(empresa_id=empresa_id, factura_id=factura_id)
         return await anyio.to_thread.run_sync(_factura_pdf_data_to_pdf_bytes, pdf_data)
+
+    async def resolve_destinatario_email_factura(
+        self,
+        *,
+        empresa_id: str | UUID,
+        factura_id: int,
+    ) -> tuple[str, str]:
+        """
+        Número de factura legible + email del cliente (maestro ``clientes.email``).
+        ``ValueError`` si no hay factura, cliente o email utilizable.
+        """
+        eid = _as_empresa_id_str(empresa_id)
+        fid = int(factura_id)
+        if not eid or fid < 1:
+            raise ValueError("Factura no encontrada")
+        res_f: Any = await self._db.execute(
+            self._db.table("facturas")
+            .select("id,numero_factura,num_factura,cliente")
+            .eq("id", fid)
+            .eq("empresa_id", eid)
+            .limit(1)
+        )
+        fr_rows: list[dict[str, Any]] = (res_f.data or []) if hasattr(res_f, "data") else []
+        if not fr_rows:
+            raise ValueError("Factura no encontrada")
+        fr = dict(fr_rows[0])
+        cid = str(fr.get("cliente") or "").strip()
+        if not cid:
+            raise ValueError("Factura sin cliente asociado")
+        res_c: Any = await self._db.execute(
+            filter_not_deleted(
+                self._db.table("clientes")
+                .select("email,nombre")
+                .eq("empresa_id", eid)
+                .eq("id", cid)
+                .limit(1)
+            )
+        )
+        cr = (res_c.data or []) if hasattr(res_c, "data") else []
+        if not cr:
+            raise ValueError("Cliente no encontrado")
+        email_raw = str(cr[0].get("email") or "").strip()
+        if not email_raw or "@" not in email_raw:
+            raise ValueError("El cliente no tiene un email válido para el envío")
+        num = str(fr.get("numero_factura") or fr.get("num_factura") or str(fid)).strip()
+        return num, email_raw.lower()
 
     async def list_facturas_for_cliente(
         self,

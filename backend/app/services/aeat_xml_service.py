@@ -1,8 +1,10 @@
 """
 Construcción de XML de alta VeriFactu (bloques lógicos Cabecera, RegistroFactura, Desglose).
 
-Nota: envoltorio XML con la información mínima de registro; el esquema oficial AEAT
-para remisión telemática puede exigir namespaces, firmas XAdES y tipos adicionales.
+El envío oficial con SOAP+mTLS y **firma XAdES-BES** del registro se implementa en
+``app.services.verifactu_sender`` (misma estructura lógica ampliada en
+``generar_xml_registro_facturacion_alta``). Este módulo conserva un generador
+``VeriFactuAlta`` legado; nuevas integraciones deberían alinearse con el sender.
 """
 
 from __future__ import annotations

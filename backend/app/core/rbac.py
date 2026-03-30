@@ -5,9 +5,9 @@ from typing import Any, Literal
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
-AppRbacRole = Literal["owner", "traffic_manager", "driver", "cliente"]
+AppRbacRole = Literal["owner", "traffic_manager", "driver", "cliente", "developer"]
 
-VALID_ROLES: frozenset[str] = frozenset({"owner", "traffic_manager", "driver", "cliente"})
+VALID_ROLES: frozenset[str] = frozenset({"owner", "traffic_manager", "driver", "cliente", "developer"})
 
 
 def normalize_rbac_role(

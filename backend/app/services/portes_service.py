@@ -7,7 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from app.core.math_engine import as_float_fiat, round_fiat, safe_divide, to_decimal
-from app.core.esg_engine import calculate_co2_emissions
+from app.core.esg_engine import calculate_co2_emissions, resolve_normativa_euro_for_co2
 from app.core.plans import PLAN_ENTERPRISE, fetch_empresa_plan, normalize_plan
 from app.db.soft_delete import filter_not_deleted, soft_delete_payload
 from app.db.supabase import SupabaseAsync
@@ -24,7 +24,9 @@ from app.services.eco_service import (
     calcular_huella_porte,
     factor_emision_huella_porte_default,
     peso_ton_desde_porte_create,
+    peso_ton_desde_porte_row,
 )
+from app.services.finance_pending import aggregate_pending_and_trend
 from app.services.maps_service import MapsService
 
 _log = logging.getLogger(__name__)
@@ -38,6 +40,34 @@ class PortesService:
     def __init__(self, db: SupabaseAsync, maps: MapsService) -> None:
         self._db = db
         self._maps = maps
+
+    async def _normativa_euro_co2_para_vehiculo(
+        self, *, empresa_id: str, vehiculo_flota_id: str | None
+    ) -> str:
+        """Lee ``normativa_euro`` (y fallback ``certificacion_emisiones``) desde ``flota``."""
+        vid = str(vehiculo_flota_id or "").strip()
+        if not vid:
+            return resolve_normativa_euro_for_co2()
+        try:
+            res: Any = await self._db.execute(
+                filter_not_deleted(
+                    self._db.table("flota")
+                    .select("normativa_euro,certificacion_emisiones")
+                    .eq("empresa_id", str(empresa_id).strip())
+                    .eq("id", vid)
+                    .limit(1)
+                )
+            )
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        except Exception:
+            return resolve_normativa_euro_for_co2()
+        if not rows:
+            return resolve_normativa_euro_for_co2()
+        r0 = rows[0]
+        return resolve_normativa_euro_for_co2(
+            normativa_euro=r0.get("normativa_euro"),
+            certificacion_emisiones=r0.get("certificacion_emisiones"),
+        )
 
     async def list_portes_pendientes(self, *, empresa_id: str | UUID) -> list[PorteOut]:
         eid = str(empresa_id).strip()
@@ -81,8 +111,16 @@ class PortesService:
         rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
         return [dict(r) for r in rows]
 
-    async def create_porte(self, *, empresa_id: str | UUID, porte_in: PorteCreate) -> PorteOut:
+    async def create_porte(
+        self,
+        *,
+        empresa_id: str | UUID,
+        porte_in: PorteCreate,
+        caller_is_owner: bool = False,
+    ) -> PorteOut:
         eid = str(empresa_id).strip()
+        if not eid:
+            raise PorteDomainError("empresa_id es obligatorio")
         cid = str(porte_in.cliente_id).strip()
         if not cid:
             raise PorteDomainError("cliente_id es obligatorio")
@@ -91,7 +129,7 @@ class PortesService:
         res_cli: Any = await self._db.execute(
             filter_not_deleted(
                 self._db.table("clientes")
-                .select("id,riesgo_aceptado")
+                .select("id,riesgo_aceptado,limite_credito")
                 .eq("empresa_id", eid)
                 .eq("id", cid)
                 .limit(1)
@@ -100,11 +138,31 @@ class PortesService:
         cli_rows: list[dict[str, Any]] = (res_cli.data or []) if hasattr(res_cli, "data") else []
         if not cli_rows:
             raise PorteDomainError("Cliente no encontrado")
-        riesgo_aceptado = cli_rows[0].get("riesgo_aceptado")
+        cli_row = cli_rows[0]
+        riesgo_aceptado = cli_row.get("riesgo_aceptado")
         if riesgo_aceptado is not True:
             raise PorteDomainError(
                 "Operación denegada: El cliente no ha aceptado las condiciones de riesgo comercial (Onboarding incompleto)."
             )
+
+        if not caller_is_owner:
+            try:
+                limite_raw = cli_row.get("limite_credito")
+                limite_credito = max(0.0, float(limite_raw if limite_raw is not None else 0.0))
+            except (TypeError, ValueError):
+                limite_credito = 0.0
+            pending_by_client, _, _ = await aggregate_pending_and_trend(
+                self._db, eid, months_for_trend=None
+            )
+            saldo = max(0.0, float(pending_by_client.get(cid, 0.0)))
+            try:
+                nuevo = max(0.0, float(porte_in.precio_pactado))
+            except (TypeError, ValueError):
+                nuevo = 0.0
+            if saldo + nuevo > limite_credito:
+                raise PorteDomainError(
+                    "Límite de crédito excedido. No se pueden asignar más portes a este cliente."
+                )
 
         km_val = float(porte_in.km_estimados or 0.0)
         if km_val <= 0:
@@ -115,6 +173,26 @@ class PortesService:
                     tenant_empresa_id=eid,
                 )
             )
+
+        vid_create = str(porte_in.vehiculo_id).strip() if porte_in.vehiculo_id else ""
+        if vid_create:
+            res_v: Any = await self._db.execute(
+                filter_not_deleted(
+                    self._db.table("flota")
+                    .select("id")
+                    .eq("empresa_id", eid)
+                    .eq("id", vid_create)
+                    .limit(1)
+                )
+            )
+            vrows: list[dict[str, Any]] = (res_v.data or []) if hasattr(res_v, "data") else []
+            if not vrows:
+                raise PorteDomainError("El vehículo indicado no existe en la flota de la empresa.")
+
+        euro_co2 = await self._normativa_euro_co2_para_vehiculo(
+            empresa_id=eid,
+            vehiculo_flota_id=vid_create or None,
+        )
 
         payload: dict[str, Any] = {
             "empresa_id": eid,
@@ -127,9 +205,11 @@ class PortesService:
             "descripcion": porte_in.descripcion,
             "precio_pactado": porte_in.precio_pactado,
             "estado": "pendiente",
-            # Huella simplificada para cuadro financiero ESG.
-            "co2_kg": calculate_co2_emissions(km_val, "Euro VI"),
+            # Huella simplificada para cuadro financiero ESG (factor por normativa EURO del vehículo).
+            "co2_kg": calculate_co2_emissions(km_val, euro_co2),
         }
+        if vid_create:
+            payload["vehiculo_id"] = vid_create
         if porte_in.peso_ton is not None:
             payload["peso_ton"] = float(porte_in.peso_ton)
         try:
@@ -227,6 +307,16 @@ class PortesService:
                 margen_km = float(margen_fin_km)
 
         return float(margen_km), float(coste_km)
+
+    async def operational_cost_per_km_eur(self, *, empresa_id: str, default: float = 1.10) -> float:
+        """
+        Coste operativo €/km de la empresa (histórico facturas/gastos vía ``_current_margin_and_cost_per_km``).
+        Si el coste es nulo o ≤ 0, devuelve ``default`` (p. ej. 1.10 €/km).
+        """
+        _, coste_km = await self._current_margin_and_cost_per_km(empresa_id=str(empresa_id))
+        if coste_km is None or float(coste_km) <= 0.0:
+            return float(default)
+        return float(coste_km)
 
     async def cotizar_porte(
         self,
@@ -494,12 +584,29 @@ class PortesService:
         now = datetime.now(timezone.utc)
         now_iso = now.isoformat()
 
+        vid_raw = row.get("vehiculo_id")
+        km_trip = round_fiat(to_decimal(row.get("km_estimados") or 0))
+        euro_entrega = await self._normativa_euro_co2_para_vehiculo(
+            empresa_id=eid,
+            vehiculo_flota_id=str(vid_raw).strip() if vid_raw else None,
+        )
+        km_float = float(km_trip) if km_trip > 0 else 0.0
+
         payload: dict[str, Any] = {
             "firma_consignatario_b64": b64,
             "nombre_consignatario_final": nombre_consignatario.strip()[:255],
             "fecha_entrega_real": now_iso,
             "estado": "Entregado",
+            "co2_kg": calculate_co2_emissions(km_float, euro_entrega),
         }
+        try:
+            plan_e = await fetch_empresa_plan(self._db, empresa_id=eid)
+            if normalize_plan(plan_e) == PLAN_ENTERPRISE and km_float > 0:
+                peso_e = peso_ton_desde_porte_row(dict(row))
+                fac_e = factor_emision_huella_porte_default()
+                payload["co2_emitido"] = calcular_huella_porte(km_float, peso_e, fac_e)
+        except Exception:
+            pass
         dni = (dni_consignatario or "").strip()
         if dni:
             payload["dni_consignatario"] = dni[:32]
@@ -507,9 +614,6 @@ class PortesService:
         await self._db.execute(
             self._db.table("portes").update(payload).eq("empresa_id", eid).eq("id", pid)
         )
-
-        vid_raw = row.get("vehiculo_id")
-        km_trip = round_fiat(to_decimal(row.get("km_estimados") or 0))
         odometro_actualizado = False
         odometro_error: str | None = None
         if vid_raw and km_trip > 0:

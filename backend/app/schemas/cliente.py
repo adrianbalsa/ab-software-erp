@@ -10,11 +10,11 @@ from pydantic import BaseModel, ConfigDict, Field
 class ClienteBase(BaseModel):
     """Campos comunes de la tabla `clientes` (tenant-scoped)."""
 
-    nombre: str = Field(..., min_length=1, max_length=255)
-    nif: str | None = Field(default=None, max_length=20, description="CIF/NIF del cliente")
-    email: str | None = Field(default=None, max_length=255)
-    telefono: str | None = Field(default=None, max_length=50)
-    direccion: str | None = Field(default=None, max_length=500)
+    nombre: str = Field(..., min_length=1, max_length=255, description="Nombre o razón social del cliente", examples=["Logística del Sur S.L."])
+    nif: str | None = Field(default=None, max_length=20, description="CIF/NIF del cliente válido según formato AEAT", examples=["B12345678"])
+    email: str | None = Field(default=None, max_length=255, description="Correo electrónico de contacto (facturación/operaciones)", examples=["facturacion@logsur.com"])
+    telefono: str | None = Field(default=None, max_length=50, description="Teléfono de contacto principal", examples=["+34 600 123 456"])
+    direccion: str | None = Field(default=None, max_length=500, description="Dirección postal completa", examples=["Calle Principal 1, Polígono Industrial, 28001 Madrid"])
 
 
 class ClienteCreate(ClienteBase):

@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 from starlette.background import BackgroundTasks
 
+from app.core.webhook_dispatcher import run_dispatch_webhook_job
 from app.db.supabase import SupabaseAsync, get_supabase
 
 _log = logging.getLogger(__name__)
@@ -110,46 +111,30 @@ def dispatch_webhook(
     if not eid:
         return
     background_tasks.add_task(
-        _run_webhook_deliveries,
+        run_webhook_deliveries_for_event,
         eid,
         event_type,
         dict(payload),
     )
 
 
-async def _run_webhook_deliveries(empresa_id: str, event_type: str, payload: dict[str, Any]) -> None:
-    db = await get_supabase(
-        jwt_token=None,
-        allow_service_role_bypass=True,
-        log_service_bypass_warning=False,
-    )
+async def run_webhook_deliveries_for_event(empresa_id: str, event_type: str, payload: dict[str, Any]) -> None:
+    """
+    Entrega a ``webhook_endpoints`` (HMAC X-ABLogistics) y a suscripciones B2B legacy ``webhooks``.
+    Usar desde BackgroundTasks o ``asyncio.create_task`` cuando no haya ``BackgroundTasks``.
+    """
     try:
-        endpoints = await _fetch_active_endpoints(db, empresa_id=empresa_id, event_type=event_type)
-        for ep in endpoints:
-            await _deliver_to_endpoint(db, ep, empresa_id=empresa_id, event_type=event_type, payload=payload)
+        await run_dispatch_webhook_job(empresa_id, event_type, payload)
+        db = await get_supabase(
+            jwt_token=None,
+            allow_service_role_bypass=True,
+            log_service_bypass_warning=False,
+        )
         b2b = await _fetch_b2b_webhooks(db, empresa_id=empresa_id, event_type=event_type)
         for row in b2b:
             await _deliver_b2b_webhook(db, row, empresa_id=empresa_id, event_type=event_type, payload=payload)
     except Exception:
-        _log.exception("webhook: error en _run_webhook_deliveries empresa=%s event=%s", empresa_id, event_type)
-
-
-async def _fetch_active_endpoints(
-    db: SupabaseAsync, *, empresa_id: str, event_type: str
-) -> list[dict[str, Any]]:
-    res: Any = await db.execute(
-        db.table("webhook_endpoints")
-        .select("id, empresa_id, url, secret, events, active")
-        .eq("empresa_id", empresa_id)
-        .eq("active", True)
-    )
-    rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
-    out: list[dict[str, Any]] = []
-    for r in rows:
-        evs = r.get("events") or []
-        if isinstance(evs, list) and event_type in evs:
-            out.append(r)
-    return out
+        _log.exception("webhook: error en run_webhook_deliveries_for_event empresa=%s event=%s", empresa_id, event_type)
 
 
 async def _fetch_b2b_webhooks(
@@ -249,112 +234,6 @@ async def _deliver_b2b_webhook(
         except Exception as exc:
             last_err = str(exc)
             _log.info("webhook B2B intento %s/%s fallido: %s", attempt, _MAX_ATTEMPTS, last_err)
-
-        if attempt < _MAX_ATTEMPTS:
-            delay = _BACKOFF_SEC[attempt - 1] if attempt - 1 < len(_BACKOFF_SEC) else _BACKOFF_SEC[-1]
-            await asyncio.sleep(delay)
-
-    await _patch_log(
-        db,
-        log_id=str(log_id),
-        empresa_id=empresa_id,
-        updates={
-            "response_status": last_status,
-            "failed_attempts": _MAX_ATTEMPTS,
-            "last_error": (last_err or "unknown")[:4000],
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-        },
-    )
-
-
-async def _deliver_to_endpoint(
-    db: SupabaseAsync,
-    ep: dict[str, Any],
-    *,
-    empresa_id: str,
-    event_type: str,
-    payload: dict[str, Any],
-) -> None:
-    ep_id = str(ep.get("id") or "").strip()
-    url = str(ep.get("url") or "").strip()
-    secret = str(ep.get("secret") or "")
-    if not url or not secret:
-        _log.warning("webhook: endpoint %s sin url o secret", ep_id)
-        return
-
-    idem = str(uuid.uuid4())
-    envelope: dict[str, Any] = {
-        "event": event_type,
-        "empresa_id": empresa_id,
-        "idempotency_key": idem,
-        "occurred_at": datetime.now(timezone.utc).isoformat(),
-        "payload": payload,
-    }
-    body = _canonical_json(envelope)
-    signature = _sign_body(secret, body)
-    body_text = body.decode("utf-8")
-
-    log_id = str(uuid.uuid4())
-    log_row: dict[str, Any] = {
-        "id": log_id,
-        "empresa_id": empresa_id,
-        "webhook_endpoint_id": ep_id,
-        "event_type": event_type,
-        "payload": envelope,
-        "request_body": body_text,
-        "attempts": 0,
-        "failed_attempts": 0,
-    }
-    try:
-        await db.execute(db.table("webhook_logs").insert(log_row))
-    except Exception:
-        _log.exception("webhook: insert webhook_logs fallido endpoint=%s", ep_id)
-        return
-
-    headers = {
-        "Content-Type": "application/json; charset=utf-8",
-        "X-Webhook-Event": event_type,
-        "X-Webhook-Signature": signature,
-        "X-Webhook-Idempotency-Key": idem,
-    }
-
-    last_err: str | None = None
-    last_status: int | None = None
-
-    for attempt in range(1, _MAX_ATTEMPTS + 1):
-        await _patch_log(
-            db,
-            log_id=str(log_id),
-            empresa_id=empresa_id,
-            updates={
-                "attempts": attempt,
-                "failed_attempts": attempt - 1 if attempt > 1 else 0,
-            },
-        )
-        try:
-            async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-                resp = await client.post(url, content=body, headers=headers)
-            last_status = int(resp.status_code)
-            if 200 <= resp.status_code < 300:
-                await _patch_log(
-                    db,
-                    log_id=str(log_id),
-                    empresa_id=empresa_id,
-                    updates={
-                        "response_status": last_status,
-                        "failed_attempts": 0,
-                        "last_error": None,
-                        "completed_at": datetime.now(timezone.utc).isoformat(),
-                    },
-                )
-                return
-            if 400 <= resp.status_code < 500:
-                last_err = f"HTTP {resp.status_code} (sin reintento 4xx)"
-                break
-            last_err = f"HTTP {resp.status_code}"
-        except Exception as exc:
-            last_err = str(exc)
-            _log.info("webhook intento %s/%s fallido: %s", attempt, _MAX_ATTEMPTS, last_err)
 
         if attempt < _MAX_ATTEMPTS:
             delay = _BACKOFF_SEC[attempt - 1] if attempt - 1 < len(_BACKOFF_SEC) else _BACKOFF_SEC[-1]

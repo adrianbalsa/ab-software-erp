@@ -9,34 +9,49 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
-API_TITLE = "AB Logistics OS - API V1"
+API_TITLE = "AB Logistics OS API"
 API_VERSION = "1.0.0"
 API_DESCRIPTION = (
-    "API oficial para integraciones B2B, gestión de flota, emisiones ESG y tesorería automatizada.\n\n"
+    "API oficial de AB Logistics OS para la gestión integral de transporte y logística.\n\n"
+    "**Características Principales:**\n"
+    "- **Cumplimiento Fiscal (VeriFactu):** Emisión de facturas con inalterabilidad, huella digital (cadena de hash) y envío a la AEAT.\n"
+    "- **Motor ESG:** Cálculo automatizado de emisiones de CO2 y huella de carbono por ruta y vehículo.\n"
+    "- **Gestión de Flota:** Telemetría GPS, mantenimientos y eficiencia de vehículos.\n"
+    "- **Finanzas y Tesorería:** Analítica financiera en tiempo real, control de caja y conciliación bancaria.\n\n"
     "**Autenticación:** la mayoría de rutas requieren `Authorization: Bearer <JWT>` obtenido vía "
     "`POST /auth/login` (flujo OAuth2 password documentado en esta especificación).\n\n"
     "**Webhooks salientes B2B:** los eventos hacia URLs de cliente se firman con HMAC-SHA256; "
-    "validar la cabecera `X-Webhook-Signature` (y `X-AB-Signature` en pings de prueba) según la documentación del endpoint receptor."
+    "validar la cabecera `X-Webhook-Signature`."
 )
 
 OPENAPI_CONTACT: dict[str, str] = {
-    "name": "Soporte Técnico AB",
+    "name": "Adrián Balsa - API Architect",
     "email": "api@ablogistics.com",
+    "url": "https://ablogistics.com/api-docs",
+}
+
+OPENAPI_LICENSE: dict[str, str] = {
+    "name": "Privada / Propietaria",
+    "url": "https://ablogistics.com/legal",
 }
 
 # Nombres exactos usados en include_router(..., tags=[...]) y en openapi_tags de FastAPI()
 OPENAPI_TAGS: list[dict[str, str]] = [
+    {"name": "Finanzas", "description": "Agregados financieros, cash-flow, tesorería y analítica (Math Engine)."},
+    {"name": "Flota", "description": "Gestión de vehículos, telemetría GPS, mantenimiento y eficiencia operativa."},
+    {"name": "Onboarding", "description": "Autoservicio B2B, registro de clientes y aceptación de riesgos."},
+    {"name": "Fiscal (AEAT)", "description": "Facturación electrónica, VeriFactu, inalterabilidad y envío a la AEAT."},
+    {"name": "ESG", "description": "Cálculo de emisiones de CO2, informes de sostenibilidad e indicadores ambientales."},
+    
+    # Resto de tags para compatibilidad con el enrutamiento actual
     {"name": "Autenticación", "description": "Login, refresh de tokens JWT y contexto multi-tenant (RLS)."},
-    {"name": "VeriFactu", "description": "Inalterabilidad fiscal, cadena de hash y comprobaciones AEAT."},
+    {"name": "VeriFactu", "description": "Operaciones específicas de VeriFactu (remplazado gradualmente por Fiscal (AEAT))."},
     {"name": "Facturas", "description": "Emisión, PDF, rectificativas y API versionada."},
     {"name": "Portes", "description": "Transporte, CMR, firma de entrega y documentación operativa."},
-    {"name": "Flota", "description": "Vehículos, telemetría GPS, mantenimiento y alertas administrativas."},
-    {"name": "Finanzas", "description": "Agregados financieros, cash-flow y servicios de tesorería ligados."},
     {"name": "Dashboard económico", "description": "Math Engine: KPIs, márgenes e insights económicos avanzados."},
     {"name": "Tesorería", "description": "Liquidez, vencimientos y proyección de caja."},
     {"name": "Bancos y conciliación", "description": "Movimientos bancarios, conciliación asistida e importaciones."},
     {"name": "Exportación", "description": "Exportación contable (CSV/Excel) para gestoría."},
-    {"name": "ESG", "description": "Emisiones, informes de sostenibilidad e indicadores operativos."},
     {"name": "ESG - Auditoría", "description": "Auditoría de combustible, importaciones y reporting anual detallado."},
     {"name": "Pagos", "description": "Stripe Billing, checkout y webhooks de facturación SaaS."},
     {"name": "Webhooks B2B", "description": "Suscripciones HTTPS salientes, secretos HMAC y pruebas de entrega."},
@@ -54,6 +69,8 @@ OPENAPI_TAGS: list[dict[str, str]] = [
     {"name": "Auditoría API", "description": "Registro append-only de acciones para trazabilidad y cumplimiento."},
     {"name": "Eco", "description": "Métricas ecológicas y huella operativa."},
     {"name": "Salud", "description": "Healthchecks liveness/readiness y diagnóstico de infraestructura."},
+    {"name": "Flota - Análisis", "description": "Analíticas avanzadas de flota."},
+    {"name": "Webhooks externos", "description": "Webhooks de proveedores externos (GoCardless, Stripe)."},
 ]
 
 
@@ -72,6 +89,7 @@ def attach_custom_openapi(app: FastAPI) -> None:
             routes=app.routes,
             tags=getattr(app, "openapi_tags", None),
             contact=OPENAPI_CONTACT,
+            license_info=OPENAPI_LICENSE,
         )
 
         components = openapi_schema.setdefault("components", {})

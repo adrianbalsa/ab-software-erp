@@ -1,0 +1,72 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { FleetEfficiencyTable, TruckEfficiency } from "@/components/dashboard/FleetEfficiencyTable";
+import { TruckProfitChart } from "@/components/dashboard/TruckProfitChart";
+import { Loader2 } from "lucide-react";
+import { AppShell } from "@/components/AppShell";
+
+export default function EficienciaFlotaPage() {
+  const [data, setData] = useState<TruckEfficiency[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true);
+        const response = await fetch("/api/v1/fleet/efficiency-ranking", {
+          headers: {
+            "Content-Type": "application/json"
+          }
+        });
+        if (!response.ok) throw new Error("Failed to fetch fleet efficiency data");
+        const result = await response.json();
+        
+        if (result && Array.isArray(result)) {
+          setData(result);
+        } else {
+          setData([]);
+        }
+      } catch (err: unknown) {
+        console.error("Error al cargar datos de eficiencia:", err);
+        setError("No se pudieron cargar los datos. Inténtalo de nuevo más tarde.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    fetchData();
+  }, []);
+
+  return (
+    <AppShell active="eficiencia">
+      <div className="flex-1 space-y-6 p-8 pt-6">
+      <div className="flex items-center justify-between space-y-2">
+        <h2 className="text-3xl font-bold tracking-tight">Eficiencia de Flota</h2>
+      </div>
+      
+      {loading ? (
+        <div className="flex h-[400px] items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : error ? (
+        <div className="rounded-md bg-destructive/15 p-4 text-destructive">
+          {error}
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
+          <div className="col-span-full lg:col-span-4">
+            <h3 className="mb-4 text-lg font-medium">Ranking de Eficiencia</h3>
+            <FleetEfficiencyTable data={data} />
+          </div>
+          <div className="col-span-full lg:col-span-3">
+            <h3 className="mb-4 text-lg font-medium">Métricas Financieras</h3>
+            <TruckProfitChart data={data} />
+          </div>
+        </div>
+      )}
+      </div>
+    </AppShell>
+  );
+}

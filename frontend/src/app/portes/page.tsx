@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link";
 
 import { RoleGuard } from "@/components/auth/RoleGuard";
+import { ToastHost, type ToastPayload } from "@/components/ui/ToastHost";
 import { CotizadorInteligente } from "@/components/portes/CotizadorInteligente";
 import { AddressAutocomplete } from "@/components/maps/AddressAutocomplete";
 import { GoogleMapsProvider, mapsApiKeyAvailable } from "@/components/maps/GoogleMapsProvider";
@@ -78,6 +79,7 @@ export default function PortesPage() {
   const [formBultos, setFormBultos] = useState("1");
   const [formBusy, setFormBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [creditToast, setCreditToast] = useState<ToastPayload | null>(null);
 
   const headerCheckboxRef = useRef<HTMLInputElement>(null);
   const mapsReady = mapsApiKeyAvailable();
@@ -220,9 +222,22 @@ export default function PortesPage() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(
-          typeof err?.detail === "string" ? err.detail : `HTTP ${res.status}`,
-        );
+        const detail =
+          typeof err?.detail === "string" ? err.detail : `HTTP ${res.status}`;
+        if (res.status === 403) {
+          const friendly =
+            detail.includes("Límite de crédito") || detail.includes("crédito")
+              ? "El cliente está bloqueado por riesgo financiero: límite de crédito superado. Reduce el importe o cobra facturas pendientes."
+              : detail;
+          setCreditToast({
+            id: Date.now(),
+            message: friendly,
+            tone: "error",
+          });
+          setFormError(friendly);
+          return;
+        }
+        throw new Error(detail);
       }
       setFormOrigen("");
       setFormDestino("");
@@ -487,7 +502,14 @@ export default function PortesPage() {
             <code className="text-xs bg-slate-100 px-1 rounded">MAPS_API_KEY</code>).
           </p>
           {formError && (
-            <p className="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <p
+              role="alert"
+              className={`mt-3 text-sm rounded-lg px-3 py-2 border ${
+                formError.includes("riesgo financiero") || formError.includes("crédito")
+                  ? "text-red-900 bg-red-100 border-red-400 font-medium"
+                  : "text-red-700 bg-red-50 border-red-200"
+              }`}
+            >
               {formError}
             </p>
           )}
@@ -755,6 +777,12 @@ export default function PortesPage() {
       </div>
 
       {/* Acción masiva: barra flotante inferior (móvil + refuerzo visual) */}
+      <ToastHost
+        toast={creditToast}
+        onDismiss={() => setCreditToast(null)}
+        durationMs={7200}
+      />
+
       {selectionOpen && (
         <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur-md shadow-[0_-8px_30px_rgba(15,23,42,0.12)] sm:hidden">
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">

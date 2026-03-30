@@ -1,0 +1,1 @@
+{"project_id": "bmdzpbdyvzkycyfgndvd", "query": "-- Cuenta contable PGC opcional por cliente (exportación a gestoría).\nALTER TABLE public.clientes ADD COLUMN IF NOT EXISTS cuenta_contable text;\n\nCOMMENT ON COLUMN public.clientes.cuenta_contable IS\n  'Cuenta 430… si se informa; si NULL, la exportación genera 430 + sufijo determinista desde id.';\n"}

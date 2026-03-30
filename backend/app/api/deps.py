@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from app.core.plans import (
     PLAN_ENTERPRISE,
@@ -37,6 +37,7 @@ from app.services.payment_service import PaymentService
 from app.services.reconciliation_service import ReconciliationService
 from app.services.accounting_export import AccountingExportService
 from app.services.treasury_service import TreasuryService
+from app.services.webhook_endpoints_service import WebhookEndpointsService
 from app.services.webhooks_admin_service import WebhooksAdminService
 from app.services.fleet_maintenance_service import FleetMaintenanceService
 from app.services.stripe_service import assert_empresa_billing_active
@@ -175,6 +176,10 @@ async def get_webhooks_admin_service(db: SupabaseAsync = Depends(get_db)) -> Web
     return WebhooksAdminService(db)
 
 
+async def get_webhook_endpoints_service(db: SupabaseAsync = Depends(get_db)) -> WebhookEndpointsService:
+    return WebhookEndpointsService(db)
+
+
 async def get_fleet_maintenance_service(db: SupabaseAsync = Depends(get_db)) -> FleetMaintenanceService:
     return FleetMaintenanceService(db)
 
@@ -288,6 +293,71 @@ async def bind_write_context(
     await auth_service.ensure_empresa_context(empresa_id=current_user.empresa_id)
     await auth_service.ensure_rbac_context(user=current_user)
     return current_user
+
+
+async def assert_resource_belongs_to_current_empresa(
+    *,
+    db: SupabaseAsync,
+    current_user: UserOut,
+    table_name: str,
+    resource_id: str,
+    id_column: str = "id",
+    empresa_column: str = "empresa_id",
+) -> None:
+    """
+    Verifica ownership multi-tenant de un recurso por ``empresa_id``.
+    Devuelve 404 para no filtrar existencia entre tenants.
+    """
+    rid = str(resource_id or "").strip()
+    if not rid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Identificador de recurso inválido.",
+        )
+
+    q = (
+        db.table(table_name)
+        .select(f"{id_column},{empresa_column}")
+        .eq(id_column, rid)
+        .eq(empresa_column, str(current_user.empresa_id))
+        .limit(1)
+    )
+    res: Any = await db.execute(q)
+    rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recurso no encontrado",
+        )
+
+
+def require_tenant_resource(
+    *,
+    table_name: str,
+    path_param: str,
+    id_column: str = "id",
+    empresa_column: str = "empresa_id",
+) -> Callable[..., Any]:
+    """
+    Dependencia inyectable para validar que un ``path_param`` pertenece al tenant actual.
+    """
+
+    async def _dep(
+        request: Request,
+        current_user: UserOut = Depends(get_current_user),
+        db: SupabaseAsync = Depends(get_db),
+    ) -> None:
+        raw_id = request.path_params.get(path_param)
+        await assert_resource_belongs_to_current_empresa(
+            db=db,
+            current_user=current_user,
+            table_name=table_name,
+            resource_id=str(raw_id or ""),
+            id_column=id_column,
+            empresa_column=empresa_column,
+        )
+
+    return _dep
 
 
 async def require_admin_user(current_user: UserOut = Depends(get_current_user)) -> UserOut:

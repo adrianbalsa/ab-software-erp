@@ -12,6 +12,10 @@ class Settings:
     PROJECT_NAME: str
     # development | production — CORS estricto, HSTS, etc.
     ENVIRONMENT: str
+    # FastAPI/Starlette: en producción debe ser False (sin trazas de error detalladas al cliente).
+    DEBUG: bool
+    # TrustedHostMiddleware: hosts permitidos en cabecera Host (p. ej. api.midominio.com). "*" = cualquiera (solo desarrollo).
+    ALLOWED_HOSTS: tuple[str, ...]
     SUPABASE_URL: str
     SUPABASE_KEY: str  # clave pública (anon) histórica
     SUPABASE_ANON_KEY: str  # misma que PostgREST con RLS (fallback: SUPABASE_KEY o env SUPABASE_ANON_KEY)
@@ -40,6 +44,13 @@ class Settings:
     # Resend (Email Engine); opcional — sin clave no se envían correos
     RESEND_API_KEY: Optional[str]
     EMAIL_FROM_ADDRESS: Optional[str]
+    # SMTP (facturación / envío manual de PDF); opcional — sin host no usa SMTP
+    SMTP_HOST: Optional[str]
+    SMTP_PORT: int
+    SMTP_USER: Optional[str]
+    SMTP_PASSWORD: Optional[str]
+    # Remitente From para SMTP (si falta, se puede alinear con EMAIL_FROM_ADDRESS en get_settings)
+    EMAILS_FROM_EMAIL: Optional[str]
     # GoCardless Bank Account Data (ex-Nordigen); opcional — sin credenciales no hay /bancos/*
     GOCARDLESS_SECRET_ID: Optional[str]
     GOCARDLESS_SECRET_KEY: Optional[str]
@@ -75,6 +86,61 @@ class Settings:
     AEAT_CLIENT_KEY_PATH: Optional[str]
     AEAT_CLIENT_P12_PATH: Optional[str]
     AEAT_CLIENT_P12_PASSWORD: Optional[str]
+    # Contraseña de la clave privada PEM (si el .key está cifrado); distinta de la del .p12
+    AEAT_CLIENT_KEY_PASSWORD: Optional[str]
+
+
+def _parse_debug_flag(*, environment: str) -> bool:
+    """En producción siempre False. En desarrollo por defecto True salvo DEBUG=0/false."""
+    if environment == "production":
+        raw = getenv("DEBUG")
+        if raw is not None and str(raw).strip().lower() in ("1", "true", "yes", "on"):
+            raise RuntimeError("DEBUG no puede ser True cuando ENVIRONMENT=production")
+        return False
+    raw = getenv("DEBUG")
+    if raw is None or str(raw).strip() == "":
+        return True
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
+_DEFAULT_PROD_ALLOWED_HOSTS: tuple[str, ...] = (
+    "app.ablogistics-os.com",
+    "api.ablogistics-os.com",
+    "ablogistics-os.com",
+    "www.ablogistics-os.com",
+    # Permite despliegues en Vercel (p. ej. previews *.vercel.app) detrás de proxy.
+    # TrustedHostMiddleware soporta sufijos con punto inicial para match por subdominio.
+    ".vercel.app",
+    "vercel.app",
+)
+
+
+def _parse_allowed_hosts(*, environment: str) -> tuple[str, ...]:
+    """
+    Lista de Host permitidos para TrustedHostMiddleware.
+    Producción: obligatorio vía ALLOWED_HOSTS (coma-separado) o API_PUBLIC_HOST.
+    Se unen FQDN por defecto (doble dominio + API dedicada) con los definidos en env.
+    Desarrollo: por defecto * (cualquier Host).
+    """
+    raw = (getenv("ALLOWED_HOSTS") or "").strip()
+    if environment == "production":
+        from_env = tuple(h.strip() for h in raw.split(",") if h.strip())
+        api_host = (getenv("API_PUBLIC_HOST") or getenv("PUBLIC_API_HOST") or "").strip()
+        merged_list = list(_DEFAULT_PROD_ALLOWED_HOSTS)
+        if api_host:
+            merged_list.append(api_host)
+        merged_list.extend(from_env)
+        # Sin duplicados, orden estable
+        seen: set[str] = set()
+        out: list[str] = []
+        for h in merged_list:
+            if h and h not in seen:
+                seen.add(h)
+                out.append(h)
+        return tuple(out)
+    if not raw:
+        return ("*",)
+    return tuple(h.strip() for h in raw.split(",") if h.strip())
 
 
 def _require_env(name: str) -> str:
@@ -180,6 +246,9 @@ def get_settings() -> Settings:
     if environment not in ("development", "production"):
         environment = "development"
 
+    debug = _parse_debug_flag(environment=environment)
+    allowed_hosts = _parse_allowed_hosts(environment=environment)
+
     cookie_secure_env = getenv("COOKIE_SECURE")
     if cookie_secure_env is not None and cookie_secure_env.strip() != "":
         cookie_secure = cookie_secure_env.strip().lower() in ("1", "true", "yes")
@@ -203,6 +272,15 @@ def get_settings() -> Settings:
     public_app = _opt("PUBLIC_APP_URL") or _opt("OFFICIAL_FRONTEND_ORIGIN")
     resend_api_key = _opt("RESEND_API_KEY")
     email_from = _opt("EMAIL_FROM_ADDRESS")
+    smtp_host = _opt("SMTP_HOST")
+    smtp_port_raw = getenv("SMTP_PORT")
+    try:
+        smtp_port = int(str(smtp_port_raw).strip()) if smtp_port_raw and str(smtp_port_raw).strip() else 587
+    except ValueError:
+        smtp_port = 587
+    smtp_user = _opt("SMTP_USER")
+    smtp_password = _opt("SMTP_PASSWORD")
+    emails_from_smtp = _opt("EMAILS_FROM_EMAIL") or email_from
     gc_sid = _opt("GOCARDLESS_SECRET_ID")
     gc_skey = _opt("GOCARDLESS_SECRET_KEY")
     gc_access_token = _opt("GOCARDLESS_ACCESS_TOKEN")
@@ -241,15 +319,26 @@ def get_settings() -> Settings:
     aeat_key = _opt("AEAT_CLIENT_KEY_PATH")
     aeat_p12 = _opt("AEAT_CLIENT_P12_PATH")
     aeat_p12_pwd = _opt("AEAT_CLIENT_P12_PASSWORD")
+    aeat_key_pwd = _opt("AEAT_CLIENT_KEY_PASSWORD")
 
     # ─── CORS: producción estricta (dominio oficial); desarrollo incluye localhost ───
     official = (getenv("OFFICIAL_FRONTEND_ORIGIN") or "").strip().rstrip("/")
     cors_extra_raw = getenv("CORS_ALLOW_ORIGINS") or ""
 
+    _default_prod_cors = frozenset(
+        {
+            # Dominios oficiales para llamadas desde el frontend.
+            "https://app.ablogistics-os.com",
+            # API dedicada: permite llamadas cross-origin si algún flujo carga desde api.*.
+            "https://api.ablogistics-os.com",
+            "https://ablogistics-os.com",
+            "https://www.ablogistics-os.com",
+        }
+    )
     if environment == "production":
-        origins_set: set[str] = set()
+        origins_set: set[str] = set(_default_prod_cors)
         if official:
-            origins_set.add(official)
+            origins_set.add(official.rstrip("/"))
         for part in cors_extra_raw.split(","):
             o = part.strip().rstrip("/")
             if o:
@@ -262,7 +351,8 @@ def get_settings() -> Settings:
         cors_allow_origins = frozenset(origins_set)
         cors_re = getenv("CORS_ALLOW_ORIGIN_REGEX")
         if cors_re is None:
-            cors_allow_origin_regex = None
+            # Permite builds/previews de Vercel en caso de que el tráfico llegue desde *.vercel.app.
+            cors_allow_origin_regex = r"^https://[\w.-]+\.vercel\.app$"
         else:
             s = cors_re.strip()
             cors_allow_origin_regex = None if s in ("", "0") else s
@@ -289,6 +379,8 @@ def get_settings() -> Settings:
     return Settings(
         PROJECT_NAME=getenv("PROJECT_NAME") or "AB Logistics OS API",
         ENVIRONMENT=environment,
+        DEBUG=debug,
+        ALLOWED_HOSTS=allowed_hosts,
         SUPABASE_URL=supabase_url,
         SUPABASE_KEY=supabase_key,
         SUPABASE_ANON_KEY=supabase_anon_key,
@@ -314,6 +406,11 @@ def get_settings() -> Settings:
         PUBLIC_APP_URL=public_app,
         RESEND_API_KEY=resend_api_key,
         EMAIL_FROM_ADDRESS=email_from,
+        SMTP_HOST=smtp_host,
+        SMTP_PORT=max(1, min(65535, smtp_port)),
+        SMTP_USER=smtp_user,
+        SMTP_PASSWORD=smtp_password,
+        EMAILS_FROM_EMAIL=emails_from_smtp,
         GOCARDLESS_SECRET_ID=gc_sid,
         GOCARDLESS_SECRET_KEY=gc_skey,
         GOCARDLESS_ACCESS_TOKEN=gc_access_token,
@@ -337,5 +434,6 @@ def get_settings() -> Settings:
         AEAT_CLIENT_KEY_PATH=aeat_key,
         AEAT_CLIENT_P12_PATH=aeat_p12,
         AEAT_CLIENT_P12_PASSWORD=aeat_p12_pwd,
+        AEAT_CLIENT_KEY_PASSWORD=aeat_key_pwd,
     )
 

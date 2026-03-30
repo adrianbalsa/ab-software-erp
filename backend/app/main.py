@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.routes import admin, ai, audit_logs, auth, bank, bancos, clientes, dashboard, eco, empresa, esg, facturas, facturacion, finance, flota, gastos, maps, payments, portes, presupuestos, reports, utils
 from app.core.config import get_settings
@@ -32,6 +33,7 @@ from app.api.v1 import facturas_pdf as facturas_pdf_v1
 from app.api.v1 import finance_dashboard as finance_dashboard_v1
 from app.api.v1 import flota_ubicacion as flota_ubicacion_v1
 from app.api.v1 import flota_dashboard as flota_dashboard_v1
+from app.api.v1 import fleet_analytics as fleet_analytics_v1
 from app.api.v1 import payments_gocardless as payments_gocardless_v1
 from app.api.v1 import stripe
 from app.api.v1 import gastos_combustible as gastos_combustible_v1
@@ -41,6 +43,7 @@ from app.api.v1 import webhooks as webhooks_v1
 from app.api.v1 import webhooks_gocardless as webhooks_gocardless_v1
 from app.api.v1 import portal_cliente as portal_cliente_v1
 from app.api.v1 import portal_onboarding as portal_onboarding_v1
+from app.api.v1 import analytics as analytics_v1
 
 from app.core.alerts import short_traceback_from_exc, schedule_critical_error_alert
 from app.core.rate_limit import SkipOptionsSlowAPIMiddleware, limiter
@@ -80,9 +83,11 @@ def create_app() -> FastAPI:
         description=API_DESCRIPTION,
         version=API_VERSION,
         openapi_tags=OPENAPI_TAGS,
-        docs_url="/openapi/swagger",
-        redoc_url="/openapi/redoc",
-        openapi_url="/openapi/openapi.json",
+        docs_url="/docs",
+        redoc_url="/redoc",
+        openapi_url="/openapi.json",
+        swagger_ui_parameters={"displayRequestDuration": True, "syntaxHighlight.theme": "monokai"},
+        debug=settings.DEBUG,
     )
     attach_custom_openapi(app)
     app.state.limiter = limiter
@@ -115,9 +120,27 @@ def create_app() -> FastAPI:
     # Rate limit por IP (SlowAPI 100/min); login/refresh exentos y 5/min por IP aquí.
     app.add_middleware(SkipOptionsSlowAPIMiddleware)
     app.add_middleware(AuthLoginRateLimitMiddleware)
+    # Primera línea de defensa: Host permitido (API detrás de proxy con --proxy-headers).
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.ALLOWED_HOSTS))
 
     @app.get("/health", tags=["Salud"])
     async def health() -> JSONResponse:
+        """
+        Salud operativa del búnker: conectividad **Supabase PostgREST** (datos).
+        200 si la API de Supabase responde; 503 si no hay conexión.
+        Para chequeo completo (Postgres directo, Redis, PgBouncer) usar ``GET /health/deep``.
+        """
+        from app.core.health_checks import check_supabase_rest
+
+        ok, detail = await check_supabase_rest(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
+        body = {
+            "status": "ok" if ok else "degraded",
+            "supabase": {"ok": ok, "detail": detail},
+        }
+        return JSONResponse(content=body, status_code=200 if ok else 503)
+
+    @app.get("/health/deep", tags=["Salud"])
+    async def health_deep() -> JSONResponse:
         """
         Readiness profundo: Supabase REST, ``FinanceService``, Postgres (``DATABASE_URL``),
         Redis (``REDIS_URL`` opcional), listener TCP de PgBouncer (puerto 6432 o
@@ -194,6 +217,7 @@ def create_app() -> FastAPI:
     app.include_router(flota.router, prefix="/flota", tags=["Flota"])
     app.include_router(flota_ubicacion_v1.router, prefix="/api/v1/flota", tags=["Flota"])
     app.include_router(flota_dashboard_v1.router, prefix="/api/v1/flota", tags=["Flota"])
+    app.include_router(fleet_analytics_v1.router, prefix="/api/v1/fleet", tags=["Flota - Análisis"])
 
     app.include_router(stripe.router, prefix="/api/v1/stripe", tags=["Pagos"])
     app.include_router(payments_gocardless_v1.router, prefix="/api/v1/payments/gocardless", tags=["Pagos"])
@@ -208,7 +232,7 @@ def create_app() -> FastAPI:
     app.include_router(gastos_combustible_v1.router, prefix="/api/v1/gastos", tags=["Gastos"])
     app.include_router(finance_dashboard_v1.router, prefix="/api/v1/finance", tags=["Finanzas"])
     app.include_router(health_v1.router, prefix="/api/v1", tags=["Salud"])
-    app.include_router(verifactu_v1.router, prefix="/api/v1/verifactu", tags=["VeriFactu"])
+    app.include_router(verifactu_v1.router, prefix="/api/v1/verifactu", tags=["Fiscal (AEAT)"])
     app.include_router(audit_logs.router, prefix="/api/v1/audit-logs", tags=["Auditoría API"])
     app.include_router(webhooks_v1.router, prefix="/api/v1/webhooks", tags=["Webhooks B2B"])
     app.include_router(
@@ -224,8 +248,9 @@ def create_app() -> FastAPI:
     app.include_router(
         portal_onboarding_v1.router,
         prefix="/api/v1/portal",
-        tags=["Portal cliente"],
+        tags=["Onboarding"],
     )
+    app.include_router(analytics_v1.router, prefix="/api/v1", tags=["Finanzas"])
 
     return app
 

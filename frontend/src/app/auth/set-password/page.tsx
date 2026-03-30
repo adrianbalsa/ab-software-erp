@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, KeyRound, Loader2, ShieldCheck } from "lucide-react";
 
@@ -14,7 +14,7 @@ function readHashParams(): URLSearchParams {
   return new URLSearchParams(hash);
 }
 
-export default function SetPasswordPage() {
+function SetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -164,3 +164,16 @@ export default function SetPasswordPage() {
   );
 }
 
+export default function SetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
+          <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+        </main>
+      }
+    >
+      <SetPasswordContent />
+    </Suspense>
+  );
+}

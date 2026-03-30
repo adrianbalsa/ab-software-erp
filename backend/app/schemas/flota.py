@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.vehiculo import NormativaEuro
+
 
 class AmortizacionLinealIn(BaseModel):
     valor_inicial: Annotated[float, Field(ge=0)] = 0.0
@@ -44,10 +46,10 @@ class FlotaVehiculoIn(BaseModel):
     """
 
     id: Optional[str] = None
-    vehiculo: str = Field(..., min_length=1, max_length=255)
-    matricula: str = Field(..., min_length=1, max_length=255)
-    precio_compra: float = Field(..., ge=0)
-    km_actual: float = Field(..., ge=0)
+    vehiculo: str = Field(..., min_length=1, max_length=255, description="Alias interno o marca/modelo del vehículo", examples=["Scania R500 Rojo"])
+    matricula: str = Field(..., min_length=1, max_length=255, description="Matrícula oficial del vehículo (sin guiones ni espacios preferiblemente)", examples=["1234ABC"])
+    precio_compra: float = Field(..., ge=0, description="Precio de adquisición en EUR para amortización", examples=[120000.0])
+    km_actual: float = Field(..., ge=0, description="Kilometraje actual del odómetro", examples=[450000.5])
     estado: FlotaEstado
     tipo_motor: FlotaTipoMotor
     itv_vencimiento: Optional[date] = None
@@ -63,6 +65,10 @@ class FlotaVehiculoIn(BaseModel):
     certificacion_emisiones: CertificacionEmisiones = Field(
         default="Euro VI",
         description="Norma de emisiones (ESG auditoría)",
+    )
+    normativa_euro: NormativaEuro = Field(
+        default=NormativaEuro.EURO_VI,
+        description="Normativa EURO aplicada al factor CO₂ kg/km del motor ESG (porte).",
     )
 
 

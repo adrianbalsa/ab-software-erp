@@ -9,8 +9,10 @@ from app.core.rbac import RoleChecker
 from app.schemas.factura import FacturaCreateFromPortes, FacturaGenerateResult
 from app.schemas.porte import PorteCotizarIn, PorteCotizarOut, PorteCreate, PorteOut
 from app.schemas.user import UserOut
+from app.models.webhook import WebhookEventType
 from app.services.facturas_service import FacturasService
 from app.services.portes_service import PorteDomainError, PortesService
+from app.services.webhook_service import dispatch_webhook
 
 
 router = APIRouter()
@@ -34,14 +36,32 @@ async def list_portes(
 @router.post("/", response_model=PorteOut, status_code=status.HTTP_201_CREATED)
 async def create_porte(
     porte_in: PorteCreate,
+    background_tasks: BackgroundTasks,
     current_user: UserOut = Depends(deps.bind_write_context),
     _: None = Depends(RoleChecker(["ADMIN", "GESTOR"])),
     service: PortesService = Depends(deps.get_portes_service),
 ) -> PorteOut:
     try:
-        return await service.create_porte(empresa_id=current_user.empresa_id, porte_in=porte_in)
+        caller_is_owner = str(current_user.rbac_role or "").strip().lower() == "owner"
+        return await service.create_porte(
+            empresa_id=current_user.empresa_id,
+            porte_in=porte_in,
+            caller_is_owner=caller_is_owner,
+        )
     except PorteDomainError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+        detail = str(e)
+        if "Límite de crédito excedido" in detail:
+            dispatch_webhook(
+                empresa_id=str(current_user.empresa_id),
+                event_type=WebhookEventType.CREDIT_LIMIT_EXCEEDED.value,
+                payload={
+                    "cliente_id": str(porte_in.cliente_id),
+                    "reason": "hard_stop_credit",
+                    "detail": detail,
+                },
+                background_tasks=background_tasks,
+            )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail) from e
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 

@@ -1,0 +1,1 @@
+{"project_id": "bmdzpbdyvzkycyfgndvd", "query": "-- DNI/NIE opcional del consignatario (POD).\nALTER TABLE public.portes\n  ADD COLUMN IF NOT EXISTS dni_consignatario text;\n\nCOMMENT ON COLUMN public.portes.dni_consignatario IS 'DNI/NIE del consignatario (opcional, entrega POD).';\n"}

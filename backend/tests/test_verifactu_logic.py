@@ -84,8 +84,9 @@ async def test_emitir_f1_genera_hash_registro_correcto() -> None:
         _data([porte_row]),
         _data([{"nif": "B12345678"}]),
         _data([{"nif": "a87654321"}]),
-        _data([]),
-        _data([factura_row]),
+        _data([]),  # cadena: última factura por empresa
+        _data([]),  # huella: último fingerprint_hash (vacío → génesis)
+        _data([factura_row]),  # insert facturas
         _data([{}]),
         _data([{}]),
         _data([cliente_det]),
@@ -109,7 +110,7 @@ async def test_emitir_f1_genera_hash_registro_correcto() -> None:
 
     assert result.factura.hash_registro == expected_hash
     assert len(expected_hash) == 64
-    assert db.execute.await_count == 12
+    assert db.execute.await_count == 13
 
 
 @pytest.mark.asyncio
@@ -208,6 +209,7 @@ async def test_emitir_r1_rectificativa_vincula_f1_e_importes_negativos() -> None
         _data([]),
         _data([chain_row]),
         _data([{"nif": "A87654321", "nombre": "Cliente QA"}]),
+        _data([]),  # huella: último fingerprint_hash
         _data(
             [
                 {

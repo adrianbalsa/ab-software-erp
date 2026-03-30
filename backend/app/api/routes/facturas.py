@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
 from app.api import deps
 from app.core.rbac import RoleChecker
+from app.db.supabase import SupabaseAsync
 from app.schemas.factura import (
     FacturaCreateFromPortes,
+    FacturaEmailEnviadaOut,
     FacturaGenerateResult,
     FacturaOut,
     FacturaRecalculateIn,
@@ -15,7 +18,8 @@ from app.schemas.factura import (
     FacturaRectificarIn,
 )
 from app.schemas.user import UserOut
-from app.services.email_service import send_invoice_email_from_base64
+from app.services.auditoria_service import AuditoriaService
+from app.services.email_service import EmailService, send_invoice_email_from_base64
 from app.services.facturas_service import FacturasService
 
 
@@ -50,10 +54,17 @@ async def recalcular_totales_factura(
 
 @router.get("/", response_model=list[FacturaOut])
 async def list_facturas(
+    estado_aeat: str | None = Query(
+        None,
+        description="Filtrar por columna aeat_sif_estado (p. ej. aceptado, pendiente).",
+    ),
     current_user: UserOut = Depends(deps.require_role("owner")),
     service: FacturasService = Depends(deps.get_facturas_service),
 ) -> list[FacturaOut]:
-    return await service.list_facturas(empresa_id=current_user.empresa_id)
+    return await service.list_facturas(
+        empresa_id=current_user.empresa_id,
+        estado_aeat=estado_aeat,
+    )
 
 
 @router.post(
@@ -126,6 +137,88 @@ async def rectificar_factura(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/{factura_id}/enviar",
+    response_model=FacturaEmailEnviadaOut,
+    summary="Enviar factura por correo (SMTP)",
+)
+async def enviar_factura_por_email(
+    factura_id: int,
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
+    _tenant_guard: None = Depends(
+        deps.require_tenant_resource(table_name="facturas", path_param="factura_id")
+    ),
+    service: FacturasService = Depends(deps.get_facturas_service),
+    db: SupabaseAsync = Depends(deps.get_db),
+) -> FacturaEmailEnviadaOut:
+    """
+    Genera el PDF al vuelo (misma pipeline que ``GET …/pdf-data``), obtiene el email del cliente
+    y envía el documento por **SMTP** si está configurado (``SMTP_*``, ``EMAILS_FROM_EMAIL``).
+
+    Registra un evento best-effort en ``auditoria`` con la marca temporal del envío.
+    """
+    if not EmailService.smtp_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio SMTP no configurado (SMTP_HOST, SMTP_PORT, EMAILS_FROM_EMAIL).",
+        )
+    try:
+        numero_factura, dest_email = await service.resolve_destinatario_email_factura(
+            empresa_id=current_user.empresa_id,
+            factura_id=factura_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    try:
+        pdf_bytes = await service.generate_factura_pdf_bytes(
+            empresa_id=current_user.empresa_id,
+            factura_id=factura_id,
+        )
+    except ValueError as e:
+        if "no encontrada" in str(e).lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    mailer = EmailService()
+    try:
+        await mailer.send_invoice_email(dest_email, pdf_bytes, numero_factura)
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(e),
+        ) from e
+
+    enviado_en = datetime.now(tz=timezone.utc)
+    audit = AuditoriaService(db)
+    await audit.try_log(
+        empresa_id=str(current_user.empresa_id),
+        accion="ENVIAR_FACTURA_EMAIL",
+        tabla="facturas",
+        registro_id=str(factura_id),
+        cambios={
+            "numero_factura": numero_factura,
+            "destinatario": dest_email,
+            "enviado_en": enviado_en.isoformat(),
+            "canal": "smtp",
+        },
+    )
+
+    return FacturaEmailEnviadaOut(
+        factura_id=factura_id,
+        numero_factura=numero_factura,
+        destinatario=dest_email,
+        enviado_en=enviado_en,
+        mensaje="Factura enviada por correo correctamente.",
+        auditoria={
+            "accion": "ENVIAR_FACTURA_EMAIL",
+            "tabla": "facturas",
+            "registro_id": str(factura_id),
+            "enviado_en": enviado_en.isoformat(),
+        },
+    )
 
 
 @router.post("/{factura_id}/finalizar", response_model=FacturaOut)

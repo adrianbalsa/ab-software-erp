@@ -21,26 +21,31 @@ class EmpresaCreate(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    nif: str = Field(..., min_length=1, max_length=12)
+    nif: str = Field(..., min_length=1, max_length=12, description="NIF o CIF de la empresa legal válido según AEAT", examples=["A12345678"])
     nombre_legal: str = Field(
         ...,
         min_length=1,
         max_length=255,
         validation_alias=AliasChoices("nombre_legal", "nombrelegal"),
+        description="Razón social registrada",
+        examples=["AB Logistics Enterprise S.A."]
     )
     nombre_comercial: str | None = Field(
         default=None,
         max_length=255,
         validation_alias=AliasChoices("nombre_comercial", "nombrecomercial"),
+        description="Nombre de la marca o comercial, si difiere del legal",
+        examples=["AB Logistics"]
     )
-    plan: str = Field(default="starter", min_length=1, max_length=50)
-    email: str | None = Field(default=None, max_length=255)
-    telefono: str | None = Field(default=None, max_length=50)
-    direccion: str | None = Field(default=None, max_length=255)
+    plan: str = Field(default="starter", min_length=1, max_length=50, description="Plan de suscripción (ej: starter, pro, enterprise)", examples=["pro"])
+    email: str | None = Field(default=None, max_length=255, description="Correo electrónico oficial", examples=["contacto@ablogistics.com"])
+    telefono: str | None = Field(default=None, max_length=50, description="Teléfono corporativo", examples=["+34 91 123 45 67"])
+    direccion: str | None = Field(default=None, max_length=255, description="Sede o dirección principal", examples=["Av. Transporte 42, Planta 3"])
     iban: str | None = Field(
         default=None,
         max_length=34,
-        description="IBAN (se persiste cifrado en aplicación; columna opcional en BD)",
+        description="IBAN bancario (se persiste cifrado en base de datos)",
+        examples=["ES9121000418451234567890"]
     )
     activa: bool = True
 

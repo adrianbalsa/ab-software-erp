@@ -106,6 +106,62 @@ class SupabaseAsync:
 
         return await anyio.to_thread.run_sync(_call)
 
+    async def auth_admin_generate_link(
+        self,
+        *,
+        email: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> Any:
+        def _call() -> Any:
+            payload: dict[str, Any] = {
+                "type": "invite",
+                "email": email,
+                "options": {"data": metadata or {}},
+            }
+            return self._client.auth.admin.generate_link(payload)
+
+        return await anyio.to_thread.run_sync(_call)
+
+
+def _extract_action_link(raw: Any) -> str | None:
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        direct = raw.get("action_link") or raw.get("actionLink")
+        if isinstance(direct, str) and direct.strip():
+            return direct.strip()
+        data = raw.get("data")
+        if isinstance(data, dict):
+            nested = data.get("action_link") or data.get("actionLink")
+            if isinstance(nested, str) and nested.strip():
+                return nested.strip()
+    data_attr = getattr(raw, "data", None)
+    if isinstance(data_attr, dict):
+        nested_attr = data_attr.get("action_link") or data_attr.get("actionLink")
+        if isinstance(nested_attr, str) and nested_attr.strip():
+            return nested_attr.strip()
+    for attr in ("action_link", "actionLink"):
+        value = getattr(raw, attr, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+async def auth_admin_generate_link(email: str, metadata: dict[str, Any]) -> str:
+    """
+    Genera magic link de invitación con cliente admin (service role).
+    """
+    db_admin = await get_supabase(
+        jwt_token=None,
+        allow_service_role_bypass=True,
+        log_service_bypass_warning=False,
+    )
+    raw = await db_admin.auth_admin_generate_link(email=email, metadata=metadata)
+    link = _extract_action_link(raw)
+    if not link:
+        raise RuntimeError("No se pudo generar action_link de onboarding")
+    return link
+
 
 @dataclass(frozen=True, slots=True)
 class SupabaseDeps:

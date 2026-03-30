@@ -1,3 +1,4 @@
+# Instalación local para tests y CI: pip install -r requirements-dev.txt
 fastapi==0.109.0
 uvicorn==0.27.0
 gunicorn>=22.0.0
@@ -7,6 +8,9 @@ sentry-sdk[fastapi]>=2.19.0
 python-jose[cryptography]==3.3.0
 # Fernet (cifrado en reposo: IBAN, tokens bancarios, etc.)
 cryptography>=42.0.0
+# VeriFactu / AEAT: firma XML XAdES-BES (XML-DSig envuelto + metadatos ETSI)
+signxml>=4.0.0
+lxml>=5.0.0
 httpx>=0.27.0
 googlemaps>=4.10.0
 passlib[argon2]==1.7.4

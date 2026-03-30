@@ -23,6 +23,7 @@ limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 RATE_LIMIT_EXEMPT_PATHS: frozenset[str] = frozenset(
     {
         "/health",
+        "/health/deep",
         "/ready",
         "/openapi/swagger",
         "/openapi/redoc",

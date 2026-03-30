@@ -12,9 +12,9 @@ type Props = {
 };
 
 function borderForPrioridad(p: FleetAlert["prioridad"]): string {
-  if (p === "alta") return "border-red-500/80 bg-red-50/90 shadow-sm shadow-red-200/40";
-  if (p === "media") return "border-amber-400/90 bg-amber-50/90 shadow-sm shadow-amber-200/40";
-  return "border-amber-200/80 bg-slate-50/80";
+  if (p === "alta") return "border-red-800 bg-red-100 text-red-950 shadow-sm";
+  if (p === "media") return "border-amber-800 bg-amber-100 text-amber-950 shadow-sm";
+  return "border-slate-500 bg-slate-100 text-slate-900";
 }
 
 export function AlertasCriticas({ alerts, loading, error, onRetry }: Props) {
@@ -38,7 +38,8 @@ export function AlertasCriticas({ alerts, loading, error, onRetry }: Props) {
             type="button"
             onClick={onRetry}
             disabled={loading}
-            className="text-xs font-semibold text-[#2563eb] hover:underline disabled:opacity-50"
+            aria-label={loading ? "Actualizando alertas de flota" : "Actualizar alertas de flota"}
+            className="text-xs font-semibold text-[#1d4ed8] hover:underline disabled:opacity-50"
           >
             {loading ? "Actualizando…" : "Actualizar"}
           </button>
@@ -47,7 +48,7 @@ export function AlertasCriticas({ alerts, loading, error, onRetry }: Props) {
 
       <div className="p-6">
         {error && (
-          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4">
+          <p className="text-sm text-amber-950 bg-amber-50 border-2 border-amber-700 rounded-xl px-3 py-2 mb-4">
             {error}
           </p>
         )}
@@ -87,7 +88,7 @@ export function AlertasCriticas({ alerts, loading, error, onRetry }: Props) {
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-700">
                     {a.tipo === "itv_vencimiento" && "ITV"}
                     {a.tipo === "seguro_vencimiento" && "Seguro"}
                     {a.tipo === "proxima_revision_km" && "Revisión km"}
@@ -95,10 +96,10 @@ export function AlertasCriticas({ alerts, loading, error, onRetry }: Props) {
                     <span
                       className={
                         a.prioridad === "alta"
-                          ? "text-red-700"
+                          ? "text-red-950"
                           : a.prioridad === "media"
-                            ? "text-amber-800"
-                            : "text-slate-600"
+                            ? "text-amber-950"
+                            : "text-slate-900"
                       }
                     >
                       Prioridad {a.prioridad}

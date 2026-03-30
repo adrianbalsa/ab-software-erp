@@ -16,6 +16,9 @@ router = APIRouter()
 async def get_factura_pdf_data(
     factura_id: int,
     current_user: UserOut = Depends(deps.require_role("owner")),
+    _tenant_guard: None = Depends(
+        deps.require_tenant_resource(table_name="facturas", path_param="factura_id")
+    ),
     service: FacturasService = Depends(deps.get_facturas_service),
 ) -> FacturaPdfDataOut:
     """

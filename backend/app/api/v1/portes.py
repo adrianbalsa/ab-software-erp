@@ -24,6 +24,9 @@ router = APIRouter()
 async def get_porte_cmr_data(
     porte_id: UUID,
     current_user: UserOut = Depends(deps.get_current_user),
+    _tenant_guard: None = Depends(
+        deps.require_tenant_resource(table_name="portes", path_param="porte_id")
+    ),
     service: PortesService = Depends(deps.get_portes_service),
 ) -> CmrDataOut:
     """
@@ -44,6 +47,9 @@ async def firmar_entrega(
     porte_id: UUID,
     body: FirmaEntregaIn,
     current_user: UserOut = Depends(deps.bind_write_context),
+    _tenant_guard: None = Depends(
+        deps.require_tenant_resource(table_name="portes", path_param="porte_id")
+    ),
     service: PortesService = Depends(deps.get_portes_service),
 ) -> FirmaEntregaOut:
     """
@@ -82,6 +88,9 @@ async def firmar_entrega(
 async def descargar_albaran_entrega(
     porte_id: UUID,
     current_user: UserOut = Depends(deps.get_current_user),
+    _tenant_guard: None = Depends(
+        deps.require_tenant_resource(table_name="portes", path_param="porte_id")
+    ),
     service: PortesService = Depends(deps.get_portes_service),
 ) -> StreamingResponse:
     """PDF albarán con firma incrustada (tras entrega confirmada)."""

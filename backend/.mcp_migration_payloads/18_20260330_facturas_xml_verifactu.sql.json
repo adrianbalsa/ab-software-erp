@@ -1,0 +1,1 @@
+{"project_id": "bmdzpbdyvzkycyfgndvd", "query": "-- XML de alta VeriFactu (registro exportable / trazabilidad) persistido con la factura.\nALTER TABLE public.facturas\n  ADD COLUMN IF NOT EXISTS xml_verifactu TEXT;\n\nCOMMENT ON COLUMN public.facturas.xml_verifactu IS\n  'XML UTF-8 de registro VeriFactu (Cabecera, RegistroFactura, Desglose) generado al sellar el hash';\n"}

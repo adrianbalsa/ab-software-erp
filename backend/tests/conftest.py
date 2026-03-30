@@ -186,7 +186,11 @@ async def client(monkeypatch: pytest.MonkeyPatch):
     from app.main import create_app
 
     application = create_app()
-    transport = ASGITransport(app=application)
+    # httpx 0.28+: lifespan="on" ejecuta startup/shutdown de FastAPI en tests.
+    try:
+        transport = ASGITransport(app=application, lifespan="on")
+    except TypeError:
+        transport = ASGITransport(app=application)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 

@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import RiskAssessmentCard from "@/components/auth/RiskAssessmentCard";
 import { Loader2 } from "lucide-react";
 import { fetchPortalMyRisk, postPortalAcceptRisk } from "@/lib/api";
 
-export default function OnboardingPage() {
+function OnboardingContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = searchParams.get("token"); // Token de la invitación de Supabase
@@ -97,5 +97,19 @@ export default function OnboardingPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      }
+    >
+      <OnboardingContent />
+    </Suspense>
   );
 }

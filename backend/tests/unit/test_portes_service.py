@@ -44,8 +44,16 @@ class _FakeQuery:
 
 
 class _FakeDb:
-    def __init__(self, *, client_row: dict[str, Any] | None) -> None:
+    def __init__(
+        self,
+        *,
+        client_row: dict[str, Any] | None,
+        facturas_rows: list[dict[str, Any]] | None = None,
+        portes_rows: list[dict[str, Any]] | None = None,
+    ) -> None:
         self.client_row = client_row
+        self.facturas_rows = list(facturas_rows or [])
+        self.portes_rows = list(portes_rows or [])
         self.inserted_porte: dict[str, Any] | None = None
 
     def table(self, name: str) -> _FakeQuery:
@@ -54,6 +62,10 @@ class _FakeDb:
     async def execute(self, query: _FakeQuery) -> _FakeResult:
         if query.table == "clientes" and query.action == "select":
             return _FakeResult(data=[self.client_row] if self.client_row is not None else [])
+        if query.table == "facturas" and query.action == "select":
+            return _FakeResult(data=self.facturas_rows)
+        if query.table == "portes" and query.action == "select":
+            return _FakeResult(data=self.portes_rows)
         if query.table == "portes" and query.action == "insert":
             row = {"id": "22222222-2222-2222-2222-222222222222", **query.payload}
             self.inserted_porte = row
@@ -66,12 +78,15 @@ class _FakeMaps:
         return 120.0
 
 
+CID = "11111111-1111-1111-1111-111111111111"
+
+
 @pytest.mark.asyncio
 async def test_create_porte_denied_when_cliente_risk_not_accepted() -> None:
-    db = _FakeDb(client_row={"id": "c1", "riesgo_aceptado": False})
+    db = _FakeDb(client_row={"id": CID, "riesgo_aceptado": False, "limite_credito": 5000.0})
     svc = PortesService(db=db, maps=_FakeMaps())
     payload = PorteCreate(
-        cliente_id=UUID("11111111-1111-1111-1111-111111111111"),
+        cliente_id=UUID(CID),
         fecha=date(2026, 1, 10),
         origen="Madrid",
         destino="Valencia",
@@ -94,10 +109,14 @@ async def test_create_porte_denied_when_cliente_risk_not_accepted() -> None:
 
 @pytest.mark.asyncio
 async def test_create_porte_allows_when_cliente_risk_accepted() -> None:
-    db = _FakeDb(client_row={"id": "c1", "riesgo_aceptado": True})
+    db = _FakeDb(
+        client_row={"id": CID, "riesgo_aceptado": True, "limite_credito": 50_000.0},
+        facturas_rows=[],
+        portes_rows=[],
+    )
     svc = PortesService(db=db, maps=_FakeMaps())
     payload = PorteCreate(
-        cliente_id=UUID("11111111-1111-1111-1111-111111111111"),
+        cliente_id=UUID(CID),
         fecha=date(2026, 1, 10),
         origen="Madrid",
         destino="Valencia",
@@ -116,3 +135,75 @@ async def test_create_porte_allows_when_cliente_risk_accepted() -> None:
     assert out.origen == "Madrid"
     assert db.inserted_porte is not None
 
+
+@pytest.mark.asyncio
+async def test_create_porte_denied_when_credit_limit_exceeded() -> None:
+    db = _FakeDb(
+        client_row={"id": CID, "riesgo_aceptado": True, "limite_credito": 1000.0},
+        facturas_rows=[
+            {
+                "cliente": CID,
+                "total_factura": 900.0,
+                "estado_cobro": "pendiente",
+                "fecha_emision": "2026-01-01",
+            },
+        ],
+        portes_rows=[],
+    )
+    svc = PortesService(db=db, maps=_FakeMaps())
+    payload = PorteCreate(
+        cliente_id=UUID(CID),
+        fecha=date(2026, 1, 10),
+        origen="Madrid",
+        destino="Valencia",
+        km_estimados=350,
+        bultos=8,
+        descripcion="Carga general",
+        precio_pactado=200.0,
+    )
+
+    with pytest.raises(
+        PorteDomainError,
+        match="Límite de crédito excedido. No se pueden asignar más portes a este cliente.",
+    ):
+        await svc.create_porte(
+            empresa_id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            porte_in=payload,
+            caller_is_owner=False,
+        )
+    assert db.inserted_porte is None
+
+
+@pytest.mark.asyncio
+async def test_create_porte_allows_credit_overflow_when_owner_bypass() -> None:
+    db = _FakeDb(
+        client_row={"id": CID, "riesgo_aceptado": True, "limite_credito": 1000.0},
+        facturas_rows=[
+            {
+                "cliente": CID,
+                "total_factura": 900.0,
+                "estado_cobro": "pendiente",
+                "fecha_emision": "2026-01-01",
+            },
+        ],
+        portes_rows=[],
+    )
+    svc = PortesService(db=db, maps=_FakeMaps())
+    payload = PorteCreate(
+        cliente_id=UUID(CID),
+        fecha=date(2026, 1, 10),
+        origen="Madrid",
+        destino="Valencia",
+        km_estimados=350,
+        bultos=8,
+        descripcion="Carga general",
+        precio_pactado=200.0,
+    )
+
+    out = await svc.create_porte(
+        empresa_id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        porte_in=payload,
+        caller_is_owner=True,
+    )
+    assert out.id
+    assert db.inserted_porte is not None

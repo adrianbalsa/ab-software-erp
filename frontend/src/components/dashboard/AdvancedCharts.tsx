@@ -32,6 +32,33 @@ function formatEUR(n: number) {
   });
 }
 
+/** Coerción segura para valores de Recharts (Tooltip / ejes), que pueden ser undefined o arrays. */
+function toFiniteNumber(value: unknown, fallback = 0): number {
+  if (value == null || value === "") return fallback;
+  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+  if (Array.isArray(value)) {
+    const n = Number(value[0]);
+    return Number.isFinite(n) ? n : fallback;
+  }
+  return fallback;
+}
+
+function formatTooltipEUR(value: unknown): string {
+  const n = toFiniteNumber(value, 0);
+  return formatEUR(Number.isFinite(n) ? n : 0);
+}
+
+function formatTooltipEurPerKm(value: unknown): string {
+  if (value == null || value === "") return "—";
+  const n = toFiniteNumber(value, NaN);
+  if (Number.isNaN(n)) return "—";
+  return `${n.toFixed(2)} €/km`;
+}
+
 function formatPeriodLabel(yyyyMm: string) {
   const [y, m] = yyyyMm.split("-").map(Number);
   if (!y || !m) return yyyyMm;
@@ -191,10 +218,21 @@ export function AdvancedCharts() {
                 <BarChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200" />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} className="text-zinc-500" />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) => `${Math.round(toFiniteNumber(v, 0) / 1000)}k`}
+                  />
                   <Tooltip
-                    formatter={(v: number | string) => formatEUR(Number(v))}
-                    labelFormatter={(_, p) => (p?.[0]?.payload?.periodo as string) ?? ""}
+                    formatter={(value: number | string | ReadonlyArray<number | string> | undefined) =>
+                      formatTooltipEUR(value)
+                    }
+                    labelFormatter={(_, p) => {
+                      const first = Array.isArray(p) ? p[0] : undefined;
+                      const row = first && typeof first === "object" && "payload" in first
+                        ? (first as { payload?: ChartRow }).payload
+                        : undefined;
+                      return row?.periodo ?? "";
+                    }}
                   />
                   <Legend />
                   <Bar dataKey="ingresos" name="Ingresos" fill="#22c55e" radius={[4, 4, 0, 0]} />
@@ -216,14 +254,12 @@ export function AdvancedCharts() {
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                   <YAxis
                     tick={{ fontSize: 11 }}
-                    tickFormatter={(v) => `${Number(v).toFixed(2)} €`}
+                    tickFormatter={(v) => `${toFiniteNumber(v, 0).toFixed(2)} €`}
                     domain={["auto", "auto"]}
                   />
                   <Tooltip
-                    formatter={(v: number | string) =>
-                      v == null || v === ""
-                        ? "—"
-                        : `${Number(v).toFixed(2)} €/km`
+                    formatter={(value: number | string | ReadonlyArray<number | string> | undefined) =>
+                      formatTooltipEurPerKm(value)
                     }
                   />
                   <Legend />
@@ -252,18 +288,23 @@ export function AdvancedCharts() {
                   <YAxis
                     yAxisId="eur"
                     tick={{ fontSize: 11 }}
-                    tickFormatter={(v) => `${Math.round(v / 1000)}k`}
+                    tickFormatter={(v) => `${Math.round(toFiniteNumber(v, 0) / 1000)}k`}
                   />
                   <YAxis
                     yAxisId="co2"
                     orientation="right"
                     tick={{ fontSize: 11 }}
-                    tickFormatter={(v) => `${v}`}
+                    tickFormatter={(v) => String(toFiniteNumber(v, 0))}
                   />
                   <Tooltip
-                    formatter={(v: number | string, name: string) => {
-                      if (name === "Ingresos") return formatEUR(Number(v));
-                      return `${Number(v).toFixed(1)} kg`;
+                    formatter={(
+                      value: number | string | ReadonlyArray<number | string> | undefined,
+                      name,
+                    ) => {
+                      const n = toFiniteNumber(value, 0);
+                      const label = String(name ?? "");
+                      if (label === "Ingresos") return formatEUR(n);
+                      return `${n.toFixed(1)} kg`;
                     }}
                   />
                   <Legend />

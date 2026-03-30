@@ -1,36 +1,63 @@
-import type { Metadata } from "next";
+"use client";
 
-import { LandingFAQ } from "@/components/landing/LandingFAQ";
-import { LandingFooter } from "@/components/landing/LandingFooter";
-import { LandingHeader } from "@/components/landing/LandingHeader";
-import { LandingHero } from "@/components/landing/LandingHero";
-import { LandingHeroMotion } from "@/components/landing/LandingHeroMotion";
-import { LandingHowItWorks } from "@/components/landing/LandingHowItWorks";
-import { LandingMoats } from "@/components/landing/LandingMoats";
-import { LandingPricing } from "@/components/landing/LandingPricing";
-import { LandingROISimulator } from "@/components/landing/LandingROISimulator";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { LoginForm } from "@/components/auth/LoginForm";
 
-export const metadata: Metadata = {
-  title: "AB Logistics OS | Sistema operativo para flotas inteligentes",
-  description:
-    "Margen por km, VeriFactu 2026, huella de carbono y EBITDA real. Dashboard unificado para transporte B2B.",
-};
+/**
+ * Entrada del subdominio app: solo acceso al sistema (sin marketing).
+ * Sesión iniciada → cuadro de mando; si no, formulario de login.
+ */
+function HomeContent() {
+  const router = useRouter();
+  const [checked, setChecked] = useState(false);
+  const [hasToken, setHasToken] = useState(false);
 
-export default function LandingPage() {
+  useEffect(() => {
+    try {
+      const t = localStorage.getItem("jwt_token");
+      if (t) {
+        setHasToken(true);
+        router.replace("/dashboard");
+      } else {
+        setHasToken(false);
+      }
+    } catch {
+      setHasToken(false);
+    } finally {
+      setChecked(true);
+    }
+  }, [router]);
+
+  if (!checked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f4f6fb] text-slate-500">
+        Cargando…
+      </div>
+    );
+  }
+
+  if (hasToken) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f4f6fb] text-slate-500">
+        Redirigiendo…
+      </div>
+    );
+  }
+
+  return <LoginForm hideBackToMarketing />;
+}
+
+export default function HomePage() {
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-100">
-      <LandingHeader />
-      <main>
-        <LandingHeroMotion>
-          <LandingHero />
-        </LandingHeroMotion>
-        <LandingROISimulator />
-        <LandingMoats />
-        <LandingHowItWorks />
-        <LandingPricing />
-        <LandingFAQ />
-      </main>
-      <LandingFooter />
-    </div>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-[#f4f6fb] text-slate-500">
+          Cargando…
+        </div>
+      }
+    >
+      <HomeContent />
+    </Suspense>
   );
 }

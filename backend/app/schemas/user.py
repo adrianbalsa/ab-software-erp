@@ -31,7 +31,7 @@ class UserOut(BaseModel):
     rol: str = Field(default="user", description="Rol legado panel admin (profiles.rol / usuarios.rol)")
     rbac_role: str = Field(
         default="owner",
-        description="Rol RBAC operativo: owner | traffic_manager | driver | cliente (profiles.role)",
+        description="Rol RBAC operativo: owner | traffic_manager | driver | cliente | developer (profiles.role)",
     )
     cliente_id: UUID | None = Field(
         default=None,

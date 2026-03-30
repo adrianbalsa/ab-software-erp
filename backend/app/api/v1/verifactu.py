@@ -7,19 +7,24 @@ from fastapi import APIRouter, Depends, Query, Request
 from app.api import deps
 from app.core.alerts import schedule_critical_error_alert
 from app.core.verifactu import verify_invoice_chain
-from app.core.verifactu_qr import generate_verifactu_qr
+from app.core.verifactu_qr import generate_verifactu_qr_with_url
 from app.core.crypto import pii_crypto
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserOut
 from app.services.verifactu_service import VerifactuService
 
-router = APIRouter()
+from pydantic import BaseModel
 
+class HTTPError(BaseModel):
+    detail: str
+
+router = APIRouter()
 
 @router.get(
     "/verificar-cadena",
     summary="Verificar cadena de hash VeriFactu",
+    responses={404: {"description": "No encontrado", "model": HTTPError}, 400: {"description": "Petición inválida", "model": HTTPError}}
 )
 async def verificar_cadena(
     request: Request,
@@ -48,6 +53,7 @@ async def verificar_cadena(
 @router.get(
     "/audit/verify-chain",
     summary="Auditoría de integridad de cadena fiscal",
+    responses={404: {"description": "No encontrado", "model": HTTPError}, 400: {"description": "Parámetros inválidos", "model": HTTPError}}
 )
 async def audit_verify_chain(
     ejercicio: int | None = Query(default=None, ge=2000, le=2100),
@@ -79,10 +85,17 @@ async def audit_verify_chain(
 @router.get(
     "/audit/qr-preview/{factura_id}",
     summary="Previsualización QR VeriFactu de factura",
+    responses={
+        404: {"description": "Factura no encontrada o sin acceso", "model": HTTPError},
+        400: {"description": "Petición inválida", "model": HTTPError}
+    }
 )
 async def audit_qr_preview(
     factura_id: int,
     _: UserOut = Depends(deps.require_role("owner")),
+    _tenant_guard: None = Depends(
+        deps.require_tenant_resource(table_name="facturas", path_param="factura_id")
+    ),
     db: SupabaseAsync = Depends(deps.get_db),
     current_user: UserOut = Depends(deps.get_current_user),
 ) -> dict[str, object]:
@@ -101,14 +114,13 @@ async def audit_qr_preview(
     row = dict(rows[0])
     raw_nif = str(row.get("nif_emisor") or "").strip()
     nif_plain = pii_crypto.decrypt_pii(raw_nif) or raw_nif
-    qr_bytes = generate_verifactu_qr(
-        {
-            "nif_emisor": nif_plain,
-            "num_factura": row.get("num_factura") or row.get("numero_factura"),
-            "fecha_expedicion": row.get("fecha_emision"),
-            "importe_total": row.get("total_factura"),
-        }
-    )
+    invoice_payload = {
+        "nif_emisor": nif_plain,
+        "num_factura": row.get("num_factura") or row.get("numero_factura"),
+        "fecha_expedicion": row.get("fecha_emision"),
+        "importe_total": row.get("total_factura"),
+    }
+    qr_bytes, aeat_url = generate_verifactu_qr_with_url(invoice_payload)
     return {
         "found": True,
         "factura_id": row.get("id"),
@@ -116,5 +128,6 @@ async def audit_qr_preview(
         "fecha_emision": row.get("fecha_emision"),
         "total_factura": row.get("total_factura"),
         "fingerprint_hash": row.get("fingerprint_hash"),
+        "aeat_url": aeat_url,
         "qr_png_base64": base64.b64encode(qr_bytes).decode("ascii"),
     }

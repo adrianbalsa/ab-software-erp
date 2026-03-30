@@ -1,0 +1,1 @@
+{"project_id": "bmdzpbdyvzkycyfgndvd", "query": "-- Campo de emisiones simplificado para reportes financieros ESG.\nalter table if exists public.portes\nadd column if not exists co2_kg numeric;\n\n-- Backfill inicial desde campo legacy si existe valor.\nupdate public.portes\nset co2_kg = coalesce(co2_kg, co2_emitido)\nwhere co2_kg is null;\n"}

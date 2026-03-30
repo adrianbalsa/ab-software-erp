@@ -14,19 +14,25 @@ PorteEstado = Literal["pendiente", "Entregado", "facturado"]
 
 
 class PorteCreate(BaseModel):
-    cliente_id: UUID = Field(..., description="ID del cliente/cargador (FK clientes)")
-    fecha: date = Field(..., description="Fecha de servicio")
-    origen: str = Field(..., min_length=1, max_length=255)
-    destino: str = Field(..., min_length=1, max_length=255)
-    km_estimados: float = Field(default=0.0, ge=0)
-    bultos: int = Field(default=1, ge=1)
+    cliente_id: UUID = Field(..., description="ID del cliente/cargador (FK clientes)", examples=["123e4567-e89b-12d3-a456-426614174000"])
+    fecha: date = Field(..., description="Fecha programada de servicio", examples=["2026-04-15"])
+    origen: str = Field(..., min_length=1, max_length=255, description="Dirección de carga", examples=["Madrid, Centro Logístico Sur"])
+    destino: str = Field(..., min_length=1, max_length=255, description="Dirección de descarga", examples=["Barcelona, Polígono Zona Franca"])
+    km_estimados: float = Field(default=0.0, ge=0, description="Distancia estimada en kilómetros", examples=[620.5])
+    bultos: int = Field(default=1, ge=1, description="Número de bultos o palets", examples=[33])
     peso_ton: float | None = Field(
         default=None,
         ge=0,
         description="Peso de carga en toneladas (ESG); si no se envía, se estima desde bultos",
+        examples=[24.0]
     )
-    descripcion: str | None = Field(default=None, max_length=500)
-    precio_pactado: float = Field(..., gt=0, description="Precio pactado en EUR")
+    descripcion: str | None = Field(default=None, max_length=500, description="Observaciones del porte", examples=["Carga paletizada refrigerada"])
+    precio_pactado: float = Field(..., gt=0, description="Precio pactado en EUR (sin impuestos)", examples=[1250.0])
+    vehiculo_id: UUID | None = Field(
+        default=None,
+        description="Vehículo de flota (public.flota.id) asignado al porte; determina normativa EURO del CO₂.",
+        examples=["456e4567-e89b-12d3-a456-426614174001"]
+    )
 
 
 class PorteOut(BaseModel):
@@ -49,6 +55,10 @@ class PorteOut(BaseModel):
     precio_pactado: float | None = Field(
         default=None,
         description="Oculto (null) en API para rol driver.",
+    )
+    vehiculo_id: UUID | None = Field(
+        default=None,
+        description="Vehículo de flota asignado (public.flota.id).",
     )
     co2_emitido: float | None = Field(
         default=None,

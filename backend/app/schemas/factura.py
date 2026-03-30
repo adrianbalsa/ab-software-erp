@@ -30,11 +30,12 @@ class FacturaCreateFromPortes(BaseModel):
     pendientes y pertenecer al ``cliente_id`` indicado).
     """
 
-    cliente_id: UUID = Field(..., description="ID del cliente/cargador (FK clientes)")
-    iva_porcentaje: Annotated[float, Field(ge=0, le=100)] = 21.0
+    cliente_id: UUID = Field(..., description="ID del cliente/cargador (FK clientes)", examples=["123e4567-e89b-12d3-a456-426614174000"])
+    iva_porcentaje: Annotated[float, Field(ge=0, le=100, description="Porcentaje de IVA a aplicar", examples=[21.0])] = 21.0
     porte_ids: list[UUID] | None = Field(
         default=None,
         description="Opcional: subconjunto de IDs de portes pendientes a incluir en la factura",
+        examples=[["123e4567-e89b-12d3-a456-426614174001"]]
     )
 
 
@@ -271,3 +272,17 @@ class FacturaPdfDataOut(BaseModel):
     )
     def _ser_pdf_totals(self, v: float) -> float:
         return as_float_fiat(v)
+
+
+class FacturaEmailEnviadaOut(BaseModel):
+    """Respuesta tras enviar la factura por SMTP (auditoría de envío)."""
+
+    factura_id: int
+    numero_factura: str
+    destinatario: str = Field(..., description="Correo del cliente al que se envió el PDF")
+    enviado_en: datetime = Field(..., description="Marca temporal UTC del envío")
+    mensaje: str = Field(default="Factura enviada por correo correctamente.")
+    auditoria: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Metadatos de trazabilidad (acción, canal, registro)",
+    )

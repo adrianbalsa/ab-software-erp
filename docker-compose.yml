@@ -1,58 +1,129 @@
-# AB Logistics OS — stack local (desarrollo / smoke)
-# Copia variables sensibles a `.env` en la raíz (no versionar).
-# REDIS_URL para el backend se fuerza al servicio `redis` de esta red.
+# AB Logistics OS - Orquestación de Producción
+# --------------------------------------------
+# Contiene los servicios Backend (API), Frontend (Web), Redis (Caché/Rate-limit)
+# y Nginx (Proxy inverso para 80/443 y logs).
 
 services:
   redis:
     image: redis:7-alpine
+    restart: always
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
       start_period: 5s
+    networks:
+      - ab_logistics_net
 
-  backend:
+  api:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    restart: always
     env_file:
       - .env
     environment:
-      # Rate limiting / webhooks (prioridad sobre .env)
+      # Sobreescribimos REDIS_URL para que apunte al contenedor local
       REDIS_URL: redis://redis:6379/0
-    ports:
-      - "8000:8000"
+      # Concurrencia de Uvicorn (optimizada)
+      WEB_CONCURRENCY: "4"
+    volumes:
+      - api_logs:/app/logs
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ab_logistics_net
+    # No exponemos el puerto 8000 directamente al host; nginx gestionará el tráfico
 
-  frontend:
+  web:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
+        # Pasa estas variables a tiempo de build para inyectarlas en estáticos de Next.js.
+        # En producción, usa un archivo .env que Docker Compose leerá automáticamente
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.ablogistics-os.com}
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-https://api.ablogistics-os.com}
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-}
         NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-}
         NEXT_PUBLIC_MAPS_API_KEY: ${NEXT_PUBLIC_MAPS_API_KEY:-}
         NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+    restart: always
     env_file:
       - .env
     environment:
-      # Runtime (opcional; el bundle ya inlinó NEXT_PUBLIC_* en build)
       NODE_ENV: production
-    ports:
-      - "3000:3000"
+      PORT: 3000
+    volumes:
+      - web_logs:/app/logs
     depends_on:
-      - backend
-      - redis
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - ab_logistics_net
+    # Tampoco exponemos el 3000 directamente, pasa a través de Nginx.
+
+  landing:
+    build:
+      context: ./landing
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: "0.0.0.0"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    networks:
+      - ab_logistics_net
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+      landing:
+        condition: service_healthy
+    networks:
+      - ab_logistics_net
 
 volumes:
   redis_data:
+  api_logs:
+  web_logs:
+  nginx_logs:
+
+networks:
+  ab_logistics_net:
+    driver: bridge

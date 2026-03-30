@@ -1,25 +1,28 @@
-# AB Logistics OS — Next.js (multi-stage, standalone, usuario no-root)
+# AB Logistics OS — Next.js Producción (multi-stage, standalone, usuario no-root)
 # Contexto de build: carpeta frontend/
 
-# ─── Dependencias npm (capa cacheable) ─────────────────────────────────────
+# ─── 1. Etapa: Dependencias npm (capa cacheable) ─────────────────────────
 FROM node:20-alpine AS deps
 WORKDIR /app
 
+# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine para saber por qué es útil.
 RUN apk add --no-cache libc6-compat
 
+# Instalamos únicamente dependencias necesarias para compilar y ejecutar
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# ─── Build de producción ───────────────────────────────────────────────────
+# ─── 2. Etapa: Build de producción ───────────────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=production
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Variables públicas inlinadas en el bundle (definir en docker-compose build.args)
+# Variables públicas inyectadas al bundle (definir en docker-compose args).
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_API_BASE_URL
 ARG NEXT_PUBLIC_API_BASE
@@ -35,19 +38,28 @@ ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
 
 RUN npm run build
 
-# ─── Runtime mínimo (solo standalone + estáticos) ─────────────────────────
+# ─── 3. Etapa: Runtime mínimo (solo standalone + estáticos) ──────────────
 FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
-    HOSTNAME=0.0.0.0
+    HOSTNAME="0.0.0.0"
 
+# curl: healthchecks Docker Compose (GET /)
+RUN apk add --no-cache curl
+
+# Creamos usuario no root
 RUN addgroup --system --gid 1001 nodejs \
-    && adduser --system --uid 1001 nextjs
+    && adduser --system --uid 1001 nextjs \
+    && mkdir -p /app/logs \
+    && chown nextjs:nodejs /app/logs
 
+# Archivos estáticos
 COPY --from=builder /app/public ./public
+
+# Modo Standalone de Next.js (reduce el tamaño de la imagen excluyendo dependencias no utilizadas)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
@@ -55,4 +67,5 @@ USER nextjs
 
 EXPOSE 3000
 
+# Iniciamos el servidor compilado optimizado (server.js se genera con Next.js standalone output)
 CMD ["node", "server.js"]

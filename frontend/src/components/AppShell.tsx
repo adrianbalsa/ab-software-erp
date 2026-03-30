@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
+  BarChart3,
   Car,
   CreditCard,
   FileText,
@@ -26,7 +28,9 @@ import {
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 
+import { ConfiguracionNavSection } from "@/components/layout/Sidebar";
 import { QuotaStatusCard } from "@/components/QuotaStatusCard";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useRole } from "@/hooks/useRole";
 import type { AppRbacRole } from "@/lib/api";
 
@@ -54,10 +58,13 @@ type Props = {
     | "admin"
     | "seguridad"
     | "flota"
+    | "eficiencia"
     | "operaciones"
     | "clientes"
     | "integrations"
-    | "auditoria";
+    | "auditoria"
+    | "desarrolladores"
+    | "analitica";
 };
 
 function showNavItem(
@@ -104,6 +111,16 @@ function ShellNavAndFooter({
           <LayoutDashboard className="w-5 h-5 mr-3 shrink-0" />
           Dashboard
         </Link>
+        {role === "owner" && (
+          <Link
+            href="/dashboard/analitica"
+            className={`${navLink} ${active === "analitica" ? navActive : navInactive}`}
+            {...p}
+          >
+            <BarChart3 className="w-5 h-5 mr-3 shrink-0" />
+            Matriz CIP
+          </Link>
+        )}
         {showNavItem("clientes", role) && (
           <Link
             id="tour-nav-clientes"
@@ -142,6 +159,16 @@ function ShellNavAndFooter({
               >
                 <Wallet className="w-5 h-5 mr-3 shrink-0" />
                 Tesorería y Riesgos
+              </Link>
+            )}
+            {role === "owner" && (
+              <Link
+                href="/dashboard/finanzas/simulador"
+                className={`${navLink} ${active === "finanzas" ? navActive : navInactive}`}
+                {...p}
+              >
+                <GitCompare className="w-5 h-5 mr-3 shrink-0" />
+                Simulador Impacto
               </Link>
             )}
             <Link
@@ -183,6 +210,15 @@ function ShellNavAndFooter({
             >
               <Car className="w-5 h-5 mr-3 shrink-0" />
               Flota
+            </Link>
+
+            <Link
+              href="/flota/eficiencia"
+              className={`nav-flota-eficiencia ${navLink} ${active === "eficiencia" ? navActive : navInactive}`}
+              {...p}
+            >
+              <Activity className="w-5 h-5 mr-3 shrink-0" />
+              Eficiencia
             </Link>
             <Link
               href="/operaciones/live"
@@ -244,6 +280,7 @@ function ShellNavAndFooter({
             Integraciones
           </Link>
         )}
+        <ConfiguracionNavSection active={active} role={role} onNavLinkClick={onNavLinkClick} />
         <Link
           href="/perfil/seguridad"
           className={`${navLink} ${active === "seguridad" ? navActive : navInactive}`}
@@ -271,7 +308,10 @@ export function AppShell({ children, active }: Props) {
 
   const resolvedActive: Props["active"] = (() => {
     if (active) return active;
+    if (pathname.startsWith("/dashboard/configuracion")) return "desarrolladores";
+    if (pathname === "/dashboard/analitica") return "analitica";
     if (pathname === "/dashboard/finanzas/tesoreria") return "tesoreria";
+    if (pathname === "/dashboard/finanzas/simulador") return "finanzas";
     if (pathname === "/dashboard/finanzas/auditoria") return "auditoria";
     if (pathname === "/finanzas/conciliacion") return "conciliacion";
     if (pathname === "/finanzas/exportar") return "exportar";
@@ -330,46 +370,40 @@ export function AppShell({ children, active }: Props) {
         <ShellNavAndFooter active={resolvedActive} role={role} />
       </aside>
 
-      {mobileOpen ? (
-        <>
-          <button
-            type="button"
-            className="lg:hidden fixed inset-0 z-[60] bg-black/60"
-            aria-label="Cerrar menú"
-            onClick={closeMobile}
-          />
-          <aside
-            className="lg:hidden fixed inset-y-0 left-0 z-[70] flex w-[min(100%,18rem)] flex-col border-r border-slate-800/80 text-slate-300 shadow-2xl"
-            style={sidebarBg}
-          >
-            <div className="h-16 flex items-center justify-between gap-2 px-4 border-b border-slate-800/80 shrink-0">
-              <div className="flex min-w-0 items-center">
-                <Truck className="w-6 h-6 text-[#60a5fa] mr-2 shrink-0" />
-                <span className="text-white font-bold text-sm tracking-tight truncate">
-                  AB Logistics OS
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={closeMobile}
-                className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-800/80 hover:text-white"
-                aria-label="Cerrar menú"
-              >
-                <X className="w-5 h-5" />
-              </button>
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent
+          side="left"
+          className="text-slate-300"
+          style={sidebarBg}
+          aria-label="Menú de navegación principal"
+        >
+          <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-800/80 px-4">
+            <div className="flex min-w-0 items-center">
+              <Truck className="mr-2 h-6 w-6 shrink-0 text-[#60a5fa]" />
+              <SheetTitle className="truncate border-0 p-0 text-sm font-bold text-white">
+                AB Logistics OS
+              </SheetTitle>
             </div>
-            <ShellNavAndFooter
-              active={resolvedActive}
-              role={role}
-              onNavLinkClick={closeMobile}
-            />
-          </aside>
-        </>
-      ) : null}
+            <button
+              type="button"
+              onClick={closeMobile}
+              className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-800/80 hover:text-white"
+              aria-label="Cerrar menú"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <ShellNavAndFooter
+            active={resolvedActive}
+            role={role}
+            onNavLinkClick={closeMobile}
+          />
+        </SheetContent>
+      </Sheet>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden px-3 pb-4 pt-0 sm:px-4 lg:px-0 lg:pb-0">
         <div
-          className="lg:hidden sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-slate-800/80 px-4 text-slate-200"
+          className="lg:hidden sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-slate-800/80 px-2 text-slate-200 sm:px-3"
           style={sidebarBg}
         >
           <button
@@ -380,9 +414,9 @@ export function AppShell({ children, active }: Props) {
           >
             <Menu className="h-6 w-6" />
           </button>
-          <span className="font-bold tracking-tight truncate">AB Logistics OS</span>
+          <span className="truncate font-bold tracking-tight">AB Logistics OS</span>
         </div>
-        {children}
+        <div className="min-h-0 min-w-0 flex-1">{children}</div>
       </div>
     </div>
   );

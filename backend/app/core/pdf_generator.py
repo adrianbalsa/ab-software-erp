@@ -17,6 +17,7 @@ def generate_esg_certificate(report_data: dict[str, Any]) -> bytes:
     total_co2 = float(report_data.get("total_co2_kg") or 0.0)
     total_portes = int(report_data.get("total_portes") or 0)
     total_km = float(report_data.get("total_km") or 0.0)
+    metodologia = str(report_data.get("esg_metodologia") or "").strip()
 
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=18)
@@ -70,11 +71,15 @@ def generate_esg_certificate(report_data: dict[str, Any]) -> bytes:
     # Pie
     pdf.set_font("helvetica", "I", 8)
     pdf.set_text_color(75, 85, 99)
-    pdf.multi_cell(
-        0,
-        4.5,
-        "Calculo basado en normativa Euro VI y estandares europeos de transporte B2B.",
+    texto_pie = (
+        metodologia
+        if metodologia
+        else (
+            "Emisiones calculadas según composición de flota (Mix Euro IV/V/VI). "
+            "Cada porte aplica el factor de emisión correspondiente a la normativa EURO del vehículo asignado."
+        )
     )
+    pdf.multi_cell(0, 4.5, texto_pie)
     pdf.cell(
         0,
         4.5,

@@ -1,0 +1,1 @@
+{"project_id": "bmdzpbdyvzkycyfgndvd", "query": "-- CMR: nombre del conductor (opcional; si NULL, el PDF deja la casilla en blanco).\nALTER TABLE public.portes ADD COLUMN IF NOT EXISTS conductor_nombre text;\n\nCOMMENT ON COLUMN public.portes.conductor_nombre IS\n  'Nombre del conductor para carta de porte (CMR); opcional.';\n"}

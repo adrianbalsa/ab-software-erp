@@ -5,9 +5,19 @@ import { AlertTriangle, FileDown, RefreshCw, Wallet } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
 import { RoleGuard } from "@/components/auth/RoleGuard";
+import { CreditAlertBanner } from "@/components/dashboard/CreditAlertBanner";
+import { RiskRankingTable } from "@/components/dashboard/RiskRankingTable";
+import { RouteMarginTable } from "@/components/dashboard/RouteMarginTable";
 import { TreasuryRiskCharts } from "@/components/dashboard/TreasuryRiskCharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { api, type FinanceEsgReport, type TreasuryRiskResponse } from "@/lib/api";
+import {
+  api,
+  type CreditAlert,
+  type FinanceEsgReport,
+  type RiskRankingRow,
+  type RouteMarginRow,
+  type TreasuryRiskResponse,
+} from "@/lib/api";
 
 function formatEUR(value: number) {
   return value.toLocaleString("es-ES", {
@@ -72,6 +82,9 @@ function KpiCard({
 
 export default function DashboardTesoreriaPage() {
   const [data, setData] = useState<TreasuryRiskResponse | null>(null);
+  const [riskRanking, setRiskRanking] = useState<RiskRankingRow[] | null>(null);
+  const [routeMarginRows, setRouteMarginRows] = useState<RouteMarginRow[]>([]);
+  const [creditAlerts, setCreditAlerts] = useState<CreditAlert[]>([]);
   const [esgReport, setEsgReport] = useState<FinanceEsgReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloadingCert, setDownloadingCert] = useState(false);
@@ -81,13 +94,22 @@ export default function DashboardTesoreriaPage() {
     setLoading(true);
     setError(null);
     try {
-      const [risk, esg] = await Promise.all([
+      const [risk, ranking, esg, alerts, margins] = await Promise.all([
         api.finance.fetchTreasuryRisk(),
+        api.finance.getRiskRanking(),
         api.finance.fetchEsgReport(),
+        api.finance.getCreditAlerts().catch(() => [] as CreditAlert[]),
+        api.finance.getRouteMarginRanking().catch(() => [] as RouteMarginRow[]),
       ]);
       setData(risk);
+      setRiskRanking(ranking);
       setEsgReport(esg);
+      setCreditAlerts(alerts);
+      setRouteMarginRows(margins);
     } catch (e) {
+      setRiskRanking(null);
+      setRouteMarginRows([]);
+      setCreditAlerts([]);
       setError(e instanceof Error ? e.message : "No se pudo cargar la tesoreria");
     } finally {
       setLoading(false);
@@ -159,6 +181,8 @@ export default function DashboardTesoreriaPage() {
               </button>
             </div>
           </header>
+
+          <CreditAlertBanner alerts={creditAlerts} />
 
           {error && (
             <Card className="border-rose-200 bg-rose-50">
@@ -247,6 +271,36 @@ export default function DashboardTesoreriaPage() {
                 highRisk={highRisk}
                 trendData={data.cashflow_trend}
               />
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Ranking de riesgo por cliente</CardTitle>
+                  <CardDescription>
+                    Top exposiciones por valor en riesgo (
+                    <span className="font-serif italic">V</span>
+                    <sub className="text-[10px]">r</sub>
+                    ). Barras relativas al máximo del listado.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <RiskRankingTable rows={riskRanking ?? []} />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Ranking de margen por ruta</CardTitle>
+                  <CardDescription>
+                    Top rutas por margen neto (
+                    <span className="font-serif italic">M</span>
+                    <sub className="text-[10px]">n</sub>
+                    ); coste operativo estimado por km de la empresa.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <RouteMarginTable rows={routeMarginRows} />
+                </CardContent>
+              </Card>
             </>
           )}
         </main>
