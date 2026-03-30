@@ -17,10 +17,10 @@ from app.core.math_engine import (
 )
 
 
-def test_round_fiat_half_up() -> None:
-    # Redondeo contable ROUND_HALF_UP a 2 decimales (véase math_engine.round_fiat)
+def test_round_fiat_banker() -> None:
+    # Redondeo contable ROUND_HALF_EVEN a 2 decimales (véase math_engine.round_fiat)
     assert round_fiat("2.675") == Decimal("2.68")
-    assert round_fiat(Decimal("2.685")) == Decimal("2.69")
+    assert round_fiat(Decimal("2.685")) == Decimal("2.68")
     assert round_fiat(10.0) == Decimal("10.00")
 
 

@@ -22,6 +22,6 @@ def test_to_decimal_invalid_raises_domain_error() -> None:
         to_decimal("abc-not-a-number")
 
 
-def test_round_fiat_uses_half_up() -> None:
+def test_round_fiat_uses_half_even() -> None:
     assert round_fiat(Decimal("2.675")) == Decimal("2.68")
-    assert round_fiat(Decimal("2.685")) == Decimal("2.69")
+    assert round_fiat(Decimal("2.685")) == Decimal("2.68")
