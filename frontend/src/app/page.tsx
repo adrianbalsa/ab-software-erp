@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoginForm } from "@/components/auth/LoginForm";
-import { RootDomainLanding } from "@/components/marketing/RootDomainLanding";
+import { LandingPageDark } from "@/components/landing/LandingPageDark";
 import { getAuthToken } from "@/lib/auth";
 
 function isMarketingRootHostname(hostname: string): boolean {
@@ -53,7 +53,7 @@ function HomeContent() {
   }
 
   if (phase === "marketing") {
-    return <RootDomainLanding />;
+    return <LandingPageDark />;
   }
 
   if (hasToken) {
