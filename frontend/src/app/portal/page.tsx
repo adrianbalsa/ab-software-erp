@@ -22,6 +22,7 @@ import {
   refreshAccessToken,
 } from "@/lib/api";
 import { SetupMandateCard } from "@/components/portal/SetupMandateCard";
+import { clearAuthToken, getAuthToken } from "@/lib/auth";
 
 type Tab = "entregas" | "facturas";
 
@@ -102,7 +103,7 @@ export default function PortalClientePage() {
   useEffect(() => {
     if (role === null) return;
     try {
-      const t = localStorage.getItem("jwt_token");
+      const t = getAuthToken();
       if (!t) {
         router.replace(`/login?redirect=${encodeURIComponent("/portal")}`);
         return;
@@ -120,7 +121,7 @@ export default function PortalClientePage() {
 
   const logout = () => {
     try {
-      localStorage.removeItem("jwt_token");
+      clearAuthToken();
       notifyJwtUpdated();
     } catch {
       /* ignore */

@@ -22,6 +22,7 @@ import {
 } from "@/lib/admin-api";
 import type { AuditoriaAdminRow, EmpresaCreateBody, MetricasSaaSFacturacionOut, UsuarioAdminOut } from "@/types/admin";
 import type { EmpresaOut } from "@/types/empresa";
+import { getAuthToken } from "@/lib/auth";
 
 const PLANS = ["starter", "professional", "business", "enterprise"] as const;
 const ROLES = ["user", "manager", "admin", "empleado", "gestor"] as const;
@@ -67,7 +68,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     try {
-      setToken(localStorage.getItem("jwt_token"));
+      setToken(getAuthToken());
     } catch {
       setToken(null);
     }

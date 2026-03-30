@@ -6,6 +6,7 @@ import {
   jwtRbacRole,
   type AppRbacRole,
 } from "@/lib/api";
+import { AUTH_TOKEN_KEY } from "@/lib/auth";
 
 export function useRole(): {
   role: AppRbacRole;
@@ -22,7 +23,7 @@ export function useRole(): {
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === "jwt_token" || e.key === null) refresh();
+      if (e.key === AUTH_TOKEN_KEY || e.key === "jwt_token" || e.key === null) refresh();
     };
     window.addEventListener("storage", onStorage);
 

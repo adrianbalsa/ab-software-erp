@@ -3,6 +3,22 @@
  * Prioridad: NEXT_PUBLIC_API_BASE_URL → NEXT_PUBLIC_API_URL → NEXT_PUBLIC_API_BASE → localhost.
  * Si el env termina en `/api/v1`, se normaliza (las rutas ya añaden `/api/v1/...`).
  */
+import {
+  AUTH_TOKEN_KEY,
+  authHeaders,
+  clearAuthToken,
+  getAuthToken,
+  setAuthToken,
+} from "./auth";
+
+export {
+  AUTH_TOKEN_KEY,
+  authHeaders,
+  clearAuthToken,
+  getAuthToken,
+  setAuthToken,
+};
+
 function resolveApiBase(): string {
   const raw = (
     process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -32,17 +48,6 @@ function resolveApiBase(): string {
 
 export const API_BASE = resolveApiBase();
 
-/** Authorization desde `localStorage` (misma sesión que el resto del front). */
-export function authHeaders(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  try {
-    const t = localStorage.getItem("jwt_token");
-    return t ? { Authorization: `Bearer ${t}` } : {};
-  } catch {
-    return {};
-  }
-}
-
 /**
  * Renueva el access JWT usando la cookie HttpOnly del refresh token.
  * Requiere `credentials: 'include'` también en el login.
@@ -69,7 +74,7 @@ export async function parseApiError(res: Response): Promise<string> {
 export function jwtEmpresaId(): string | null {
   if (typeof window === "undefined") return null;
   try {
-    const t = localStorage.getItem("jwt_token");
+    const t = getAuthToken();
     if (!t) return null;
     const parts = t.split(".");
     if (parts.length < 2) return null;
@@ -94,7 +99,7 @@ export type AppRbacRole =
 export function jwtPayload(): Record<string, unknown> | null {
   if (typeof window === "undefined") return null;
   try {
-    const t = localStorage.getItem("jwt_token");
+    const t = getAuthToken();
     if (!t) return null;
     const parts = t.split(".");
     if (parts.length < 2) return null;
@@ -110,6 +115,13 @@ export function jwtPayload(): Record<string, unknown> | null {
  * Rol efectivo para la UI. Sin JWT → `driver` (menos privilegios) para no mostrar
  * módulos financieros; con JWT sin claim `rbac_role` (legacy) → `owner`.
  */
+/** Email o identificador del usuario (`sub` del JWT). */
+export function jwtSubject(): string | null {
+  const p = jwtPayload();
+  const sub = p?.sub;
+  return typeof sub === "string" && sub.trim() ? sub.trim() : null;
+}
+
 export function jwtRbacRole(): AppRbacRole {
   const p = jwtPayload();
   if (!p) return "driver";
@@ -1570,7 +1582,7 @@ export async function refreshAccessToken(): Promise<string | null> {
     const t = data.access_token;
     if (typeof t === "string" && t) {
       try {
-        localStorage.setItem("jwt_token", t);
+        setAuthToken(t);
         notifyJwtUpdated();
       } catch {
         /* ignore */

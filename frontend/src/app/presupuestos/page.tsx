@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { API_BASE, authHeaders } from "@/lib/api";
+import { getAuthToken } from "@/lib/auth";
 import {
   clearPresupuestoDraft,
   loadPresupuestoDraft,
@@ -48,7 +49,7 @@ type PresupuestoCalculoInBody = {
 function readJwtPresent(): boolean {
   if (typeof window === "undefined") return false;
   try {
-    const t = localStorage.getItem("jwt_token");
+    const t = getAuthToken();
     return typeof t === "string" && t.length > 0;
   } catch {
     return false;

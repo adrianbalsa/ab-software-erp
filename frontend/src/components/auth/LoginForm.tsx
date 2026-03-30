@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { API_BASE, jwtRbacRole, notifyJwtUpdated } from "@/lib/api";
+import { getAuthToken, setAuthToken } from "@/lib/auth";
 
 const LANDING_URL =
   process.env.NEXT_PUBLIC_LANDING_URL?.replace(/\/$/, "") || "https://ablogistics-os.com";
@@ -26,7 +27,7 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
 
   useEffect(() => {
     try {
-      const t = localStorage.getItem("jwt_token");
+      const t = getAuthToken();
       if (t) router.replace(redirectTo);
     } catch {
       /* ignore */
@@ -54,7 +55,7 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
       }
       const data = await res.json();
       try {
-        localStorage.setItem("jwt_token", data.access_token);
+        setAuthToken(data.access_token);
         notifyJwtUpdated();
       } catch {
         /* ignore */

@@ -28,7 +28,7 @@ import {
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 
-import { ConfiguracionNavSection } from "@/components/layout/Sidebar";
+import { ConfiguracionNavSection, SidebarUserSection } from "@/components/layout/Sidebar";
 import { QuotaStatusCard } from "@/components/QuotaStatusCard";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useRole } from "@/hooks/useRole";
@@ -293,6 +293,7 @@ function ShellNavAndFooter({
       <div className="px-4 pb-3 shrink-0">
         <QuotaStatusCard />
       </div>
+      <SidebarUserSection />
       <div className="p-4 border-t border-slate-800/80 text-xs text-slate-500 flex items-center gap-2 shrink-0">
         <Leaf className="w-4 h-4 text-emerald-500" />
         <span>AB Logistics OS</span>

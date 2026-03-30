@@ -15,6 +15,7 @@ import { RoleGuard } from "@/components/auth/RoleGuard";
 import { AppShell } from "@/components/AppShell";
 import { AuditLogsViewer } from "@/components/security/AuditLogsViewer";
 import { API_BASE, authHeaders } from "@/lib/api";
+import { getAuthToken } from "@/lib/auth";
 
 type ActiveSession = {
   id: string;
@@ -50,7 +51,7 @@ export default function SeguridadPage() {
 
   useEffect(() => {
     try {
-      setToken(localStorage.getItem("jwt_token"));
+      setToken(getAuthToken());
     } catch {
       setToken(null);
     }

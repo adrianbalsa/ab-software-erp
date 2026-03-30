@@ -14,7 +14,8 @@ import {
   YAxis,
 } from "recharts";
 
-import { API_BASE, authHeaders as getAuthHeaders } from "@/lib/api";
+import { API_BASE, authHeaders as getAuthHeaders, notifyJwtUpdated } from "@/lib/api";
+import { clearAuthToken, getAuthToken, setAuthToken } from "@/lib/auth";
 
 /** kg CO₂ / L — referencia diésel Euro 6 / marco UE (alineado con backend ReportService). */
 const KG_CO2_REF_EURO6 = 2.64;
@@ -135,7 +136,8 @@ export default function SostenibilidadPage() {
       const data = await res.json();
       setToken(data.access_token);
       try {
-        localStorage.setItem("jwt_token", data.access_token);
+        setAuthToken(data.access_token);
+        notifyJwtUpdated();
       } catch {
         // ignore
       }
@@ -148,7 +150,7 @@ export default function SostenibilidadPage() {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("jwt_token");
+      const saved = getAuthToken();
       if (saved) setToken(saved);
     } catch {
       // ignore
@@ -736,7 +738,7 @@ export default function SostenibilidadPage() {
             onClick={() => {
               setToken(null);
               try {
-                localStorage.removeItem("jwt_token");
+                clearAuthToken();
               } catch {
                 // ignore
               }

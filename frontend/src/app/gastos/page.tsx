@@ -10,7 +10,8 @@ import {
   Settings,
   Truck,
 } from "lucide-react";
-import { API_BASE, authHeaders } from "@/lib/api";
+import { API_BASE, authHeaders, notifyJwtUpdated } from "@/lib/api";
+import { clearAuthToken, getAuthToken, setAuthToken } from "@/lib/auth";
 
 /** Respuesta de POST /gastos/ocr-hint (sin confirmar). */
 type GastoOCRHint = {
@@ -85,7 +86,7 @@ export default function GastosPage() {
 
   useEffect(() => {
     try {
-      const t = localStorage.getItem("jwt_token");
+      const t = getAuthToken();
       if (t) setToken(t);
     } catch {
       // ignore
@@ -111,7 +112,8 @@ export default function GastosPage() {
       }
       const data = await res.json();
       setToken(data.access_token);
-      localStorage.setItem("jwt_token", data.access_token);
+      setAuthToken(data.access_token);
+      notifyJwtUpdated();
     } catch (e: unknown) {
       setAuthError(e instanceof Error ? e.message : "Error");
     } finally {
@@ -122,7 +124,7 @@ export default function GastosPage() {
   const logout = () => {
     setToken(null);
     try {
-      localStorage.removeItem("jwt_token");
+      clearAuthToken();
     } catch {
       // ignore
     }

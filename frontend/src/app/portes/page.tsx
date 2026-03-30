@@ -10,6 +10,7 @@ import { AddressAutocomplete } from "@/components/maps/AddressAutocomplete";
 import { GoogleMapsProvider, mapsApiKeyAvailable } from "@/components/maps/GoogleMapsProvider";
 import { useRole } from "@/hooks/useRole";
 import { API_BASE, jwtEmpresaId, notifyJwtUpdated } from "@/lib/api";
+import { getAuthToken, setAuthToken } from "@/lib/auth";
 
 type PorteOut = {
   id: string;
@@ -126,7 +127,7 @@ export default function PortesPage() {
       const data = await res.json();
       setToken(data.access_token);
       try {
-        localStorage.setItem("jwt_token", data.access_token);
+        setAuthToken(data.access_token);
         notifyJwtUpdated();
       } catch {
         // ignore
@@ -140,7 +141,7 @@ export default function PortesPage() {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("jwt_token");
+      const saved = getAuthToken();
       if (saved) setToken(saved);
     } catch {
       // ignore

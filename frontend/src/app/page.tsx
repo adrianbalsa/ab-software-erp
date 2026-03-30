@@ -3,19 +3,34 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { RootDomainLanding } from "@/components/marketing/RootDomainLanding";
+import { getAuthToken } from "@/lib/auth";
+
+function isMarketingRootHostname(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return h === "ablogistics-os.com" || h === "www.ablogistics-os.com";
+}
 
 /**
- * Entrada del subdominio app: solo acceso al sistema (sin marketing).
- * Sesión iniciada → cuadro de mando; si no, formulario de login.
+ * Raíz del ERP:
+ * - `ablogistics-os.com` / `www.*` → landing pública (visitante sin contexto de app).
+ * - Cualquier otro host (p. ej. `app.ablogistics-os.com`, localhost) → sin JWT muestra Login;
+ *   con JWT redirige a `/dashboard`.
  */
 function HomeContent() {
   const router = useRouter();
-  const [checked, setChecked] = useState(false);
+  const [phase, setPhase] = useState<"loading" | "marketing" | "app">("loading");
   const [hasToken, setHasToken] = useState(false);
 
   useEffect(() => {
+    const hostname = typeof window !== "undefined" ? window.location.hostname : "";
+    if (isMarketingRootHostname(hostname)) {
+      setPhase("marketing");
+      return;
+    }
+
     try {
-      const t = localStorage.getItem("jwt_token");
+      const t = getAuthToken();
       if (t) {
         setHasToken(true);
         router.replace("/dashboard");
@@ -25,16 +40,20 @@ function HomeContent() {
     } catch {
       setHasToken(false);
     } finally {
-      setChecked(true);
+      setPhase("app");
     }
   }, [router]);
 
-  if (!checked) {
+  if (phase === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f4f6fb] text-slate-500">
         Cargando…
       </div>
     );
+  }
+
+  if (phase === "marketing") {
+    return <RootDomainLanding />;
   }
 
   if (hasToken) {

@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { notifyJwtUpdated } from "@/lib/api";
+import { setAuthToken } from "@/lib/auth";
 
 const WELCOME_FLAG = "abl_oauth_welcome";
 
@@ -20,7 +21,7 @@ function AuthCallbackInner() {
     }
 
     try {
-      localStorage.setItem("jwt_token", token.trim());
+      setAuthToken(token.trim());
       notifyJwtUpdated();
       sessionStorage.setItem(WELCOME_FLAG, "1");
     } catch {
