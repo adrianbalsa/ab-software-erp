@@ -10,43 +10,61 @@ from slowapi.errors import RateLimitExceeded
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api.routes import admin, ai, audit_logs, auth, bank, bancos, clientes, dashboard, eco, empresa, esg, facturas, facturacion, finance, flota, gastos, maps, payments, portes, presupuestos, reports, utils
+from app.api.routes import (
+    admin,
+    ai,
+    audit_logs,
+    auth,
+    bank,
+    bancos,
+    clientes,
+    dashboard,
+    eco,
+    empresa,
+    esg,
+    facturas,
+    facturacion,
+    finance,
+    flota,
+    gastos,
+    maps,
+    payments,
+    portes,
+    presupuestos,
+    reports,
+    utils,
+)
+from app.api.v1 import analytics as analytics_v1
+from app.api.v1 import bancos_conciliacion as bancos_conciliacion_v1
+from app.api.v1 import chat as chat_v1
+from app.api.v1 import clientes as clientes_v1
+from app.api.v1 import economic_dashboard as economic_dashboard_v1
+from app.api.v1 import esg_auditoria as esg_auditoria_v1
+from app.api.v1 import esg_reports as esg_reports_v1
+from app.api.v1 import export as export_v1
+from app.api.v1 import facturas_pdf as facturas_pdf_v1
+from app.api.v1 import finance_dashboard as finance_dashboard_v1
+from app.api.v1 import fleet_analytics as fleet_analytics_v1
+from app.api.v1 import flota_dashboard as flota_dashboard_v1
+from app.api.v1 import flota_ubicacion as flota_ubicacion_v1
+from app.api.v1 import gastos_combustible as gastos_combustible_v1
+from app.api.v1 import health as health_router
+from app.api.v1 import payments_gocardless as payments_gocardless_v1
+from app.api.v1 import portal_cliente as portal_cliente_v1
+from app.api.v1 import portal_onboarding as portal_onboarding_v1
+from app.api.v1 import portes as portes_v1
+from app.api.v1 import stripe
+from app.api.v1 import treasury as treasury_v1
+from app.api.v1 import verifactu as verifactu_v1
+from app.api.v1 import webhooks as webhooks_v1
+from app.api.v1 import webhooks_gocardless as webhooks_gocardless_v1
+from app.core.alerts import schedule_critical_error_alert, short_traceback_from_exc
 from app.core.config import get_settings
-from app.db.supabase import get_supabase
+from app.core.rate_limit import SkipOptionsSlowAPIMiddleware, limiter
 from app.middleware.json_access_log import JsonAccessLogMiddleware
 from app.middleware.rate_limit_middleware import AuthLoginRateLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.slow_request_log import SlowRequestLogMiddleware
-
-# 1. Importamos tu nuevo router de Stripe junto a los demás
-from app.api.v1 import bancos_conciliacion as bancos_conciliacion_v1
-from app.api.v1 import export as export_v1
-from app.api.v1 import portes as portes_v1
-from app.api.v1 import treasury as treasury_v1
-from app.api.v1 import chat as chat_v1
-from app.api.v1 import economic_dashboard as economic_dashboard_v1
-from app.api.v1 import clientes as clientes_v1
-from app.api.v1 import esg_reports as esg_reports_v1
-from app.api.v1 import esg_auditoria as esg_auditoria_v1
-from app.api.v1 import facturas as facturas_v1
-from app.api.v1 import facturas_pdf as facturas_pdf_v1
-from app.api.v1 import finance_dashboard as finance_dashboard_v1
-from app.api.v1 import flota_ubicacion as flota_ubicacion_v1
-from app.api.v1 import flota_dashboard as flota_dashboard_v1
-from app.api.v1 import fleet_analytics as fleet_analytics_v1
-from app.api.v1 import payments_gocardless as payments_gocardless_v1
-from app.api.v1 import stripe
-from app.api.v1 import gastos_combustible as gastos_combustible_v1
-from app.api.v1 import health as health_v1
-from app.api.v1 import verifactu as verifactu_v1
-from app.api.v1 import webhooks as webhooks_v1
-from app.api.v1 import webhooks_gocardless as webhooks_gocardless_v1
-from app.api.v1 import portal_cliente as portal_cliente_v1
-from app.api.v1 import portal_onboarding as portal_onboarding_v1
-from app.api.v1 import analytics as analytics_v1
-
-from app.core.alerts import short_traceback_from_exc, schedule_critical_error_alert
-from app.core.rate_limit import SkipOptionsSlowAPIMiddleware, limiter
 from app.openapi_config import (
     API_DESCRIPTION,
     API_TITLE,
@@ -94,7 +112,6 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     # Orden: primero añadido = más interno. El último = más externo (primero en ejecutarse en la petición).
-    # SessionMiddleware (externo): cookies de sesión para el state OAuth (CSRF) entre redirecciones.
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.SESSION_SECRET_KEY,
@@ -115,60 +132,18 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    # Más externo: mide duración total (incluye middleware interior) para umbral > 5 s.
     app.add_middleware(SlowRequestLogMiddleware)
-    # Rate limit por IP (SlowAPI 100/min); login/refresh exentos y 5/min por IP aquí.
     app.add_middleware(SkipOptionsSlowAPIMiddleware)
     app.add_middleware(AuthLoginRateLimitMiddleware)
-    # Primera línea de defensa: Host permitido (API detrás de proxy con --proxy-headers).
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.ALLOWED_HOSTS))
-
-    @app.get("/health", tags=["Salud"])
-    async def health() -> JSONResponse:
-        """
-        Salud operativa del búnker: conectividad **Supabase PostgREST** (datos).
-        200 si la API de Supabase responde; 503 si no hay conexión.
-        Para chequeo completo (Postgres directo, Redis, PgBouncer) usar ``GET /health/deep``.
-        """
-        from app.core.health_checks import check_supabase_rest
-
-        ok, detail = await check_supabase_rest(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
-        body = {
-            "status": "ok" if ok else "degraded",
-            "supabase": {"ok": ok, "detail": detail},
-        }
-        return JSONResponse(content=body, status_code=200 if ok else 503)
-
-    @app.get("/health/deep", tags=["Salud"])
-    async def health_deep() -> JSONResponse:
-        """
-        Readiness profundo: Supabase REST, ``FinanceService``, Postgres (``DATABASE_URL``),
-        Redis (``REDIS_URL`` opcional), listener TCP de PgBouncer (puerto 6432 o
-        ``PGBOUNCER_HEALTH_HOST``). Para solo proceso vivo usar ``GET /ready``.
-        """
-        from app.core import health_checks
-
-        db = await get_supabase(
-            jwt_token=None,
-            allow_service_role_bypass=True,
-            log_service_bypass_warning=False,
-        )
-        body = await health_checks.run_deep_health(
-            supabase_url=settings.SUPABASE_URL,
-            service_key=settings.SUPABASE_SERVICE_KEY,
-            db=db,
-        )
-        code = 200 if body.get("status") == "healthy" else 503
-        return JSONResponse(content=body, status_code=code)
-
-    @app.get("/ready", tags=["Salud"])
-    async def ready() -> dict[str, str]:
-        """Liveness rápido (proceso arriba). Healthchecks de Docker/K8s suelen usar este endpoint."""
-        return {"status": "ready"}
+    # En producción: cualquier Host (Railway healthchecks desde IPs internas / proxy).
+    # En desarrollo: lista explícita desde settings.
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=["*"] if settings.ENVIRONMENT == "production" else list(settings.ALLOWED_HOSTS),
+    )
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
-        # Captura 500 explícitos (si los hubiera) y dispara alerta crítica.
         if exc.status_code == 500:
             schedule_critical_error_alert(
                 request=request,
@@ -178,22 +153,23 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
-        # Captura cualquier 500 no controlado.
         schedule_critical_error_alert(
             request=request,
             error_detail=short_traceback_from_exc(exc),
         )
         return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
+    # Salud en la raíz (Railway: GET /health, GET /ready).
+    app.include_router(health_router.router)
     app.include_router(utils.router, tags=["Salud"])
     app.include_router(payments.router, prefix="/payments", tags=["Pagos"])
     app.include_router(auth.router, prefix="/auth", tags=["Autenticación"])
     app.include_router(portes.router, prefix="/portes", tags=["Portes"])
-    # Alias versionado (misma semántica que `/portes/*` para clientes BFF / integraciones).
     app.include_router(portes.router, prefix="/api/v1/portes", tags=["Portes"])
     app.include_router(clientes.router, prefix="/clientes", tags=["Clientes"])
     app.include_router(facturas.router, prefix="/facturas", tags=["Facturas"])
-    app.include_router(facturas_v1.router, prefix="/api/v1/facturas", tags=["Facturas"])
+    # Mismo router que `/facturas` (evita duplicar import `app.api.v1.facturas`).
+    app.include_router(facturas.router, prefix="/api/v1/facturas", tags=["Facturas"])
     app.include_router(facturas_pdf_v1.router, prefix="/api/v1/facturas", tags=["Facturas"])
     app.include_router(
         economic_dashboard_v1.router,
@@ -231,7 +207,6 @@ def create_app() -> FastAPI:
     app.include_router(clientes_v1.router, prefix="/api/v1/clientes", tags=["Clientes"])
     app.include_router(gastos_combustible_v1.router, prefix="/api/v1/gastos", tags=["Gastos"])
     app.include_router(finance_dashboard_v1.router, prefix="/api/v1/finance", tags=["Finanzas"])
-    app.include_router(health_v1.router, prefix="/api/v1", tags=["Salud"])
     app.include_router(verifactu_v1.router, prefix="/api/v1/verifactu", tags=["Fiscal (AEAT)"])
     app.include_router(audit_logs.router, prefix="/api/v1/audit-logs", tags=["Auditoría API"])
     app.include_router(webhooks_v1.router, prefix="/api/v1/webhooks", tags=["Webhooks B2B"])

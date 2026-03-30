@@ -164,7 +164,6 @@ async def client(monkeypatch: pytest.MonkeyPatch):
 
     # Cada módulo mantiene su referencia importada al importar; parchear todos
     monkeypatch.setattr("app.db.supabase.get_supabase", _fake_get_supabase)
-    monkeypatch.setattr("app.main.get_supabase", _fake_get_supabase)
     monkeypatch.setattr("app.api.deps.get_supabase", _fake_get_supabase)
 
     monkeypatch.setattr(
