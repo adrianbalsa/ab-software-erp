@@ -31,6 +31,10 @@ function SetPasswordContent() {
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setSessionError("Configuración pendiente. Contacta con soporte.");
+      return;
+    }
 
     async function bootstrapRecoverySession() {
       try {
@@ -78,6 +82,9 @@ function SetPasswordContent() {
     setSubmitError(null);
     try {
       const supabase = getSupabaseBrowserClient();
+      if (!supabase) {
+        throw new Error("Configuración pendiente. Contacta con soporte.");
+      }
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       router.replace("/portal/facturas");

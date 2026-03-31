@@ -55,10 +55,12 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
     let token: string | null = null;
     try {
       const supabase = getSupabaseBrowserClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      token = session?.access_token ?? null;
+      if (supabase) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        token = session?.access_token ?? null;
+      }
     } catch {
       token = null;
     }
@@ -75,7 +77,9 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
     if (typeof window !== "undefined") {
       try {
         const supabase = getSupabaseBrowserClient();
-        await supabase.auth.signOut();
+        if (supabase) {
+          await supabase.auth.signOut();
+        }
       } catch {
         /* ignore */
       }
