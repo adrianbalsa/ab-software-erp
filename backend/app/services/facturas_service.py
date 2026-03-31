@@ -1383,6 +1383,20 @@ class FacturasService:
             },
         )
 
+        # Si la rectificación afecta una factura de un mes anterior, fuerza recálculo del snapshot
+        # financiero de ese periodo (consistencia KPI histórica).
+        orig_period = str(orig.get("fecha_emision") or "")[:7]
+        current_period = date.today().strftime("%Y-%m")
+        if len(orig_period) == 7 and orig_period != current_period:
+            try:
+                await self._db.rpc(
+                    "_upsert_monthly_kpis",
+                    {"p_empresa_id": eid, "p_period_month": orig_period},
+                )
+            except Exception:
+                # Best effort: no bloquear emisión fiscal por mantenimiento de snapshot.
+                pass
+
         raw_nif_emisor_new = row_new.get("nif_emisor")
         if isinstance(raw_nif_emisor_new, str) and raw_nif_emisor_new.strip():
             row_new["nif_emisor"] = (

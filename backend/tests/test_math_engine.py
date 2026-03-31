@@ -112,3 +112,14 @@ def test_math_engine_descuento_global() -> None:
     assert t.importe_descuento_global_aplicado == Decimal("10.00")
     assert t.base_imponible_total == Decimal("90.00")
     assert t.total_factura == t.base_imponible_total + t.cuota_iva_total
+
+
+def test_calculate_invoice_totals_rectificativa_negative_base_half_even() -> None:
+    t = MathEngine.calculate_invoice_totals(
+        [{"cantidad": 1, "precio_unitario": "-100.05", "tipo_iva_porcentaje": 21}],
+        allow_negative_bases=True,
+    )
+    assert t.base_imponible_total == Decimal("-100.05")
+    assert t.cuota_iva_total == Decimal("-21.01")
+    assert t.total_factura == Decimal("-121.06")
+    assert abs(t.total_factura - (t.base_imponible_total + t.cuota_iva_total)) < Decimal("0.001")

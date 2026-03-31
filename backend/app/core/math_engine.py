@@ -29,6 +29,10 @@ class FinancialDomainError(ValueError):
     """Dato monetario inválido (p. ej. precio negativo donde no aplica). Las rutas API suelen mapearlo a 400."""
 
 
+class RoundingIntegrityError(FinancialDomainError):
+    """Descuadre contable tras redondeo (total != base + IVA [+ RE])."""
+
+
 def to_decimal(value: float | str | Decimal | None) -> Decimal:
     """Convierte entrada a ``Decimal`` sin pasar por binarios de ``float`` cuando es posible."""
     if value is None:
@@ -221,6 +225,7 @@ class MathEngine:
         global_discount: Decimal = Decimal("0"),
         *,
         aplicar_recargo_equivalencia: bool = False,
+        allow_negative_bases: bool = False,
     ) -> InvoiceTotalsResult:
         """
         - Base imponible **línea a línea** (cantidad × precio − descuento de línea), cuantizada.
@@ -280,7 +285,7 @@ class MathEngine:
 
                 bruto = quantize_financial(qty * price)
                 net = quantize_financial(bruto - d_line)
-                if net < 0:
+                if net < 0 and not allow_negative_bases:
                     raise FinancialDomainError(f"Línea {idx}: importe neto negativo tras descuentos.")
                 re_flag = bool(raw.get("recargo_equivalencia")) if raw.get("recargo_equivalencia") is not None else aplicar_recargo_equivalencia
 
@@ -317,8 +322,12 @@ class MathEngine:
                     importe_descuento_global_aplicado=Decimal("0.00"),
                 )
 
-            if disc_glob > total_net:
+            if not allow_negative_bases and disc_glob > total_net:
                 raise FinancialDomainError("Descuento global superior a la base imponible bruta.")
+            if allow_negative_bases and disc_glob != Decimal("0.00"):
+                raise FinancialDomainError(
+                    "No se admite descuento global en cálculo con bases negativas (rectificativa)."
+                )
 
             # Reparto proporcional del descuento global con corrección de céntimo en la línea mayor
             if disc_glob == 0:
@@ -336,6 +345,7 @@ class MathEngine:
 
             # Agrupar bases por tipo IVA
             buckets: dict[str, Decimal] = {}
+            cuotas_buckets: dict[str, Decimal] = {}
             re_for_bucket: dict[str, bool] = {}
             line_results: list[LineaTotalCalculada] = []
 
@@ -343,6 +353,9 @@ class MathEngine:
                 iva_pct, d_line, re_f = meta[i]
                 key = _iva_rate_key(iva_pct)
                 buckets[key] = buckets.get(key, Decimal("0")) + adj
+                # IVA por línea (ROUND_HALF_EVEN) y agregado por tipo.
+                line_vat = quantize_financial(adj * (iva_pct / Decimal("100")))
+                cuotas_buckets[key] = cuotas_buckets.get(key, Decimal("0")) + line_vat
                 # RE por grupo: True si alguna línea del grupo lo pide
                 re_for_bucket[key] = re_for_bucket.get(key, False) or re_f
                 raw_it = items[i]
@@ -375,7 +388,7 @@ class MathEngine:
                 b_g = quantize_financial(raw_base)
                 base_total += b_g
                 iva_pct = Decimal(key)
-                cuota = quantize_financial(b_g * (iva_pct / Decimal("100")))
+                cuota = quantize_financial(cuotas_buckets.get(key, Decimal("0.00")))
                 re_pct_stat = RECARGO_EQUIVALENCIA_POR_IVA_PCT.get(key, Decimal("0.00"))
                 re_cuota = (
                     quantize_financial(b_g * (re_pct_stat / Decimal("100")))
@@ -399,6 +412,11 @@ class MathEngine:
             merged = quantize_financial(base_total + cuota_sum + re_sum)
             # Coherencia: total = base + IVA + RE (misma cuantía)
             ajuste = Decimal("0.00")
+            check = abs(merged - (base_total + cuota_sum + re_sum))
+            if check >= Decimal("0.001"):
+                raise RoundingIntegrityError(
+                    "Rounding integrity check failed: abs(total - (base + iva + re)) >= 0.001"
+                )
 
             return InvoiceTotalsResult(
                 base_imponible_total=decimal_to_db_numeric(base_total),
@@ -410,3 +428,21 @@ class MathEngine:
                 ajuste_centimos=decimal_to_db_numeric(ajuste),
                 importe_descuento_global_aplicado=decimal_to_db_numeric(disc_applied),
             )
+
+    @staticmethod
+    def calculate_invoice_totals(
+        items: list[dict[str, Any]],
+        global_discount: Decimal = Decimal("0"),
+        *,
+        aplicar_recargo_equivalencia: bool = False,
+        allow_negative_bases: bool = False,
+    ) -> InvoiceTotalsResult:
+        """
+        Alias explícito para facturación: soporta rectificativas con bases negativas.
+        """
+        return MathEngine.calculate_totals(
+            items,
+            global_discount=global_discount,
+            aplicar_recargo_equivalencia=aplicar_recargo_equivalencia,
+            allow_negative_bases=allow_negative_bases,
+        )
