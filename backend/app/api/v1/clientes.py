@@ -79,13 +79,13 @@ async def invite_cliente_b2b(
     cliente_id: UUID,
     _: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     current_user: UserOut = Depends(deps.bind_write_context),
-    db_admin: SupabaseAsync = Depends(deps.get_db_admin),
+    db: SupabaseAsync = Depends(deps.get_db),
 ) -> dict[str, str]:
     empresa_id = str(current_user.empresa_id)
     cid = str(cliente_id)
 
-    res_cliente: Any = await db_admin.execute(
-        db_admin.table("clientes")
+    res_cliente: Any = await db.execute(
+        db.table("clientes")
         .select("id,empresa_id,email,fecha_invitacion")
         .eq("id", cid)
         .eq("empresa_id", empresa_id)
@@ -110,8 +110,8 @@ async def invite_cliente_b2b(
             detail="El cliente no tiene un email válido",
         ) from exc
 
-    res_profile: Any = await db_admin.execute(
-        db_admin.table("profiles")
+    res_profile: Any = await db.execute(
+        db.table("profiles")
         .select("id")
         .eq("cliente_id", cid)
         .limit(1)
@@ -124,7 +124,7 @@ async def invite_cliente_b2b(
         )
 
     try:
-        await db_admin.auth_admin_invite_user_by_email(
+        await db.auth_admin_invite_user_by_email(
             email=email,
             options={
                 "data": {
@@ -142,8 +142,8 @@ async def invite_cliente_b2b(
 
     invited_at = datetime.now(timezone.utc).isoformat()
     try:
-        await db_admin.execute(
-            db_admin.table("clientes")
+        await db.execute(
+            db.table("clientes")
             .update({"fecha_invitacion": invited_at})
             .eq("id", cid)
             .eq("empresa_id", empresa_id)
@@ -152,8 +152,8 @@ async def invite_cliente_b2b(
         # Compatibilidad: si el campo no existe todavía no bloqueamos la invitación.
         pass
 
-    await db_admin.execute(
-        db_admin.table("audit_logs").insert(
+    await db.execute(
+        db.table("audit_logs").insert(
             {
                 "empresa_id": empresa_id,
                 "table_name": "clientes",

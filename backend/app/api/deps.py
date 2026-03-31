@@ -52,12 +52,27 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 reusable_oauth2 = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
-async def get_supabase(token: str | None = Depends(reusable_oauth2)) -> SupabaseAsync:
+async def get_supabase(
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+) -> SupabaseAsync:
     """
-    Cliente Supabase con **identidad del usuario** en la cabecera (JWT + anon key → RLS).
-
-    Sin ``Authorization: Bearer``, cliente **anon** sin bypass (ver ``app.db.supabase``).
+    Cliente Supabase **siempre** inicializado con el JWT del request para aplicar RLS por usuario.
     """
+    auth_header = request.headers.get("Authorization") or request.headers.get("authorization") or ""
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header requerido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    header_token = auth_header.split(" ", 1)[1].strip()
+    if not header_token or header_token != token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return await supabase_db.get_supabase(jwt_token=token)
 
 
