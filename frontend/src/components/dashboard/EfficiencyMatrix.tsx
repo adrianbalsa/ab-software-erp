@@ -88,12 +88,12 @@ export function EfficiencyMatrix({
               <ZAxis type="number" dataKey="ingresos" range={[100, 1400]} name="Ingresos" />
               <Tooltip
                 cursor={{ strokeDasharray: "3 3" }}
-                formatter={(value: number | string, key: string) => {
+                formatter={(value: any, name: any) => {
                   const v = Number(value ?? 0);
-                  if (key === "ingresos") return [fmtEur(v), "Ingresos"];
-                  if (key === "margen_neto_km") return [`${v.toFixed(4)} €/km`, "Margen neto/km"];
-                  if (key === "co2_per_ton_km") return [`${v.toFixed(4)} kg`, "CO2 por ton-km"];
-                  return [String(value), key];
+                  if (name === "ingresos") return [fmtEur(v), "Ingresos"];
+                  if (name === "margen_neto_km") return [`${v.toFixed(4)} €/km`, "Margen neto/km"];
+                  if (name === "co2_per_ton_km") return [`${v.toFixed(4)} kg`, "CO2 por ton-km"];
+                  return [String(value), name];
                 }}
               />
               <Scatter data={data} fill="#2563eb" />
