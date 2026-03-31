@@ -78,11 +78,11 @@ export function BreakEvenAnalysis({ loading, monthly }: Props) {
               <XAxis dataKey="periodo" />
               <YAxis tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`} />
               <Tooltip
-                formatter={(value: number | string, key: string) => {
+                formatter={(value: any, name: any) => {
                   const v = Number(value ?? 0);
-                  if (key === "cumulative_ingresos") return [fmtEur(v), "Ingresos acumulados"];
-                  if (key === "cumulative_gastos") return [fmtEur(v), "Gastos acumulados"];
-                  return [String(value), key];
+                  if (name === "cumulative_ingresos") return [fmtEur(v), "Ingresos acumulados"];
+                  if (name === "cumulative_gastos") return [fmtEur(v), "Gastos acumulados"];
+                  return [String(value), name];
                 }}
               />
               <Area
