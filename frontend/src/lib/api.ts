@@ -21,6 +21,10 @@ export {
 };
 
 function resolveApiBase(): string {
+  const hasExplicitApiBase =
+    Boolean(process.env.NEXT_PUBLIC_API_BASE_URL) ||
+    Boolean(process.env.NEXT_PUBLIC_API_URL) ||
+    Boolean(process.env.NEXT_PUBLIC_API_BASE);
   const raw = (
     process.env.NEXT_PUBLIC_API_BASE_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
@@ -28,6 +32,15 @@ function resolveApiBase(): string {
     ""
   ).trim();
   if (!raw) {
+    if (typeof window !== "undefined") {
+      console.error(
+        "CRITICAL: NEXT_PUBLIC_API_BASE_URL/NEXT_PUBLIC_API_URL/NEXT_PUBLIC_API_BASE no definidos. Usando fallback http://localhost:8000.",
+      );
+    } else if (!hasExplicitApiBase) {
+      console.error(
+        "CRITICAL: API base env vars no definidos en servidor. Usando fallback http://localhost:8000.",
+      );
+    }
     return "http://localhost:8000";
   }
   let base = raw.replace(/\/$/, "").replace(/\/api\/v1$/i, "");
