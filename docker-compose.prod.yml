@@ -146,6 +146,28 @@ services:
     profiles:
       - cloudflare
 
+  sentinel-watchdog:
+    image: abl-backend:prod
+    restart: always
+    mem_limit: 256m
+    mem_reservation: 64m
+    env_file:
+      - .env
+      - ./backend/.env
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "while true; do python scripts/sentinel_watchdog.py; sleep 900; done",
+      ]
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    networks:
+      - app
+
 networks:
   internal:
     internal: true

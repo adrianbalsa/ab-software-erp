@@ -10,6 +10,7 @@ import {
   getAuthToken,
   setAuthToken,
 } from "./auth";
+import { getSupabaseBrowserClient } from "./supabase";
 
 export {
   AUTH_TOKEN_KEY,
@@ -51,7 +52,19 @@ export const API_BASE = resolveApiBase();
 export async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers ?? {});
   if (typeof window !== "undefined") {
-    const token = window.localStorage.getItem("token");
+    let token: string | null = null;
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      token = session?.access_token ?? null;
+    } catch {
+      token = null;
+    }
+    if (!token) {
+      token = getAuthToken();
+    }
     if (token) {
       headers.set("Authorization", `Bearer ${token}`);
     }
@@ -60,8 +73,17 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
   const res = await fetch(input, { ...init, headers });
   if (res.status === 401 || res.status === 403) {
     if (typeof window !== "undefined") {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        await supabase.auth.signOut();
+      } catch {
+        /* ignore */
+      }
+      clearAuthToken();
       window.localStorage.removeItem("token");
-      window.location.href = "/login?expired=true";
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login?expired=true";
+      }
     }
     throw new Error(`HTTP ${res.status}`);
   }
