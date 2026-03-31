@@ -14,6 +14,7 @@ from starlette.responses import Response
 from app.api import deps
 from app.core.config import get_settings
 from app.db.supabase import SupabaseAsync
+from app.services.reconciliation_service import ReconciliationEngine
 
 router = APIRouter()
 _log = logging.getLogger(__name__)
@@ -220,9 +221,25 @@ async def _process_gocardless_webhook(*, db: SupabaseAsync, payload: dict[str, A
     events = payload.get("events")
     if not isinstance(events, list):
         return
+    engine = ReconciliationEngine(db)
     for raw in events:
         if not isinstance(raw, dict):
             continue
+        try:
+            event_type = _extract_event_type(raw)
+            await db.execute(
+                db.table("webhook_events").insert(
+                    {
+                        "provider": "gocardless",
+                        "event_type": event_type or "unknown",
+                        "payload": raw,
+                        "status": "PENDING",
+                        "error_log": None,
+                    }
+                )
+            )
+        except Exception:
+            _log.exception("gocardless webhook: no se pudo encolar webhook_events")
         try:
             event_type = _extract_event_type(raw)
             if event_type == "payments.confirmed":
@@ -232,6 +249,10 @@ async def _process_gocardless_webhook(*, db: SupabaseAsync, payload: dict[str, A
                 await _mark_cliente_mandate_active_and_audit(db=db, event=raw, body_digest=body_digest)
         except Exception:
             _log.exception("gocardless webhook: error procesando evento")
+    try:
+        await engine.poll_pending_queue(limit=min(len(events), 100))
+    except Exception:
+        _log.exception("gocardless webhook: error en polling de reconciliación")
 
 
 @router.post(

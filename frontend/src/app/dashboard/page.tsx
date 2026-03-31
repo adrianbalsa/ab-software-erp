@@ -12,12 +12,15 @@ import { CashFlowChart } from "@/components/dashboard/CashFlowChart";
 import { CostBreakdownPie } from "@/components/dashboard/CostBreakdownPie";
 import { EfficiencyKpiCard } from "@/components/dashboard/EfficiencyKpiCard";
 import { AdvancedCharts } from "@/components/dashboard/AdvancedCharts";
+import { BreakEvenAnalysis } from "@/components/dashboard/BreakEvenAnalysis";
 import { EconomicAdvancedDashboard } from "@/components/dashboard/EconomicAdvancedDashboard";
+import { EfficiencyMatrix } from "@/components/dashboard/EfficiencyMatrix";
 import { SupportCard } from "@/components/docs/SupportCard";
 import { EconomicOverview } from "@/components/EconomicOverview";
 import { EmissionBadge } from "@/components/esg/EmissionBadge";
 import { ToastHost, type ToastPayload } from "@/components/ui/ToastHost";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
+import { useEcoDashboard } from "@/hooks/useEcoDashboard";
 import { useFinanceDashboard } from "@/hooks/useFinanceDashboard";
 import { useFleetAlerts } from "@/hooks/useFleetAlerts";
 import { useRole } from "@/hooks/useRole";
@@ -40,6 +43,12 @@ export default function Dashboard() {
   const { data, loading, error, refresh } = useFinanceDashboard({
     enabled: isOwner,
   });
+  const {
+    data: ecoData,
+    loading: ecoLoading,
+    error: ecoError,
+    refresh: refreshEco,
+  } = useEcoDashboard({ enabled: isOwner });
   const {
     data: statsOps,
     loading: statsLoading,
@@ -75,6 +84,7 @@ export default function Dashboard() {
 
   const onRefreshKpis = () => {
     if (isOwner) void refresh();
+    if (isOwner) void refreshEco();
     else void refreshStats();
     if (canFleetAlerts) void refreshFleetAlerts();
   };
@@ -245,6 +255,41 @@ export default function Dashboard() {
                   <CostBreakdownPie
                     loading={loading}
                     data={data?.gastos_por_bucket_cinco ?? []}
+                  />
+                </div>
+              </section>
+
+              <section className="space-y-4" aria-labelledby="dash-rentabilidad-avanzada">
+                <h2
+                  id="dash-rentabilidad-avanzada"
+                  className="text-lg font-bold text-[#0b1224] tracking-tight"
+                >
+                  Análisis de Rentabilidad Avanzada
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Datos consolidados desde endpoints optimizados:
+                  <code className="bg-slate-100 px-1 rounded text-xs ml-1">
+                    GET /finance/dashboard
+                  </code>
+                  <code className="bg-slate-100 px-1 rounded text-xs ml-1">
+                    GET /eco/dashboard/
+                  </code>
+                </p>
+                {ecoError ? (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-lg text-sm">
+                    ESG: {ecoError}
+                  </div>
+                ) : null}
+                <div className="grid lg:grid-cols-2 gap-6">
+                  <EfficiencyMatrix
+                    loading={loading || ecoLoading}
+                    margenNetoKm={data?.margen_neto_km_mes_actual ?? null}
+                    co2PerTonKm={ecoData?.co2_per_ton_km ?? null}
+                    ingresosMensuales={data?.ingresos ?? 0}
+                  />
+                  <BreakEvenAnalysis
+                    loading={loading}
+                    monthly={data?.ingresos_vs_gastos_mensual ?? []}
                   />
                 </div>
               </section>

@@ -10,6 +10,7 @@ from typing import Any
 from uuid import UUID
 
 import anyio
+from rapidfuzz import fuzz
 
 from app.db.supabase import SupabaseAsync
 from app.schemas.conciliacion import ConciliacionSugerenciaLLM, ConciliarAiOut
@@ -748,3 +749,300 @@ class ReconciliationService:
             .eq("empresa_id", eid)
             .eq("estado", "Sugerido")
         )
+
+
+class ReconciliationEngine:
+    """
+    Motor de conciliación para cola `webhook_events` (GoCardless).
+
+    Flujo:
+    - Lee eventos `PENDING`.
+    - Extrae importe, descripción y referencia/mandato.
+    - Busca facturas no cobradas en margen ±5%.
+    - Fuzzy match descripción bancaria vs nombre cliente (`rapidfuzz`).
+    - Si score > 0.95, marca factura cobrada y evento COMPLETED.
+    - Si no, evento FAILED + `error_log`.
+    """
+
+    def __init__(self, db: SupabaseAsync) -> None:
+        self._db = db
+
+    @staticmethod
+    def _to_decimal(value: Any) -> Decimal | None:
+        try:
+            return Decimal(str(value))
+        except Exception:
+            return None
+
+    @staticmethod
+    def _extract_payload_event(payload: Any) -> dict[str, Any]:
+        obj: Any = payload
+        if isinstance(obj, str):
+            try:
+                obj = json.loads(obj)
+            except Exception:
+                return {}
+        if not isinstance(obj, dict):
+            return {}
+        if isinstance(obj.get("events"), list):
+            events = obj.get("events") or []
+            if events and isinstance(events[0], dict):
+                return dict(events[0])
+        if isinstance(obj.get("event"), dict):
+            return dict(obj["event"])
+        return dict(obj)
+
+    @staticmethod
+    def _extract_amount_desc_ref(event: dict[str, Any]) -> tuple[Decimal | None, str, str, str]:
+        details = event.get("details") if isinstance(event.get("details"), dict) else {}
+        links = event.get("links") if isinstance(event.get("links"), dict) else {}
+        metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
+
+        amount_minor = (
+            details.get("amount")
+            or details.get("amount_minor")
+            or event.get("amount_minor")
+            or event.get("amount_in_minor")
+        )
+        amount_major = event.get("amount") or details.get("amount_major")
+        amount_raw = amount_minor if amount_minor is not None else amount_major
+        amount = ReconciliationEngine._to_decimal(amount_raw)
+        if amount is not None and amount_minor is not None:
+            amount = (amount / Decimal("100")).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_EVEN
+            )
+        if amount is not None and amount_major is not None and amount_minor is None:
+            amount = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+
+        description = str(
+            details.get("description")
+            or details.get("cause")
+            or event.get("description")
+            or metadata.get("description")
+            or ""
+        ).strip()
+        reference = str(
+            metadata.get("reference")
+            or links.get("mandate")
+            or links.get("payment")
+            or event.get("resource_id")
+            or ""
+        ).strip()
+        empresa_ctx = str(
+            metadata.get("empresa_id")
+            or metadata.get("dummy_empresa_id")
+            or event.get("empresa_id")
+            or ""
+        ).strip()
+        return amount, description, reference, empresa_ctx
+
+    async def _clientes_nombre_por_id(self, *, empresa_id: str, cliente_ids: set[str]) -> dict[str, str]:
+        if not cliente_ids:
+            return {}
+        try:
+            res: Any = await self._db.execute(
+                self._db.table("clientes")
+                .select("id,nombre,nombre_comercial")
+                .eq("empresa_id", empresa_id)
+                .in_("id", list(cliente_ids))
+            )
+            out: dict[str, str] = {}
+            for row in (res.data or []) if hasattr(res, "data") else []:
+                cid = str(row.get("id") or "").strip()
+                if not cid:
+                    continue
+                out[cid] = str(
+                    row.get("nombre_comercial") or row.get("nombre") or ""
+                ).strip()
+            return out
+        except Exception:
+            return {}
+
+    async def _candidate_invoices(
+        self,
+        *,
+        amount: Decimal,
+        empresa_ctx: str | None,
+    ) -> list[dict[str, Any]]:
+        res: Any = await self._db.execute(
+            self._db.table("facturas")
+            .select("id,empresa_id,total_factura,estado_cobro,fecha_emision,cliente,numero_factura,num_factura")
+            .order("fecha_emision", desc=True)
+            .limit(500)
+        )
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        low = (amount * Decimal("0.95")).quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+        high = (amount * Decimal("1.05")).quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            st = str(r.get("estado_cobro") or "").strip().lower()
+            if st == "cobrada":
+                continue
+            rid = str(r.get("empresa_id") or "").strip()
+            if empresa_ctx and rid and rid != empresa_ctx:
+                continue
+            tot = self._to_decimal(r.get("total_factura"))
+            if tot is None:
+                continue
+            tot_q = tot.quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+            if low <= tot_q <= high:
+                out.append(dict(r))
+        return out
+
+    async def _pick_best_match(
+        self,
+        *,
+        amount: Decimal,
+        description: str,
+        reference: str,
+        empresa_ctx: str | None,
+    ) -> tuple[dict[str, Any] | None, float]:
+        candidates = await self._candidate_invoices(amount=amount, empresa_ctx=empresa_ctx)
+        if not candidates:
+            return None, 0.0
+
+        # Agrupar por empresa para enriquecer nombres de cliente.
+        by_empresa: dict[str, list[dict[str, Any]]] = {}
+        for c in candidates:
+            by_empresa.setdefault(str(c.get("empresa_id") or "").strip(), []).append(c)
+
+        best: dict[str, Any] | None = None
+        best_score = 0.0
+        desc_norm = description.strip()
+        ref_norm = reference.strip().casefold()
+
+        for eid, bucket in by_empresa.items():
+            ids = {str(x.get("cliente") or "").strip() for x in bucket if x.get("cliente") is not None}
+            name_map = await self._clientes_nombre_por_id(empresa_id=eid, cliente_ids=ids)
+            for inv in bucket:
+                cid = str(inv.get("cliente") or "").strip()
+                cname = name_map.get(cid, "")
+                fuzzy = (
+                    float(fuzz.token_set_ratio(desc_norm, cname)) / 100.0
+                    if desc_norm and cname
+                    else 0.0
+                )
+                inv_no = str(
+                    inv.get("numero_factura") or inv.get("num_factura") or ""
+                ).strip().casefold()
+                ref_hit = 1.0 if inv_no and inv_no in ref_norm else 0.0
+                score = max(fuzzy, ref_hit)
+                if score > best_score:
+                    best_score = score
+                    best = inv
+        return best, best_score
+
+    async def _mark_event(
+        self,
+        *,
+        event_id: int,
+        status: str,
+        error_log: str | None = None,
+    ) -> None:
+        payload: dict[str, Any] = {"status": status}
+        if error_log is not None:
+            payload["error_log"] = error_log[:2000]
+        await self._db.execute(
+            self._db.table("webhook_events")
+            .update(payload)
+            .eq("id", event_id)
+        )
+
+    async def _mark_invoice_paid(
+        self,
+        *,
+        invoice: dict[str, Any],
+        reference: str,
+    ) -> None:
+        fid = int(invoice.get("id"))
+        eid = str(invoice.get("empresa_id") or "").strip()
+        if not eid:
+            raise ValueError("invoice empresa_id missing")
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await self._db.execute(
+            self._db.table("facturas")
+            .update(
+                {
+                    "estado_cobro": "cobrada",
+                    "payment_status": "PAID",
+                    "pago_id": reference or f"gocardless:auto:{fid}",
+                    "fecha_cobro_real": now_iso[:10],
+                }
+            )
+            .eq("id", fid)
+            .eq("empresa_id", eid)
+            .neq("estado_cobro", "cobrada")
+        )
+
+        fe = str(invoice.get("fecha_emision") or "").strip()
+        month = fe[:7] if len(fe) >= 7 else ""
+        if month:
+            await self._db.rpc(
+                "_upsert_monthly_kpis",
+                {"p_empresa_id": eid, "p_period_month": month},
+            )
+
+    async def process_pending_event(self, event_row: dict[str, Any]) -> bool:
+        event_id = int(event_row.get("id") or 0)
+        if event_id <= 0:
+            return False
+        payload_event = self._extract_payload_event(event_row.get("payload"))
+        amount, description, reference, empresa_ctx = self._extract_amount_desc_ref(payload_event)
+        if amount is None or amount <= 0:
+            await self._mark_event(
+                event_id=event_id,
+                status="FAILED",
+                error_log="No matching invoice found: invalid or missing amount",
+            )
+            return False
+
+        best, score = await self._pick_best_match(
+            amount=amount,
+            description=description,
+            reference=reference,
+            empresa_ctx=empresa_ctx or None,
+        )
+        if best is None or score <= 0.95:
+            await self._mark_event(
+                event_id=event_id,
+                status="FAILED",
+                error_log="No matching invoice found",
+            )
+            return False
+
+        await self._mark_invoice_paid(invoice=best, reference=reference)
+        await self._mark_event(event_id=event_id, status="COMPLETED", error_log=None)
+        return True
+
+    async def poll_pending_queue(self, *, limit: int = 50) -> dict[str, int]:
+        lim = max(1, min(500, int(limit)))
+        res: Any = await self._db.execute(
+            self._db.table("webhook_events")
+            .select("id,provider,event_type,payload,status,created_at")
+            .eq("provider", "gocardless")
+            .eq("status", "PENDING")
+            .order("created_at", desc=False)
+            .limit(lim)
+        )
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+
+        completed = 0
+        failed = 0
+        for row in rows:
+            try:
+                ok = await self.process_pending_event(dict(row))
+                if ok:
+                    completed += 1
+                else:
+                    failed += 1
+            except Exception as exc:
+                rid = int(row.get("id") or 0)
+                if rid > 0:
+                    await self._mark_event(
+                        event_id=rid,
+                        status="FAILED",
+                        error_log=f"No matching invoice found: {str(exc)}",
+                    )
+                failed += 1
+        return {"processed": len(rows), "completed": completed, "failed": failed}
