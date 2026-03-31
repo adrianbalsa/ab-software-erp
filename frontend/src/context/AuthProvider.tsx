@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { clearAuthToken } from "@/lib/auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
@@ -42,6 +42,7 @@ function clearClientState(): void {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -52,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const invalid = event === "SIGNED_OUT" || !session;
       if (!invalid) return;
       clearClientState();
+      const shouldRedirect = session === null && pathname !== "/" && !pathname.startsWith("/auth");
+      if (!shouldRedirect) return;
       router.replace("/login");
       router.refresh();
     });
@@ -59,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, [pathname, router]);
 
   return <>{children}</>;
 }
