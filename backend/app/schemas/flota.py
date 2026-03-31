@@ -38,6 +38,8 @@ class AmortizacionLinealOut(BaseModel):
 FlotaEstado = Literal["Operativo", "En Taller", "Baja", "Vendido"]
 FlotaTipoMotor = Literal["Diesel", "Gasolina", "Híbrido", "Eléctrico"]
 CertificacionEmisiones = Literal["Euro V", "Euro VI", "Electrico", "Hibrido"]
+EngineClass = Literal["EURO_VI", "EURO_V", "EURO_IV", "EURO_III", "EV"]
+FuelType = Literal["DIESEL", "ELECTRIC", "HIBRIDO", "GASOLINA"]
 
 
 class FlotaVehiculoIn(BaseModel):
@@ -69,6 +71,14 @@ class FlotaVehiculoIn(BaseModel):
     normativa_euro: NormativaEuro = Field(
         default=NormativaEuro.EURO_VI,
         description="Normativa EURO aplicada al factor CO₂ kg/km del motor ESG (porte).",
+    )
+    engine_class: EngineClass = Field(
+        default="EURO_VI",
+        description="Clase de motor para factores dinámicos ESG (GLEC).",
+    )
+    fuel_type: FuelType = Field(
+        default="DIESEL",
+        description="Tipo de combustible para factores dinámicos ESG (GLEC).",
     )
 
 

@@ -16,6 +16,7 @@ router = APIRouter()
 async def finance_summary(
     current_user: UserOut = Depends(require_admin),
     service: FinanceService = Depends(deps.get_finance_service),
+    period_month: str | None = None,
 ) -> FinanceSummaryOut:
     """
     EBITDA operativo (aprox.) e ingresos/gastos **netos de IVA** por empresa.
@@ -23,16 +24,23 @@ async def finance_summary(
 
     Delega en `FinanceService.financial_summary` (consultas vía SupabaseAsync).
     """
-    return await service.financial_summary(empresa_id=current_user.empresa_id)
+    return await service.financial_summary(
+        empresa_id=current_user.empresa_id,
+        period_month=period_month,
+    )
 
 
 @router.get("/dashboard", response_model=FinanceDashboardOut)
 async def finance_dashboard(
     current_user: UserOut = Depends(require_admin),
     service: FinanceService = Depends(deps.get_finance_service),
+    period_month: str | None = None,
 ) -> FinanceDashboardOut:
     """
     KPIs financieros, ``margen_km_eur`` (EBITDA / km snapshot facturado) y comparativa 6 meses.
     Solo accesible por ADMIN y SUPERADMIN.
     """
-    return await service.financial_dashboard(empresa_id=current_user.empresa_id)
+    return await service.financial_dashboard(
+        empresa_id=current_user.empresa_id,
+        period_month=period_month,
+    )

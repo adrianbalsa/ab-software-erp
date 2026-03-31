@@ -138,6 +138,45 @@ class FinanceService:
         return f"{y:04d}-{m:02d}"
 
     @staticmethod
+    def _mes_actual_clave(hoy: date) -> str:
+        return f"{hoy.year:04d}-{hoy.month:02d}"
+
+    @staticmethod
+    def _period_month_or_current(value: str | None, *, hoy: date) -> str:
+        raw = str(value or "").strip()
+        if len(raw) == 7 and raw[4] == "-" and raw[:4].isdigit() and raw[5:7].isdigit():
+            mm = int(raw[5:7])
+            if 1 <= mm <= 12:
+                return raw
+        return FinanceService._mes_actual_clave(hoy)
+
+    async def _snapshot_kpis_mes(
+        self,
+        *,
+        empresa_id: str,
+        period_month: str,
+    ) -> tuple[Decimal, Decimal, Decimal]:
+        """
+        Lee KPIs preagregados desde `finance_kpi_snapshots` (O(1)).
+        Si no existe snapshot para el mes solicitado, retorna ceros.
+        """
+        res: Any = await self._db.execute(
+            self._db.table("finance_kpi_snapshots")
+            .select("ingresos_operacion, gastos_operacion, ebitda")
+            .eq("empresa_id", empresa_id)
+            .eq("period_month", period_month)
+            .limit(1)
+        )
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        if not rows:
+            return Decimal("0.00"), Decimal("0.00"), Decimal("0.00")
+        row = rows[0]
+        ingresos = quantize_currency(self._decimal_or_zero(row.get("ingresos_operacion")))
+        gastos = quantize_currency(self._decimal_or_zero(row.get("gastos_operacion")))
+        ebitda = quantize_currency(self._decimal_or_zero(row.get("ebitda")))
+        return ingresos, gastos, ebitda
+
+    @staticmethod
     def _bucket_gasto_cinco(categoria: str | None) -> str:
         """
         Mapea categoría de ticket a 5 buckets UI: Combustible, Personal,
@@ -174,51 +213,35 @@ class FinanceService:
         out.reverse()
         return out
 
-    async def financial_summary(self, *, empresa_id: str) -> FinanceSummaryOut:
+    async def financial_summary(self, *, empresa_id: str, period_month: str | None = None) -> FinanceSummaryOut:
         """
-        EBITDA operativo (aprox.) **excluyendo IVA** en ingresos y gastos.
-
-        Todas las lecturas pasan por `SupabaseAsync.execute` sobre tablas `facturas` y `gastos`,
-        filtradas por `empresa_id`.
+        KPIs financieros del mes actual desde snapshot preagregado (`finance_kpi_snapshots`).
+        Fallback a 0 cuando aún no existe snapshot del periodo.
         """
         eid = str(empresa_id or "").strip()
         if not eid:
             return FinanceSummaryOut(ingresos=0.0, gastos=0.0, ebitda=0.0)
-
-        # 1. INGRESOS: facturas emitidas (base neta sin IVA)
-        res_fac: Any = await self._db.execute(
-            self._db.table("facturas")
-            .select("base_imponible, total_factura, cuota_iva")
-            .eq("empresa_id", eid)
+        period_month = self._period_month_or_current(period_month, hoy=date.today())
+        ingresos, gastos, ebitda = await self._snapshot_kpis_mes(
+            empresa_id=eid,
+            period_month=period_month,
         )
-        fact_rows: list[dict[str, Any]] = (res_fac.data or []) if hasattr(res_fac, "data") else []
-        ingresos = sum((self._ingreso_neto_sin_iva(r) for r in fact_rows), Decimal("0.00"))
-
-        # 2. GASTOS: tickets activos; restar IVA del ticket cuando consta
-        res_gas: Any = await self._db.execute(
-            filter_not_deleted(self._db.table("gastos").select("*").eq("empresa_id", eid))
-        )
-        gas_rows: list[dict[str, Any]] = (
-            (res_gas.data or []) if hasattr(res_gas, "data") else []
-        )
-        gastos = sum((self._gasto_neto_sin_iva(r) for r in gas_rows), Decimal("0.00"))
-
-        ebitda, _ = self._recalculate_ebitda_and_margen_km(
-            ingresos=ingresos,
-            gastos=gastos,
-            km_facturados=Decimal("0.00"),
-        )
-
         return FinanceSummaryOut(
-            ingresos=float(quantize_currency(ingresos)),
-            gastos=float(quantize_currency(gastos)),
+            ingresos=float(ingresos),
+            gastos=float(gastos),
             ebitda=float(ebitda),
         )
 
-    async def financial_dashboard(self, *, empresa_id: str, hoy: date | None = None) -> FinanceDashboardOut:
+    async def financial_dashboard(
+        self,
+        *,
+        empresa_id: str,
+        hoy: date | None = None,
+        period_month: str | None = None,
+    ) -> FinanceDashboardOut:
         """
-        KPIs como ``financial_summary`` más ``total_km_estimados_snapshot`` (suma en facturas),
-        ``margen_km_eur`` y serie de 6 meses (ingresos por ``fecha_emision`` de facturas).
+        Dashboard financiero optimizado para O(1): consume snapshot mensual preagregado.
+        Fallback a cero si el snapshot del mes actual no existe.
         """
         eid = str(empresa_id or "").strip()
         if not eid:
@@ -240,164 +263,26 @@ class FinanceService:
 
         if hoy is None:
             hoy = date.today()
-
-        summary = await self.financial_summary(empresa_id=eid)
-
-        res_fac_full: Any = await self._db.execute(
-            self._db.table("facturas")
-            .select(
-                "base_imponible, total_factura, cuota_iva, fecha_emision, "
-                "total_km_estimados_snapshot, estado_cobro"
-            )
-            .eq("empresa_id", eid)
+        period_month = self._period_month_or_current(period_month, hoy=hoy)
+        ingresos, gastos, ebitda = await self._snapshot_kpis_mes(
+            empresa_id=eid,
+            period_month=period_month,
         )
-        fact_rows_full: list[dict[str, Any]] = (
-            (res_fac_full.data or []) if hasattr(res_fac_full, "data") else []
-        )
-        total_km = sum(
-            self._decimal_or_zero(r.get("total_km_estimados_snapshot"))
-            for r in fact_rows_full
-        )
-        ingresos_d = self._decimal_or_zero(summary.ingresos)
-        gastos_d = self._decimal_or_zero(summary.gastos)
-        ebitda_d, margen_km_d = self._recalculate_ebitda_and_margen_km(
-            ingresos=ingresos_d,
-            gastos=gastos_d,
-            km_facturados=total_km,
-        )
-
-        res_gas: Any = await self._db.execute(
-            filter_not_deleted(self._db.table("gastos").select("*").eq("empresa_id", eid))
-        )
-        gas_rows: list[dict[str, Any]] = (res_gas.data or []) if hasattr(res_gas, "data") else []
-
-        claves = self._ultimos_n_meses_clave(hoy=hoy, n=6)
-        ing_mes: dict[str, Decimal] = {k: Decimal("0.00") for k in claves}
-        gas_mes: dict[str, Decimal] = {k: Decimal("0.00") for k in claves}
-
-        for r in fact_rows_full:
-            pk = self._periodo_yyyy_mm(r.get("fecha_emision"))
-            if pk in ing_mes:
-                ing_mes[pk] += self._ingreso_neto_sin_iva(r)
-
-        for r in gas_rows:
-            pk = self._periodo_yyyy_mm(r.get("fecha"))
-            if pk in gas_mes:
-                gas_mes[pk] += self._gasto_neto_sin_iva(r)
-
-        serie = [
-            FinanceMensualBarOut(
-                periodo=k,
-                ingresos=float(quantize_currency(ing_mes[k])),
-                gastos=float(quantize_currency(gas_mes[k])),
-            )
-            for k in claves
-        ]
-
-        claves_set = set(claves)
-
-        def _es_cobrada(row: dict[str, Any]) -> bool:
-            return str(row.get("estado_cobro") or "").strip().lower() == "cobrada"
-
-        tesoreria: list[FinanceTesoreriaMensualOut] = []
-        for k in claves:
-            ing_f = Decimal("0.00")
-            cob = Decimal("0.00")
-            for r in fact_rows_full:
-                pk = self._periodo_yyyy_mm(r.get("fecha_emision"))
-                if pk != k:
-                    continue
-                net = self._ingreso_neto_sin_iva(r)
-                ing_f += net
-                if _es_cobrada(r):
-                    cob += net
-            tesoreria.append(
-                FinanceTesoreriaMensualOut(
-                    periodo=k,
-                    ingresos_facturados=float(quantize_currency(max(ing_f, Decimal("0.00")))),
-                    cobros_reales=float(quantize_currency(max(cob, Decimal("0.00")))),
-                )
-            )
-
-        bucket_totals: dict[str, Decimal] = {
-            "Combustible": Decimal("0.00"),
-            "Personal": Decimal("0.00"),
-            "Mantenimiento": Decimal("0.00"),
-            "Seguros": Decimal("0.00"),
-            "Peajes": Decimal("0.00"),
-        }
-        for r in gas_rows:
-            pk = self._periodo_yyyy_mm(r.get("fecha"))
-            if pk not in claves_set:
-                continue
-            b = self._bucket_gasto_cinco(str(r.get("categoria") or ""))
-            bucket_totals[b] = bucket_totals.get(b, Decimal("0.00")) + self._gasto_neto_sin_iva(r)
-
-        gastos_buckets = [
-            GastoBucketCincoOut(name=name, value=float(quantize_currency(v)))
-            for name, v in bucket_totals.items()
-        ]
-
-        def _margen_neto_km_mes(yyyy_mm: str) -> Decimal | None:
-            ing_m = Decimal("0.00")
-            gas_m = Decimal("0.00")
-            km_m = Decimal("0.00")
-            for r in fact_rows_full:
-                if self._periodo_yyyy_mm(r.get("fecha_emision")) != yyyy_mm:
-                    continue
-                ing_m += self._ingreso_neto_sin_iva(r)
-                km_m += self._decimal_or_zero(r.get("total_km_estimados_snapshot"))
-            for r in gas_rows:
-                if self._periodo_yyyy_mm(r.get("fecha")) != yyyy_mm:
-                    continue
-                gas_m += self._gasto_neto_sin_iva(r)
-            _, margen = self._recalculate_ebitda_and_margen_km(
-                ingresos=ing_m,
-                gastos=gas_m,
-                km_facturados=km_m,
-            )
-            return margen
-
-        cur_mes = f"{hoy.year:04d}-{hoy.month:02d}"
-        prev_mes = self._mes_anterior_clave(hoy)
-        margen_act = _margen_neto_km_mes(cur_mes)
-        margen_prev = _margen_neto_km_mes(prev_mes)
-
-        var_pct: float | None = None
-        if margen_act is not None and margen_prev is not None:
-            if abs(float(margen_prev)) < 1e-9:
-                var_pct = None if abs(float(margen_act)) < 1e-9 else 100.0
-            else:
-                var_pct = round(
-                    (float(margen_act) - float(margen_prev)) / abs(float(margen_prev)) * 100.0,
-                    2,
-                )
-
-        def _km_facturados_mes(yyyy_mm: str) -> Decimal:
-            tot = Decimal("0.00")
-            for r in fact_rows_full:
-                if self._periodo_yyyy_mm(r.get("fecha_emision")) != yyyy_mm:
-                    continue
-                tot += self._decimal_or_zero(r.get("total_km_estimados_snapshot"))
-            return tot
-
-        km_cur = _km_facturados_mes(cur_mes)
-        km_prev = _km_facturados_mes(prev_mes)
 
         return FinanceDashboardOut(
-            ingresos=float(quantize_currency(ingresos_d)),
-            gastos=float(quantize_currency(gastos_d)),
-            ebitda=float(ebitda_d),
-            total_km_estimados_snapshot=round(float(total_km), 3),
-            margen_km_eur=float(margen_km_d) if margen_km_d is not None else None,
-            ingresos_vs_gastos_mensual=serie,
-            tesoreria_mensual=tesoreria,
-            gastos_por_bucket_cinco=gastos_buckets,
-            margen_neto_km_mes_actual=float(margen_act) if margen_act is not None else None,
-            margen_neto_km_mes_anterior=float(margen_prev) if margen_prev is not None else None,
-            variacion_margen_km_pct=var_pct,
-            km_facturados_mes_actual=round(float(km_cur), 3) if km_cur > 0 else None,
-            km_facturados_mes_anterior=round(float(km_prev), 3) if km_prev > 0 else None,
+            ingresos=float(ingresos),
+            gastos=float(gastos),
+            ebitda=float(ebitda),
+            total_km_estimados_snapshot=0.0,
+            margen_km_eur=None,
+            ingresos_vs_gastos_mensual=[],
+            tesoreria_mensual=[],
+            gastos_por_bucket_cinco=[],
+            margen_neto_km_mes_actual=None,
+            margen_neto_km_mes_anterior=None,
+            variacion_margen_km_pct=None,
+            km_facturados_mes_actual=None,
+            km_facturados_mes_anterior=None,
         )
 
     @staticmethod

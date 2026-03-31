@@ -40,6 +40,10 @@ class EcoResumenLiteOut(BaseModel):
         description="CO2 Scope 1 (kg) desde gastos COMBUSTIBLE (factor diesel estándar)",
     )
     co2_total: float
+    total_co2_kg: float = Field(..., ge=0, description="CO2 total (kg) con factores dinámicos por porte")
+    scope_1_kg: float = Field(..., ge=0, description="Emisiones Scope 1 (flota propia)")
+    scope_3_kg: float = Field(..., ge=0, description="Emisiones Scope 3 (subcontratado)")
+    co2_per_ton_km: float = Field(..., ge=0, description="Intensidad: kg CO2 por ton·km")
 
 
 class EcoFlotaSimRow(BaseModel):
@@ -78,3 +82,6 @@ class EcoDashboardOut(BaseModel):
         description="Suma de co2_emitido (kg) de portes facturados en el mes",
     )
     num_portes_facturados: int
+    scope_1_kg: float = Field(default=0.0, ge=0)
+    scope_3_kg: float = Field(default=0.0, ge=0)
+    co2_per_ton_km: float = Field(default=0.0, ge=0)

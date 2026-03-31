@@ -19,6 +19,12 @@ class PorteCreate(BaseModel):
     origen: str = Field(..., min_length=1, max_length=255, description="Dirección de carga", examples=["Madrid, Centro Logístico Sur"])
     destino: str = Field(..., min_length=1, max_length=255, description="Dirección de descarga", examples=["Barcelona, Polígono Zona Franca"])
     km_estimados: float = Field(default=0.0, ge=0, description="Distancia estimada en kilómetros", examples=[620.5])
+    km_vacio: float = Field(
+        default=0.0,
+        ge=0,
+        description="Kilómetros en vacío (sin carga) para cálculo dinámico de CO2.",
+        examples=[120.0],
+    )
     bultos: int = Field(default=1, ge=1, description="Número de bultos o palets", examples=[33])
     peso_ton: float | None = Field(
         default=None,
@@ -32,6 +38,10 @@ class PorteCreate(BaseModel):
         default=None,
         description="Vehículo de flota (public.flota.id) asignado al porte; determina normativa EURO del CO₂.",
         examples=["456e4567-e89b-12d3-a456-426614174001"]
+    )
+    subcontratado: bool = Field(
+        default=False,
+        description="True si el porte es subcontratado (Scope 3), False para flota propia (Scope 1).",
     )
 
 
@@ -50,6 +60,10 @@ class PorteOut(BaseModel):
     origen: str
     destino: str
     km_estimados: float
+    km_vacio: float | None = Field(
+        default=None,
+        description="Kilómetros en vacío del porte.",
+    )
     bultos: int
     descripcion: str | None
     precio_pactado: float | None = Field(
@@ -69,6 +83,10 @@ class PorteOut(BaseModel):
         description="Toneladas de carga informadas (opcional)",
     )
     estado: PorteEstado
+    subcontratado: bool = Field(
+        default=False,
+        description="Porte subcontratado (Scope 3).",
+    )
     factura_id: int | None = None
     nombre_consignatario_final: str | None = Field(
         default=None,

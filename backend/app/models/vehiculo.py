@@ -15,6 +15,21 @@ class NormativaEuro(StrEnum):
     EURO_VI = "Euro VI"
 
 
+class EngineClass(StrEnum):
+    EURO_VI = "EURO_VI"
+    EURO_V = "EURO_V"
+    EURO_IV = "EURO_IV"
+    EURO_III = "EURO_III"
+    EV = "EV"
+
+
+class FuelType(StrEnum):
+    DIESEL = "DIESEL"
+    ELECTRIC = "ELECTRIC"
+    HIBRIDO = "HIBRIDO"
+    GASOLINA = "GASOLINA"
+
+
 class Vehiculo(BaseModel):
     """
     Vehículo de flota (tabla ``public.flota`` / ``public.vehiculos``).
@@ -26,4 +41,12 @@ class Vehiculo(BaseModel):
     normativa_euro: NormativaEuro = Field(
         default=NormativaEuro.EURO_VI,
         description='Normativa EURO real para cálculo CO₂: "Euro III", "Euro IV", "Euro V" o "Euro VI".',
+    )
+    engine_class: EngineClass = Field(
+        default=EngineClass.EURO_VI,
+        description="Clase de motor para factores dinámicos ESG.",
+    )
+    fuel_type: FuelType = Field(
+        default=FuelType.DIESEL,
+        description="Tipo de combustible para factores dinámicos ESG.",
     )

@@ -17,6 +17,7 @@ from app.schemas.esg import (
 )
 from app.core.esg_engine import (
     calculate_co2_emissions,
+    calculate_co2_footprint,
     calculate_nox_emissions,
     get_co2_factor_kg_per_km,
 )
@@ -100,7 +101,7 @@ class EsgService:
                 filter_not_deleted(
                     self._db.table("flota")
                     .select(
-                        "id, matricula, vehiculo, tipo_motor, factor_emision_co2_tkm, normativa_euro"
+                        "id, matricula, vehiculo, tipo_motor, factor_emision_co2_tkm, normativa_euro, engine_class, fuel_type"
                     )
                     .eq("empresa_id", eid)
                     .in_("id", list(ids))
@@ -150,7 +151,7 @@ class EsgService:
                 self._db.table("portes")
                 .select(
                     "id, origen, destino, km_estimados, peso_ton, bultos, vehiculo_id, "
-                    "co2_emitido, fecha"
+                    "co2_emitido, fecha, km_vacio, subcontratado"
                 )
                 .eq("empresa_id", eid)
                 .eq("estado", "facturado")
@@ -196,10 +197,19 @@ class EsgService:
             vid_raw = r.get("vehiculo_id")
             vid_key: str | None = str(vid_raw).strip() if vid_raw is not None else None
             frow = flota_por_id.get(vid_key) if vid_key else None
-            factor = _factor_desde_flota_row(frow)
-
-            co2_p = max(0.0, km_real * peso * factor)
-            co2_pess = max(0.0, km_real * 1.15 * peso * factor)
+            km_vacio = max(0.0, float(r.get("km_vacio") or 0.0))
+            if km_vacio > km_real:
+                km_vacio = km_real
+            km_cargado = max(0.0, km_real - km_vacio)
+            co2_scoped = calculate_co2_footprint(
+                km_cargado=km_cargado,
+                km_vacio=km_vacio,
+                engine_class=str((frow or {}).get("engine_class") or "EURO_VI"),
+                fuel_type=str((frow or {}).get("fuel_type") or "DIESEL"),
+                subcontratado=bool(r.get("subcontratado") or False),
+            )
+            co2_p = max(0.0, float(co2_scoped["total_co2_kg"]))
+            co2_pess = max(0.0, co2_p * 1.15)
 
             total_co2 += co2_p
             total_km += km_real

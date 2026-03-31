@@ -119,6 +119,9 @@ async def simular_eco(
     co2_cb, _lit = await service.co2_emisiones_combustible_scope1(
         empresa_id=current_user.empresa_id
     )
+    total_co2_kg, scope_1_kg, scope_3_kg, co2_per_ton_km = await service.dynamic_portes_summary(
+        empresa_id=str(current_user.empresa_id),
+    )
     return EcoResumenLiteOut(
         n_tickets=base.n_tickets,
         papel_kg=base.papel_kg,
@@ -126,6 +129,10 @@ async def simular_eco(
         co2_flota=base.co2_flota,
         co2_combustible=float(co2_cb),
         co2_total=float(base.co2_tickets + base.co2_flota + co2_cb),
+        total_co2_kg=total_co2_kg,
+        scope_1_kg=scope_1_kg,
+        scope_3_kg=scope_3_kg,
+        co2_per_ton_km=co2_per_ton_km,
     )
 
 

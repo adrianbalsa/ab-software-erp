@@ -19,6 +19,21 @@ _NOX_FACTORS_G_PER_KM: Final[dict[str, float]] = {
     "EURO III": 5.0,
 }
 
+# Factores dinámicos GLEC simplificados en gCO2/km por perfil.
+# Convención: "<ENGINE_CLASS>_<FUEL_TYPE>_<LOAD>" donde LOAD es FULL o EMPTY.
+_GLEC_GCO2_PER_KM: Final[dict[str, float]] = {
+    "EURO_VI_DIESEL_FULL": 800.0,
+    "EURO_VI_DIESEL_EMPTY": 550.0,
+    "EURO_V_DIESEL_FULL": 860.0,
+    "EURO_V_DIESEL_EMPTY": 600.0,
+    "EURO_IV_DIESEL_FULL": 920.0,
+    "EURO_IV_DIESEL_EMPTY": 650.0,
+    "EURO_III_DIESEL_FULL": 980.0,
+    "EURO_III_DIESEL_EMPTY": 700.0,
+    "EV_ELECTRIC_FULL": 0.0,
+    "EV_ELECTRIC_EMPTY": 0.0,
+}
+
 
 def _normalize_euro_key(raw: str) -> str:
     """Mapea etiquetas canónicas o legacy a claves internas (EURO IV|V|VI)."""
@@ -99,3 +114,70 @@ def get_nox_factor_g_per_km(normativa_euro: str) -> float:
     """Factor NOx g/km por normativa EURO."""
     key = _normalize_euro_key(normativa_euro)
     return _NOX_FACTORS_G_PER_KM.get(key, _NOX_FACTORS_G_PER_KM["EURO VI"])
+
+
+def _normalize_engine_class(raw: str | None) -> str:
+    s = str(raw or "").strip().upper().replace("-", "_").replace(" ", "_")
+    if s in {"EURO_VI", "EURO_V", "EURO_IV", "EURO_III", "EV"}:
+        return s
+    if s in {"ELECTRIC", "ELECTRICO", "ELÉCTRICO"}:
+        return "EV"
+    return "EURO_VI"
+
+
+def _normalize_fuel_type(raw: str | None) -> str:
+    s = str(raw or "").strip().upper().replace("-", "_").replace(" ", "_")
+    if s in {"DIESEL", "ELECTRIC", "GASOLINA", "HIBRIDO"}:
+        return s
+    if s in {"ELÉCTRICO", "ELECTRICO", "EV"}:
+        return "ELECTRIC"
+    return "DIESEL"
+
+
+def _factor_gco2_per_km(*, engine_class: str | None, fuel_type: str | None, load: str) -> float:
+    ec = _normalize_engine_class(engine_class)
+    ft = _normalize_fuel_type(fuel_type)
+    key = f"{ec}_{ft}_{load}"
+    if key in _GLEC_GCO2_PER_KM:
+        return _GLEC_GCO2_PER_KM[key]
+    # Fallbacks robustos para combinaciones no listadas.
+    fb = f"{ec}_DIESEL_{load}"
+    if fb in _GLEC_GCO2_PER_KM:
+        return _GLEC_GCO2_PER_KM[fb]
+    return _GLEC_GCO2_PER_KM["EURO_VI_DIESEL_EMPTY" if load == "EMPTY" else "EURO_VI_DIESEL_FULL"]
+
+
+def calculate_co2_footprint(
+    *,
+    km_cargado: float,
+    km_vacio: float,
+    engine_class: str | None = "EURO_VI",
+    fuel_type: str | None = "DIESEL",
+    subcontratado: bool = False,
+) -> dict[str, float]:
+    """
+    Calcula CO2 dinámico por tramo cargado/vacío y clasifica Scope 1 vs Scope 3.
+
+    Returns:
+        {
+          "total_co2_kg": float,
+          "scope_1_kg": float,
+          "scope_3_kg": float
+        }
+    """
+    km_full = max(0.0, float(km_cargado or 0.0))
+    km_empty = max(0.0, float(km_vacio or 0.0))
+    f_full = _factor_gco2_per_km(engine_class=engine_class, fuel_type=fuel_type, load="FULL")
+    f_empty = _factor_gco2_per_km(engine_class=engine_class, fuel_type=fuel_type, load="EMPTY")
+    total_kg = ((km_full * f_full) + (km_empty * f_empty)) / 1000.0
+    if subcontratado:
+        return {
+            "total_co2_kg": round(total_kg, 6),
+            "scope_1_kg": 0.0,
+            "scope_3_kg": round(total_kg, 6),
+        }
+    return {
+        "total_co2_kg": round(total_kg, 6),
+        "scope_1_kg": round(total_kg, 6),
+        "scope_3_kg": 0.0,
+    }
