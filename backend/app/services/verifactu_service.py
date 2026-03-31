@@ -95,12 +95,13 @@ class VerifactuService:
         return t if t else None
 
     @staticmethod
-    def generate_invoice_hash(invoice_data: dict[str, Any], previous_hash: str) -> str:
+    def generate_invoice_hash(invoice_data: dict[str, Any], previous_hash: str | None) -> str:
         """
         Huella de inalterabilidad para ``public.facturas.hash_factura`` (cadena dependiente del anterior).
 
         Concatena (determinista): número, fecha ISO, NIF emisor, total con 2 decimales, y ``previous_hash``.
-        Si ``previous_hash`` viene vacío, se usa ``VERIFACTU_INVOICE_GENESIS_HASH``.
+        Si ``previous_hash`` viene vacío o ``None``, se usa ``VERIFACTU_INVOICE_GENESIS_HASH``
+        como semilla de cadena para la primera factura.
         """
         num = VerifactuService._norm_str(
             invoice_data.get("num_factura") or invoice_data.get("numero_factura")
@@ -219,7 +220,7 @@ class VerifactuService:
         try:
             q = (
                 self._db.table("facturas")
-                .select("hash_registro, hash_factura, numero_secuencial, fecha_emision, id")
+                .select("huella_hash, hash_registro, hash_factura, numero_secuencial, fecha_emision, id")
                 .eq("empresa_id", eid)
                 .order("numero_secuencial", desc=True)
                 .order("fecha_emision", desc=True)
@@ -231,7 +232,7 @@ class VerifactuService:
             if not rows:
                 return None, 1
             row = rows[0]
-            raw = row.get("hash_factura") or row.get("hash_registro")
+            raw = row.get("huella_hash") or row.get("hash_factura") or row.get("hash_registro")
             h = VerifactuService._norm_hash_anterior(str(raw) if raw is not None else None)
             val = row.get("numero_secuencial")
             try:
@@ -253,7 +254,7 @@ class VerifactuService:
         try:
             q = (
                 self._db.table("facturas")
-                .select("hash_factura, hash_registro")
+                .select("huella_hash, hash_factura, hash_registro")
                 .eq("empresa_id", eid)
                 .eq("numero_secuencial", int(numero_secuencial))
                 .limit(1)
@@ -262,7 +263,11 @@ class VerifactuService:
             rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
             if not rows:
                 return None
-            raw = rows[0].get("hash_factura") or rows[0].get("hash_registro")
+            raw = (
+                rows[0].get("huella_hash")
+                or rows[0].get("hash_factura")
+                or rows[0].get("hash_registro")
+            )
             return VerifactuService._norm_hash_anterior(str(raw) if raw is not None else None)
         except Exception:
             return None
@@ -287,7 +292,7 @@ class VerifactuService:
                 self._db.table("facturas")
                 .select(
                     "id,numero_secuencial,num_factura,numero_factura,fecha_emision,"
-                    "nif_emisor,total_factura,hash_factura,hash_registro,hash_anterior"
+                    "nif_emisor,total_factura,huella_hash,hash_factura,hash_registro,huella_anterior,hash_anterior"
                 )
                 .eq("empresa_id", eid)
                 .order("numero_secuencial", desc=True)
@@ -331,7 +336,7 @@ class VerifactuService:
             prev_hash = fetched if fetched else VERIFACTU_INVOICE_GENESIS_HASH
 
         for row in rows:
-            ha_raw = row.get("hash_anterior")
+            ha_raw = row.get("huella_anterior") if row.get("huella_anterior") is not None else row.get("hash_anterior")
             ha = str(ha_raw if ha_raw is not None else "").strip()
             if ha.lower() != prev_hash.lower():
                 discrepancies.append(
@@ -357,7 +362,12 @@ class VerifactuService:
                 "total_factura": row.get("total_factura"),
             }
             expected = VerifactuService.generate_invoice_hash(inv, prev_hash)
-            stored = str(row.get("hash_factura") or row.get("hash_registro") or "").strip()
+            stored = str(
+                row.get("huella_hash")
+                or row.get("hash_factura")
+                or row.get("hash_registro")
+                or ""
+            ).strip()
             if stored.lower() != expected.lower():
                 discrepancies.append(
                     {
@@ -513,12 +523,25 @@ class VerifactuService:
             total = float(fr.get("total_factura") or 0.0)
         except (TypeError, ValueError):
             total = 0.0
+        huella = str(
+            fr.get("huella_hash")
+            or fr.get("hash_registro")
+            or fr.get("hash_factura")
+            or fr.get("fingerprint")
+            or ""
+        ).strip()
 
         if not nif_em or not num_s or not fe_str:
             raise ValueError(
                 "Datos insuficientes para URL VeriFactu (NIF emisor, número de factura o fecha)"
             )
-        return build_srei_verifactu_url(nif_em, num_s, fe_str, total)
+        return build_srei_verifactu_url(
+            nif_em,
+            num_s,
+            fe_str,
+            total,
+            huella_hash=huella,
+        )
 
     async def generate_verifactu_qr(
         self,
@@ -528,6 +551,7 @@ class VerifactuService:
         fecha: str,
         importe_total: float,
         fingerprint: str,
+        huella_hash: str | None = None,
         storage_bucket: str | None = "facturas",
         storage_path: str | None = None,
     ) -> dict[str, str | None]:
@@ -536,12 +560,13 @@ class VerifactuService:
         El parámetro ``fingerprint`` se mantiene por compatibilidad de firma pero la URL
         SREI no lo incluye en la URL.
         """
-        _ = fingerprint  # reservado por compatibilidad histórica (TIKE incluía huella)
+        huella = str(huella_hash or fingerprint or "").strip()
         url = build_srei_verifactu_url(
             nif_emisor,
             num_factura,
             fecha,
             importe_total,
+            huella_hash=huella,
         )
         png = qr_png_bytes_from_url(url)
         b64 = base64.b64encode(png).decode("ascii")

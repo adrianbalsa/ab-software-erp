@@ -224,6 +224,7 @@ def _pg_finalizar_factura_verifactu(*, empresa_id: str, factura_id: int) -> dict
                 num_f,
                 fe,
                 float(r.get("total_factura") or 0.0),
+                huella_hash=hr,
             )
             out_m = conn.execute(
                 text(
@@ -231,6 +232,7 @@ def _pg_finalizar_factura_verifactu(*, empresa_id: str, factura_id: int) -> dict
                     UPDATE public.facturas
                     SET fingerprint = CAST(:fp AS text),
                         prev_fingerprint = CAST(:pfp AS text),
+                        qr_content = CAST(:url AS text),
                         qr_code_url = CAST(:url AS text),
                         is_finalized = true
                     WHERE id = :fid AND empresa_id = CAST(:eid AS uuid)
@@ -383,6 +385,7 @@ class FacturasService:
             num_f,
             fe,
             float(r.get("total_factura") or 0.0),
+            huella_hash=hr,
         )
         try:
             await self._db.execute(
@@ -391,6 +394,7 @@ class FacturasService:
                     {
                         "fingerprint": fp,
                         "prev_fingerprint": prev_fp,
+                        "qr_content": url,
                         "qr_code_url": url,
                         "is_finalized": True,
                     }
@@ -906,6 +910,16 @@ class FacturasService:
             previous_fingerprint,
         )
         previous_invoice_hash = previous_fingerprint
+        qr_verifactu = await self._verifactu.generate_verifactu_qr(
+            nif_emisor=nif_emisor,
+            num_factura=num_fact,
+            fecha=fecha_iso,
+            importe_total=float(total_factura),
+            fingerprint=hash_registro,
+            huella_hash=hash_registro,
+            storage_bucket=None,
+        )
+        qr_content = str(qr_verifactu.get("verification_url") or "").strip() or None
 
         # Campos alineados con VeriFactu / SIF (tipo F1, huella y encadenamiento)
         factura_payload: dict[str, Any] = {
@@ -923,6 +937,11 @@ class FacturasService:
             "hash_anterior": eslabon.hash_anterior,
             "hash_registro": hash_registro,
             "hash_factura": hash_registro,
+            "huella_anterior": eslabon.hash_anterior,
+            "huella_hash": hash_registro,
+            "fecha_hitos_verifactu": datetime.now(timezone.utc).isoformat(),
+            "qr_content": qr_content,
+            "qr_code_url": qr_content,
             "fingerprint_hash": fingerprint_hash,
             "previous_fingerprint": previous_fingerprint,
             "previous_invoice_hash": previous_invoice_hash,
@@ -1287,6 +1306,16 @@ class FacturasService:
             previous_fingerprint,
         )
         previous_invoice_hash = previous_fingerprint
+        qr_verifactu = await self._verifactu.generate_verifactu_qr(
+            nif_emisor=nif_emisor,
+            num_factura=num_fact_r,
+            fecha=fecha_iso,
+            importe_total=float(total_r),
+            fingerprint=hash_registro,
+            huella_hash=hash_registro,
+            storage_bucket=None,
+        )
+        qr_content = str(qr_verifactu.get("verification_url") or "").strip() or None
 
         porte_snap = _clone_snapshot_con_importes_negativos(orig.get("porte_lineas_snapshot"))
         km_snap = orig.get("total_km_estimados_snapshot")
@@ -1310,6 +1339,11 @@ class FacturasService:
             "hash_anterior": eslabon.hash_anterior,
             "hash_registro": hash_registro,
             "hash_factura": hash_registro,
+            "huella_anterior": eslabon.hash_anterior,
+            "huella_hash": hash_registro,
+            "fecha_hitos_verifactu": datetime.now(timezone.utc).isoformat(),
+            "qr_content": qr_content,
+            "qr_code_url": qr_content,
             "fingerprint_hash": fingerprint_hash,
             "previous_fingerprint": previous_fingerprint,
             "previous_invoice_hash": previous_invoice_hash,
@@ -1534,6 +1568,7 @@ class FacturasService:
                     num_s,
                     fe_str,
                     total_f,
+                    huella_hash=hr_full or fp_full,
                 )
         if not qr_url and aeat_csv and aeat_csv.lower().startswith("http"):
             qr_url = aeat_csv

@@ -83,6 +83,18 @@ class FacturaOut(BaseModel):
         description="Alias histórico del hash de registro (mismo valor que hash_registro si aplica)",
     )
     hash_anterior: str | None = None
+    huella_hash: str | None = Field(
+        default=None,
+        description="Huella SHA-256 encadenada persistida para VeriFactu (alias de hash_registro).",
+    )
+    huella_anterior: str | None = Field(
+        default=None,
+        description="Huella previa en la cadena VeriFactu para esta factura.",
+    )
+    fecha_hitos_verifactu: datetime | None = Field(
+        default=None,
+        description="Timestamp del hito de sellado/encadenado VeriFactu.",
+    )
     bloqueado: bool | None = None
     fingerprint: str | None = Field(
         default=None,
@@ -107,6 +119,10 @@ class FacturaOut(BaseModel):
     qr_code_url: str | None = Field(
         default=None,
         description="URL TIKE de cotejo AEAT codificada en el QR de registro",
+    )
+    qr_content: str | None = Field(
+        default=None,
+        description="Contenido literal de la URL codificada en el QR VeriFactu.",
     )
     is_finalized: bool | None = Field(
         default=None,

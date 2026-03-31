@@ -47,11 +47,19 @@ def _importe_para_qr(importe_total: float) -> str:
     return f"{float(importe_total):.2f}"
 
 
+def _huella_corta(value: str | None) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    return raw[:8]
+
+
 def build_srei_verifactu_url(
     nif_emisor: str,
     numserie: str,
     fecha: str,
     importe_total: float,
+    huella_hash: str | None = None,
 ) -> str:
     """
     URL oficial de consulta VeriFactu (SREI): ``nif``, ``numser``, ``fec`` (DD-MM-AAAA), ``imp``.
@@ -66,6 +74,9 @@ def build_srei_verifactu_url(
         f"&fec={quote(fe, safe='')}"
         f"&imp={quote(imp, safe='')}"
     )
+    hc = _huella_corta(huella_hash)
+    if hc:
+        q += f"&hc={quote(hc, safe='')}"
     return f"{SREI_VERIFACTU_BASE}?{q}"
 
 

@@ -8,7 +8,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.services.aeat_qr_service import build_srei_verifactu_url, build_tike_verifactu_url
-from app.services.verifactu_service import VERIFACTU_CHAIN_SEED_HEX, VerifactuService
+from app.services.verifactu_service import (
+    VERIFACTU_CHAIN_SEED_HEX,
+    VERIFACTU_INVOICE_GENESIS_HASH,
+    VerifactuService,
+)
 
 
 def test_generar_hash_sin_campos_rect_igual_que_legacy() -> None:
@@ -33,6 +37,20 @@ def test_generar_hash_sin_campos_rect_igual_que_legacy() -> None:
         num_factura_rectificada=None,
     )
     assert h == h2
+
+
+def test_generate_invoice_hash_usa_genesis_si_prev_vacio() -> None:
+    inv = {
+        "num_factura": "FAC-2026-000001",
+        "fecha_emision": "2026-03-24",
+        "nif_emisor": "B12345678",
+        "total_factura": 121.0,
+    }
+    h_none = VerifactuService.generate_invoice_hash(inv, None)
+    h_empty = VerifactuService.generate_invoice_hash(inv, "")
+    h_genesis = VerifactuService.generate_invoice_hash(inv, VERIFACTU_INVOICE_GENESIS_HASH)
+    assert h_none == h_empty == h_genesis
+    assert len(h_none) == 64
 
 
 def test_generar_hash_r1_incluye_tipo_y_rect_distinto() -> None:
