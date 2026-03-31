@@ -1,10 +1,10 @@
 "use client";
 
 import {
-  Bubble,
-  BubbleChart,
   CartesianGrid,
   ResponsiveContainer,
+  Scatter,
+  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
@@ -71,7 +71,7 @@ export function EfficiencyMatrix({
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <BubbleChart margin={{ top: 12, right: 12, left: 12, bottom: 12 }}>
+            <ScatterChart margin={{ top: 12, right: 12, left: 12, bottom: 12 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 type="number"
@@ -96,8 +96,8 @@ export function EfficiencyMatrix({
                   return [String(value), key];
                 }}
               />
-              <Bubble data={data} dataKey="ingresos" fill="#2563eb" />
-            </BubbleChart>
+              <Scatter data={data} fill="#2563eb" />
+            </ScatterChart>
           </ResponsiveContainer>
         )}
       </div>
