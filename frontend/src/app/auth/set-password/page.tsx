@@ -37,6 +37,7 @@ function SetPasswordContent() {
     }
 
     async function bootstrapRecoverySession() {
+      if (!supabase) return;
       try {
         const fromSearchToken =
           searchParams.get("token_hash") ||
