@@ -3,13 +3,21 @@ import { createBrowserClient } from "@supabase/ssr";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.ablogistics-os.com";
 
-// 1. Instancia base
+// 1. Helpers universales (para evitar fallos de importacion)
+export const getAuthToken = () =>
+  typeof window !== "undefined" ? localStorage.getItem("sb-access-token") : null;
+export const setAuthToken = (token: string) =>
+  typeof window !== "undefined" && localStorage.setItem("sb-access-token", token);
+export const clearAuthToken = () =>
+  typeof window !== "undefined" && localStorage.removeItem("sb-access-token");
+export const authHeaders = () => ({ Authorization: `Bearer ${getAuthToken()}` });
+
+// 2. Instancia de Axios con interceptor de seguridad
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: { "Content-Type": "application/json" },
 });
 
-// 2. Interceptor de Seguridad (Solo se activa en el cliente para evitar errores de build)
 apiClient.interceptors.request.use(async (config) => {
   if (typeof window !== "undefined") {
     const supabase = createBrowserClient(
@@ -26,13 +34,7 @@ apiClient.interceptors.request.use(async (config) => {
   return config;
 });
 
-// 3. Exportaciones de compatibilidad total (Legacy + New)
+// 3. Exportaciones por nombre y por defecto (Compatibilidad Total)
 export const api = apiClient;
 export { apiClient };
 export default apiClient;
-
-// Helpers basicos
-export const getAuthToken = () =>
-  typeof window !== "undefined" ? localStorage.getItem("sb-access-token") : null;
-export const clearAuthToken = () =>
-  typeof window !== "undefined" && localStorage.removeItem("sb-access-token");
