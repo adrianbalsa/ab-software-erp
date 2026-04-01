@@ -16,7 +16,10 @@ export const setAuthToken = (token: string) =>
   typeof window !== "undefined" && localStorage.setItem(AUTH_TOKEN_KEY, token);
 export const clearAuthToken = () =>
   typeof window !== "undefined" && localStorage.removeItem(AUTH_TOKEN_KEY);
-export const authHeaders = () => ({ Authorization: `Bearer ${getAuthToken() ?? ""}` });
+export const authHeaders = () => {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 export const notifyJwtUpdated = () => {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(ABL_JWT_UPDATED_EVENT));
@@ -85,23 +88,41 @@ async function resolveAccessToken(): Promise<string | null> {
 }
 
 apiClient.interceptors.request.use(async (config) => {
-  if (typeof window === "undefined") return config;
+  let token: string | null = null;
+  if (typeof window !== "undefined") {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      token = session?.access_token ?? null;
+    }
+    if (!token) token = window.localStorage.getItem("sb-access-token");
+  } else {
+    try {
+      const { cookies } = await import("next/headers");
+      const cookieStore = await cookies();
+      const refId = process.env.NEXT_PUBLIC_SUPABASE_URL?.split("//")[1]?.split(".")[0];
+      const supabaseTokenStr =
+        cookieStore.get("sb-access-token")?.value ||
+        (refId ? cookieStore.get(`sb-${refId}-auth-token`)?.value : undefined);
 
-  const supabase = getSupabaseClient();
-  const {
-    data: { session },
-  } = supabase ? await supabase.auth.getSession() : { data: { session: null as any } };
-
+      if (supabaseTokenStr) {
+        try {
+          const parsed = JSON.parse(supabaseTokenStr) as { access_token?: string };
+          token = parsed.access_token || supabaseTokenStr;
+        } catch {
+          token = supabaseTokenStr;
+        }
+      }
+    } catch {
+      // Ignorar si no estamos en entorno Next.js SSR
+    }
+  }
   config.headers = config.headers ?? {};
   const headers = config.headers as Record<string, string>;
-
-  if (session?.access_token) {
-    headers.Authorization = `Bearer ${session.access_token}`;
-  } else {
-    const localToken = window.localStorage.getItem("sb-access-token");
-    if (localToken) headers.Authorization = `Bearer ${localToken}`;
-    else delete headers.Authorization;
-  }
+  if (token) headers.Authorization = `Bearer ${token}`;
+  else delete headers.Authorization;
 
   return config;
 });
