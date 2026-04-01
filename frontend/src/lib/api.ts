@@ -16,7 +16,7 @@ export const setAuthToken = (token: string) =>
   typeof window !== "undefined" && localStorage.setItem(AUTH_TOKEN_KEY, token);
 export const clearAuthToken = () =>
   typeof window !== "undefined" && localStorage.removeItem(AUTH_TOKEN_KEY);
-export const authHeaders = () => {
+export const authHeaders = (): Record<string, string> => {
   const token = getAuthToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };

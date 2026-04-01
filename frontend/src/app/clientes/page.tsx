@@ -6,7 +6,7 @@ import { BarChart3, Loader2, RefreshCw, Users } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
 import { RoleGuard } from "@/components/auth/RoleGuard";
-import { API_BASE, authHeaders } from "@/lib/api";
+import { API_BASE, apiFetch, authHeaders } from "@/lib/api";
 
 type ClienteRow = {
   id: string;
@@ -29,9 +29,8 @@ function ClientesContent() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/clientes/`, {
+      const res = await apiFetch(`${API_BASE}/clientes/`, {
         credentials: "include",
-        headers: { ...authHeaders() },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
