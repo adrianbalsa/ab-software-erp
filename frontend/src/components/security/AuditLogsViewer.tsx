@@ -13,7 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { API_BASE, authHeaders, parseApiError } from "@/lib/api";
+import { API_BASE, apiFetch, parseApiError } from "@/lib/api";
 
 type AuditAction = "INSERT" | "UPDATE" | "DELETE";
 
@@ -134,9 +134,8 @@ export function AuditLogsViewer() {
       const params = new URLSearchParams();
       params.set("limit", "150");
       if (tableFilter) params.set("table_name", tableFilter);
-      const res = await fetch(`${API_BASE}/api/v1/audit-logs?${params}`, {
+      const res = await apiFetch(`${API_BASE}/api/v1/audit-logs?${params}`, {
         credentials: "include",
-        headers: { ...authHeaders() },
       });
       if (!res.ok) {
         throw new Error(await parseApiError(res));

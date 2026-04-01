@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { FileText } from "lucide-react";
 
 import {
-  authHeaders,
+  apiFetch,
   fetchPortalFacturas,
   parseApiError,
   portalFacturaPdfUrl,
@@ -116,9 +116,8 @@ export default function PortalFacturasPage() {
                           setDownloading(row.id);
                           try {
                             async function doFetch(): Promise<Response> {
-                              return fetch(portalFacturaPdfUrl(row.id), {
+                              return apiFetch(portalFacturaPdfUrl(row.id), {
                                 credentials: "include",
-                                headers: authHeaders(),
                               });
                             }
                             let res = await doFetch();

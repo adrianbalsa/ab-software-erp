@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { API_BASE, authHeaders } from "@/lib/api";
+import { API_BASE, apiFetch } from "@/lib/api";
 
 const VALID = new Set(["starter", "pro", "enterprise"]);
 
@@ -29,12 +29,11 @@ function CheckoutRedirect() {
 
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/payments/create-checkout`, {
+        const res = await apiFetch(`${API_BASE}/payments/create-checkout`, {
           method: "POST",
           credentials: "include",
           headers: {
             "Content-Type": "application/json",
-            ...authHeaders(),
           },
           body: JSON.stringify({ plan_type: plan }),
         });

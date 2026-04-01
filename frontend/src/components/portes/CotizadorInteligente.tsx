@@ -12,7 +12,7 @@ import {
   Timer,
 } from "lucide-react";
 
-import { API_BASE, authHeaders, parseApiError } from "@/lib/api";
+import { API_BASE, apiFetch, parseApiError } from "@/lib/api";
 
 export type CotizadorInteligenteProps = {
   empresaId: string;
@@ -84,12 +84,11 @@ export function CotizadorInteligente({ empresaId }: CotizadorInteligenteProps) {
           empresa_id: empresaId,
           precio_oferta: Number.isFinite(precioNum) ? precioNum : 0,
         };
-        const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/v1/portes/cotizar`, {
+        const res = await apiFetch(`${API_BASE.replace(/\/$/, "")}/api/v1/portes/cotizar`, {
           method: "POST",
           credentials: "include",
           headers: {
             "Content-Type": "application/json",
-            ...authHeaders(),
           },
           body: JSON.stringify(payload),
         });

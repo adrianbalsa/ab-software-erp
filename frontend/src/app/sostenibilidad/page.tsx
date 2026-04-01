@@ -14,7 +14,7 @@ import {
   YAxis,
 } from "recharts";
 
-import { API_BASE, authHeaders as getAuthHeaders, notifyJwtUpdated } from "@/lib/api";
+import { API_BASE, notifyJwtUpdated } from "@/lib/api";
 import { clearAuthToken, getAuthToken, setAuthToken } from "@/lib/auth";
 
 /** kg CO₂ / L — referencia diésel Euro 6 / marco UE (alineado con backend ReportService). */
@@ -247,9 +247,8 @@ export default function SostenibilidadPage() {
     (async () => {
       setLoadingEmisiones(true);
       try {
-        const res = await fetch(`${API_BASE}/eco/emisiones-mensuales`, {
+        const res = await apiFetch("/eco/emisiones-mensuales", {
           credentials: "include",
-          headers: { ...getAuthHeaders() },
         });
         if (!res.ok) return;
         const raw = (await res.json()) as EmisionMensual[];
@@ -413,11 +412,10 @@ export default function SostenibilidadPage() {
     setCertHuellaBusy(true);
     setCertHuellaErr(null);
     try {
-      const url = `${API_BASE}/reports/esg/certificado-huella?periodo=${encodeURIComponent(periodoHuella)}`;
-      const res = await fetch(url, {
+      const res = await apiFetch(`/reports/esg/certificado-huella?periodo=${encodeURIComponent(periodoHuella)}`, {
         method: "GET",
         credentials: "include",
-        headers: { ...getAuthHeaders(), Accept: "application/pdf" },
+        headers: { Accept: "application/pdf" },
       });
       if (!res.ok) {
         const t = await res.text();

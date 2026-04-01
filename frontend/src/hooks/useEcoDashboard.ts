@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { API_BASE, apiFetch, authHeaders } from "@/lib/api";
+import { API_BASE, apiFetch } from "@/lib/api";
 
 export type EcoDashboard = {
   anio: number;
@@ -30,7 +30,6 @@ export function useEcoDashboard(options?: { enabled?: boolean }) {
     try {
       const res = await apiFetch(`${API_BASE}/eco/dashboard/`, {
         credentials: "include",
-        headers: { ...authHeaders() },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

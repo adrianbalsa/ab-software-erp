@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { API_BASE, authHeaders } from "@/lib/api";
+import { API_BASE, apiFetch } from "@/lib/api";
 
 export type EmpresaQuota = {
   plan_type: string;
@@ -19,9 +19,8 @@ export function useEmpresaQuota() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/empresa/quota`, {
+      const res = await apiFetch(`${API_BASE}/empresa/quota`, {
         credentials: "include",
-        headers: { ...authHeaders() },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

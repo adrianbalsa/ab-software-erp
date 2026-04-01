@@ -7,7 +7,7 @@ import { Building2, FileText, LogOut, Package, Receipt } from "lucide-react";
 
 import {
   API_BASE,
-  authHeaders,
+  apiFetch,
   fetchPortalFacturas,
   fetchPortalPortes,
   jwtRbacRole,
@@ -28,7 +28,7 @@ type Tab = "entregas" | "facturas";
 
 async function downloadAuthedPdf(url: string, filename: string) {
   async function doFetch(): Promise<Response> {
-    return fetch(url, { credentials: "include", headers: { ...authHeaders() } });
+    return apiFetch(url, { credentials: "include" });
   }
   let res = await doFetch();
   if (res.status === 401) {

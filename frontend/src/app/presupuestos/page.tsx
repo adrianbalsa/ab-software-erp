@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { API_BASE, authHeaders } from "@/lib/api";
+import { API_BASE, apiFetch } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import {
   clearPresupuestoDraft,
@@ -172,12 +172,11 @@ export default function PresupuestosPage() {
         tipo_combustible: "hibrido",
       };
 
-      const response = await fetch(`${API_BASE}/eco/certificado-pdf`, {
+      const response = await apiFetch(`${API_BASE}/eco/certificado-pdf`, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...authHeaders(),
         },
         body: JSON.stringify(payload),
       });
@@ -237,12 +236,11 @@ export default function PresupuestosPage() {
         },
       };
 
-      const response = await fetch(`${API_BASE}/presupuestos/calcular`, {
+      const response = await apiFetch(`${API_BASE}/presupuestos/calcular`, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...authHeaders(),
         },
         body: JSON.stringify(payload),
       });

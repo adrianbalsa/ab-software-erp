@@ -11,7 +11,7 @@ import {
 } from "recharts";
 
 import { RoleGuard } from "@/components/auth/RoleGuard";
-import { API_BASE, authHeaders, parseApiError, type AppRbacRole } from "@/lib/api";
+import { API_BASE, apiFetch, parseApiError, type AppRbacRole } from "@/lib/api";
 
 type ESGAuditClienteItem = {
   cliente_id: string;
@@ -72,10 +72,10 @@ export default function EsgAuditoriaPage() {
       const q = new URLSearchParams();
       q.set("fecha_inicio", fechaInicio);
       q.set("fecha_fin", fechaFin);
-      const res = await fetch(`${API_BASE}/api/v1/esg/audit-report?${q.toString()}`, {
+      const res = await apiFetch(`${API_BASE}/api/v1/esg/audit-report?${q.toString()}`, {
         method: "GET",
         credentials: "include",
-        headers: { ...authHeaders(), Accept: "application/json" },
+        headers: { Accept: "application/json" },
       });
       if (!res.ok) {
         throw new Error(await parseApiError(res));

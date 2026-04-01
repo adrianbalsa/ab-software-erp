@@ -6,7 +6,7 @@ import { BarChart3, Loader2, RefreshCw, Users } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
 import { RoleGuard } from "@/components/auth/RoleGuard";
-import { API_BASE, apiFetch, authHeaders } from "@/lib/api";
+import { API_BASE, apiFetch } from "@/lib/api";
 
 type ClienteRow = {
   id: string;
@@ -59,11 +59,10 @@ function ClientesContent() {
     setFormError(null);
     setSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/clientes/`, {
+      const res = await apiFetch(`${API_BASE}/clientes/`, {
         method: "POST",
         credentials: "include",
         headers: {
-          ...authHeaders(),
           "Content-Type": "application/json",
         },
         body: JSON.stringify({

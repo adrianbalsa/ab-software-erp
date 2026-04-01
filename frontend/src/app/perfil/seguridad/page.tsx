@@ -14,7 +14,7 @@ import {
 import { RoleGuard } from "@/components/auth/RoleGuard";
 import { AppShell } from "@/components/AppShell";
 import { AuditLogsViewer } from "@/components/security/AuditLogsViewer";
-import { API_BASE, authHeaders } from "@/lib/api";
+import { API_BASE, apiFetch } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 
 type ActiveSession = {
@@ -66,9 +66,8 @@ export default function SeguridadPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/auth/sessions`, {
+      const res = await apiFetch(`${API_BASE}/auth/sessions`, {
         credentials: "include",
-        headers: { ...authHeaders() },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -94,10 +93,9 @@ export default function SeguridadPage() {
     setActionId(id);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/auth/sessions/${id}`, {
+      const res = await apiFetch(`${API_BASE}/auth/sessions/${id}`, {
         method: "DELETE",
         credentials: "include",
-        headers: { ...authHeaders() },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -117,10 +115,9 @@ export default function SeguridadPage() {
     setClosingAll(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/auth/sessions/all`, {
+      const res = await apiFetch(`${API_BASE}/auth/sessions/all`, {
         method: "DELETE",
         credentials: "include",
-        headers: { ...authHeaders() },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

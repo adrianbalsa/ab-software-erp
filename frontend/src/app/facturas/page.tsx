@@ -8,7 +8,7 @@ import { AppShell } from "@/components/AppShell";
 import { VeriFactuBadge } from "@/components/dashboard/VeriFactuBadge";
 import { SendInvoiceButton } from "@/components/facturas/SendInvoiceButton";
 import { ToastHost, type ToastPayload } from "@/components/ui/ToastHost";
-import { API_BASE, api, authHeaders, type Factura } from "@/lib/api";
+import { API_BASE, api, apiFetch, type Factura } from "@/lib/api";
 
 function puedeReenviarAeat(r: Factura): boolean {
   if (!r.is_finalized || !r.fingerprint) return false;
@@ -74,11 +74,10 @@ export default function FacturasPage() {
     setRectBusy(true);
     setRectError(null);
     try {
-      const res = await fetch(`${API_BASE}/facturas/${rectTarget.id}/rectificar`, {
+      const res = await apiFetch(`${API_BASE}/facturas/${rectTarget.id}/rectificar`, {
         method: "POST",
         credentials: "include",
         headers: {
-          ...authHeaders(),
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ motivo: m }),
@@ -101,10 +100,10 @@ export default function FacturasPage() {
     const idStr = String(r.id);
     setAeatBusyId(idStr);
     try {
-      const res = await fetch(`${API_BASE}/facturas/${idStr}/reenviar-aeat`, {
+      const res = await apiFetch(`${API_BASE}/facturas/${idStr}/reenviar-aeat`, {
         method: "POST",
         credentials: "include",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -122,9 +121,9 @@ export default function FacturasPage() {
   const descargarPdfInmutable = async (id: string) => {
     setDownloadingId(id);
     try {
-      const res = await fetch(`${API_BASE}/reports/facturas/${id}/pdf`, {
+      const res = await apiFetch(`${API_BASE}/reports/facturas/${id}/pdf`, {
         credentials: "include",
-        headers: { ...authHeaders(), Accept: "application/pdf" },
+        headers: { Accept: "application/pdf" },
       });
       if (!res.ok) {
         const t = await res.text();

@@ -1,16 +1,15 @@
 /**
  * Cliente tipado para `/admin/*`. Empresas: siempre `EmpresaOut` en snake_case.
  */
-import { API_BASE, authHeaders } from "@/lib/api";
+import { API_BASE, apiFetch } from "@/lib/api";
 import type { AuditoriaAdminRow, EmpresaCreateBody, MetricasSaaSFacturacionOut, UsuarioAdminOut, UsuarioAdminPatchBody } from "@/types/admin";
 import type { EmpresaOut } from "@/types/empresa";
 
 async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await apiFetch(`${API_BASE}${path}`, {
     ...init,
     credentials: "include",
     headers: {
-      ...authHeaders(),
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...(init?.headers as Record<string, string>),
     },

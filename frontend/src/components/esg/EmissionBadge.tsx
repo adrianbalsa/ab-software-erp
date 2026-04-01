@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { API_BASE, authHeaders, parseApiError } from "@/lib/api";
+import { API_BASE, apiFetch, parseApiError } from "@/lib/api";
 
 type Monthly = {
   mes: string;
@@ -32,10 +32,10 @@ export function EmissionBadge({ year }: { year?: number }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/esg/reporte-anual?year=${y}`, {
+      const res = await apiFetch(`${API_BASE}/api/v1/esg/reporte-anual?year=${y}`, {
         method: "GET",
         credentials: "include",
-        headers: { ...authHeaders(), Accept: "application/json" },
+        headers: { Accept: "application/json" },
       });
       if (!res.ok) throw new Error(await parseApiError(res));
       setData((await res.json()) as AnnualResponse);

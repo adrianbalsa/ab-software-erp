@@ -7,7 +7,7 @@ import { FileText, Loader2 } from "lucide-react";
 
 import { CmrPdfViewerModal } from "@/components/portes/CmrPdfViewerModal";
 import { generateCmrPdfBlob } from "@/components/portes/CmrPdfTemplate";
-import { API_BASE, authHeaders, getPorteCmrData } from "@/lib/api";
+import { API_BASE, apiFetch, getPorteCmrData } from "@/lib/api";
 import { RouteMap } from "@/components/maps/RouteMap";
 
 type PorteDetail = {
@@ -38,9 +38,8 @@ export default function PorteDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/portes/${encodeURIComponent(id)}`, {
+      const res = await apiFetch(`${API_BASE}/portes/${encodeURIComponent(id)}`, {
         credentials: "include",
-        headers: { ...authHeaders() },
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { detail?: string };

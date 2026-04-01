@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { API_BASE, authHeaders, parseApiError } from "@/lib/api";
+import { API_BASE, apiFetch, parseApiError } from "@/lib/api";
 
 export type EconomicInsightsData = {
   coste_medio_km_ultimos_30d: number | null;
@@ -45,9 +45,9 @@ export function useEconomicInsights(options: { enabled: boolean }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/dashboard/economic-insights`, {
+      const res = await apiFetch(`${API_BASE}/api/v1/dashboard/economic-insights`, {
         credentials: "include",
-        headers: { ...authHeaders(), Accept: "application/json" },
+        headers: { Accept: "application/json" },
       });
       if (!res.ok) {
         throw new Error(await parseApiError(res));

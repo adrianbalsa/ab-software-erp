@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { API_BASE, apiFetch, authHeaders } from "@/lib/api";
+import { API_BASE, apiFetch } from "@/lib/api";
 
 export type FinanceMensualBar = {
   periodo: string;
@@ -53,7 +53,6 @@ export function useFinanceDashboard(options?: { enabled?: boolean }) {
     try {
       const res = await apiFetch(`${API_BASE}/finance/dashboard`, {
         credentials: "include",
-        headers: { ...authHeaders() },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

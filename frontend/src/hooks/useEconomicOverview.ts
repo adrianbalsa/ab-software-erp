@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { API_BASE, authHeaders } from "@/lib/api";
+import { API_BASE, apiFetch } from "@/lib/api";
 import type {
   FinanceDashboard,
   FinanceMensualBar,
@@ -92,14 +92,12 @@ export function useEconomicOverview() {
     setLoading(true);
     setError(null);
     try {
-      const headers = { ...authHeaders() };
       const [resDash, resGas, resFac] = await Promise.all([
-        fetch(`${API_BASE}/finance/dashboard`, {
+        apiFetch(`${API_BASE}/finance/dashboard`, {
           credentials: "include",
-          headers,
         }),
-        fetch(`${API_BASE}/gastos/`, { credentials: "include", headers }),
-        fetch(`${API_BASE}/facturas/`, { credentials: "include", headers }),
+        apiFetch(`${API_BASE}/gastos/`, { credentials: "include" }),
+        apiFetch(`${API_BASE}/facturas/`, { credentials: "include" }),
       ]);
 
       if (!resDash.ok) {

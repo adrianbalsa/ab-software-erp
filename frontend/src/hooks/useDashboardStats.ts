@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { API_BASE, authHeaders, parseApiError } from "@/lib/api";
+import { API_BASE, apiFetch, parseApiError } from "@/lib/api";
 
 export type DashboardStats = {
   ebitda_estimado: number;
@@ -25,9 +25,8 @@ export function useDashboardStats(options?: { enabled?: boolean }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/dashboard/stats`, {
+      const res = await apiFetch(`${API_BASE}/dashboard/stats`, {
         credentials: "include",
-        headers: { ...authHeaders() },
       });
       if (!res.ok) {
         throw new Error(await parseApiError(res));

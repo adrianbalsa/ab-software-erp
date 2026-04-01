@@ -20,7 +20,7 @@ import {
 } from "recharts";
 
 import { AppShell } from "@/components/AppShell";
-import { API_BASE, authHeaders } from "@/lib/api";
+import { API_BASE, apiFetch } from "@/lib/api";
 
 type VehiculoRow = {
   id: string;
@@ -92,13 +92,11 @@ export default function FlotaPage() {
     setError(null);
     try {
       const [rInv, rMet] = await Promise.all([
-        fetch(`${API_BASE}/flota/inventario`, {
+        apiFetch(`${API_BASE}/flota/inventario`, {
           credentials: "include",
-          headers: { ...authHeaders() },
         }),
-        fetch(`${API_BASE}/flota/metricas`, {
+        apiFetch(`${API_BASE}/flota/metricas`, {
           credentials: "include",
-          headers: { ...authHeaders() },
         }),
       ]);
       if (!rInv.ok) {
@@ -127,9 +125,8 @@ export default function FlotaPage() {
   const exportCsv = async () => {
     setExporting(true);
     try {
-      const res = await fetch(`${API_BASE}/flota/export`, {
+      const res = await apiFetch(`${API_BASE}/flota/export`, {
         credentials: "include",
-        headers: { ...authHeaders() },
       });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);

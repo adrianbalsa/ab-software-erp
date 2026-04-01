@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { API_BASE, authHeaders } from "@/lib/api";
+import { API_BASE, apiFetch } from "@/lib/api";
 
 export type FinanceSummary = {
   ingresos: number;
@@ -19,9 +19,8 @@ export function useFinanceSummary() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/finance/summary`, {
+      const res = await apiFetch(`${API_BASE}/finance/summary`, {
         credentials: "include",
-        headers: { ...authHeaders() },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

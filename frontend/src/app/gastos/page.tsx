@@ -10,7 +10,7 @@ import {
   Settings,
   Truck,
 } from "lucide-react";
-import { API_BASE, authHeaders, notifyJwtUpdated } from "@/lib/api";
+import { API_BASE, apiFetch, notifyJwtUpdated } from "@/lib/api";
 import { clearAuthToken, getAuthToken, setAuthToken } from "@/lib/auth";
 
 /** Respuesta de POST /gastos/ocr-hint (sin confirmar). */
@@ -180,10 +180,9 @@ export default function GastosPage() {
       fd.append("confirm", "false");
       fd.append("evidencia", file);
 
-      const res = await fetch(`${API_BASE}/gastos/ocr-hint`, {
+      const res = await apiFetch(`${API_BASE}/gastos/ocr-hint`, {
         method: "POST",
         credentials: "include",
-        headers: { ...authHeaders() },
         body: fd,
       });
       if (!res.ok) {
@@ -236,10 +235,9 @@ export default function GastosPage() {
       }
       fd.append("evidencia", file);
 
-      const res = await fetch(`${API_BASE}/gastos/ocr-hint`, {
+      const res = await apiFetch(`${API_BASE}/gastos/ocr-hint`, {
         method: "POST",
         credentials: "include",
-        headers: { ...authHeaders() },
         body: fd,
       });
       if (!res.ok) {

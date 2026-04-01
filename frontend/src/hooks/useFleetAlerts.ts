@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { API_BASE, authHeaders } from "@/lib/api";
+import { API_BASE, apiFetch } from "@/lib/api";
 import type { UUID } from "@/types";
 
 export type FleetAlert = {
@@ -30,9 +30,8 @@ export function useFleetAlerts(options?: { enabled?: boolean }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/flota/alerts`, {
+      const res = await apiFetch(`${API_BASE}/flota/alerts`, {
         credentials: "include",
-        headers: { ...authHeaders() },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

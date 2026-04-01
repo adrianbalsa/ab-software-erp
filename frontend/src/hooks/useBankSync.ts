@@ -12,7 +12,7 @@ import {
   writeBankInstitutionId,
   writeBankLastSyncNow,
 } from "@/lib/bankStorage";
-import { API_BASE, authHeaders, parseApiError } from "@/lib/api";
+import { API_BASE, apiFetch, parseApiError } from "@/lib/api";
 
 export type BankConnectOut = {
   link: string;
@@ -85,10 +85,10 @@ export function useBankSync() {
       setIsLoading(true);
       setError(null);
       try {
-        const res = await fetch(buildConnectUrl(id, redirectUrl), {
+        const res = await apiFetch(buildConnectUrl(id, redirectUrl), {
           method: "GET",
           credentials: "include",
-          headers: { ...authHeaders(), Accept: "application/json" },
+          headers: { Accept: "application/json" },
         });
         if (!res.ok) {
           throw new Error(await parseApiError(res));
@@ -116,10 +116,10 @@ export function useBankSync() {
       setIsSyncing(true);
       setError(null);
       try {
-        const res = await fetch(buildSyncUrl(opts?.dateFrom, opts?.dateTo), {
+        const res = await apiFetch(buildSyncUrl(opts?.dateFrom, opts?.dateTo), {
           method: "POST",
           credentials: "include",
-          headers: { ...authHeaders(), Accept: "application/json" },
+          headers: { Accept: "application/json" },
         });
         if (!res.ok) {
           throw new Error(await parseApiError(res));

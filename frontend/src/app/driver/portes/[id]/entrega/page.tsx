@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Loader2, MapPin, Package, PenLine } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { API_BASE, authHeaders, parseApiError, postFirmaEntrega } from "@/lib/api";
+import { API_BASE, apiFetch, parseApiError, postFirmaEntrega } from "@/lib/api";
 
 const SignaturePadDynamic = dynamic(
   async () => {
@@ -42,9 +42,8 @@ export default function EntregaDriverPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/portes/${encodeURIComponent(id)}`, {
+      const res = await apiFetch(`${API_BASE}/portes/${encodeURIComponent(id)}`, {
         credentials: "include",
-        headers: { ...authHeaders() },
       });
       if (!res.ok) {
         const msg = await parseApiError(res);
