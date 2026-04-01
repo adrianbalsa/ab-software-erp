@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { API_BASE, jwtRbacRole, notifyJwtUpdated } from "@/lib/api";
+import { API_BASE, notifyJwtUpdated } from "@/lib/api";
 import { getAuthToken, setAuthToken } from "@/lib/auth";
 
 const LANDING_URL =
@@ -60,8 +60,8 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
       } catch {
         /* ignore */
       }
-      const next = jwtRbacRole() === "cliente" ? "/portal" : redirectTo;
-      router.replace(next);
+      router.refresh();
+      window.location.href = "/dashboard";
     } catch (e: unknown) {
       console.error("Login error details:", e);
       setError(e instanceof Error ? e.message : "Error de conexión");

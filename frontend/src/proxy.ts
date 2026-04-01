@@ -1,33 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-function isProtectedPath(pathname: string): boolean {
-  const protectedPrefixes = [
-    "/dashboard",
-    "/admin",
-    "/profile",
-    "/portal",
-    "/finanzas",
-    "/facturas",
-    "/gastos",
-    "/flota",
-    "/clientes",
-    "/portes",
-    "/sostenibilidad",
-    "/settings",
-    "/perfil",
-    "/bancos",
-    "/payments",
-  ];
-  return protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-}
-
 export async function proxy(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-  if (pathname === "/login") {
-    return NextResponse.next();
-  }
-
   let res = NextResponse.next({ request: { headers: req.headers } });
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -49,20 +23,11 @@ export async function proxy(req: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user && isProtectedPath(pathname)) {
-    const loginUrl = req.nextUrl.clone();
-    loginUrl.pathname = "/login";
-    loginUrl.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(loginUrl);
-  }
+  await supabase.auth.getSession();
 
   return res;
 }
 
 export const config = {
-  matcher: ["/((?!login(?:/|$)|landing(?:/|$)|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
