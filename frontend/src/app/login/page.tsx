@@ -1,12 +1,22 @@
+"use client";
+
+import { useActionState } from "react";
 import { loginAction } from "./actions";
 
 export default function LoginPage() {
+  const [state, action, isPending] = useActionState(loginAction, null);
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
       <section className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
         <h1 className="text-xl font-semibold text-zinc-900">Iniciar sesión</h1>
         <p className="mt-2 text-sm text-zinc-600">Accede con tu cuenta para entrar al dashboard.</p>
-        <form action={loginAction} className="mt-6 space-y-4">
+        {state?.error ? (
+          <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {state.error}
+          </p>
+        ) : null}
+        <form action={action} className="mt-6 space-y-4">
           <div>
             <label htmlFor="email" className="mb-1 block text-sm font-medium text-zinc-700">
               Email
@@ -35,9 +45,10 @@ export default function LoginPage() {
           </div>
           <button
             type="submit"
+            disabled={isPending}
             className="inline-flex w-full items-center justify-center rounded-xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800"
           >
-            Entrar
+            {isPending ? "Entrando..." : "Entrar"}
           </button>
         </form>
       </section>

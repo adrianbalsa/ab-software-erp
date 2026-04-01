@@ -4,7 +4,8 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-export async function loginAction(formData: FormData) {
+export async function loginAction(prevState: any, formData: FormData) {
+  void prevState;
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
