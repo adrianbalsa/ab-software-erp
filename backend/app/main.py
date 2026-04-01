@@ -126,9 +126,22 @@ def create_app() -> FastAPI:
         SecurityHeadersMiddleware,
         enable_hsts=settings.ENVIRONMENT == "production",
     )
+    cors_origins = set(settings.CORS_ALLOW_ORIGINS)
+    cors_origins.update(
+        {
+            "https://ablogistics-os.com",
+            "https://www.ablogistics-os.com",
+        }
+    )
+    vercel_deployment_url = (os.getenv("VERCEL_DEPLOYMENT_URL") or "").strip().rstrip("/")
+    if vercel_deployment_url:
+        if vercel_deployment_url.startswith("http://") or vercel_deployment_url.startswith("https://"):
+            cors_origins.add(vercel_deployment_url)
+        else:
+            cors_origins.add(f"https://{vercel_deployment_url}")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=sorted(settings.CORS_ALLOW_ORIGINS),
+        allow_origins=sorted(cors_origins),
         allow_origin_regex=settings.CORS_ALLOW_ORIGIN_REGEX,
         allow_credentials=True,
         allow_methods=["*"],

@@ -89,6 +89,7 @@ def _attach_refresh_cookie(response: Response, *, raw_refresh: str, max_age: int
 
 
 @router.post("/login")
+@router.post("/login/", include_in_schema=False)
 async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -99,6 +100,7 @@ async def login(
     Devuelve ``access_token`` en JSON y fija el **refresh token** en cookie HttpOnly
     (Secure según entorno, SameSite=Lax). [cite: 2026-03-22]
     """
+    _log.info("Login request received for user: %s", form_data.username)
     user = await auth_service.authenticate(
         username=form_data.username,
         password=form_data.password,
@@ -144,6 +146,7 @@ async def login(
 
 
 @router.post("/refresh")
+@router.post("/refresh/", include_in_schema=False)
 async def refresh_session(
     request: Request,
     auth_service: AuthService = Depends(deps.get_auth_service_admin),

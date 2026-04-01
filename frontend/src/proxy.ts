@@ -5,6 +5,7 @@ function isProtectedPath(pathname: string): boolean {
   const protectedPrefixes = [
     "/dashboard",
     "/admin",
+    "/profile",
     "/portal",
     "/finanzas",
     "/facturas",

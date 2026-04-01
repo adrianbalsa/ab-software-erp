@@ -63,6 +63,7 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
       const next = jwtRbacRole() === "cliente" ? "/portal" : redirectTo;
       router.replace(next);
     } catch (e: unknown) {
+      console.error("Login error details:", e);
       setError(e instanceof Error ? e.message : "Error de conexión");
     } finally {
       setBusy(false);
