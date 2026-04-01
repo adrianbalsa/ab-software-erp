@@ -86,11 +86,23 @@ async function resolveAccessToken(): Promise<string | null> {
 
 apiClient.interceptors.request.use(async (config) => {
   if (typeof window === "undefined") return config;
-  const token = await resolveAccessToken();
-  if (token) {
-    config.headers = config.headers ?? {};
-    (config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
+
+  const supabase = getSupabaseClient();
+  const {
+    data: { session },
+  } = supabase ? await supabase.auth.getSession() : { data: { session: null as any } };
+
+  config.headers = config.headers ?? {};
+  const headers = config.headers as Record<string, string>;
+
+  if (session?.access_token) {
+    headers.Authorization = `Bearer ${session.access_token}`;
+  } else {
+    const localToken = window.localStorage.getItem("sb-access-token");
+    if (localToken) headers.Authorization = `Bearer ${localToken}`;
+    else delete headers.Authorization;
   }
+
   return config;
 });
 
