@@ -69,35 +69,59 @@ const apiClient = axios.create({
 });
 
 let _supabaseClient: ReturnType<typeof createBrowserClient> | null = null;
-function getSupabaseClient() {
+declare global {
+  interface Window {
+    __supabaseInstance?: ReturnType<typeof createBrowserClient>;
+  }
+}
+
+export function getSupabaseClient() {
   if (typeof window === "undefined") return null;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) return null;
-  if (!_supabaseClient) _supabaseClient = createBrowserClient(url, anon);
+
+  if (_supabaseClient) return _supabaseClient;
+  if (window.__supabaseInstance) {
+    _supabaseClient = window.__supabaseInstance;
+    return _supabaseClient;
+  }
+
+  _supabaseClient = createBrowserClient(url, anon);
+  window.__supabaseInstance = _supabaseClient;
   return _supabaseClient;
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 async function resolveAccessToken(): Promise<string | null> {
   const supabase = getSupabaseClient();
   if (!supabase) return getAuthToken();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  return session?.access_token ?? getAuthToken();
+
+  const readSessionToken = async (): Promise<string | null> => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  };
+
+  let token = await readSessionToken();
+  if (!token) {
+    await wait(500);
+    token = await readSessionToken();
+  }
+  return token ?? getAuthToken();
 }
 
 apiClient.interceptors.request.use(async (config) => {
   let token: string | null = null;
   if (typeof window !== "undefined") {
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      token = session?.access_token ?? null;
-    }
-    if (!token) token = window.localStorage.getItem("sb-access-token");
+    token = await resolveAccessToken();
+    if (!token) token = window.localStorage.getItem(AUTH_TOKEN_KEY);
   } else {
     try {
       const { cookies } = await import("next/headers");

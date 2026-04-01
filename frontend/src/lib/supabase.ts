@@ -1,8 +1,8 @@
 "use client";
 
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getSupabaseClient } from "./api";
 
-let _client: SupabaseClient | null = null;
 let _missingConfigLogged = false;
 
 export function isSupabaseConfigured(): boolean {
@@ -12,11 +12,8 @@ export function isSupabaseConfigured(): boolean {
 }
 
 export function getSupabaseBrowserClient(): SupabaseClient | null {
-  if (_client) return _client;
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) {
+  const client = getSupabaseClient();
+  if (!client) {
     if (!_missingConfigLogged) {
       console.error(
         "Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY. Se omite inicializacion de Supabase.",
@@ -25,14 +22,6 @@ export function getSupabaseBrowserClient(): SupabaseClient | null {
     }
     return null;
   }
-
-  _client = createClient(url, anonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-  });
-  return _client;
+  return client as SupabaseClient;
 }
 
