@@ -50,10 +50,10 @@ export async function proxy(req: NextRequest) {
   });
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session && isProtectedPath(pathname)) {
+  if (!user && isProtectedPath(pathname)) {
     const loginUrl = req.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("redirect", pathname);
