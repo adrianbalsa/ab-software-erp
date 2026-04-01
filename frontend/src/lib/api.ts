@@ -85,7 +85,7 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
     }
   }
 
-  const res = await fetch(input, { ...init, headers });
+  const res = await globalThis.fetch(input, { ...init, headers });
   if (res.status === 401 || res.status === 403) {
     if (typeof window !== "undefined") {
       try {
@@ -106,6 +106,9 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
   }
   return res;
 }
+
+// En este módulo, toda llamada fetch usa el wrapper con sesión Supabase.
+const fetch = apiFetch;
 
 /**
  * Renueva el access JWT usando la cookie HttpOnly del refresh token.
