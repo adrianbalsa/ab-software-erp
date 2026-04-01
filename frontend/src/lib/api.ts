@@ -3,14 +3,13 @@
  * Prioridad: NEXT_PUBLIC_API_BASE_URL → NEXT_PUBLIC_API_URL → NEXT_PUBLIC_API_BASE → localhost.
  * Si el env termina en `/api/v1`, se normaliza (las rutas ya añaden `/api/v1/...`).
  */
+import { createBrowserClient } from "@supabase/ssr";
 import {
   AUTH_TOKEN_KEY,
   authHeaders,
-  clearAuthToken,
   getAuthToken,
   setAuthToken,
 } from "./auth";
-import { getSupabaseBrowserClient } from "./supabase";
 
 export {
   AUTH_TOKEN_KEY,
@@ -62,21 +61,27 @@ function resolveApiBase(): string {
 
 export const API_BASE = resolveApiBase();
 
+async function getSupabaseAccessToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+
+  try {
+    const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers ?? {});
   if (typeof window !== "undefined") {
-    let token: string | null = null;
-    try {
-      const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        token = session?.access_token ?? null;
-      }
-    } catch {
-      token = null;
-    }
+    let token: string | null = await getSupabaseAccessToken();
     if (!token) {
       token = getAuthToken();
     }
@@ -87,21 +92,6 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
 
   const res = await globalThis.fetch(input, { ...init, headers });
   if (res.status === 401 || res.status === 403) {
-    if (typeof window !== "undefined") {
-      try {
-        const supabase = getSupabaseBrowserClient();
-        if (supabase) {
-          await supabase.auth.signOut();
-        }
-      } catch {
-        /* ignore */
-      }
-      clearAuthToken();
-      window.localStorage.removeItem("token");
-      if (window.location.pathname !== "/login") {
-        window.location.href = "/login?expired=true";
-      }
-    }
     throw new Error(`HTTP ${res.status}`);
   }
   return res;
