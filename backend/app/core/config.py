@@ -220,21 +220,18 @@ def get_settings() -> Settings:
     supabase_anon_key = (supabase_anon_raw.strip() if supabase_anon_raw and supabase_anon_raw.strip() else supabase_key)
     supabase_service_key = getenv("SUPABASE_SERVICE_KEY") or supabase_key
 
-    # JWT local de la aplicación (Railway/Vercel: JWT_SECRET_KEY; alias JWT_SECRET soportado)
-    jwt_secret = getenv("JWT_SECRET_KEY") or getenv("JWT_SECRET")
-    if not jwt_secret or not str(jwt_secret).strip():
-        raise RuntimeError(
-            "Falta secreto JWT para firmar/validar sesión: defina JWT_SECRET_KEY o JWT_SECRET en Railway. "
-            "Ver backend/migrations/README_SCHEMA_SYNC.md"
-        )
-    jwt_secret = str(jwt_secret).strip()
     supabase_jwks_url = (
         getenv("SUPABASE_JWKS_URL")
         or "https://bmdzpbdyvzkycyfgndvd.supabase.co/auth/v1/.well-known/jwks.json"
     )
     supabase_jwks_url = str(supabase_jwks_url).strip()
-    if not supabase_jwks_url:
-        raise RuntimeError("Missing required env var: SUPABASE_JWKS_URL")
+    # JWT local de la aplicación (Railway/Vercel: JWT_SECRET_KEY; alias JWT_SECRET soportado)
+    jwt_secret_raw = getenv("JWT_SECRET_KEY") or getenv("JWT_SECRET")
+    jwt_secret = str(jwt_secret_raw).strip() if jwt_secret_raw else ""
+    if not jwt_secret and not supabase_jwks_url:
+        raise RuntimeError(
+            "Debe definir JWT_SECRET_KEY o SUPABASE_JWKS_URL para la validación de tokens."
+        )
     supabase_jwt_issuer = getenv("SUPABASE_JWT_ISSUER")
     supabase_jwt_issuer = supabase_jwt_issuer.strip() if supabase_jwt_issuer else None
 
@@ -303,6 +300,8 @@ def get_settings() -> Settings:
             "Falta SESSION_SECRET_KEY (o JWT_SECRET_KEY como respaldo) para SessionMiddleware / OAuth state."
         )
     session_secret = str(session_secret_raw).strip()
+    if not jwt_secret:
+        jwt_secret = session_secret
 
     database_url = _build_database_url(environment=environment)
     redis_url = _opt("REDIS_URL")
