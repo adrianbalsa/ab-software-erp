@@ -45,20 +45,23 @@ export function jwtPayload(): JwtPayload | null {
 export type AppRbacRole = "owner" | "traffic_manager" | "driver" | "cliente" | "developer";
 
 export function jwtRbacRole(): AppRbacRole {
-  const payload = jwtPayload() as
+  const p = jwtPayload() as
     | {
-        app_metadata?: { rbac_role?: unknown };
         rbac_role?: unknown;
+        app_metadata?: { rbac_role?: unknown };
+        user_metadata?: { rbac_role?: unknown };
       }
     | null;
-  // Supabase mete los metadatos en app_metadata
-  const r = payload?.app_metadata?.rbac_role || payload?.rbac_role;
+  if (!p) return "driver";
 
-  console.log("DEBUG - Rol detectado:", r); // Para que lo veas en consola
-  if (r === "owner" || r === "traffic_manager" || r === "driver" || r === "cliente" || r === "developer") {
-    return r as AppRbacRole;
-  }
-  return "driver"; // Fallback por defecto
+  // Supabase puede guardar el rol en diferentes sitios según la config
+  const r = p.rbac_role || p.app_metadata?.rbac_role || p.user_metadata?.rbac_role;
+
+  console.log("🔍 JWT COMPLETO:", p);
+  console.log("🔑 ROL DETECTADO:", r);
+
+  const validRoles = ["owner", "traffic_manager", "driver", "cliente", "developer"];
+  return validRoles.includes(r as string) ? (r as AppRbacRole) : "driver";
 }
 
 export function jwtSubject(): string | null {
