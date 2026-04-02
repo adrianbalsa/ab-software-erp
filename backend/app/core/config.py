@@ -20,8 +20,8 @@ class Settings:
     SUPABASE_KEY: str  # clave pública (anon) histórica
     SUPABASE_ANON_KEY: str  # misma que PostgREST con RLS (fallback: SUPABASE_KEY o env SUPABASE_ANON_KEY)
     SUPABASE_SERVICE_KEY: str
-    # Secreto JWT Supabase (Dashboard → API). Opcional override de iss (dominio custom).
-    SUPABASE_JWT_SECRET: str
+    # Validación JWT Supabase via JWKS (ECC/ES256). Opcional override de iss (dominio custom).
+    SUPABASE_JWKS_URL: str
     SUPABASE_JWT_ISSUER: str | None
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str
@@ -220,18 +220,21 @@ def get_settings() -> Settings:
     supabase_anon_key = (supabase_anon_raw.strip() if supabase_anon_raw and supabase_anon_raw.strip() else supabase_key)
     supabase_service_key = getenv("SUPABASE_SERVICE_KEY") or supabase_key
 
-    # JWT (Railway/Vercel: usar JWT_SECRET_KEY; alias JWT_SECRET soportado)
+    # JWT local de la aplicación (Railway/Vercel: JWT_SECRET_KEY; alias JWT_SECRET soportado)
     jwt_secret = getenv("JWT_SECRET_KEY") or getenv("JWT_SECRET")
     if not jwt_secret or not str(jwt_secret).strip():
         raise RuntimeError(
             "Falta secreto JWT para firmar/validar sesión: defina JWT_SECRET_KEY o JWT_SECRET en Railway. "
-            "Para tokens de Supabase Auth use también SUPABASE_JWT_SECRET (Dashboard → API → JWT Secret). "
             "Ver backend/migrations/README_SCHEMA_SYNC.md"
         )
     jwt_secret = str(jwt_secret).strip()
-    # Mismo secreto que en Supabase Dashboard → API → JWT Settings (HS256).
-    # Si no se define, se reutiliza JWT_SECRET_KEY (solo válido si coinciden).
-    supabase_jwt_secret = getenv("SUPABASE_JWT_SECRET") or jwt_secret
+    supabase_jwks_url = (
+        getenv("SUPABASE_JWKS_URL")
+        or "https://bmdzpbdyvzkycyfgndvd.supabase.co/auth/v1/.well-known/jwks.json"
+    )
+    supabase_jwks_url = str(supabase_jwks_url).strip()
+    if not supabase_jwks_url:
+        raise RuntimeError("Missing required env var: SUPABASE_JWKS_URL")
     supabase_jwt_issuer = getenv("SUPABASE_JWT_ISSUER")
     supabase_jwt_issuer = supabase_jwt_issuer.strip() if supabase_jwt_issuer else None
 
@@ -385,7 +388,7 @@ def get_settings() -> Settings:
         SUPABASE_KEY=supabase_key,
         SUPABASE_ANON_KEY=supabase_anon_key,
         SUPABASE_SERVICE_KEY=supabase_service_key,
-        SUPABASE_JWT_SECRET=supabase_jwt_secret,
+        SUPABASE_JWKS_URL=supabase_jwks_url,
         SUPABASE_JWT_ISSUER=supabase_jwt_issuer,
         JWT_SECRET_KEY=jwt_secret,
         JWT_ALGORITHM=jwt_alg,

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from typing import Any, Final
+from urllib.request import Request, urlopen
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -14,6 +17,7 @@ from app.core.config import get_settings
 TOKEN_TYPE: Final[str] = "bearer"
 
 _SUPABASE_JWT_AUDIENCE = "authenticated"
+_DEFAULT_SUPABASE_JWKS_URL = "https://bmdzpbdyvzkycyfgndvd.supabase.co/auth/v1/.well-known/jwks.json"
 
 # Argon2id vía passlib (argon2-cffi); alineado con recomendaciones actuales [OWASP / NIST-aligned].
 _pwd_context = CryptContext(
@@ -42,13 +46,12 @@ def decode_access_token_payload(token: str) -> dict[str, Any]:
     settings = get_settings()
     base_url = settings.SUPABASE_URL.rstrip("/")
     expected_issuer = settings.SUPABASE_JWT_ISSUER or f"{base_url}/auth/v1"
+    jwks_url = settings.SUPABASE_JWKS_URL or _DEFAULT_SUPABASE_JWKS_URL
 
     try:
-        return jwt.decode(
-            token,
-            settings.SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
-            audience=_SUPABASE_JWT_AUDIENCE,
+        return _decode_supabase_es256_with_jwks(
+            token=token,
+            jwks_url=jwks_url,
             issuer=expected_issuer,
         )
     except JWTError:
@@ -65,6 +68,42 @@ def decode_access_token_payload(token: str) -> dict[str, Any]:
         pass
 
     raise ValueError("Token inválido o expirado")
+
+
+@lru_cache(maxsize=1)
+def _fetch_jwks(jwks_url: str) -> dict[str, Any]:
+    req = Request(jwks_url, headers={"Accept": "application/json"})
+    with urlopen(req, timeout=5) as resp:  # noqa: S310
+        data = json.loads(resp.read().decode("utf-8"))
+    if not isinstance(data, dict) or not isinstance(data.get("keys"), list):
+        raise ValueError("JWKS inválido")
+    return data
+
+
+def _decode_supabase_es256_with_jwks(*, token: str, jwks_url: str, issuer: str) -> dict[str, Any]:
+    header = jwt.get_unverified_header(token)
+    kid = header.get("kid")
+    if not isinstance(kid, str) or not kid:
+        raise JWTError("Token sin 'kid' en header")
+
+    jwks = _fetch_jwks(jwks_url)
+    key = next((k for k in jwks["keys"] if isinstance(k, dict) and k.get("kid") == kid), None)
+
+    if key is None:
+        _fetch_jwks.cache_clear()
+        jwks = _fetch_jwks(jwks_url)
+        key = next((k for k in jwks["keys"] if isinstance(k, dict) and k.get("kid") == kid), None)
+
+    if key is None:
+        raise JWTError("No se encontró clave pública para 'kid'")
+
+    return jwt.decode(
+        token,
+        key,
+        algorithms=["ES256"],
+        audience=_SUPABASE_JWT_AUDIENCE,
+        issuer=issuer,
+    )
 
 
 def sha256_hex(value: str) -> str:
