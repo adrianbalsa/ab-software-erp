@@ -294,12 +294,13 @@ def get_settings() -> Settings:
     google_sec = _opt("GOOGLE_CLIENT_SECRET")
     google_redirect = _opt("GOOGLE_OAUTH_REDIRECT_URI")
 
-    session_secret_raw = getenv("SESSION_SECRET_KEY") or jwt_secret
-    if not session_secret_raw or not str(session_secret_raw).strip():
-        raise RuntimeError(
-            "Falta SESSION_SECRET_KEY (o JWT_SECRET_KEY como respaldo) para SessionMiddleware / OAuth state."
-        )
-    session_secret = str(session_secret_raw).strip()
+    session_secret_raw = getenv("SESSION_SECRET_KEY")
+    if session_secret_raw and str(session_secret_raw).strip():
+        session_secret = str(session_secret_raw).strip()
+    elif environment == "development":
+        session_secret = "dev-session-secret-change-me"
+    else:
+        raise RuntimeError("Falta SESSION_SECRET_KEY en producción (Railway).")
     if not jwt_secret:
         jwt_secret = session_secret
 
