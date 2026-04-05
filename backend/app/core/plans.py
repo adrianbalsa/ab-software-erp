@@ -50,12 +50,12 @@ def max_vehiculos(plan_normalized: str) -> int | None:
 
 
 async def fetch_empresa_plan(db: Any, *, empresa_id: str) -> str:
-    """Lee `empresas.plan_type` o `plan` con el cliente Supabase del JWT (RLS)."""
-    q = db.table("empresas").select("plan, plan_type").eq("id", str(empresa_id)).limit(1)
+    """Lee `empresas.plan` con el cliente Supabase del JWT (RLS)."""
+    q = db.table("empresas").select("plan").eq("id", str(empresa_id)).limit(1)
     res: Any = await db.execute(q)
     rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
     if not rows:
         return PLAN_STARTER
     row = rows[0]
-    raw = row.get("plan_type") or row.get("plan")
+    raw = row.get("plan")
     return normalize_plan(str(raw or ""))
