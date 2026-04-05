@@ -38,7 +38,7 @@ export function useDashboardStats(options?: { enabled?: boolean }) {
         throw new Error(await parseApiError(res));
       }
       const json = (await res.json()) as Partial<StatsResponse>;
-      const stats = (json?.data ?? {}) as Partial<StatsData>;
+      const stats = (json?.data ?? {}) as Record<string, any>;
       setData({
         km_estimados: Number(stats.km_estimados ?? 0),
         bultos: Number(stats.bultos ?? 0),
