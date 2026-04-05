@@ -312,7 +312,7 @@ export default function Dashboard() {
                       {statsLoading
                         ? "…"
                         : statsOps != null
-                          ? statsOps.km_totales_mes.toLocaleString("es-ES", {
+                          ? (statsOps.km_estimados ?? 0).toLocaleString("es-ES", {
                               maximumFractionDigits: 1,
                             })
                           : "—"}
@@ -335,7 +335,7 @@ export default function Dashboard() {
                       Bultos (mes)
                     </p>
                     <h3 className="text-3xl font-bold text-slate-800">
-                      {statsLoading ? "…" : statsOps != null ? statsOps.bultos_mes : "—"}
+                      {statsLoading ? "…" : statsOps != null ? (statsOps.bultos ?? 0) : "—"}
                     </h3>
                   </div>
                   <div className="p-3 bg-indigo-50 rounded-xl text-indigo-600">

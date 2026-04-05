@@ -4,16 +4,22 @@ import { useCallback, useEffect, useState } from "react";
 
 import { API_BASE, apiFetch, parseApiError } from "@/lib/api";
 
-export type DashboardStats = {
-  ebitda_estimado: number;
-  pendientes_cobro: number;
-  km_totales_mes: number;
-  bultos_mes: number;
+export type DashboardStatsData = {
+  km_estimados: number;
+  bultos: number;
+  portes_count: number;
+  clientes_activos: number;
+  facturacion_estimada: number;
+};
+
+export type StatsResponse = {
+  message: string;
+  data: DashboardStatsData;
 };
 
 export function useDashboardStats(options?: { enabled?: boolean }) {
   const enabled = options?.enabled !== false;
-  const [data, setData] = useState<DashboardStats | null>(null);
+  const [data, setData] = useState<DashboardStatsData | null>(null);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,8 +37,15 @@ export function useDashboardStats(options?: { enabled?: boolean }) {
       if (!res.ok) {
         throw new Error(await parseApiError(res));
       }
-      const json = (await res.json()) as DashboardStats;
-      setData(json);
+      const json = (await res.json()) as Partial<StatsResponse>;
+      const stats = json?.data ?? {};
+      setData({
+        km_estimados: Number(stats.km_estimados ?? 0),
+        bultos: Number(stats.bultos ?? 0),
+        portes_count: Number(stats.portes_count ?? 0),
+        clientes_activos: Number(stats.clientes_activos ?? 0),
+        facturacion_estimada: Number(stats.facturacion_estimada ?? 0),
+      });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Error");
       setData(null);

@@ -38,9 +38,9 @@ export function QuotaStatusCard() {
     );
   }
 
-  const plan = normalizePlan(data.plan_type);
-  const used = data.vehiculos_actuales;
-  const limit = data.limite_vehiculos;
+  const plan = normalizePlan(data.plan);
+  const used = data.portes_actuales ?? 0;
+  const limit = data.limite_portes;
 
   const pctFinite =
     limit != null && limit > 0
