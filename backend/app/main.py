@@ -126,10 +126,18 @@ def create_app() -> FastAPI:
         SecurityHeadersMiddleware,
         enable_hsts=settings.ENVIRONMENT == "production",
     )
+    origins = (
+        [
+            origin.strip()
+            for origin in settings.CORS_ALLOW_ORIGINS.split(",")
+            if origin.strip()
+        ]
+        if isinstance(settings.CORS_ALLOW_ORIGINS, str)
+        else [origin.strip() for origin in settings.CORS_ALLOW_ORIGINS if str(origin).strip()]
+    )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_origin_regex=settings.CORS_ALLOW_ORIGIN_REGEX,
+        allow_origins=origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
