@@ -191,7 +191,7 @@ def create_access_token(
     if empresa_id and str(empresa_id).strip():
         payload["empresa_id"] = str(empresa_id).strip()
     rr = (rbac_role or "").strip().lower()
-    if rr in ("owner", "traffic_manager", "driver", "cliente"):
+    if rr in ("owner", "admin", "traffic_manager", "driver", "cliente", "developer"):
         payload["rbac_role"] = rr
     av = (assigned_vehiculo_id or "").strip()
     if av:

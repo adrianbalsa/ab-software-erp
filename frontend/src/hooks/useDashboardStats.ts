@@ -12,6 +12,7 @@ export type DashboardStatsData = {
   facturacion_estimada: number;
 };
 
+/** Alineado con GET /dashboard/stats: `{ message, data }` (payload anidado). */
 export type StatsResponse = {
   message: string;
   data: DashboardStatsData;

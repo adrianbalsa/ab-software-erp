@@ -23,6 +23,7 @@ import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useEcoDashboard } from "@/hooks/useEcoDashboard";
 import { useFinanceDashboard } from "@/hooks/useFinanceDashboard";
 import { useFleetAlerts } from "@/hooks/useFleetAlerts";
+import { isOwnerLike } from "@/lib/api";
 import { useRole } from "@/hooks/useRole";
 
 const OAUTH_WELCOME_KEY = "abl_oauth_welcome";
@@ -37,8 +38,8 @@ export default function Dashboard() {
   useEffect(() => {
     if (role === "cliente") router.replace("/portal");
   }, [role, router]);
-  const isOwner = role === "owner";
-  const canFleetAlerts = role === "owner" || role === "traffic_manager";
+  const isOwner = isOwnerLike(role);
+  const canFleetAlerts = isOwnerLike(role) || role === "traffic_manager";
 
   const { data, loading, error, refresh } = useFinanceDashboard({
     enabled: isOwner,

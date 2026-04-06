@@ -32,7 +32,7 @@ import { ConfiguracionNavSection, SidebarUserSection } from "@/components/layout
 import { QuotaStatusCard } from "@/components/QuotaStatusCard";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useRole } from "@/hooks/useRole";
-import type { AppRbacRole } from "@/lib/api";
+import { isOwnerLike, type AppRbacRole } from "@/lib/api";
 
 const navLink =
   "flex items-center px-3 py-2.5 rounded-lg transition-colors text-sm font-medium";
@@ -78,19 +78,19 @@ function showNavItem(
     | "clientes",
   role: AppRbacRole,
 ): boolean {
-  // Solo owner y developer pueden ver clientes
+  // Solo owner / admin y developer pueden ver clientes
   if (key === "clientes") {
-    return role === "owner" || role === "developer";
+    return isOwnerLike(role) || role === "developer";
   }
-  
-  // Solo owner y developer pueden ver finanzas y admin (roles ADMIN/SUPERADMIN)
+
+  // Solo owner / admin y developer pueden ver finanzas y admin (roles ADMIN/SUPERADMIN)
   // Los roles traffic_manager, driver, cliente son equivalentes a STAFF
   if (key === "finanzas" || key === "admin") {
-    return role === "owner" || role === "developer";
+    return isOwnerLike(role) || role === "developer";
   }
-  
-  // Owner puede ver todo
-  if (role === "owner") return true;
+
+  // Owner / admin puede ver todo
+  if (isOwnerLike(role)) return true;
   
   // Developer puede ver casi todo excepto operaciones de flota (driver-specific)
   if (role === "developer") {
@@ -129,7 +129,7 @@ function ShellNavAndFooter({
           <LayoutDashboard className="w-5 h-5 mr-3 shrink-0" />
           Dashboard
         </Link>
-        {role === "owner" && (
+        {isOwnerLike(role) && (
           <Link
             href="/dashboard/analitica"
             className={`${navLink} ${active === "analitica" ? navActive : navInactive}`}
@@ -168,7 +168,7 @@ function ShellNavAndFooter({
               <GitCompare className="w-5 h-5 mr-3 shrink-0" />
               Conciliación IA
             </Link>
-            {role === "owner" && (
+            {isOwnerLike(role) && (
               <Link
                 id="tour-nav-finanzas"
                 href="/dashboard/finanzas/tesoreria"
@@ -179,7 +179,7 @@ function ShellNavAndFooter({
                 Tesorería y Riesgos
               </Link>
             )}
-            {role === "owner" && (
+            {isOwnerLike(role) && (
               <Link
                 href="/dashboard/finanzas/simulador"
                 className={`${navLink} ${active === "finanzas" ? navActive : navInactive}`}
@@ -197,7 +197,7 @@ function ShellNavAndFooter({
               <FileDown className="w-5 h-5 mr-3 shrink-0" />
               Exportar
             </Link>
-            {role === "owner" && (
+            {isOwnerLike(role) && (
               <Link
                 href="/dashboard/finanzas/auditoria"
                 className={`${navLink} ${active === "auditoria" ? navActive : navInactive}`}
@@ -288,7 +288,7 @@ function ShellNavAndFooter({
             Admin
           </Link>
         )}
-        {role === "owner" && (
+        {isOwnerLike(role) && (
           <Link
             href="/settings/integrations"
             className={`${navLink} ${active === "integrations" ? navActive : navInactive}`}

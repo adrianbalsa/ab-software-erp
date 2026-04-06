@@ -9,7 +9,7 @@ import { CotizadorInteligente } from "@/components/portes/CotizadorInteligente";
 import { AddressAutocomplete } from "@/components/maps/AddressAutocomplete";
 import { GoogleMapsProvider, mapsApiKeyAvailable } from "@/components/maps/GoogleMapsProvider";
 import { useRole } from "@/hooks/useRole";
-import { API_BASE, jwtEmpresaId, notifyJwtUpdated } from "@/lib/api";
+import { API_BASE, isOwnerLike, jwtEmpresaId, notifyJwtUpdated } from "@/lib/api";
 import { getAuthToken, setAuthToken } from "@/lib/auth";
 
 type PorteOut = {
@@ -48,8 +48,8 @@ function formatClienteLabel(id: string) {
 
 export default function PortesPage() {
   const { role } = useRole();
-  const canCreatePorte = role === "owner" || role === "traffic_manager";
-  const canFacturar = role === "owner";
+  const canCreatePorte = isOwnerLike(role) || role === "traffic_manager";
+  const canFacturar = isOwnerLike(role);
 
   const [token, setToken] = useState<string | null>(null);
   const [username, setUsername] = useState("");

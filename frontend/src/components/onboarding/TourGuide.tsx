@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { useRole } from "@/hooks/useRole";
+import { isOwnerLike } from "@/lib/api";
 
 const STEPS: Step[] = [
   {
@@ -47,7 +48,7 @@ export function TourGuide() {
   const { completed, hydrated, markComplete } = useOnboarding();
   const [run, setRun] = useState(false);
 
-  const shouldOfferTour = role === "owner" && hydrated && !completed;
+  const shouldOfferTour = isOwnerLike(role) && hydrated && !completed;
 
   useEffect(() => {
     if (!shouldOfferTour || pathname !== "/dashboard") {

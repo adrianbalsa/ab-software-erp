@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { LogOut, Webhook } from "lucide-react";
 import { useMemo } from "react";
-import { jwtPayload, jwtSubject, type AppRbacRole } from "@/lib/api";
+import { isOwnerLike, jwtPayload, jwtSubject, type AppRbacRole } from "@/lib/api";
 import { logout } from "@/lib/auth";
 import { useRole } from "@/hooks/useRole";
 
@@ -18,9 +18,9 @@ type Props = {
   onNavLinkClick?: () => void;
 };
 
-/** Bloque «Configuración»: API y Webhooks (solo owner / developer). */
+/** Bloque «Configuración»: API y Webhooks (solo owner / admin / developer). */
 export function ConfiguracionNavSection({ active, role, onNavLinkClick }: Props) {
-  if (role !== "owner" && role !== "developer") return null;
+  if (!isOwnerLike(role) && role !== "developer") return null;
 
   const p = onNavLinkClick ? { onClick: onNavLinkClick } : {};
 
@@ -43,6 +43,7 @@ export function ConfiguracionNavSection({ active, role, onNavLinkClick }: Props)
 
 const ROLE_LABELS: Record<AppRbacRole, string> = {
   owner: "Propietario",
+  admin: "Administrador",
   traffic_manager: "Traffic Manager",
   driver: "Conductor",
   cliente: "Cliente",

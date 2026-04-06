@@ -42,7 +42,18 @@ export function jwtPayload(): JwtPayload | null {
   }
 }
 
-export type AppRbacRole = "owner" | "traffic_manager" | "driver" | "cliente" | "developer";
+export type AppRbacRole =
+  | "owner"
+  | "admin"
+  | "traffic_manager"
+  | "driver"
+  | "cliente"
+  | "developer";
+
+/** Owner o admin de empresa (mismos privilegios de shell / facturación). */
+export function isOwnerLike(role: AppRbacRole): boolean {
+  return role === "owner" || role === "admin";
+}
 
 export function jwtRbacRole(): AppRbacRole {
   const p = jwtPayload() as
@@ -57,10 +68,14 @@ export function jwtRbacRole(): AppRbacRole {
   // Supabase puede guardar el rol en diferentes sitios según la config
   const r = p.rbac_role || p.app_metadata?.rbac_role || p.user_metadata?.rbac_role;
 
-  console.log("🔍 JWT COMPLETO:", p);
-  console.log("🔑 ROL DETECTADO:", r);
-
-  const validRoles = ["owner", "traffic_manager", "driver", "cliente", "developer"];
+  const validRoles = [
+    "owner",
+    "admin",
+    "traffic_manager",
+    "driver",
+    "cliente",
+    "developer",
+  ];
   return validRoles.includes(r as string) ? (r as AppRbacRole) : "driver";
 }
 

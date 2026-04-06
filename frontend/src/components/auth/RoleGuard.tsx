@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useRole } from "@/hooks/useRole";
-import type { AppRbacRole } from "@/lib/api";
+import { isOwnerLike, type AppRbacRole } from "@/lib/api";
 
 type RoleGuardProps = {
   allowedRoles: AppRbacRole[];
@@ -17,6 +17,9 @@ export function RoleGuard({
   fallback = null,
 }: RoleGuardProps) {
   const { role } = useRole();
-  if (!allowedRoles.includes(role)) return <>{fallback}</>;
+  const allowed =
+    allowedRoles.includes(role) ||
+    (isOwnerLike(role) && allowedRoles.includes("owner"));
+  if (!allowed) return <>{fallback}</>;
   return <>{children}</>;
 }
