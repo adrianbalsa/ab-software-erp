@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { LogOut, Webhook } from "lucide-react";
 import { useMemo } from "react";
-import { isOwnerLike, jwtPayload, jwtSubject, type AppRbacRole } from "@/lib/api";
+import { isOwnerLike, jwtDisplayName, jwtPayload, type AppRbacRole } from "@/lib/api";
 import { logout } from "@/lib/auth";
 import { useRole } from "@/hooks/useRole";
 
@@ -68,7 +68,7 @@ const DEMO_EMPRESA_UUID = "406d68d7-52d8-5eb2-bff1-0a03095f7f6f";
 /** Pie de sidebar: avatar, nombre, rol y cierre de sesión (estilo bunker). */
 export function SidebarUserSection() {
   const { role } = useRole();
-  const displayName = jwtSubject() || "Usuario";
+  const displayName = jwtDisplayName();
   const payload = jwtPayload();
   const empresaClaim = String(
     payload?.empresa_id ??

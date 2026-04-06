@@ -1,5 +1,6 @@
 import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
 import { createBrowserClient } from "@supabase/ssr";
+import { getAuthToken as getAuthTokenFromStore } from "@/lib/auth";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -8,14 +9,17 @@ export const API_BASE =
   "https://api.ablogistics-os.com";
 
 export const ABL_JWT_UPDATED_EVENT = "abl:jwt-updated";
-export const AUTH_TOKEN_KEY = "sb-access-token";
 
-export const getAuthToken = () =>
-  typeof window !== "undefined" ? localStorage.getItem(AUTH_TOKEN_KEY) : null;
-export const setAuthToken = (token: string) =>
-  typeof window !== "undefined" && localStorage.setItem(AUTH_TOKEN_KEY, token);
-export const clearAuthToken = () =>
-  typeof window !== "undefined" && localStorage.removeItem(AUTH_TOKEN_KEY);
+/** JWT en localStorage: clave canónica `abl_auth_token`; fallback `sb-access-token` (legacy). */
+export function getAuthToken(): string | null {
+  const t = getAuthTokenFromStore();
+  if (t) return t;
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("sb-access-token");
+  }
+  return null;
+}
+
 export const authHeaders = (): Record<string, string> => {
   const token = getAuthToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -55,20 +59,19 @@ export function isOwnerLike(role: AppRbacRole): boolean {
   return role === "owner" || role === "admin";
 }
 
-export function jwtRbacRole(): AppRbacRole {
-  const p = jwtPayload() as
-    | {
-        rbac_role?: unknown;
-        app_metadata?: { rbac_role?: unknown };
-        user_metadata?: { rbac_role?: unknown };
-      }
-    | null;
-  if (!p) return "driver";
+type JwtMeta = {
+  rbac_role?: unknown;
+  role?: unknown;
+  roles?: unknown;
+};
 
-  // Supabase puede guardar el rol en diferentes sitios según la config
-  const r = p.rbac_role || p.app_metadata?.rbac_role || p.user_metadata?.rbac_role;
+function coerceAppRbacRole(raw: unknown): AppRbacRole | null {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const lower = s.toLowerCase();
 
-  const validRoles = [
+  const valid: AppRbacRole[] = [
     "owner",
     "admin",
     "traffic_manager",
@@ -76,12 +79,78 @@ export function jwtRbacRole(): AppRbacRole {
     "cliente",
     "developer",
   ];
-  return validRoles.includes(r as string) ? (r as AppRbacRole) : "driver";
+  if (valid.includes(lower as AppRbacRole)) return lower as AppRbacRole;
+
+  const upper = s.toUpperCase();
+  const legacyUpper: Record<string, AppRbacRole> = {
+    ADMIN: "owner",
+    GESTOR: "traffic_manager",
+    CONDUCTOR: "driver",
+    OWNER: "owner",
+    DRIVER: "driver",
+    TRAFFIC_MANAGER: "traffic_manager",
+    CLIENTE: "cliente",
+    DEVELOPER: "developer",
+  };
+  if (legacyUpper[upper]) return legacyUpper[upper];
+
+  if (lower === "propietario") return "owner";
+  if (lower === "administrador") return "admin";
+
+  return null;
+}
+
+function collectRoleCandidates(p: Record<string, unknown>): unknown[] {
+  const app = p.app_metadata as JwtMeta | undefined;
+  const user = p.user_metadata as JwtMeta | undefined;
+  const out: unknown[] = [
+    p.rbac_role,
+    p.role,
+    app?.rbac_role,
+    app?.role,
+    user?.rbac_role,
+    user?.role,
+  ];
+  if (app?.roles != null) {
+    if (Array.isArray(app.roles)) out.push(...app.roles);
+    else out.push(app.roles);
+  }
+  return out;
+}
+
+export function jwtRbacRole(): AppRbacRole {
+  const p = jwtPayload();
+  if (!p) return "driver";
+
+  const po = p as Record<string, unknown>;
+  for (const c of collectRoleCandidates(po)) {
+    const r = coerceAppRbacRole(c);
+    if (r) return r;
+  }
+  return "driver";
 }
 
 export function jwtSubject(): string | null {
   const sub = jwtPayload()?.sub;
   return typeof sub === "string" ? sub : null;
+}
+
+/** Nombre visible: user_metadata (Supabase), email, o sub (p. ej. email en JWT de la API). */
+export function jwtDisplayName(): string {
+  const p = jwtPayload();
+  if (!p) return "Usuario";
+
+  const po = p as Record<string, unknown>;
+  const um = po.user_metadata as Record<string, unknown> | undefined;
+  const pick =
+    (typeof um?.full_name === "string" && um.full_name.trim()) ||
+    (typeof um?.name === "string" && um.name.trim()) ||
+    (typeof um?.display_name === "string" && um.display_name.trim()) ||
+    (typeof po.email === "string" && po.email.trim()) ||
+    (typeof um?.email === "string" && um.email.trim()) ||
+    (typeof po.sub === "string" && po.sub.includes("@") ? po.sub.trim() : "");
+
+  return pick || "Usuario";
 }
 
 export function jwtEmpresaId(): string | null {
@@ -148,7 +217,7 @@ apiClient.interceptors.request.use(async (config) => {
   let token: string | null = null;
   if (typeof window !== "undefined") {
     token = await resolveAccessToken();
-    if (!token) token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) token = getAuthToken();
   } else {
     try {
       const { cookies } = await import("next/headers");
