@@ -22,6 +22,10 @@ export function useRole(): {
   }, []);
 
   useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === AUTH_TOKEN_KEY || e.key === "jwt_token" || e.key === null) refresh();
     };

@@ -100,6 +100,14 @@ function coerceAppRbacRole(raw: unknown): AppRbacRole | null {
   return null;
 }
 
+/**
+ * Backend FastAPI (`create_access_token` en security.py) emite en el payload:
+ * - `sub` (username / identificador de sesión)
+ * - `empresa_id` (opcional)
+ * - `rbac_role` (opcional): owner | admin | traffic_manager | driver | cliente | developer
+ * - `assigned_vehiculo_id`, `cliente_id` (opcionales)
+ * Los JWT de Supabase Auth siguen usando app_metadata / user_metadata.
+ */
 function collectRoleCandidates(p: Record<string, unknown>): unknown[] {
   const app = p.app_metadata as JwtMeta | undefined;
   const user = p.user_metadata as JwtMeta | undefined;
@@ -123,6 +131,9 @@ export function jwtRbacRole(): AppRbacRole {
   if (!p) return "driver";
 
   const po = p as Record<string, unknown>;
+  const root = coerceAppRbacRole(po.rbac_role);
+  if (root) return root;
+
   for (const c of collectRoleCandidates(po)) {
     const r = coerceAppRbacRole(c);
     if (r) return r;
@@ -135,20 +146,26 @@ export function jwtSubject(): string | null {
   return typeof sub === "string" ? sub : null;
 }
 
-/** Nombre visible: user_metadata (Supabase), email, o sub (p. ej. email en JWT de la API). */
+/**
+ * Nombre visible: Supabase user_metadata si existe; si no, claim `email` o `sub` del JWT
+ * (el backend FastAPI solo garantiza `sub` como username, p. ej. `adrian_balsa`).
+ */
 export function jwtDisplayName(): string {
   const p = jwtPayload();
   if (!p) return "Usuario";
 
   const po = p as Record<string, unknown>;
   const um = po.user_metadata as Record<string, unknown> | undefined;
+  const sub =
+    typeof po.sub === "string" && po.sub.trim() ? po.sub.trim() : "";
+
   const pick =
     (typeof um?.full_name === "string" && um.full_name.trim()) ||
     (typeof um?.name === "string" && um.name.trim()) ||
     (typeof um?.display_name === "string" && um.display_name.trim()) ||
     (typeof po.email === "string" && po.email.trim()) ||
     (typeof um?.email === "string" && um.email.trim()) ||
-    (typeof po.sub === "string" && po.sub.includes("@") ? po.sub.trim() : "");
+    sub;
 
   return pick || "Usuario";
 }
