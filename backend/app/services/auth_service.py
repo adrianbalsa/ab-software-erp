@@ -37,9 +37,12 @@ class AuthService:
         ok, needs_argon2_upgrade = verify_password_against_stored(password, user.password_hash)
         if not ok:
             return None
+        canonical = user.username
         if needs_argon2_upgrade:
-            await self._lazy_upgrade_password_hash(username=username, plain_password=password)
+            await self._lazy_upgrade_password_hash(username=canonical, plain_password=password)
         profile = await self.get_profile_by_subject(subject=username)
+        if profile is None and canonical != (username or "").strip():
+            profile = await self.get_profile_by_subject(subject=canonical)
         if profile is not None and profile.empresa_id:
             return profile
         if not user.empresa_id:
@@ -174,10 +177,22 @@ class AuthService:
         )
 
     async def get_user(self, *, username: str) -> UserInDB | None:
-        # supabase-py returns objects with `.data`; keep it loose-typed but validated at the edge.
-        query = self._db.table("usuarios").select("*").eq("username", username)
-        res: Any = await self._db.execute(query)
-        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        """Resuelve ``usuarios`` por ``username`` exacto o por ``email`` (insensible a mayúsculas)."""
+        val = (username or "").strip()
+        if not val:
+            return None
+        rows: list[dict[str, Any]] = []
+        try:
+            q = self._db.table("usuarios").select("*").eq("username", val).limit(1)
+            res: Any = await self._db.execute(q)
+            rows = (res.data or []) if hasattr(res, "data") else []
+            if not rows:
+                q2 = self._db.table("usuarios").select("*").ilike("email", val.lower()).limit(1)
+                res2: Any = await self._db.execute(q2)
+                rows = (res2.data or []) if hasattr(res2, "data") else []
+        except Exception as exc:
+            logger.warning("get_user: lectura usuarios falló: %s", exc)
+            return None
         if not rows:
             return None
         row = rows[0]
