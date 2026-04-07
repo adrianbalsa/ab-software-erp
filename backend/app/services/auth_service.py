@@ -4,12 +4,19 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from app.core.config import get_settings
 from app.core.rbac import normalize_rbac_role
 from app.core.security import hash_password_argon2id, verify_password_against_stored
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserInDB, UserOut
 
 logger = logging.getLogger(__name__)
+
+
+def _auth_debug(msg: str, *args: object) -> None:
+    """Logs de depuración login; activos solo si DEBUG=true (quitar o silenciar tras diagnosticar)."""
+    if get_settings().DEBUG:
+        logger.info("AUTH_DEBUG " + msg, *args)
 
 
 def _uuid_or_none(value: str) -> str | None:
@@ -31,11 +38,25 @@ class AuthService:
         self._db = db
 
     async def authenticate(self, *, username: str, password: str) -> UserOut | None:
+        login_id = (username or "").strip()
+        _auth_debug("authenticate start login_id=%s", login_id[:80])
         user = await self.get_user(username=username)
         if user is None:
+            _auth_debug("authenticate no row in public.usuarios for login_id=%s", login_id[:80])
+            return None
+        has_hash = bool((user.password_hash or "").strip())
+        _auth_debug(
+            "authenticate user found id=%s username=%s email_match_used=yes password_hash_non_empty=%s",
+            user.id,
+            (user.username or "")[:64],
+            has_hash,
+        )
+        if not has_hash:
+            _auth_debug("authenticate abort: password_hash vacío en usuarios")
             return None
         ok, needs_argon2_upgrade = verify_password_against_stored(password, user.password_hash)
         if not ok:
+            _auth_debug("authenticate password verification failed for usuario id=%s", user.id)
             return None
         canonical = user.username
         if needs_argon2_upgrade:
@@ -44,14 +65,25 @@ class AuthService:
         if profile is None and canonical != (username or "").strip():
             profile = await self.get_profile_by_subject(subject=canonical)
         if profile is not None and profile.empresa_id:
+            _auth_debug(
+                "authenticate using profiles rbac_role=%s empresa_id=%s",
+                profile.rbac_role,
+                profile.empresa_id,
+            )
             return profile
         if not user.empresa_id:
+            _auth_debug(
+                "authenticate abort: sin profile con empresa y usuarios.empresa_id vacío (usuario=%s)",
+                (user.username or "")[:64],
+            )
             return None
+        rbac = normalize_rbac_role(None, legacy_rol=user.rol)
+        _auth_debug("authenticate fallback UserOut from usuarios only rbac_role=%s", rbac)
         return UserOut(
             username=user.username,
             empresa_id=user.empresa_id,
             rol=user.rol,
-            rbac_role=normalize_rbac_role(None, legacy_rol=user.rol),
+            rbac_role=rbac,
             cliente_id=None,
             usuario_id=None,
         )
@@ -177,7 +209,10 @@ class AuthService:
         )
 
     async def get_user(self, *, username: str) -> UserInDB | None:
-        """Resuelve ``usuarios`` por ``username`` exacto o por ``email`` (insensible a mayúsculas)."""
+        """
+        Resuelve ``usuarios`` (no ``profiles``): primero ``username`` exacto, luego ``email``
+        exacto (tal cual y en minúsculas), y por último ``ilike`` en email (compatibilidad).
+        """
         val = (username or "").strip()
         if not val:
             return None
@@ -186,6 +221,14 @@ class AuthService:
             q = self._db.table("usuarios").select("*").eq("username", val).limit(1)
             res: Any = await self._db.execute(q)
             rows = (res.data or []) if hasattr(res, "data") else []
+            if not rows:
+                qe = self._db.table("usuarios").select("*").eq("email", val).limit(1)
+                res_e: Any = await self._db.execute(qe)
+                rows = (res_e.data or []) if hasattr(res_e, "data") else []
+            if not rows:
+                qe2 = self._db.table("usuarios").select("*").eq("email", val.lower()).limit(1)
+                res_e2: Any = await self._db.execute(qe2)
+                rows = (res_e2.data or []) if hasattr(res_e2, "data") else []
             if not rows:
                 q2 = self._db.table("usuarios").select("*").ilike("email", val.lower()).limit(1)
                 res2: Any = await self._db.execute(q2)
