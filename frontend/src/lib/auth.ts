@@ -54,6 +54,11 @@ const JWT_UPDATED_EVENT = "abl:jwt-updated";
  */
 export function logout(): void {
   clearAuthToken();
+  if (typeof window !== "undefined") {
+    void fetch("/api/auth/logout", { method: "POST" }).catch(() => {
+      /* ignore */
+    });
+  }
   if (typeof window === "undefined") return;
   try {
     window.dispatchEvent(new CustomEvent(JWT_UPDATED_EVENT));

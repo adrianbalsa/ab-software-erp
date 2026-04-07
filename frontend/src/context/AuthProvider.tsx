@@ -22,6 +22,9 @@ function clearClientState(): void {
   } catch {
     // ignore
   }
+  void fetch("/api/auth/logout", { method: "POST" }).catch(() => {
+    /* ignore */
+  });
   try {
     window.localStorage.clear();
   } catch {

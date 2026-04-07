@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppProviders } from "@/components/AppProviders";
 import { SentryInit } from "@/components/SentryInit";
+import { getServerInitialRole } from "@/lib/server-api";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -19,18 +20,20 @@ export const metadata: Metadata = {
   description: "Operaciones, finanzas, VeriFactu y sostenibilidad — AB Software",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const initialRole = await getServerInitialRole();
+
   return (
     <html lang="es">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <SentryInit />
-        <AppProviders>{children}</AppProviders>
+        <AppProviders initialRole={initialRole}>{children}</AppProviders>
       </body>
     </html>
   );

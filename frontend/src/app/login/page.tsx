@@ -1,14 +1,27 @@
 "use client";
 
 import Image from "next/image";
-import { useActionState, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useState } from "react";
 import { loginAction } from "./actions";
+import { notifyJwtUpdated } from "@/lib/api";
+import { setAuthToken } from "@/lib/auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [state, action, isPending] = useActionState(loginAction, null);
   const [oauthError, setOauthError] = useState<string | null>(null);
   const [oauthPending, setOauthPending] = useState(false);
+
+  useEffect(() => {
+    if (state && "success" in state && state.success) {
+      setAuthToken(state.accessToken);
+      notifyJwtUpdated();
+      router.push("/dashboard");
+      router.refresh();
+    }
+  }, [state, router]);
 
   const onGoogleSignIn = async () => {
     setOauthError(null);
@@ -51,7 +64,7 @@ export default function LoginPage() {
             <p className="text-sm text-slate-500">Inicia sesión en tu empresa</p>
           </div>
         </div>
-        {state?.error ? (
+        {state && "error" in state ? (
           <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
             {state.error}
           </p>

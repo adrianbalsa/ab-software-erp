@@ -2,6 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Session } from "@supabase/supabase-js";
 
+import { jwtRbacRoleFromToken, type AppRbacRole } from "@/lib/api";
+
 async function getServerSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -35,8 +37,24 @@ export async function getServerSession(): Promise<Session | null> {
   return session ?? null;
 }
 
-export async function getServerAuthHeader(): Promise<Record<string, string>> {
+/** JWT de login FastAPI (`abl_auth_token`) o, si no hay, access_token de Supabase. */
+export async function getSessionAccessTokenForRole(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const abl = cookieStore.get("abl_auth_token")?.value ?? null;
+  if (abl) return abl;
   const session = await getServerSession();
-  if (!session?.access_token) return {};
-  return { Authorization: `Bearer ${session.access_token}` };
+  return session?.access_token ?? null;
+}
+
+/** Rol para el primer paint SSR (cookie HttpOnly o sesión Supabase). */
+export async function getServerInitialRole(): Promise<AppRbacRole | undefined> {
+  const t = await getSessionAccessTokenForRole();
+  if (!t) return undefined;
+  return jwtRbacRoleFromToken(t);
+}
+
+export async function getServerAuthHeader(): Promise<Record<string, string>> {
+  const token = await getSessionAccessTokenForRole();
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
 }

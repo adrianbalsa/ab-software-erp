@@ -10,7 +10,10 @@ export const API_BASE =
 
 export const ABL_JWT_UPDATED_EVENT = "abl:jwt-updated";
 
-/** JWT en localStorage: clave canónica `abl_auth_token`; fallback `sb-access-token` (legacy). */
+/**
+ * JWT para el cliente (localStorage). En RSC/SSR el token HttpOnly está en
+ * `cookies().get("abl_auth_token")` — usar `getSessionAccessTokenForRole` en `server-api.ts`.
+ */
 export function getAuthToken(): string | null {
   const t = getAuthTokenFromStore();
   if (t) return t;
@@ -32,18 +35,35 @@ export const notifyJwtUpdated = () => {
 
 type JwtPayload = Record<string, unknown>;
 
-export function jwtPayload(): JwtPayload | null {
+/** Decodifica el segmento payload (2.º fragmento) de un JWT; Node (Buffer) o navegador (atob). */
+export function decodeJwtPayloadSegment(segment: string): JwtPayload | null {
   try {
-    const token = getAuthToken();
-    if (!token) return null;
-    const parts = token.split(".");
-    if (parts.length < 2) return null;
-    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const b64 = segment.replace(/-/g, "+").replace(/_/g, "/");
     const pad = "=".repeat((4 - (b64.length % 4)) % 4);
-    return JSON.parse(atob(b64 + pad)) as JwtPayload;
+    const padded = b64 + pad;
+    let json: string;
+    if (typeof Buffer !== "undefined") {
+      json = Buffer.from(padded, "base64").toString("utf8");
+    } else if (typeof globalThis.atob === "function") {
+      json = globalThis.atob(padded);
+    } else {
+      return null;
+    }
+    return JSON.parse(json) as JwtPayload;
   } catch {
     return null;
   }
+}
+
+export function jwtPayloadFromAccessToken(token: string | null | undefined): JwtPayload | null {
+  if (!token) return null;
+  const parts = token.split(".");
+  if (parts.length < 2) return null;
+  return decodeJwtPayloadSegment(parts[1]);
+}
+
+export function jwtPayload(): JwtPayload | null {
+  return jwtPayloadFromAccessToken(getAuthToken());
 }
 
 export type AppRbacRole =
@@ -126,8 +146,7 @@ function collectRoleCandidates(p: Record<string, unknown>): unknown[] {
   return out;
 }
 
-export function jwtRbacRole(): AppRbacRole {
-  const p = jwtPayload();
+function rbacRoleFromPayload(p: JwtPayload | null): AppRbacRole {
   if (!p) return "driver";
 
   const po = p as Record<string, unknown>;
@@ -139,6 +158,14 @@ export function jwtRbacRole(): AppRbacRole {
     if (r) return r;
   }
   return "driver";
+}
+
+export function jwtRbacRoleFromToken(token: string | null | undefined): AppRbacRole {
+  return rbacRoleFromPayload(jwtPayloadFromAccessToken(token));
+}
+
+export function jwtRbacRole(): AppRbacRole {
+  return rbacRoleFromPayload(jwtPayload());
 }
 
 export function jwtSubject(): string | null {

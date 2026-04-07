@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useActionState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { API_BASE, notifyJwtUpdated } from "@/lib/api";
+import { loginAction } from "@/app/login/actions";
+import { notifyJwtUpdated } from "@/lib/api";
 import { getAuthToken, setAuthToken } from "@/lib/auth";
 
 const LANDING_URL =
@@ -20,10 +21,7 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/dashboard";
 
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [state, action, isPending] = useActionState(loginAction, null);
 
   useEffect(() => {
     try {
@@ -34,41 +32,14 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
     }
   }, [router, redirectTo]);
 
-  const login = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      const body = new URLSearchParams();
-      body.set("username", username);
-      body.set("password", password);
-      const res = await fetch(`${API_BASE}/auth/login`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: body.toString(),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(
-          typeof err?.detail === "string" ? err.detail : "Credenciales incorrectas",
-        );
-      }
-      const data = await res.json();
-      try {
-        setAuthToken(data.access_token);
-        notifyJwtUpdated();
-      } catch {
-        /* ignore */
-      }
+  useEffect(() => {
+    if (state && "success" in state && state.success) {
+      setAuthToken(state.accessToken);
+      notifyJwtUpdated();
+      router.replace(redirectTo);
       router.refresh();
-      window.location.href = "/dashboard";
-    } catch (e: unknown) {
-      console.error("Login error details:", e);
-      setError(e instanceof Error ? e.message : "Error de conexión");
-    } finally {
-      setBusy(false);
     }
-  };
+  }, [state, router, redirectTo]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#f4f6fb] p-6">
@@ -88,15 +59,15 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
           </div>
         </div>
 
-        <div className="space-y-4">
+        <form action={action} className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="login-username">
               Usuario
             </label>
             <input
               id="login-username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              name="username"
+              required
               className="w-full rounded-lg border border-slate-300 p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
               autoComplete="username"
             />
@@ -107,25 +78,24 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
             </label>
             <input
               id="login-password"
+              name="password"
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              required
               className="w-full rounded-lg border border-slate-300 p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
               autoComplete="current-password"
             />
           </div>
-          {error && (
+          {state && "error" in state ? (
             <p className="text-sm text-red-600" role="alert">
-              {error}
+              {state.error}
             </p>
-          )}
+          ) : null}
           <button
-            type="button"
-            onClick={() => void login()}
-            disabled={busy}
+            type="submit"
+            disabled={isPending}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-zinc-700 via-zinc-800 to-emerald-600 py-3 font-bold text-white shadow-lg shadow-zinc-900/25 transition-all hover:brightness-105 disabled:opacity-60"
           >
-            {busy ? "Entrando…" : "Iniciar sesión"}
+            {isPending ? "Entrando…" : "Iniciar sesión"}
           </button>
 
           <div className="relative py-2 text-center text-xs text-zinc-400">
@@ -157,7 +127,7 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
             </svg>
             Google
           </Link>
-        </div>
+        </form>
 
         {!hideBackToMarketing && (
           <p className="mt-6 text-center text-sm text-slate-500">

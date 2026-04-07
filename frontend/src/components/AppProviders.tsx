@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 
 import { TourGuide } from "@/components/onboarding/TourGuide";
 import { AuthProvider } from "@/context/AuthProvider";
+import { RoleProvider } from "@/context/RoleProvider";
+import type { AppRbacRole } from "@/lib/api";
 import { isSupabaseConfigured } from "@/lib/supabase";
 
 function ConfiguracionPendienteScreen() {
@@ -19,15 +21,23 @@ function ConfiguracionPendienteScreen() {
   );
 }
 
-export function AppProviders({ children }: { children: ReactNode }) {
+export function AppProviders({
+  children,
+  initialRole,
+}: {
+  children: ReactNode;
+  initialRole?: AppRbacRole;
+}) {
   if (!isSupabaseConfigured()) {
     return <ConfiguracionPendienteScreen />;
   }
 
   return (
     <AuthProvider>
-      {children}
-      <TourGuide />
+      <RoleProvider initialRole={initialRole}>
+        {children}
+        <TourGuide />
+      </RoleProvider>
     </AuthProvider>
   );
 }

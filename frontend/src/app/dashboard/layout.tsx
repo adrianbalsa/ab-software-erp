@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { getServerSession } from "@/lib/server-api";
+import { getSessionAccessTokenForRole } from "@/lib/server-api";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  const session = await getServerSession();
-  if (!session) {
+  const token = await getSessionAccessTokenForRole();
+  if (!token) {
     redirect("/login");
   }
 
