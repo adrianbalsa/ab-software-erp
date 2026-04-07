@@ -2,6 +2,8 @@
 
 import { cookies } from "next/headers";
 
+import { getAblAuthCookieSetOptions } from "@/lib/auth-cookie";
+
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
@@ -63,14 +65,8 @@ export async function loginAction(
   }
 
   const cookieStore = await cookies();
-  const isProd = process.env.NODE_ENV === "production";
-  cookieStore.set("abl_auth_token", accessToken, {
-    path: "/",
-    httpOnly: true,
-    secure: isProd,
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 7,
-  });
+  const opts = getAblAuthCookieSetOptions();
+  cookieStore.set("abl_auth_token", accessToken, opts);
 
   return { success: true, accessToken };
 }
