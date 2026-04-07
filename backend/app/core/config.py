@@ -112,6 +112,9 @@ _DEFAULT_PROD_ALLOWED_HOSTS: tuple[str, ...] = (
     # TrustedHostMiddleware soporta sufijos con punto inicial para match por subdominio.
     ".vercel.app",
     "vercel.app",
+    # Railway (hostname público del servicio; health interno usa /health sin validar Host).
+    ".railway.app",
+    "railway.app",
 )
 
 

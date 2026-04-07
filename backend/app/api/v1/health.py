@@ -1,8 +1,8 @@
-"""Endpoints de salud: raíz (`/health`, `/ready`) y readiness profundo (`/health/deep`)."""
+"""Endpoints de salud: liveness ``GET /health`` (middleware), ``/ready``, readiness profundo ``/health/deep``."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
@@ -10,22 +10,7 @@ from app.core.config import get_settings
 router = APIRouter(tags=["Salud"])
 
 
-@router.get("/health", include_in_schema=True)
-async def health() -> JSONResponse:
-    """
-    Salud operativa: conectividad **Supabase PostgREST** (datos).
-    200 si la API de Supabase responde; 503 si no hay conexión.
-    Para chequeo completo usar ``GET /health/deep``.
-    """
-    from app.core.health_checks import check_supabase_rest
-
-    settings = get_settings()
-    ok, detail = await check_supabase_rest(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
-    body = {
-        "status": "ok" if ok else "degraded",
-        "supabase": {"ok": ok, "detail": detail},
-    }
-    return JSONResponse(content=body, status_code=200 if ok else 503)
+# GET /health (text/plain "OK") lo sirve ``HealthCheckBypassMiddleware`` en ``main.py`` (antes de TrustedHost).
 
 
 @router.get("/health/deep", include_in_schema=True)

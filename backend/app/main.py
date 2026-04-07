@@ -63,6 +63,7 @@ from app.api.v1 import webhooks_gocardless as webhooks_gocardless_v1
 from app.core.alerts import schedule_critical_error_alert, short_traceback_from_exc
 from app.core.config import get_settings
 from app.core.rate_limit import SkipOptionsSlowAPIMiddleware, limiter
+from app.middleware.health_bypass import HealthCheckBypassMiddleware
 from app.middleware.json_access_log import JsonAccessLogMiddleware
 from app.middleware.rate_limit_middleware import AuthLoginRateLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -145,12 +146,13 @@ def create_app() -> FastAPI:
     app.add_middleware(SlowRequestLogMiddleware)
     app.add_middleware(SkipOptionsSlowAPIMiddleware)
     app.add_middleware(AuthLoginRateLimitMiddleware)
-    # En producción: cualquier Host (Railway healthchecks desde IPs internas / proxy).
-    # En desarrollo: lista explícita desde settings.
+    # Lista explícita (sin "*"); GET /health se atiende antes vía HealthCheckBypassMiddleware.
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["*"] if settings.ENVIRONMENT == "production" else list(settings.ALLOWED_HOSTS),
+        allowed_hosts=list(settings.ALLOWED_HOSTS),
     )
+    # Más externo que TrustedHost: ejecuta primero y evita 400 en healthchecks con Host no listado.
+    app.add_middleware(HealthCheckBypassMiddleware)
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
