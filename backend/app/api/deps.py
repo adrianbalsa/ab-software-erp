@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable
 from uuid import UUID
 
@@ -45,6 +46,7 @@ from app.services.ai_service import LogisAdvisorService
 from app.services.esg_audit_service import EsgAuditService
 from app.services.audit_logs_service import AuditLogsService
 
+_deps_log = logging.getLogger(__name__)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
@@ -85,11 +87,17 @@ async def get_db_admin() -> SupabaseAsync:
     Cliente con **service role** (bypass RLS) solo para rutas de autenticación que lo requieran
     explícitamente (``/auth/login``, ``/auth/refresh``). **No** usar en el resto de la API.
     """
-    return await supabase_db.get_supabase(
-        jwt_token=None,
-        allow_service_role_bypass=True,
-        log_service_bypass_warning=False,
-    )
+    try:
+        db = await supabase_db.get_supabase(
+            jwt_token=None,
+            allow_service_role_bypass=True,
+            log_service_bypass_warning=False,
+        )
+        return db
+    except Exception as exc:
+        _deps_log.exception("get_db_admin: fallo al crear cliente Supabase (service role): %s", exc)
+        print(f"GET_DB_ADMIN FAILED: {exc!r}", flush=True)
+        raise
 
 
 async def get_auth_service(db: SupabaseAsync = Depends(get_db)) -> AuthService:
@@ -98,7 +106,14 @@ async def get_auth_service(db: SupabaseAsync = Depends(get_db)) -> AuthService:
 
 async def get_auth_service_admin(db: SupabaseAsync = Depends(get_db_admin)) -> AuthService:
     """``AuthService`` con service role: solo ``/auth/login`` y ``/auth/refresh``."""
-    return AuthService(db)
+    try:
+        svc = AuthService(db)
+        _deps_log.debug("get_auth_service_admin: ok")
+        return svc
+    except Exception as exc:
+        _deps_log.exception("get_auth_service_admin: %s", exc)
+        print(f"GET_AUTH_SERVICE_ADMIN FAILED: {exc!r}", flush=True)
+        raise
 
 
 async def get_refresh_token_service(db: SupabaseAsync = Depends(get_db)) -> RefreshTokenService:
@@ -107,7 +122,12 @@ async def get_refresh_token_service(db: SupabaseAsync = Depends(get_db)) -> Refr
 
 async def get_refresh_token_service_admin(db: SupabaseAsync = Depends(get_db_admin)) -> RefreshTokenService:
     """``RefreshTokenService`` con service role: solo ``/auth/login`` y ``/auth/refresh``."""
-    return RefreshTokenService(db)
+    try:
+        return RefreshTokenService(db)
+    except Exception as exc:
+        _deps_log.exception("get_refresh_token_service_admin: %s", exc)
+        print(f"GET_REFRESH_TOKEN_SERVICE_ADMIN FAILED: {exc!r}", flush=True)
+        raise
 
 
 async def get_maps_service(db: SupabaseAsync = Depends(get_db)) -> MapsService:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 from urllib.parse import quote
 
@@ -99,13 +100,23 @@ async def login(
     """
     Devuelve ``access_token`` en JSON y fija el **refresh token** en cookie HttpOnly
     (Secure según entorno, SameSite=Lax). [cite: 2026-03-22]
+
+    OAuth2 password: el cuerpo debe ser **application/x-www-form-urlencoded** con
+    ``username`` y ``password`` (no JSON). Si el cliente envía JSON, FastAPI responde **422** antes de esta función.
     """
+    # ``print`` va al stderr (Railway); las Depends (OAuth2 + Supabase) ya se resolvieron si llegamos aquí.
+    ch = request.client.host if request.client else None
+    print(f"LOGIN ROUTE BODY START: client_host={ch!r} username_field={form_data.username!r}", flush=True)
     _log.info("Login request received for user: %s", form_data.username)
     user = await auth_service.authenticate(
         username=form_data.username,
         password=form_data.password,
     )
     if user is None:
+        print(
+            "LOGIN 401: authenticate() -> None (usuario/contraseña/contexto empresa; ver AUTH_DEBUG si DEBUG=true)",
+            flush=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas",
@@ -143,6 +154,37 @@ async def login(
         _attach_refresh_cookie(response, raw_refresh=raw_refresh, max_age=max_age)
 
     return response
+
+
+@router.get("/debug/check-user/{email}", include_in_schema=False)
+async def debug_check_user(
+    email: str,
+    auth_service: AuthService = Depends(deps.get_auth_service_admin),
+) -> dict[str, Any]:
+    """
+    Solo con ``DEBUG=true`` o ``ALLOW_DEBUG_USER_CHECK=1``. Quitar o desactivar tras diagnosticar.
+    Comprueba ``public.usuarios`` por username/email (misma lógica que login).
+    """
+    settings = get_settings()
+    if not settings.DEBUG and os.getenv("ALLOW_DEBUG_USER_CHECK", "").strip() != "1":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    row = await auth_service.get_user(username=email)
+    if row is None:
+        return {
+            "exists": False,
+            "has_password_hash": False,
+            "lookup": email,
+            "hint": "Ninguna fila en usuarios con ese username/email.",
+        }
+    ph = (row.password_hash or "").strip()
+    return {
+        "exists": True,
+        "has_password_hash": bool(ph),
+        "username": row.username,
+        "password_hash_sample": (ph[:24] + "…") if len(ph) > 24 else ph,
+        "empresa_id": str(row.empresa_id) if row.empresa_id else None,
+        "rol": row.rol,
+    }
 
 
 @router.post("/refresh")

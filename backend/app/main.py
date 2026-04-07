@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -64,6 +66,7 @@ from app.core.alerts import schedule_critical_error_alert, short_traceback_from_
 from app.core.config import get_settings
 from app.core.rate_limit import SkipOptionsSlowAPIMiddleware, limiter
 from app.middleware.health_bypass import HealthCheckBypassMiddleware
+from app.middleware.login_debug_print import LoginDebugPrintMiddleware
 from app.middleware.json_access_log import JsonAccessLogMiddleware
 from app.middleware.rate_limit_middleware import AuthLoginRateLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -153,6 +156,22 @@ def create_app() -> FastAPI:
     )
     # Más externo que TrustedHost: ejecuta primero y evita 400 en healthchecks con Host no listado.
     app.add_middleware(HealthCheckBypassMiddleware)
+    # Más externo aún: print stderr antes de TrustedHost / OAuth2 body (depurar 401 sin entrar en la ruta).
+    app.add_middleware(LoginDebugPrintMiddleware)
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_login_debug(request: Request, exc: RequestValidationError):
+        """422 en login suele ser JSON en lugar de form-urlencoded (OAuth2PasswordRequestForm)."""
+        if request.url.path.rstrip("/") == "/auth/login":
+            print(
+                "LOGIN 422 RequestValidationError (¿Content-Type application/json?). "
+                f"errors={jsonable_encoder(exc.errors())}",
+                flush=True,
+            )
+        return JSONResponse(
+            status_code=422,
+            content={"detail": jsonable_encoder(exc.errors())},
+        )
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
