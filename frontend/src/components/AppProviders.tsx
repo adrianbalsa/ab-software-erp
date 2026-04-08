@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Toaster } from "sonner";
 
 import { TourGuide } from "@/components/onboarding/TourGuide";
 import { AuthProvider } from "@/context/AuthProvider";
@@ -37,6 +38,20 @@ export function AppProviders({
       <RoleProvider initialRole={initialRole}>
         {children}
         <TourGuide />
+        <Toaster
+          position="bottom-right"
+          theme="dark"
+          richColors
+          closeButton
+          toastOptions={{
+            classNames: {
+              toast:
+                "group border border-zinc-800/80 bg-zinc-950/95 text-zinc-100 shadow-2xl backdrop-blur-md",
+              title: "text-zinc-100",
+              description: "text-zinc-400",
+            },
+          }}
+        />
       </RoleProvider>
     </AuthProvider>
   );

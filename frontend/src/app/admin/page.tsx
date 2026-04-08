@@ -23,9 +23,28 @@ import {
 import type { AuditoriaAdminRow, EmpresaCreateBody, MetricasSaaSFacturacionOut, UsuarioAdminOut } from "@/types/admin";
 import type { EmpresaOut } from "@/types/empresa";
 import { getAuthToken } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const PLANS = ["starter", "professional", "business", "enterprise"] as const;
 const ROLES = ["user", "manager", "admin", "empleado", "gestor"] as const;
+
+/** Bento / terminal-style containers (admin dashboard) */
+const BENTO =
+  "rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-6 backdrop-blur-md shadow-2xl transition-all";
+
+const inputAdminClass =
+  "h-10 border-zinc-800 bg-zinc-900/50 text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-600 focus-visible:ring-zinc-600/30 md:text-sm";
+
+const btnPrimaryClass = "bg-emerald-600 text-white hover:bg-emerald-500 focus-visible:ring-emerald-500/40";
+
+const tableShell = "overflow-x-auto rounded-xl border border-zinc-800/60";
+const tableClass = "w-full text-sm text-zinc-300";
+const tableHead =
+  "border-b border-zinc-800 bg-zinc-950/80 text-left text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500";
+const tableCell = "border-b border-zinc-800/40 px-4 py-3";
 
 type TabId = "empresas" | "usuarios" | "metricas" | "auditoria" | "facturacion";
 
@@ -73,6 +92,11 @@ export default function AdminPage() {
       setToken(null);
     }
   }, []);
+
+  useEffect(() => {
+    if (!error) return;
+    toast.error(error, { id: "admin-api-error" });
+  }, [error]);
 
   const loadEmpresas = useCallback(async () => {
     setLoading(true);
@@ -263,16 +287,21 @@ export default function AdminPage() {
 
   if (!token) {
     return (
-      <div className="min-h-screen ab-app-gradient flex items-center justify-center p-6">
-        <div className="ab-glass max-w-md w-full rounded-2xl p-8 text-center space-y-4">
-          <Shield className="w-12 h-12 text-[var(--ab-primary)] mx-auto" />
-          <h1 className="text-xl font-bold text-slate-900">Panel de administración</h1>
-          <p className="text-sm text-slate-600">
-            Inicia sesión en la aplicación y vuelve aquí con un usuario <strong>rol admin</strong>.
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-6">
+        <div
+          className={cn(
+            BENTO,
+            "max-w-md w-full space-y-4 text-center"
+          )}
+        >
+          <Shield className="mx-auto h-12 w-12 text-emerald-500/90" />
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-100">Panel de administración</h1>
+          <p className="text-sm text-zinc-400">
+            Inicia sesión en la aplicación y vuelve aquí con un usuario <strong className="text-zinc-200">rol admin</strong>.
           </p>
           <Link
             href="/portes"
-            className="inline-block text-sm font-semibold text-[var(--ab-primary)] hover:underline"
+            className="inline-block text-sm font-medium text-emerald-400 hover:text-emerald-300 hover:underline"
           >
             Ir a login (Portes)
           </Link>
@@ -290,57 +319,58 @@ export default function AdminPage() {
   ];
 
   return (
-    <div className="min-h-screen ab-app-gradient flex font-sans text-slate-800">
-      <aside className="w-64 shrink-0 ab-sidebar text-slate-300 flex flex-col border-r border-slate-800/80">
-        <div className="h-16 flex items-center px-5 border-b border-slate-800/80">
-          <Truck className="w-6 h-6 text-[var(--ab-accent)] mr-2" />
+    <div className="flex min-h-screen bg-zinc-950 font-sans text-zinc-100">
+      <aside className="m-4 flex w-[15.5rem] shrink-0 flex-col rounded-2xl border border-zinc-800/50 bg-black shadow-2xl backdrop-blur-md">
+        <div className="flex h-16 items-center border-b border-zinc-800/50 px-5">
+          <Truck className="mr-2 h-6 w-6 text-emerald-500/90" />
           <div>
-            <span className="text-white font-bold text-sm tracking-tight block">AB Logistics</span>
-            <span className="text-[10px] uppercase tracking-widest text-slate-500">Admin Console</span>
+            <span className="block text-sm font-semibold tracking-tight text-zinc-100">AB Logistics</span>
+            <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">Admin Console</span>
           </div>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex flex-1 flex-col gap-1 p-3">
           <Link
             href="/dashboard"
-            className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm hover:bg-slate-800/80 transition-colors"
+            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-900/80 hover:text-zinc-100"
           >
-            <LayoutDashboard className="w-4 h-4" />
+            <LayoutDashboard className="h-4 w-4" />
             Dashboard
           </Link>
           <Link
             href="/portes"
-            className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm hover:bg-slate-800/80 transition-colors"
+            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-900/80 hover:text-zinc-100"
           >
-            <Truck className="w-4 h-4" />
+            <Truck className="h-4 w-4" />
             Portes
           </Link>
-          <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm bg-[var(--ab-primary)]/15 text-[var(--ab-accent)] border border-[var(--ab-primary)]/30">
-            <Shield className="w-4 h-4" />
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2.5 text-sm font-medium text-emerald-300">
+            <Shield className="h-4 w-4" />
             Administración
           </div>
         </nav>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 ab-header border-b border-slate-200/80 flex items-center justify-between px-8">
+      <main className="flex min-w-0 flex-1 flex-col pr-4 pt-4 pb-4">
+        <header className="flex h-16 shrink-0 items-center justify-between rounded-xl border border-zinc-800/50 bg-zinc-900/30 px-8 backdrop-blur-md">
           <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Panel de administración</h1>
-            <p className="text-xs text-slate-500">Gestión global — equivalente al módulo Streamlit legacy</p>
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-100">Panel de administración</h1>
+            <p className="text-xs text-zinc-400">Gestión global — equivalente al módulo Streamlit legacy</p>
           </div>
         </header>
 
-        <div className="px-8 pt-4 border-b border-slate-200/60 bg-white/40">
+        <div className="mt-4 rounded-xl border border-zinc-800/50 bg-zinc-900/20 px-4 pt-2 backdrop-blur-sm">
           <div className="flex gap-1 overflow-x-auto pb-0">
             {tabs.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-t-lg border-b-2 transition-colors whitespace-nowrap ${
+                className={cn(
+                  "flex items-center gap-2 whitespace-nowrap rounded-t-lg border-b-2 px-4 py-3 text-sm font-medium transition-colors",
                   tab === t.id
-                    ? "border-[var(--ab-primary)] text-[var(--ab-primary)] bg-white shadow-sm"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
+                    ? "border-emerald-500 text-emerald-400"
+                    : "border-transparent text-zinc-500 hover:text-zinc-300"
+                )}
               >
                 {t.icon}
                 {t.label}
@@ -349,43 +379,42 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <div className="flex-1 p-8 overflow-auto">
-          {error && (
-            <div className="mb-6 ab-alert-error rounded-xl px-4 py-3 text-sm">{error}</div>
-          )}
-
+        <div className="flex-1 overflow-auto py-6 pr-2">
           {tab === "empresas" && (
-            <div className="space-y-8 max-w-6xl">
-              <section className="ab-card rounded-2xl p-6">
-                <h2 className="text-lg font-bold text-slate-900 mb-4">Empresas registradas</h2>
+            <div className="grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-2">
+              <section className={cn(BENTO, "lg:col-span-2")}>
+                <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-100">Empresas registradas</h2>
+                <p className="mb-4 text-sm text-zinc-400">Listado de empresas dadas de alta en la plataforma.</p>
                 {loading && empresas.length === 0 ? (
-                  <p className="text-slate-500 text-sm">Cargando…</p>
+                  <p className="text-sm text-zinc-400">Cargando…</p>
                 ) : empresas.length === 0 ? (
-                  <p className="text-slate-500 text-sm">No hay empresas.</p>
+                  <p className="text-sm text-zinc-400">No hay empresas.</p>
                 ) : (
-                  <div className="overflow-x-auto rounded-xl border border-slate-200/80">
-                    <table className="ab-table w-full text-sm">
+                  <div className={tableShell}>
+                    <table className={tableClass}>
                       <thead>
                         <tr>
-                          <th>Nombre comercial</th>
-                          <th>NIF</th>
-                          <th>Plan</th>
-                          <th>Activa</th>
-                          <th>Alta</th>
+                          <th className={tableHead}>Nombre comercial</th>
+                          <th className={tableHead}>NIF</th>
+                          <th className={tableHead}>Plan</th>
+                          <th className={tableHead}>Activa</th>
+                          <th className={tableHead}>Alta</th>
                         </tr>
                       </thead>
                       <tbody>
                         {empresas.map((e) => (
-                          <tr key={e.id}>
-                            <td className="font-medium text-slate-900">
+                          <tr key={e.id} className="hover:bg-zinc-800/30">
+                            <td className={cn(tableCell, "font-medium text-zinc-100")}>
                               {e.nombre_comercial || e.nombre_legal}
                             </td>
-                            <td className="font-mono text-xs">{e.nif}</td>
-                            <td>
-                              <span className="ab-badge">{e.plan}</span>
+                            <td className={cn(tableCell, "font-mono text-xs text-zinc-400")}>{e.nif}</td>
+                            <td className={tableCell}>
+                              <span className="inline-flex rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                                {e.plan}
+                              </span>
                             </td>
-                            <td>{e.activa ? "Sí" : "No"}</td>
-                            <td className="text-slate-500">{e.fecha_registro ?? "—"}</td>
+                            <td className={tableCell}>{e.activa ? "Sí" : "No"}</td>
+                            <td className={cn(tableCell, "text-zinc-500")}>{e.fecha_registro ?? "—"}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -394,101 +423,116 @@ export default function AdminPage() {
                 )}
               </section>
 
-              <section className="ab-card rounded-2xl p-6">
-                <h2 className="text-lg font-bold text-slate-900 mb-4">Crear empresa</h2>
-                <form onSubmit={onCreateEmpresa} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input
-                    className="ab-input"
+              <section className={BENTO}>
+                <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-100">Crear empresa</h2>
+                <p className="mb-4 text-sm text-zinc-400">Alta de nueva empresa en el sistema.</p>
+                <form onSubmit={onCreateEmpresa} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Input
+                    className={inputAdminClass}
                     placeholder="NIF/CIF *"
                     maxLength={12}
                     value={createForm.nif}
                     onChange={(ev) => setCreateForm({ ...createForm, nif: ev.target.value })}
                     required
                   />
-                  <input
-                    className="ab-input"
+                  <Input
+                    className={inputAdminClass}
                     placeholder="Razón social (nombre_legal) *"
                     value={createForm.nombre_legal}
                     onChange={(ev) => setCreateForm({ ...createForm, nombre_legal: ev.target.value })}
                     required
                   />
-                  <input
-                    className="ab-input"
+                  <Input
+                    className={inputAdminClass}
                     placeholder="Nombre comercial"
                     value={createForm.nombre_comercial || ""}
                     onChange={(ev) => setCreateForm({ ...createForm, nombre_comercial: ev.target.value })}
                   />
                   <select
-                    className="ab-input"
+                    className={cn(inputAdminClass, "rounded-lg px-3")}
                     value={createForm.plan}
                     onChange={(ev) => setCreateForm({ ...createForm, plan: ev.target.value })}
                   >
                     {PLANS.map((p) => (
-                      <option key={p} value={p}>
+                      <option key={p} value={p} className="bg-zinc-900">
                         {p}
                       </option>
                     ))}
                   </select>
-                  <input
-                    className="ab-input"
+                  <Input
+                    className={inputAdminClass}
                     placeholder="Email"
                     type="email"
                     value={createForm.email || ""}
                     onChange={(ev) => setCreateForm({ ...createForm, email: ev.target.value })}
                   />
-                  <input
-                    className="ab-input"
+                  <Input
+                    className={inputAdminClass}
                     placeholder="Teléfono"
                     value={createForm.telefono || ""}
                     onChange={(ev) => setCreateForm({ ...createForm, telefono: ev.target.value })}
                   />
-                  <input
-                    className="ab-input md:col-span-2"
+                  <Input
+                    className={cn(inputAdminClass, "md:col-span-2")}
                     placeholder="Dirección"
                     value={createForm.direccion || ""}
                     onChange={(ev) => setCreateForm({ ...createForm, direccion: ev.target.value })}
                   />
-                  <button type="submit" className="ab-btn-primary md:col-span-2">
+                  <Button type="submit" className={cn(btnPrimaryClass, "md:col-span-2 h-10 w-full")}>
                     Crear empresa
-                  </button>
+                  </Button>
                 </form>
               </section>
 
               {empresas.length > 0 && (
-                <section className="ab-card rounded-2xl p-6">
-                  <h2 className="text-lg font-bold text-slate-900 mb-4">Plan y estado</h2>
-                  <div className="flex flex-wrap gap-4 items-end">
+                <section className={cn(BENTO, "lg:col-span-2")}>
+                  <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-100">Plan y estado</h2>
+                  <p className="mb-4 text-sm text-zinc-400">Actualiza plan y visibilidad de la empresa seleccionada.</p>
+                  <div className="flex flex-wrap items-end gap-4">
                     <div className="min-w-[200px] flex-1">
-                      <label className="ab-label">Empresa</label>
+                      <label className="mb-1.5 block text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">
+                        Empresa
+                      </label>
                       <select
-                        className="ab-input w-full"
+                        className={cn(inputAdminClass, "w-full rounded-lg px-3")}
                         value={selEmpresaId}
                         onChange={(ev) => setSelEmpresaId(ev.target.value)}
                       >
                         {empresas.map((e) => (
-                          <option key={e.id} value={e.id}>
+                          <option key={e.id} value={e.id} className="bg-zinc-900">
                             {(e.nombre_comercial || e.nombre_legal) + ` (${e.nif})`}
                           </option>
                         ))}
                       </select>
                     </div>
                     <div className="min-w-[160px]">
-                      <label className="ab-label">Plan</label>
-                      <select className="ab-input w-full" value={selPlan} onChange={(ev) => setSelPlan(ev.target.value)}>
+                      <label className="mb-1.5 block text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">
+                        Plan
+                      </label>
+                      <select
+                        className={cn(inputAdminClass, "w-full rounded-lg px-3")}
+                        value={selPlan}
+                        onChange={(ev) => setSelPlan(ev.target.value)}
+                      >
                         {PLANS.map((p) => (
-                          <option key={p} value={p}>
+                          <option key={p} value={p} className="bg-zinc-900">
                             {p}
                           </option>
                         ))}
                       </select>
                     </div>
-                    <label className="flex items-center gap-2 text-sm pb-2">
-                      <input type="checkbox" checked={selActiva} onChange={(ev) => setSelActiva(ev.target.checked)} />
+                    <label className="flex items-center gap-2 pb-2 text-sm text-zinc-300">
+                      <input
+                        type="checkbox"
+                        className="rounded border-zinc-600 bg-zinc-900"
+                        checked={selActiva}
+                        onChange={(ev) => setSelActiva(ev.target.checked)}
+                      />
                       Empresa activa
                     </label>
-                    <button type="button" onClick={() => void onSaveEmpresa()} className="ab-btn-primary">
+                    <Button type="button" onClick={() => void onSaveEmpresa()} className={cn(btnPrimaryClass, "h-10")}>
                       Guardar
-                    </button>
+                    </Button>
                   </div>
                 </section>
               )}
@@ -496,35 +540,40 @@ export default function AdminPage() {
           )}
 
           {tab === "usuarios" && (
-            <div className="space-y-8 max-w-6xl">
-              <section className="ab-card rounded-2xl p-6">
-                <h2 className="text-lg font-bold text-slate-900 mb-4">Usuarios</h2>
+            <div className="grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-2">
+              <section className={cn(BENTO, "lg:col-span-2")}>
+                <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-100">Usuarios</h2>
+                <p className="mb-4 text-sm text-zinc-400">Usuarios registrados y su asignación por empresa.</p>
                 {loading && usuarios.length === 0 ? (
-                  <p className="text-slate-500 text-sm">Cargando…</p>
+                  <p className="text-sm text-zinc-400">Cargando…</p>
                 ) : usuarios.length === 0 ? (
-                  <p className="text-slate-500 text-sm">No hay usuarios.</p>
+                  <p className="text-sm text-zinc-400">No hay usuarios.</p>
                 ) : (
-                  <div className="overflow-x-auto rounded-xl border border-slate-200/80">
-                    <table className="ab-table w-full text-sm">
+                  <div className={tableShell}>
+                    <table className={tableClass}>
                       <thead>
                         <tr>
-                          <th>Usuario</th>
-                          <th>Email</th>
-                          <th>Rol</th>
-                          <th>Activo</th>
-                          <th>Empresa</th>
+                          <th className={tableHead}>Usuario</th>
+                          <th className={tableHead}>Email</th>
+                          <th className={tableHead}>Rol</th>
+                          <th className={tableHead}>Activo</th>
+                          <th className={tableHead}>Empresa</th>
                         </tr>
                       </thead>
                       <tbody>
                         {usuarios.map((u) => (
-                          <tr key={u.id}>
-                            <td className="font-medium">{u.username}</td>
-                            <td>{u.email ?? "—"}</td>
-                            <td>
-                              <span className="ab-badge">{u.rol}</span>
+                          <tr key={u.id} className="hover:bg-zinc-800/30">
+                            <td className={cn(tableCell, "font-medium text-zinc-100")}>{u.username}</td>
+                            <td className={tableCell}>{u.email ?? "—"}</td>
+                            <td className={tableCell}>
+                              <span className="inline-flex rounded-full bg-indigo-500/15 px-2 py-0.5 text-xs font-medium text-indigo-300">
+                                {u.rol}
+                              </span>
                             </td>
-                            <td>{u.activo ? "Sí" : "No"}</td>
-                            <td className="text-slate-600">{mapaEmpresaNombre.get(u.empresa_id) ?? u.empresa_id}</td>
+                            <td className={tableCell}>{u.activo ? "Sí" : "No"}</td>
+                            <td className={cn(tableCell, "text-zinc-400")}>
+                              {mapaEmpresaNombre.get(u.empresa_id) ?? u.empresa_id}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -534,44 +583,54 @@ export default function AdminPage() {
               </section>
 
               {usuarios.length > 0 && (
-                <section className="ab-card rounded-2xl p-6">
-                  <h2 className="text-lg font-bold text-slate-900 mb-4">Editar usuario</h2>
-                  <div className="flex flex-wrap gap-4 items-end">
+                <section className={cn(BENTO, "lg:col-span-2")}>
+                  <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-100">Editar usuario</h2>
+                  <p className="mb-4 text-sm text-zinc-400">Rol y estado del usuario seleccionado.</p>
+                  <div className="flex flex-wrap items-end gap-4">
                     <div className="min-w-[240px] flex-1">
-                      <label className="ab-label">Usuario</label>
+                      <label className="mb-1.5 block text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">
+                        Usuario
+                      </label>
                       <select
-                        className="ab-input w-full"
+                        className={cn(inputAdminClass, "w-full rounded-lg px-3")}
                         value={selUsuarioId}
                         onChange={(ev) => setSelUsuarioId(ev.target.value)}
                       >
                         {usuarios.map((u) => (
-                          <option key={u.id} value={u.id}>
+                          <option key={u.id} value={u.id} className="bg-zinc-900">
                             {u.username} {u.email ? `(${u.email})` : ""}
                           </option>
                         ))}
                       </select>
                     </div>
                     <div className="min-w-[140px]">
-                      <label className="ab-label">Rol</label>
-                      <select className="ab-input w-full" value={selRol} onChange={(ev) => setSelRol(ev.target.value)}>
+                      <label className="mb-1.5 block text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">
+                        Rol
+                      </label>
+                      <select
+                        className={cn(inputAdminClass, "w-full rounded-lg px-3")}
+                        value={selRol}
+                        onChange={(ev) => setSelRol(ev.target.value)}
+                      >
                         {ROLES.map((r) => (
-                          <option key={r} value={r}>
+                          <option key={r} value={r} className="bg-zinc-900">
                             {r}
                           </option>
                         ))}
                       </select>
                     </div>
-                    <label className="flex items-center gap-2 text-sm pb-2">
+                    <label className="flex items-center gap-2 pb-2 text-sm text-zinc-300">
                       <input
                         type="checkbox"
+                        className="rounded border-zinc-600 bg-zinc-900"
                         checked={selUsuarioActivo}
                         onChange={(ev) => setSelUsuarioActivo(ev.target.checked)}
                       />
                       Activo
                     </label>
-                    <button type="button" onClick={() => void onSaveUsuario()} className="ab-btn-primary">
+                    <Button type="button" onClick={() => void onSaveUsuario()} className={cn(btnPrimaryClass, "h-10")}>
                       Guardar usuario
-                    </button>
+                    </Button>
                   </div>
                 </section>
               )}
@@ -580,94 +639,112 @@ export default function AdminPage() {
 
           {tab === "metricas" && (
             <div className="max-w-5xl space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="ab-kpi">
-                  <p className="ab-kpi-label">Ingresos brutos</p>
-                  <p className="ab-kpi-value">{metricas ? formatEUR(metricas.total_bruto) : "—"}</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className={BENTO}>
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">Ingresos brutos</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-100">
+                    {metricas ? formatEUR(metricas.total_bruto) : "—"}
+                  </p>
                 </div>
-                <div className="ab-kpi">
-                  <p className="ab-kpi-label">IVA</p>
-                  <p className="ab-kpi-value">{metricas ? formatEUR(metricas.total_iva) : "—"}</p>
+                <div className={BENTO}>
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">IVA</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-100">
+                    {metricas ? formatEUR(metricas.total_iva) : "—"}
+                  </p>
                 </div>
-                <div className="ab-kpi ab-kpi-accent">
-                  <p className="ab-kpi-label">Ingreso neto</p>
-                  <p className="ab-kpi-value">{metricas ? formatEUR(metricas.ingreso_neto) : "—"}</p>
+                <div className={cn(BENTO, "border-emerald-500/30 bg-emerald-950/20")}>
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-400">Ingreso neto</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight text-emerald-300">
+                    {metricas ? formatEUR(metricas.ingreso_neto) : "—"}
+                  </p>
                 </div>
-                <div className="ab-kpi">
-                  <p className="ab-kpi-label">Facturas / ARPU</p>
-                  <p className="ab-kpi-value text-lg">
+                <div className={BENTO}>
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">Facturas / ARPU</p>
+                  <p className="mt-2 text-lg font-semibold tracking-tight text-zinc-100">
                     {metricas ? `${metricas.n_facturas} · ${formatEUR(metricas.arpu)}` : "—"}
                   </p>
                 </div>
               </div>
-              <p className="text-xs text-slate-500">
-                Agregado global de tabla <code className="bg-slate-100 px-1 rounded">facturas</code> (panel SaaS).
+              <p className="text-xs text-zinc-500">
+                Agregado global de tabla{" "}
+                <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-zinc-300">facturas</code> (panel SaaS).
               </p>
             </div>
           )}
 
           {tab === "auditoria" && (
-            <div className="space-y-4 max-w-6xl">
-              <div className="flex flex-wrap gap-3 items-end">
+            <div className="max-w-6xl space-y-4">
+              <div className={cn(BENTO, "flex flex-wrap items-end gap-3 py-5")}>
                 <div>
-                  <label className="ab-label">Acción contiene</label>
-                  <input
-                    className="ab-input"
+                  <label className="mb-1.5 block text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">
+                    Acción contiene
+                  </label>
+                  <Input
+                    className={cn(inputAdminClass, "w-[220px]")}
                     value={filtroAccion}
                     onChange={(ev) => setFiltroAccion(ev.target.value)}
                     placeholder="GENERAR_FACTURA"
                   />
                 </div>
                 <div>
-                  <label className="ab-label">Tabla contiene</label>
-                  <input
-                    className="ab-input"
+                  <label className="mb-1.5 block text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">
+                    Tabla contiene
+                  </label>
+                  <Input
+                    className={cn(inputAdminClass, "w-[180px]")}
                     value={filtroTabla}
                     onChange={(ev) => setFiltroTabla(ev.target.value)}
                     placeholder="facturas"
                   />
                 </div>
                 <div>
-                  <label className="ab-label">Límite</label>
+                  <label className="mb-1.5 block text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">
+                    Límite
+                  </label>
                   <select
-                    className="ab-input"
+                    className={cn(inputAdminClass, "w-[100px] rounded-lg px-3")}
                     value={audLimit}
                     onChange={(ev) => setAudLimit(Number(ev.target.value))}
                   >
                     {[50, 100, 200, 500].map((n) => (
-                      <option key={n} value={n}>
+                      <option key={n} value={n} className="bg-zinc-900">
                         {n}
                       </option>
                     ))}
                   </select>
                 </div>
-                <button type="button" className="ab-btn-secondary" onClick={() => void loadAuditoria()}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 border-zinc-700 bg-zinc-900/50 text-zinc-200 hover:bg-zinc-800"
+                  onClick={() => void loadAuditoria()}
+                >
                   Recargar
-                </button>
-                <button type="button" className="ab-btn-primary" onClick={exportAudCsv}>
+                </Button>
+                <Button type="button" className={cn(btnPrimaryClass, "h-10")} onClick={exportAudCsv}>
                   Exportar CSV
-                </button>
+                </Button>
               </div>
-              <div className="ab-card rounded-2xl overflow-hidden p-0">
+              <div className={cn(BENTO, "overflow-hidden p-0")}>
                 <div className="overflow-x-auto">
-                  <table className="ab-table w-full text-xs">
+                  <table className={cn(tableClass, "text-xs")}>
                     <thead>
                       <tr>
-                        <th>Acción</th>
-                        <th>Tabla</th>
-                        <th>Registro</th>
-                        <th>Empresa</th>
-                        <th>Fecha</th>
+                        <th className={tableHead}>Acción</th>
+                        <th className={tableHead}>Tabla</th>
+                        <th className={tableHead}>Registro</th>
+                        <th className={tableHead}>Empresa</th>
+                        <th className={tableHead}>Fecha</th>
                       </tr>
                     </thead>
                     <tbody>
                       {auditoriaFiltrada.map((r, i) => (
-                        <tr key={r.id || i}>
-                          <td className="font-mono">{r.accion}</td>
-                          <td>{r.tabla}</td>
-                          <td className="max-w-[120px] truncate">{r.registro_id}</td>
-                          <td className="truncate max-w-[100px]">{r.empresa_id}</td>
-                          <td className="text-slate-500 whitespace-nowrap">
+                        <tr key={r.id || i} className="hover:bg-zinc-800/30">
+                          <td className={cn(tableCell, "font-mono text-zinc-300")}>{r.accion}</td>
+                          <td className={tableCell}>{r.tabla}</td>
+                          <td className={cn(tableCell, "max-w-[120px] truncate")}>{r.registro_id}</td>
+                          <td className={cn(tableCell, "max-w-[100px] truncate")}>{r.empresa_id}</td>
+                          <td className={cn(tableCell, "whitespace-nowrap text-zinc-500")}>
                             {r.timestamp || r.fecha || "—"}
                           </td>
                         </tr>
@@ -680,15 +757,14 @@ export default function AdminPage() {
           )}
 
           {tab === "facturacion" && (
-            <div className="ab-card rounded-2xl p-8 max-w-xl space-y-4">
-              <h2 className="text-lg font-bold text-slate-900">Facturación</h2>
-              <p className="text-sm text-slate-600">
+            <div className={cn(BENTO, "max-w-xl space-y-2")}>
+              <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Facturación</h2>
+              <p className="text-sm leading-relaxed text-zinc-400">
                 La emisión legal de facturas de transporte está en{" "}
-                <Link href="/portes" className="text-[var(--ab-primary)] font-medium hover:underline">
+                <Link href="/portes" className="font-medium text-emerald-400 hover:text-emerald-300 hover:underline">
                   Portes
                 </Link>{" "}
-                (VeriFactu + PDF). Las facturas SaaS globales se integran aquí cuando conectes el
-                proveedor de pagos.
+                (VeriFactu + PDF). Las facturas SaaS globales se integran aquí cuando conectes el proveedor de pagos.
               </p>
             </div>
           )}
