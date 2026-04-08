@@ -58,11 +58,10 @@ export function LandingPricing() {
       if (data.url) {
         window.location.href = data.url; // Redirige a Stripe
       } else {
-        console.error("Error al crear sesión:", data);
         alert("Hubo un problema al conectar con la pasarela segura.");
       }
-    } catch (error) {
-      console.error("Error de red:", error);
+    } catch {
+      alert("No se pudo conectar con la pasarela segura. Inténtalo de nuevo.");
     } finally {
       setLoadingTier(null);
     }

@@ -16,6 +16,7 @@ import {
   getAlertasMantenimiento,
   postRegistrarMantenimiento,
   type MantenimientoAlerta,
+  type MantenimientoAlertaAdmin,
   type MantenimientoAlertaKm,
   isAlertaKm,
 } from "@/lib/api";
@@ -60,7 +61,7 @@ function MantenimientoDashboard() {
   }, [load]);
 
   const rowsKm = rows.filter(isAlertaKm);
-  const rowsAdmin = rows.filter((r) => !isAlertaKm(r));
+  const rowsAdmin = rows.filter((r): r is MantenimientoAlertaAdmin => !isAlertaKm(r));
 
   const criticos = rowsKm.filter((r) => r.urgencia === "CRITICO");
   const advertencias = rowsKm.filter((r) => r.urgencia === "ADVERTENCIA");

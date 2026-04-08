@@ -22,7 +22,7 @@ export default function PortalFacturasPage() {
   const [rows, setRows] = useState<PortalFacturaRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [downloading, setDownloading] = useState<number | null>(null);
+  const [downloading, setDownloading] = useState<string | number | null>(null);
   const [isSettingUpMandate, setIsSettingUpMandate] = useState(false);
   const [hasActiveMandate, setHasActiveMandate] = useState(false);
 

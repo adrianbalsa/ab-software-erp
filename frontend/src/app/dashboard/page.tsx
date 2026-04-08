@@ -19,6 +19,7 @@ import { SupportCard } from "@/components/docs/SupportCard";
 import { EconomicOverview } from "@/components/EconomicOverview";
 import { EmissionBadge } from "@/components/esg/EmissionBadge";
 import { ToastHost, type ToastPayload } from "@/components/ui/ToastHost";
+import { AppErrorBoundary } from "@/components/ui/AppErrorBoundary";
 import { toast } from "sonner";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useEcoDashboard } from "@/hooks/useEcoDashboard";
@@ -249,18 +250,24 @@ export default function Dashboard() {
                   kmFacturadosMes={data?.km_facturados_mes_actual ?? null}
                   kmFacturadosMesAnterior={data?.km_facturados_mes_anterior ?? null}
                 />
-                <EmissionBadge />
+                <AppErrorBoundary>
+                  <EmissionBadge />
+                </AppErrorBoundary>
                 <div className="grid lg:grid-cols-3 gap-6">
                   <div className="lg:col-span-2">
-                    <CashFlowChart
-                      loading={loading}
-                      data={data?.tesoreria_mensual ?? []}
-                    />
+                    <AppErrorBoundary>
+                      <CashFlowChart
+                        loading={loading}
+                        data={data?.tesoreria_mensual ?? []}
+                      />
+                    </AppErrorBoundary>
                   </div>
-                  <CostBreakdownPie
-                    loading={loading}
-                    data={data?.gastos_por_bucket_cinco ?? []}
-                  />
+                  <AppErrorBoundary>
+                    <CostBreakdownPie
+                      loading={loading}
+                      data={data?.gastos_por_bucket_cinco ?? []}
+                    />
+                  </AppErrorBoundary>
                 </div>
               </section>
 
@@ -281,23 +288,33 @@ export default function Dashboard() {
                   </code>
                 </p>
                 <div className="grid gap-6 lg:grid-cols-2">
-                  <EfficiencyMatrix
-                    loading={loading || ecoLoading}
-                    margenNetoKm={data?.margen_neto_km_mes_actual ?? null}
-                    co2PerTonKm={ecoData?.co2_per_ton_km ?? null}
-                    ingresosMensuales={data?.ingresos ?? 0}
-                  />
-                  <BreakEvenAnalysis
-                    loading={loading}
-                    monthly={data?.ingresos_vs_gastos_mensual ?? []}
-                  />
+                  <AppErrorBoundary>
+                    <EfficiencyMatrix
+                      loading={loading || ecoLoading}
+                      margenNetoKm={data?.margen_neto_km_mes_actual ?? null}
+                      co2PerTonKm={ecoData?.co2_per_ton_km ?? null}
+                      ingresosMensuales={data?.ingresos ?? 0}
+                    />
+                  </AppErrorBoundary>
+                  <AppErrorBoundary>
+                    <BreakEvenAnalysis
+                      loading={loading}
+                      monthly={data?.ingresos_vs_gastos_mensual ?? []}
+                    />
+                  </AppErrorBoundary>
                 </div>
               </section>
 
-              <EconomicOverview />
-              <EconomicAdvancedDashboard enabled={isOwner} />
+              <AppErrorBoundary>
+                <EconomicOverview />
+              </AppErrorBoundary>
+              <AppErrorBoundary>
+                <EconomicAdvancedDashboard enabled={isOwner} />
+              </AppErrorBoundary>
               <div className="w-full max-w-[100vw] overflow-x-auto">
-                <AdvancedCharts />
+                <AppErrorBoundary>
+                  <AdvancedCharts />
+                </AppErrorBoundary>
               </div>
             </>
           ) : (

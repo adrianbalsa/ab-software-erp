@@ -87,7 +87,7 @@ function IntegracionesContent() {
       setSuccess(
         `Webhook creado. Copia el secreto ahora; solo se muestra completo al crear o al revelar.`,
       );
-      setRevealed((r) => ({ ...r, [created.id]: created.secret_key }));
+      setRevealed((r) => ({ ...r, [created.id]: created.secret_key ?? "" }));
       await load();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "No se pudo crear");
@@ -262,7 +262,7 @@ function IntegracionesContent() {
                       {w.target_url}
                     </td>
                     <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
-                      {formatCreated(w.created_at)}
+                      {formatCreated(w.created_at ?? "")}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center justify-end gap-2">

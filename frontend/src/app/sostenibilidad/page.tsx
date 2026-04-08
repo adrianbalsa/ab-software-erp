@@ -139,8 +139,8 @@ export default function SostenibilidadPage() {
       } catch {
         // ignore
       }
-    } catch (e: any) {
-      setAuthError(e?.message || "Error de conexión");
+    } catch (e: unknown) {
+      setAuthError(e instanceof Error ? e.message : "Error de conexión");
     } finally {
       setAuthBusy(false);
     }
@@ -227,8 +227,8 @@ export default function SostenibilidadPage() {
             tipo_motor: x.tipo_motor,
           }))
         );
-      } catch (e: any) {
-        setErrorMsg(e?.message || "Error cargando datos");
+      } catch (e: unknown) {
+        setErrorMsg(e instanceof Error ? e.message : "Error cargando datos");
       } finally {
         setLoadingEco(false);
         setLoadingFlota(false);
@@ -560,8 +560,8 @@ export default function SostenibilidadPage() {
       });
       if (!res.ok) throw new Error("Error creando mantenimiento");
       setDescMantenimiento("");
-    } catch (e: any) {
-      setMantenimientoError(e?.message || "Error");
+    } catch (e: unknown) {
+      setMantenimientoError(e instanceof Error ? e.message : "Error");
     } finally {
       setMantenimientoBusy(false);
     }
@@ -1224,7 +1224,7 @@ export default function SostenibilidadPage() {
                         <select
                           value={tipoMantenimiento}
                           onChange={(e) =>
-                            setTipoMantenimiento(e.target.value as any)
+                            setTipoMantenimiento(e.target.value as (typeof tiposTaller)[number])
                           }
                           className="w-full p-2.5 border border-slate-300 rounded-lg outline-none"
                         >

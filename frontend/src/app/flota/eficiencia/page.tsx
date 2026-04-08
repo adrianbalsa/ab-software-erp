@@ -7,6 +7,7 @@ import { FleetEfficiencyTable, TruckEfficiency } from "@/components/dashboard/Fl
 import { TruckProfitChart } from "@/components/dashboard/TruckProfitChart";
 import { AppShell } from "@/components/AppShell";
 import { API_BASE, apiFetch } from "@/lib/api";
+import { EfficiencyRankingSchema } from "@/lib/schemas";
 
 export default function EficienciaFlotaPage() {
   const [data, setData] = useState<TruckEfficiency[]>([]);
@@ -17,25 +18,13 @@ export default function EficienciaFlotaPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiFetch(`${API_BASE}/api/v1/fleet/efficiency-ranking`, {
-        credentials: "include",
-      });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        const detail =
-          typeof (err as { detail?: unknown })?.detail === "string"
-            ? (err as { detail: string }).detail
-            : `HTTP ${response.status}`;
-        throw new Error(detail);
-      }
-      const result = (await response.json()) as unknown;
-      if (result && Array.isArray(result)) {
-        setData(result as TruckEfficiency[]);
-      } else {
-        setData([]);
-      }
+      const result = await apiFetch<TruckEfficiency[]>(
+        `${API_BASE}/api/v1/fleet/efficiency-ranking`,
+        undefined,
+        EfficiencyRankingSchema,
+      );
+      setData(result);
     } catch (err: unknown) {
-      console.error("Error al cargar datos de eficiencia:", err);
       setError(err instanceof Error ? err.message : "No se pudieron cargar los datos.");
     } finally {
       setLoading(false);

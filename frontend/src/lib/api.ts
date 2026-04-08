@@ -1,5 +1,6 @@
 import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
 import { createBrowserClient } from "@supabase/ssr";
+import { z, type ZodSchema } from "zod";
 import { getAuthToken as getAuthTokenFromStore } from "@/lib/auth";
 
 export const API_BASE =
@@ -9,6 +10,18 @@ export const API_BASE =
   "https://api.ablogistics-os.com";
 
 export const ABL_JWT_UPDATED_EVENT = "abl:jwt-updated";
+
+export class ApiValidationError extends Error {
+  readonly payload: unknown;
+  readonly issues: z.ZodIssue[];
+
+  constructor(message: string, payload: unknown, issues: z.ZodIssue[]) {
+    super(message);
+    this.name = "ApiValidationError";
+    this.payload = payload;
+    this.issues = issues;
+  }
+}
 
 /**
  * JWT para el cliente (localStorage). En RSC/SSR el token HttpOnly está en
@@ -314,12 +327,44 @@ apiClient.interceptors.request.use(async (config) => {
   return config;
 });
 
-export async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+export type ApiFetchOptions = RequestInit;
+
+export async function apiFetch(input: string, options?: ApiFetchOptions): Promise<Response>;
+export async function apiFetch<T>(
+  input: string,
+  options: ApiFetchOptions | undefined,
+  schema: ZodSchema<T>,
+): Promise<T>;
+export async function apiFetch<T>(
+  input: string,
+  init: ApiFetchOptions = {},
+  schema?: ZodSchema<T>,
+): Promise<Response | T> {
   const headers = new Headers(init.headers ?? {});
   const token = await resolveAccessToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const credentials = init.credentials ?? "include";
-  return fetch(input, { ...init, credentials, headers });
+  const response = await fetch(input, { ...init, credentials, headers });
+  if (!schema) return response;
+  if (!response.ok) {
+    throw new Error(await parseApiError(response));
+  }
+
+  const payload = await response.json().catch(() => null);
+  const result = schema.safeParse(payload);
+  if (!result.success) {
+    console.error("apiFetch schema validation failed", {
+      url: input,
+      issues: result.error.issues,
+      payload,
+    });
+    throw new ApiValidationError(
+      `Respuesta inválida del backend para ${input}`,
+      payload,
+      result.error.issues,
+    );
+  }
+  return result.data;
 }
 
 export async function parseApiError(res: Response): Promise<string> {
@@ -358,6 +403,7 @@ export class FacturaEmailSendError extends Error {
     this.status = status;
   }
 }
+/** Campos usados en UI de facturas; el backend puede añadir más (VeriFactu, rectificativas). */
 export type Factura = {
   id: number;
   numero_factura?: string;
@@ -365,11 +411,25 @@ export type Factura = {
   total_factura?: number;
   estado_factura?: string;
   created_at?: string;
-  [k: string]: any;
+  tipo_factura?: string | null;
+  fecha_emision?: string | null;
+  is_finalized?: boolean;
+  fingerprint?: string | null;
+  aeat_sif_estado?: string | null;
+  aeat_sif_descripcion?: string | null;
+  aeat_sif_csv?: string | null;
+  hash_registro?: string | null;
 };
+
+/** Alineado con `GET /api/v1/facturas/{id}/pdf-data` y `FacturaPdfTemplate`. */
 export type FacturaPdfData = {
-  emisor: { nombre: string; nif?: string | null; direccion?: string | null };
-  receptor: { nombre: string; nif?: string | null };
+  factura_id: number;
+  numero_factura: string;
+  num_factura_verifactu: string | null;
+  tipo_factura: string | null;
+  fecha_emision: string;
+  emisor: { nombre: string; nif: string; direccion: string | null };
+  receptor: { nombre: string; nif: string | null };
   lineas: Array<{
     concepto: string;
     cantidad: number;
@@ -380,18 +440,94 @@ export type FacturaPdfData = {
   tipo_iva_porcentaje: number;
   cuota_iva: number;
   total_factura: number;
-  verifactu_validation_url?: string;
-  hash_encadenado?: string;
-  [k: string]: any;
+  verifactu_qr_base64: string;
+  verifactu_validation_url: string | null;
+  verifactu_hash_audit: string;
+  fingerprint_completo: string | null;
+  hash_registro: string | null;
+  aeat_csv_ultimo_envio: string | null;
 };
-export type FacturaPdfPayload = Record<string, any>;
-export type CmrDataOut = Record<string, any>;
-export type LiveFleetVehicle = Record<string, any>;
-export type SimulationInput = Record<string, any>;
-export type SimulationResult = Record<string, any>;
-export type CIPMatrixPoint = Record<string, any>;
-export type VerifactuChainAudit = Record<string, any>;
-export type VerifactuQrPreview = Record<string, any>;
+
+type CmrParty = {
+  nombre?: string | null;
+  nif?: string | null;
+  direccion?: string | null;
+  pais?: string | null;
+};
+
+type CmrLugarFecha = {
+  lugar?: string | null;
+  fecha?: string | null;
+};
+
+type CmrMercancia = {
+  descripcion?: string | null;
+  bultos?: number | null;
+  peso_kg?: number | null;
+  peso_ton?: number | null;
+  volumen_m3?: number | null;
+  matricula_vehiculo?: string | null;
+  nombre_vehiculo?: string | null;
+  nombre_conductor?: string | null;
+};
+
+export type CmrDataOut = {
+  porte_id: string;
+  km_estimados?: number | null;
+  casilla_1_remitente: CmrParty;
+  casilla_2_consignatario: CmrParty;
+  casilla_3_lugar_entrega_mercancia?: string | null;
+  casilla_4_lugar_fecha_toma_carga: CmrLugarFecha;
+  casilla_6_12_mercancia: CmrMercancia;
+  casilla_16_transportista: CmrParty;
+};
+
+export type LiveFleetVehicle = {
+  id: string;
+  matricula: string;
+  conductor_nombre?: string | null;
+  estado: string;
+  ultima_latitud?: number | null;
+  ultima_longitud?: number | null;
+  ultima_actualizacion_gps?: string | null;
+};
+
+export type SimulationInput = {
+  cambio_combustible_pct: number;
+  cambio_salarios_pct: number;
+  cambio_peajes_pct: number;
+};
+
+export type SimulationResult = {
+  ebitda_base_eur: number;
+  ebitda_simulado_eur: number;
+  impacto_mensual_estimado_eur: number;
+  impacto_ebitda_eur: number;
+  impacto_ebitda_pct: number;
+  break_even: { tarifa_incremento_pct: number };
+  periodo_meses: number;
+};
+
+export type CIPMatrixPoint = {
+  ruta: string;
+  margen_neto: number;
+  emisiones_co2: number;
+  total_portes: number;
+};
+
+export type VerifactuChainAudit = {
+  is_valid: boolean;
+  total_verified: number;
+  factura_id?: number | null;
+};
+
+export type VerifactuQrPreview = {
+  found: boolean;
+  qr_png_base64?: string | null;
+  numero_factura?: string | null;
+  fingerprint_hash?: string | null;
+  aeat_url?: string | null;
+};
 export type OnboardingDashboardRow = {
   id: string;
   nombre?: string | null;
@@ -411,12 +547,29 @@ export type OnboardingDashboardData = {
     operativos?: number;
   };
 };
-export type PortalFacturaRow = Record<string, any>;
-export type PortalPorteRow = Record<string, any>;
+export type PortalFacturaRow = {
+  id: string | number;
+  numero_factura: string;
+  fecha_emision?: string | null;
+  total_factura: number;
+  estado_pago: string;
+};
+
+export type PortalPorteRow = {
+  id: string | number;
+  origen: string;
+  destino: string;
+  fecha_entrega: string | null;
+};
+
 export type FuelImportacionResponse = {
   errores: string[];
   importedAt?: string;
-  [k: string]: any;
+  total_litros: number;
+  total_euros: number;
+  total_co2_kg: number;
+  filas_importadas_ok: number;
+  total_filas_leidas: number;
 };
 export type MantenimientoUrgencia = "CRITICO" | "ADVERTENCIA" | "OK";
 export type MantenimientoAlertaKm = {
@@ -425,24 +578,71 @@ export type MantenimientoAlertaKm = {
   tipo_tarea: string;
   vehiculo_id: string;
   matricula?: string | null;
+  /** Nombre legible del vehículo (inventario), si el backend lo envía */
+  vehiculo?: string | null;
   intervalo_km: number;
   km_desde_ultimo: number;
   desgaste: number;
-  [k: string]: any;
+  ultimo_km_realizado?: number;
+  odometro_actual?: number;
 };
 export type MantenimientoAlertaAdmin = {
   urgencia: MantenimientoUrgencia;
-  tramite?: string;
-  fecha_objetivo?: string | null;
-  [k: string]: any;
+  vehiculo_id: string;
+  tipo_tramite: string;
+  fecha_vencimiento: string;
+  dias_restantes: number;
+  matricula?: string | null;
+  vehiculo?: string | null;
 };
 export type MantenimientoAlerta = MantenimientoAlertaKm | MantenimientoAlertaAdmin;
-export type MovimientoSugeridoConciliacion = Record<string, any>;
+
+export type MovimientoSugeridoConciliacion = {
+  movimiento_id: string;
+  fecha: string;
+  importe: number;
+  concepto?: string | null;
+  iban_origen?: string | null;
+  confidence_score?: number | null;
+  factura_numero?: string | null;
+  cliente_nombre?: string | null;
+  factura_total?: number | null;
+  factura_fecha?: string | null;
+  razonamiento_ia?: string | null;
+};
 export type ExportContableTipo = string;
-export type CreditAlert = Record<string, any>;
-export type FinanceEsgReport = Record<string, any>;
-export type RiskRankingRow = Record<string, any>;
-export type RouteMarginRow = Record<string, any>;
+export type CreditAlert = {
+  cliente_id: string;
+  nombre_cliente: string;
+  nivel_alerta: "CRITICAL" | "WARNING" | string;
+  saldo_pendiente: number;
+  limite_credito: number;
+  porcentaje_consumo: number;
+};
+
+export type FinanceEsgReport = {
+  periodo: string;
+  total_co2_kg: number;
+  total_portes: number;
+};
+
+export type RiskRankingRow = {
+  cliente_id: string;
+  nombre: string;
+  saldo_pendiente: number;
+  riesgo_score: number;
+  valor_riesgo: number;
+  mandato_sepa_activo: boolean;
+};
+
+export type RouteMarginRow = {
+  ruta: string;
+  total_portes: number;
+  ingresos_totales: number;
+  costes_totales: number;
+  margen_neto: number;
+  margen_porcentual: number;
+};
 export type TreasuryRiskResponse = {
   total_pendiente?: number;
   garantizado_sepa?: number;
@@ -453,13 +653,35 @@ export type TreasuryRiskResponse = {
     pendiente: number;
   }>;
 };
-export type AdvancedMetricsMonthRow = Record<string, any>;
+export type AdvancedMetricsMonthRow = {
+  periodo: string;
+  ingresos_facturacion_eur: number;
+  gastos_operativos_eur: number;
+  coste_por_km_eur: number | null;
+  emisiones_co2_kg: number;
+};
+
 export type AdvancedMetricsResponse = {
   meses: AdvancedMetricsMonthRow[];
   nota_metodologia?: string | null;
 };
-export type WebhookEndpoint = Record<string, any>;
-export type WebhookB2BRow = Record<string, any>;
+
+/** Listado/creación webhooks: el backend expone campos distintos según flujo (B2B vs panel desarrolladores). */
+export type WebhookB2BRow = {
+  id: string;
+  secret_key?: string;
+  /** Flujo integraciones (`/settings/integrations`) */
+  target_url?: string;
+  event_type?: string;
+  /** Flujo desarrolladores (`/dashboard/configuracion/desarrolladores`) */
+  url?: string;
+  event_types?: string[];
+  is_active?: boolean;
+  created_at?: string;
+};
+
+/** Alias histórico; mismo shape que un endpoint listado. */
+export type WebhookEndpoint = WebhookB2BRow;
 export type WebhookEventType = string;
 
 export const WEBHOOK_EVENT_TYPES: WebhookEventType[] = [
@@ -469,7 +691,7 @@ export const WEBHOOK_EVENT_TYPES: WebhookEventType[] = [
   "invoice.overdue",
 ];
 
-async function getJson<T = any>(url: string, init: RequestInit = {}): Promise<T> {
+async function getJson<T = unknown>(url: string, init: RequestInit = {}): Promise<T> {
   const res = await apiFetch(url, init);
   if (!res.ok) throw new Error(await parseApiError(res));
   return (await res.json()) as T;
@@ -479,15 +701,32 @@ export const refreshAccessToken = async () =>
   getJson<{ access_token?: string }>(`${API_BASE}/auth/refresh`, { method: "POST", credentials: "include" });
 export const fetchPortalFacturas = async () => getJson<PortalFacturaRow[]>(`${API_BASE}/api/v1/portal/facturas`);
 export const fetchPortalPortes = async () => getJson<PortalPorteRow[]>(`${API_BASE}/api/v1/portal/portes`);
-export const fetchPortalMyRisk = async () => getJson(`${API_BASE}/api/v1/portal/onboarding/my-risk`);
-export const postPortalAcceptRisk = async (payload: Record<string, any> = {}) =>
-  getJson(`${API_BASE}/api/v1/portal/onboarding/accept-risk`, {
+
+/** Respuesta onboarding portal (riesgo / límite); alineado con `RiskAssessmentCard` / onboarding. */
+export type PortalOnboardingMyRisk = {
+  score: number;
+  creditLimitEur: number;
+  collectionTerms: string;
+  reasons: string[];
+};
+
+export const fetchPortalMyRisk = async () =>
+  getJson<PortalOnboardingMyRisk>(`${API_BASE}/api/v1/portal/onboarding/my-risk`);
+
+export const postPortalAcceptRisk = async (payload: Record<string, unknown> = {}) =>
+  getJson<unknown>(`${API_BASE}/api/v1/portal/onboarding/accept-risk`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+
+export type PortalMandateSetupResponse = {
+  has_active_mandate?: boolean;
+  redirect_url?: string;
+};
+
 export const postPortalSetupMandate = async () =>
-  getJson(`${API_BASE}/api/v1/payments/gocardless/mandates/setup`, { method: "POST" });
+  getJson<PortalMandateSetupResponse>(`${API_BASE}/api/v1/payments/gocardless/mandates/setup`, { method: "POST" });
 export const portalFacturaPdfUrl = (id: string | number) => `${API_BASE}/api/v1/portal/facturas/${id}/pdf`;
 export const portalAlbaranPdfUrl = (id: string | number) => `${API_BASE}/api/v1/portal/portes/${id}/albaran-pdf`;
 export const getFacturaPdfData = async (id: string | number) =>
@@ -495,9 +734,12 @@ export const getFacturaPdfData = async (id: string | number) =>
 export const getPorteCmrData = async (id: string | number) => getJson<CmrDataOut>(`${API_BASE}/api/v1/portes/${id}/cmr`);
 export const getLiveFleetTracking = async () =>
   getJson<LiveFleetVehicle[]>(`${API_BASE}/api/v1/flota/live-tracking`);
-export const postFirmaEntrega = async (idOrPayload: string | Record<string, any>, maybePayload?: Record<string, any>) => {
+export const postFirmaEntrega = async (
+  idOrPayload: string | Record<string, unknown>,
+  maybePayload?: Record<string, unknown>,
+) => {
   const payload = typeof idOrPayload === "string" ? { id: idOrPayload, ...(maybePayload ?? {}) } : idOrPayload;
-  return getJson(`${API_BASE}/api/v1/portes/firma-entrega`, {
+  return getJson<unknown>(`${API_BASE}/api/v1/portes/firma-entrega`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -505,21 +747,26 @@ export const postFirmaEntrega = async (idOrPayload: string | Record<string, any>
 };
 export const getSugerenciasPendientes = async () =>
   getJson<MovimientoSugeridoConciliacion[]>(`${API_BASE}/api/v1/bancos/sugerencias-pendientes`);
-export const postConciliarAi = async (payload: Record<string, any> = {}) =>
-  getJson(`${API_BASE}/api/v1/bancos/conciliar-ai`, {
+export type ConciliarAiResponse = {
+  sugerencias_guardadas: number;
+};
+
+export const postConciliarAi = async (payload: Record<string, unknown> = {}) =>
+  getJson<ConciliarAiResponse>(`${API_BASE}/api/v1/bancos/conciliar-ai`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+
 export const postConfirmarSugerencia = async (
-  payloadOrId: Record<string, any> | string,
+  payloadOrId: Record<string, unknown> | string,
   aprobar?: boolean,
 ) => {
   const payload =
     typeof payloadOrId === "string"
       ? { movimiento_id: payloadOrId, aprobar: Boolean(aprobar) }
       : payloadOrId;
-  return getJson(`${API_BASE}/api/v1/bancos/confirmar-sugerencia`, {
+  return getJson<unknown>(`${API_BASE}/api/v1/bancos/confirmar-sugerencia`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -557,9 +804,14 @@ export const postImportarCombustible = async (payload: FormData | File) => {
 export const getAlertasMantenimiento = async () =>
   getJson<MantenimientoAlerta[]>(`${API_BASE}/api/v1/flota/alertas-mantenimiento`);
 export const isAlertaKm = (row: MantenimientoAlerta): row is MantenimientoAlertaKm =>
-  typeof (row as any)?.plan_id === "string";
-export const postRegistrarMantenimiento = async (payload: Record<string, any>) =>
-  getJson(`${API_BASE}/api/v1/flota/mantenimiento/registrar`, {
+  "plan_id" in row && typeof row.plan_id === "string";
+export type RegistrarMantenimientoResponse = {
+  ultimo_km_realizado: number;
+  gasto_id: string | number;
+};
+
+export const postRegistrarMantenimiento = async (payload: Record<string, unknown>) =>
+  getJson<RegistrarMantenimientoResponse>(`${API_BASE}/api/v1/flota/mantenimiento/registrar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -567,18 +819,22 @@ export const postRegistrarMantenimiento = async (payload: Record<string, any>) =
 export const getAdvancedMetrics = async () =>
   getJson<AdvancedMetricsResponse>(`${API_BASE}/api/v1/dashboard/advanced-metrics`);
 export const listWebhooksB2B = async () => getJson<WebhookB2BRow[]>(`${API_BASE}/api/v1/webhooks/`);
-export const createWebhookB2B = async (payload: Record<string, any>) =>
+export const createWebhookB2B = async (payload: Record<string, unknown>) =>
   getJson<WebhookB2BRow>(`${API_BASE}/api/v1/webhooks/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 export const deleteWebhookB2B = async (id: string) =>
-  getJson(`${API_BASE}/api/v1/webhooks/${encodeURIComponent(id)}`, { method: "DELETE" });
+  getJson<unknown>(`${API_BASE}/api/v1/webhooks/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const revealWebhookSecret = async (id: string) =>
   getJson<{ secret_key: string }>(`${API_BASE}/api/v1/webhooks/${encodeURIComponent(id)}/secret`);
 export const testWebhookB2B = async (id: string) =>
-  getJson(`${API_BASE}/api/v1/webhooks/${encodeURIComponent(id)}/test`, { method: "POST" });
+  getJson<unknown>(`${API_BASE}/api/v1/webhooks/${encodeURIComponent(id)}/test`, { method: "POST" });
+
+export type FacturaEmailSendResponse = {
+  destinatario: string;
+};
 
 export const api = Object.assign(apiClient, {
   facturas: {
@@ -588,7 +844,7 @@ export const api = Object.assign(apiClient, {
       if (!res.ok) {
         throw new FacturaEmailSendError(await parseApiError(res), res.status);
       }
-      return (await res.json()) as any;
+      return (await res.json()) as FacturaEmailSendResponse;
     },
   },
   analytics: {
@@ -602,13 +858,13 @@ export const api = Object.assign(apiClient, {
   },
   clientes: {
     resendInvite: (clienteId: string) =>
-      getJson(`${API_BASE}/api/v1/clientes/${encodeURIComponent(clienteId)}/resend-invite`, {
+      getJson<unknown>(`${API_BASE}/api/v1/clientes/${encodeURIComponent(clienteId)}/resend-invite`, {
         method: "POST",
       }),
   },
   webhooks: {
     getEndpoints: () => listWebhooksB2B(),
-    createEndpoint: (payload: Record<string, any>) => createWebhookB2B(payload),
+    createEndpoint: (payload: Record<string, unknown>) => createWebhookB2B(payload),
     deleteEndpoint: (id: string) => deleteWebhookB2B(id),
     getEndpointSecret: async (id: string) => {
       const out = await revealWebhookSecret(id);
@@ -639,7 +895,3 @@ export const api = Object.assign(apiClient, {
 });
 export { apiClient };
 export default apiClient;
-
-export type ComponentType = any;
-export type ReactNode = any;
-export type ToastPayload = any;

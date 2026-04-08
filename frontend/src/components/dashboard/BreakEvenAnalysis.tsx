@@ -24,6 +24,8 @@ type BreakEvenRow = {
   cumulative_gastos: number;
 };
 
+type TooltipValue = number | string | ReadonlyArray<number | string> | null | undefined;
+
 type Props = {
   loading: boolean;
   monthly: MonthlyPoint[];
@@ -84,7 +86,7 @@ export function BreakEvenAnalysis({ loading, monthly }: Props) {
                   fontSize: 12,
                   color: "#e4e4e7",
                 }}
-                formatter={(value: any, name: any) => {
+                formatter={(value: TooltipValue, name: string | number | undefined) => {
                   const v = Number(value ?? 0);
                   if (name === "cumulative_ingresos") return [fmtEur(v), "Ingresos acumulados"];
                   if (name === "cumulative_gastos") return [fmtEur(v), "Gastos acumulados"];

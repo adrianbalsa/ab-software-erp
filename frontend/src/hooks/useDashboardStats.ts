@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { z } from "zod";
 
-import { API_BASE, apiFetch, parseApiError } from "@/lib/api";
+import { API_BASE, apiFetch } from "@/lib/api";
+import { DashboardStatsSchema } from "@/lib/schemas";
 
 export type DashboardStatsData = {
   km_estimados: number;
@@ -12,11 +14,10 @@ export type DashboardStatsData = {
   facturacion_estimada: number;
 };
 
-/** Alineado con GET /dashboard/stats: `{ message, data }` (payload anidado). */
-export type StatsResponse = {
-  message: string;
-  data: DashboardStatsData;
-};
+const DashboardStatsResponseSchema = z.object({
+  message: z.string().optional(),
+  data: DashboardStatsSchema,
+});
 
 export function useDashboardStats(options?: { enabled?: boolean }) {
   const enabled = options?.enabled !== false;
@@ -32,14 +33,12 @@ export function useDashboardStats(options?: { enabled?: boolean }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch(`${API_BASE}/dashboard/stats`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        throw new Error(await parseApiError(res));
-      }
-      const json = (await res.json()) as Partial<StatsResponse>;
-      const stats = (json?.data ?? {}) as Record<string, any>;
+      const json = await apiFetch<z.infer<typeof DashboardStatsResponseSchema>>(
+        `${API_BASE}/dashboard/stats`,
+        undefined,
+        DashboardStatsResponseSchema,
+      );
+      const stats = json.data;
       setData({
         km_estimados: Number(stats.km_estimados ?? 0),
         bultos: Number(stats.bultos ?? 0),

@@ -251,7 +251,7 @@ export function CmrDocument({ data }: { data: CmrDataOut }) {
 
         <View style={{ marginTop: 6 }}>
           <Text style={{ fontSize: 6, color: "#555" }}>
-            Resumen mercancía / vehículo: {fmtMerc(m, km)}
+            Resumen mercancía / vehículo: {fmtMerc(m, km ?? null)}
           </Text>
         </View>
       </Page>

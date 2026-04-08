@@ -19,22 +19,9 @@ import {
   notifyJwtUpdated,
 } from "@/lib/api";
 import { setAuthToken } from "@/lib/auth";
-
-type PorteOut = {
-  id: string;
-  cliente_id?: string | null;
-  fecha: string;
-  origen: string;
-  destino: string;
-  km_estimados?: number;
-  precio_pactado?: number | null;
-  estado: string;
-};
-
-type ClienteRow = {
-  id: string;
-  nombre: string;
-};
+import { ClienteSchema, PorteSchema, type Cliente, type Porte } from "@/lib/schemas";
+type PorteOut = Porte;
+type ClienteRow = Cliente;
 
 type FacturaGenerateResult = {
   factura: {
@@ -161,9 +148,11 @@ export default function PortesPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchApi("/portes/", { method: "GET" });
-      if (!res.ok) throw new Error("No se pudieron cargar los portes");
-      const data = (await res.json()) as PorteOut[];
+      const data = await apiFetch<PorteOut[]>(
+        `${API_BASE}/portes/`,
+        { method: "GET" },
+        PorteSchema.array(),
+      );
       setPortes(data.filter((p) => p.estado === "pendiente"));
       setSelectedIds(new Set());
     } catch (e: unknown) {
@@ -176,9 +165,11 @@ export default function PortesPage() {
   const loadClientes = useCallback(async () => {
     if (!getAuthToken() || !canCreatePorte) return;
     try {
-      const res = await fetchApi("/clientes/", { method: "GET" });
-      if (!res.ok) return;
-      const rows = (await res.json()) as { id: string; nombre?: string | null }[];
+      const rows = await apiFetch<ClienteRow[]>(
+        `${API_BASE}/clientes/`,
+        { method: "GET" },
+        ClienteSchema.array(),
+      );
       setClientes(
         rows.map((r) => ({
           id: r.id,

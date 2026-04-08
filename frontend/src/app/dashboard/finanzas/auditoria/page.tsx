@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Copy, Loader2, ShieldCheck } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
@@ -150,10 +151,13 @@ export default function AuditoriaFiscalPage() {
                     Factura {preview.numero_factura} · Hash:{" "}
                     <code className="text-xs">{preview.fingerprint_hash ?? "N/A"}</code>
                   </p>
-                  <img
+                  <Image
                     src={`data:image/png;base64,${preview.qr_png_base64}`}
                     alt="QR VeriFactu"
-                    className="w-44 h-44 border border-zinc-200 rounded"
+                    width={176}
+                    height={176}
+                    className="h-44 w-44 rounded border border-zinc-200"
+                    unoptimized
                   />
                   {preview.aeat_url ? (
                     <div>

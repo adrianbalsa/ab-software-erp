@@ -25,6 +25,8 @@ type MatrixRow = {
   ingresos: number;
 };
 
+type TooltipValue = number | string | ReadonlyArray<number | string> | null | undefined;
+
 function fmtEur(v: number): string {
   return v.toLocaleString("es-ES", {
     style: "currency",
@@ -93,7 +95,7 @@ export function EfficiencyMatrix({
                   fontSize: 12,
                   color: "#e4e4e7",
                 }}
-                formatter={(value: any, name: any) => {
+                formatter={(value: TooltipValue, name: string | number | undefined) => {
                   const v = Number(value ?? 0);
                   if (name === "ingresos") return [fmtEur(v), "Ingresos"];
                   if (name === "margen_neto_km") return [`${v.toFixed(4)} €/km`, "Margen neto/km"];

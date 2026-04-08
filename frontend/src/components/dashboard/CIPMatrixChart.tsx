@@ -27,10 +27,19 @@ const formatCurrency = (value: number) =>
 const formatNumber = (value: number) =>
   new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 }).format(value);
 
+type CipTooltipPayload = { payload?: CIPMatrixPoint };
+
+type CipScatterTooltipProps = {
+  active?: boolean;
+  payload?: ReadonlyArray<CipTooltipPayload>;
+};
+
 // Custom tooltip for the ScatterChart
-const CustomTooltip = ({ active, payload }: any) => {
+const CustomTooltip = ({ active, payload }: CipScatterTooltipProps) => {
   if (active && payload && payload.length) {
-    const data = payload[0].payload as CIPMatrixPoint;
+    const first = payload[0] as CipTooltipPayload | undefined;
+    const data = first?.payload;
+    if (!data) return null;
     return (
       <div className="bg-white/95 backdrop-blur-sm border border-slate-200 p-4 rounded-lg shadow-xl shadow-slate-200/50">
         <p className="font-semibold text-slate-800 mb-3 border-b border-slate-100 pb-2">
