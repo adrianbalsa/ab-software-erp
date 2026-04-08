@@ -9,8 +9,16 @@ import { CotizadorInteligente } from "@/components/portes/CotizadorInteligente";
 import { AddressAutocomplete } from "@/components/maps/AddressAutocomplete";
 import { GoogleMapsProvider, mapsApiKeyAvailable } from "@/components/maps/GoogleMapsProvider";
 import { useRole } from "@/hooks/useRole";
-import { API_BASE, isOwnerLike, jwtEmpresaId, notifyJwtUpdated } from "@/lib/api";
-import { getAuthToken, setAuthToken } from "@/lib/auth";
+import {
+  ABL_JWT_UPDATED_EVENT,
+  API_BASE,
+  apiFetch,
+  getAuthToken,
+  isOwnerLike,
+  jwtEmpresaId,
+  notifyJwtUpdated,
+} from "@/lib/api";
+import { setAuthToken } from "@/lib/auth";
 
 type PorteOut = {
   id: string;
@@ -85,23 +93,17 @@ export default function PortesPage() {
   const headerCheckboxRef = useRef<HTMLInputElement>(null);
   const mapsReady = mapsApiKeyAvailable();
 
-  const authHeaders: Record<string, string> = token
-    ? ({ Authorization: `Bearer ${token}` } as Record<string, string>)
-    : {};
-
-  const apiFetch = async (path: string, init?: RequestInit) => {
+  const fetchApi = (path: string, init?: RequestInit) => {
     const h = (init?.headers as Record<string, string> | undefined) || {};
     const needsJson =
       init?.body != null &&
       typeof init.body === "string" &&
       !h["Content-Type"] &&
       !h["content-type"];
-    return fetch(`${API_BASE}${path}`, {
+    return apiFetch(`${API_BASE}${path}`, {
       ...init,
-      credentials: "include",
       headers: {
         ...h,
-        ...authHeaders,
         ...(needsJson ? { "Content-Type": "application/json" } : {}),
       },
     });
@@ -114,9 +116,8 @@ export default function PortesPage() {
       const body = new URLSearchParams();
       body.set("username", username);
       body.set("password", password);
-      const res = await fetch(`${API_BASE}/auth/login`, {
+      const res = await apiFetch(`${API_BASE}/auth/login`, {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: body.toString(),
       });
@@ -140,20 +141,27 @@ export default function PortesPage() {
   };
 
   useEffect(() => {
-    try {
-      const saved = getAuthToken();
-      if (saved) setToken(saved);
-    } catch {
-      // ignore
+    const sync = () => {
+      try {
+        setToken(getAuthToken());
+      } catch {
+        setToken(null);
+      }
+    };
+    sync();
+    if (typeof window !== "undefined") {
+      window.addEventListener(ABL_JWT_UPDATED_EVENT, sync);
+      return () => window.removeEventListener(ABL_JWT_UPDATED_EVENT, sync);
     }
+    return undefined;
   }, []);
 
   const loadPortes = useCallback(async () => {
-    if (!token) return;
+    if (!getAuthToken()) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch("/portes/", { method: "GET" });
+      const res = await fetchApi("/portes/", { method: "GET" });
       if (!res.ok) throw new Error("No se pudieron cargar los portes");
       const data = (await res.json()) as PorteOut[];
       setPortes(data.filter((p) => p.estado === "pendiente"));
@@ -163,12 +171,12 @@ export default function PortesPage() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   const loadClientes = useCallback(async () => {
-    if (!token || !canCreatePorte) return;
+    if (!getAuthToken() || !canCreatePorte) return;
     try {
-      const res = await apiFetch("/clientes/", { method: "GET" });
+      const res = await fetchApi("/clientes/", { method: "GET" });
       if (!res.ok) return;
       const rows = (await res.json()) as { id: string; nombre?: string | null }[];
       setClientes(
@@ -180,14 +188,14 @@ export default function PortesPage() {
     } catch {
       setClientes([]);
     }
-  }, [token, canCreatePorte]);
+  }, [canCreatePorte]);
 
   useEffect(() => {
     void loadClientes();
   }, [loadClientes]);
 
   const crearPorte = async () => {
-    if (!token || !formCliente.trim()) {
+    if (!getAuthToken() || !formCliente.trim()) {
       setFormError("Selecciona un cliente.");
       return;
     }
@@ -209,7 +217,7 @@ export default function PortesPage() {
     setFormBusy(true);
     setFormError(null);
     try {
-      const res = await apiFetch("/portes/", {
+      const res = await fetchApi("/portes/", {
         method: "POST",
         body: JSON.stringify({
           cliente_id: formCliente,
@@ -304,7 +312,7 @@ export default function PortesPage() {
   };
 
   const facturarSeleccionados = async () => {
-    if (!token || selectedPortes.length === 0) return;
+    if (!getAuthToken() || selectedPortes.length === 0) return;
     if (clientesEnSeleccion > 1) {
       alert(
         "Selecciona solo portes del mismo cliente. La factura legal es por cliente."
@@ -321,7 +329,7 @@ export default function PortesPage() {
     setFacturarBusy(true);
     setSuccessBanner(null);
     try {
-      const res = await apiFetch("/facturas/desde-portes", {
+      const res = await fetchApi("/facturas/desde-portes", {
         method: "POST",
         body: JSON.stringify({
           cliente_id: clienteId,

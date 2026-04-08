@@ -100,9 +100,8 @@ export default function GastosPage() {
       const body = new URLSearchParams();
       body.set("username", username);
       body.set("password", password);
-      const res = await fetch(`${API_BASE}/auth/login`, {
+      const res = await apiFetch(`${API_BASE}/auth/login`, {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: body.toString(),
       });

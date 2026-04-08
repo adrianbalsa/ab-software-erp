@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, Minus, Loader2 } from "lucide-react";
 import { FadeInSection } from "./FadeInSection";
+import { apiFetch } from "@/lib/api";
 
 const tiers = [
   {
@@ -45,7 +46,7 @@ export function LandingPricing() {
     setLoadingTier(priceId);
     try {
       // Llamada a tu backend en Railway
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/stripe/crear-sesion-checkout`, {
+      const response = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/stripe/crear-sesion-checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // En un futuro, el user_id lo sacarás del contexto de sesión de Supabase

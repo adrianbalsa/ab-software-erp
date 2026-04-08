@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { API_BASE, apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type ChatMessage = {
@@ -64,11 +65,10 @@ export function LogisAdvisor() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/v1/chatbot/ask", {
+      const response = await apiFetch(`${API_BASE}/api/v1/chatbot/ask`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
         body: JSON.stringify({ message: text.trim() }),
       });
@@ -87,7 +87,7 @@ export function LogisAdvisor() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
+    } catch {
       const errorMessage: ChatMessage = {
         id: `error-${Date.now()}`,
         role: "assistant",

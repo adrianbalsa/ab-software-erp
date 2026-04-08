@@ -206,6 +206,7 @@ export function jwtEmpresaId(): string | null {
 const apiClient = axios.create({
   baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
+  withCredentials: true,
 });
 
 let _supabaseClient: ReturnType<typeof createBrowserClient> | null = null;
@@ -239,22 +240,39 @@ function wait(ms: number): Promise<void> {
 }
 
 async function resolveAccessToken(): Promise<string | null> {
-  const supabase = getSupabaseClient();
-  if (!supabase) return getAuthToken();
+  const mem = getAuthToken();
+  if (mem) return mem;
 
-  const readSessionToken = async (): Promise<string | null> => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
-  };
+  if (typeof window !== "undefined") {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const readSessionToken = async (): Promise<string | null> => {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        return session?.access_token ?? null;
+      };
 
-  let token = await readSessionToken();
-  if (!token) {
-    await wait(500);
-    token = await readSessionToken();
+      let token = await readSessionToken();
+      if (!token) {
+        await wait(500);
+        token = await readSessionToken();
+      }
+      if (token) return token;
+    }
+    return getAuthToken();
   }
-  return token ?? getAuthToken();
+
+  try {
+    const { cookies } = await import("next/headers");
+    const cookieStore = await cookies();
+    const abl = cookieStore.get("abl_auth_token")?.value?.trim();
+    if (abl) return abl;
+  } catch {
+    /* no Next / no cookies */
+  }
+
+  return null;
 }
 
 apiClient.interceptors.request.use(async (config) => {
@@ -266,17 +284,22 @@ apiClient.interceptors.request.use(async (config) => {
     try {
       const { cookies } = await import("next/headers");
       const cookieStore = await cookies();
-      const refId = process.env.NEXT_PUBLIC_SUPABASE_URL?.split("//")[1]?.split(".")[0];
-      const supabaseTokenStr =
-        cookieStore.get("sb-access-token")?.value ||
-        (refId ? cookieStore.get(`sb-${refId}-auth-token`)?.value : undefined);
+      const abl = cookieStore.get("abl_auth_token")?.value?.trim();
+      if (abl) {
+        token = abl;
+      } else {
+        const refId = process.env.NEXT_PUBLIC_SUPABASE_URL?.split("//")[1]?.split(".")[0];
+        const supabaseTokenStr =
+          cookieStore.get("sb-access-token")?.value ||
+          (refId ? cookieStore.get(`sb-${refId}-auth-token`)?.value : undefined);
 
-      if (supabaseTokenStr) {
-        try {
-          const parsed = JSON.parse(supabaseTokenStr) as { access_token?: string };
-          token = parsed.access_token || supabaseTokenStr;
-        } catch {
-          token = supabaseTokenStr;
+        if (supabaseTokenStr) {
+          try {
+            const parsed = JSON.parse(supabaseTokenStr) as { access_token?: string };
+            token = parsed.access_token || supabaseTokenStr;
+          } catch {
+            token = supabaseTokenStr;
+          }
         }
       }
     } catch {
@@ -295,7 +318,8 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
   const headers = new Headers(init.headers ?? {});
   const token = await resolveAccessToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(input, { ...init, headers });
+  const credentials = init.credentials ?? "include";
+  return fetch(input, { ...init, credentials, headers });
 }
 
 export async function parseApiError(res: Response): Promise<string> {

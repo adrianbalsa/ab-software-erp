@@ -14,7 +14,7 @@ import {
   YAxis,
 } from "recharts";
 
-import { API_BASE, notifyJwtUpdated } from "@/lib/api";
+import { API_BASE, apiFetch as coreApiFetch, notifyJwtUpdated } from "@/lib/api";
 import { clearAuthToken, getAuthToken, setAuthToken } from "@/lib/auth";
 
 /** kg CO₂ / L — referencia diésel Euro 6 / marco UE (alineado con backend ReportService). */
@@ -100,9 +100,8 @@ export default function SostenibilidadPage() {
     : {};
 
   const apiFetch = async (path: string, init?: RequestInit) => {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const res = await coreApiFetch(`${API_BASE}${path}`, {
       ...init,
-      credentials: "include",
       headers: {
         ...((init?.headers as Record<string, string> | undefined) || {}),
         ...authHeaders,
@@ -119,9 +118,8 @@ export default function SostenibilidadPage() {
       body.set("username", username);
       body.set("password", password);
 
-      const res = await fetch(`${API_BASE}/auth/login`, {
+      const res = await coreApiFetch(`${API_BASE}/auth/login`, {
         method: "POST",
-        credentials: "include",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
@@ -346,11 +344,9 @@ export default function SostenibilidadPage() {
     setErrorCertificadoEmisiones(null);
 
     try {
-      const res = await fetch(`${API_BASE}/eco/certificate`, {
+      const res = await coreApiFetch(`${API_BASE}/eco/certificate`, {
         method: "GET",
-        credentials: "include",
         headers: {
-          Authorization: `Bearer ${token}`,
           Accept: "application/pdf",
         },
       });

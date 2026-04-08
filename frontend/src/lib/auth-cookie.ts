@@ -2,11 +2,29 @@
  * Cookie HttpOnly `abl_auth_token` (misma firma que el backend; el frontend no valida la firma con secreto).
  * Opciones alineadas entre login (server action) y logout (route handler).
  *
+ * El backend exige `Authorization: Bearer <jwt>`. La cookie HttpOnly no es legible en JS;
+ * el token duplicado en `localStorage` (`abl_auth_token`, ver `@/lib/auth`) es lo que usa
+ * el cliente para rellenar Bearer. Para SSR, leer la cookie con `cookies()` en `server-api` / `apiFetch`.
+ *
  * Env (Vercel / local):
  * - AUTH_COOKIE_DOMAIN: p.ej. `.ablogistics-os.com` (punto inicial = subdominios). Omitir en localhost.
  * - AUTH_COOKIE_SAME_SITE: `lax` | `strict` | `none` (none exige HTTPS + secure).
  * - AUTH_COOKIE_SECURE: `true` | `false` (por defecto true en production o si sameSite=none).
  */
+
+import { getAuthToken as getAuthTokenFromStore } from "@/lib/auth";
+
+/** Nombre de la cookie HttpOnly paralela al JWT en localStorage. */
+export const ABL_AUTH_COOKIE_NAME = "abl_auth_token" as const;
+
+/**
+ * JWT en el navegador para cabeceras `Authorization` (misma sesión que {@link ABL_AUTH_COOKIE_NAME}).
+ * HttpOnly impide leer la cookie aquí; se usa el valor sincronizado en localStorage al iniciar sesión.
+ */
+export function getAccessTokenForApiRequest(): string | null {
+  if (typeof window === "undefined") return null;
+  return getAuthTokenFromStore();
+}
 
 export type AuthCookieSetOptions = {
   path: string;

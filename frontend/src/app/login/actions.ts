@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 
 import { getAblAuthCookieSetOptions } from "@/lib/auth-cookie";
+import { apiFetch } from "@/lib/api";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -33,7 +34,7 @@ export async function loginAction(
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE.replace(/\/$/, "")}/auth/login`, {
+    res = await apiFetch(`${API_BASE.replace(/\/$/, "")}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body.toString(),
