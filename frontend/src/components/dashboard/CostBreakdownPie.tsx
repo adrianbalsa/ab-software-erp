@@ -43,26 +43,20 @@ export function CostBreakdownPie({ data, loading }: CostBreakdownPieProps) {
 
   if (loading) {
     return (
-      <div className="ab-card rounded-2xl p-6 animate-pulse">
-        <div className="h-4 bg-zinc-200/90 rounded w-1/2 mb-4" />
-        <div className="h-[280px] bg-zinc-100 rounded-xl" />
+      <div className="dashboard-bento animate-pulse rounded-2xl p-6">
+        <div className="mb-4 h-4 w-1/2 rounded bg-zinc-800" />
+        <div className="h-[280px] rounded-xl bg-zinc-800/60" />
       </div>
     );
   }
 
   return (
-    <div className="ab-card rounded-2xl p-6">
-      <h3 className="text-sm font-bold text-zinc-800 mb-1">
-        Desglose de gastos
-      </h3>
-      <p className="text-xs text-zinc-500 mb-4">
-        Últimos 6 meses · categorías operativas (neto sin IVA)
-      </p>
-      <div className="h-[min(260px,40vh)] min-h-[220px] sm:h-[280px] sm:min-h-[240px] w-full min-w-0">
+    <div className="dashboard-bento rounded-2xl p-6">
+      <h3 className="mb-1 text-sm font-semibold text-zinc-100">Desglose de gastos</h3>
+      <p className="mb-4 text-xs text-zinc-500">Últimos 6 meses · categorías operativas (neto sin IVA)</p>
+      <div className="h-[min(260px,40vh)] min-h-[220px] w-full min-w-0 sm:h-[280px] sm:min-h-[240px]">
         {chartData.length === 0 ? (
-          <p className="text-sm text-zinc-500 py-14 text-center">
-            Sin gastos en el periodo para clasificar.
-          </p>
+          <p className="py-14 text-center text-sm text-zinc-500">Sin gastos en el periodo para clasificar.</p>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -85,15 +79,17 @@ export function CostBreakdownPie({ data, loading }: CostBreakdownPieProps) {
                 formatter={(value) => formatEUR(Number(value ?? 0))}
                 contentStyle={{
                   borderRadius: 12,
-                  borderColor: "#e4e4e7",
+                  borderColor: "#3f3f46",
+                  background: "#18181b",
                   fontSize: 12,
+                  color: "#e4e4e7",
                 }}
               />
               <Legend
                 layout="horizontal"
                 verticalAlign="bottom"
                 align="center"
-                wrapperStyle={{ fontSize: 11, color: "#52525b" }}
+                wrapperStyle={{ fontSize: 11, color: "#a1a1aa" }}
               />
             </PieChart>
           </ResponsiveContainer>

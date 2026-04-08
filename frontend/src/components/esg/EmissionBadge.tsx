@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { API_BASE, apiFetch, parseApiError } from "@/lib/api";
 
@@ -54,6 +55,11 @@ export function EmissionBadge({ year }: { year?: number }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [y]);
 
+  useEffect(() => {
+    if (!error) return;
+    toast.error(error, { id: "emission-badge-error" });
+  }, [error]);
+
   const computed = useMemo(() => {
     const ahorroKg = data?.total_co2_ahorro_kg ?? 0;
     const baselineKg = data?.total_co2_baseline_kg ?? 0;
@@ -68,19 +74,19 @@ export function EmissionBadge({ year }: { year?: number }) {
 
   if (loading) {
     return (
-      <div className="ab-card p-6 rounded-2xl animate-pulse border border-slate-100/80">
-        <div className="h-4 bg-slate-200/90 rounded w-1/2 mb-3" />
-        <div className="h-10 bg-slate-200/70 rounded w-2/3 mb-2" />
-        <div className="h-3 bg-slate-200/70 rounded w-1/3" />
+      <div className="dashboard-bento animate-pulse rounded-2xl border border-zinc-800/50 p-6">
+        <div className="mb-3 h-4 w-1/2 rounded bg-zinc-800" />
+        <div className="mb-2 h-10 w-2/3 rounded bg-zinc-800/80" />
+        <div className="h-3 w-1/3 rounded bg-zinc-800/60" />
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="ab-card p-6 rounded-2xl border border-amber-200/80 bg-amber-50/60">
-        <p className="text-sm font-medium text-amber-900">Ahorro verde</p>
-        <p className="text-xs text-amber-900/80 mt-1">{error ?? "Sin datos"}</p>
+      <div className="dashboard-bento rounded-2xl border border-zinc-800/50 p-6">
+        <p className="text-sm font-medium text-zinc-300">Ahorro verde (CO₂)</p>
+        <p className="mt-1 text-xs text-zinc-500">Datos no disponibles. Revisa el aviso en pantalla.</p>
       </div>
     );
   }
@@ -92,25 +98,25 @@ export function EmissionBadge({ year }: { year?: number }) {
 
   return (
     <div
-      className={`ab-card p-6 rounded-2xl border ${
-        computed.positive ? "border-emerald-200/70 bg-emerald-50/35" : "border-slate-200/80 bg-slate-50/30"
+      className={`dashboard-bento rounded-2xl border p-6 ${
+        computed.positive ? "border-emerald-500/30" : "border-zinc-800/50"
       }`}
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-600">Ahorro verde (CO₂)</p>
-          <h3 className="text-3xl font-bold text-slate-800 tracking-tight">
-            {ahorroFmt} <span className="text-sm font-semibold text-slate-600">kg</span>
+          <p className="text-sm font-medium text-zinc-400">Ahorro verde (CO₂)</p>
+          <h3 className="text-3xl font-bold tracking-tight text-zinc-100">
+            {ahorroFmt} <span className="text-sm font-semibold text-zinc-500">kg</span>
           </h3>
-          <p className="text-xs text-slate-600 mt-1">
+          <p className="mt-1 text-xs text-zinc-500">
             {computed.baselineKg > 0
               ? `${pctFmt}% vs baseline (sin bonus Euro VI)`
               : "Sin baseline disponible para el año actual"}
           </p>
         </div>
         <div
-          className={`p-3 rounded-xl shrink-0 ${
-            computed.positive ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
+          className={`shrink-0 rounded-xl p-3 ${
+            computed.positive ? "bg-emerald-500/15 text-emerald-400" : "bg-zinc-800 text-zinc-400"
           }`}
           aria-hidden
         >

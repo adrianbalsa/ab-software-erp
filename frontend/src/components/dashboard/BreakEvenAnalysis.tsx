@@ -55,29 +55,35 @@ export function BreakEvenAnalysis({ loading, monthly }: Props) {
     rows.find((r) => r.cumulative_ingresos >= r.cumulative_gastos) ?? null;
 
   return (
-    <div className="ab-card p-5 rounded-2xl">
-      <h3 className="text-base font-semibold text-slate-800">
-        Break-even Analysis
-      </h3>
-      <p className="text-xs text-slate-500 mt-1">
-        Area: gastos acumulados · Línea: ingresos acumulados
-      </p>
-      <div className="h-[300px] mt-3">
+    <div className="dashboard-bento rounded-2xl p-5">
+      <h3 className="text-base font-semibold text-zinc-100">Break-even Analysis</h3>
+      <p className="mt-1 text-xs text-zinc-500">Area: gastos acumulados · Línea: ingresos acumulados</p>
+      <div className="mt-3 h-[300px]">
         {loading ? (
-          <div className="h-full flex items-center justify-center text-sm text-slate-500">
+          <div className="flex h-full items-center justify-center text-sm text-zinc-500">
             Cargando break-even...
           </div>
         ) : rows.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-sm text-slate-500">
+          <div className="flex h-full items-center justify-center text-sm text-zinc-500">
             Sin datos financieros para calcular el punto de equilibrio.
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={rows} margin={{ top: 12, right: 12, left: 12, bottom: 12 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="periodo" />
-              <YAxis tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+              <XAxis dataKey="periodo" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
+              <YAxis
+                tick={{ fill: "#a1a1aa", fontSize: 11 }}
+                tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
+              />
               <Tooltip
+                contentStyle={{
+                  borderRadius: 12,
+                  borderColor: "#3f3f46",
+                  background: "#18181b",
+                  fontSize: 12,
+                  color: "#e4e4e7",
+                }}
                 formatter={(value: any, name: any) => {
                   const v = Number(value ?? 0);
                   if (name === "cumulative_ingresos") return [fmtEur(v), "Ingresos acumulados"];

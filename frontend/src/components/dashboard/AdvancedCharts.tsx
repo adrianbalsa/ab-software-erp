@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { CalendarDays } from "lucide-react";
+import { toast } from "sonner";
 import {
   Bar,
   BarChart,
@@ -112,14 +113,14 @@ function FleetAdminAlertsStrip() {
   if (criticos === null || criticos === 0) return null;
 
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-sm text-amber-950">
-      <CalendarDays className="h-4 w-4 shrink-0 text-amber-800" aria-hidden />
+    <div className="dashboard-bento mb-4 flex flex-wrap items-center gap-2 px-4 py-3 text-sm text-zinc-300">
+      <CalendarDays className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden />
       <span>
-        <strong>{criticos}</strong> alerta(s) administrativa(s) crítica(s) (ITV / seguro / tacógrafo).
+        <strong className="text-zinc-100">{criticos}</strong> alerta(s) administrativa(s) crítica(s) (ITV / seguro / tacógrafo).
       </span>
       <Link
         href="/flota/mantenimiento"
-        className="font-semibold text-[#2563eb] underline-offset-2 hover:underline"
+        className="font-semibold text-emerald-400 underline-offset-2 hover:text-emerald-300 hover:underline"
       >
         Ver en Taller — mantenimiento
       </Link>
@@ -152,6 +153,11 @@ export function AdvancedCharts() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!error) return;
+    toast.error(error, { id: "advanced-metrics-error" });
+  }, [error]);
+
   const hasData = rows.some(
     (r) => r.ingresos > 0 || r.gastos > 0 || (r.costeKm != null && r.costeKm > 0) || r.co2 > 0,
   );
@@ -161,12 +167,12 @@ export function AdvancedCharts() {
   if (loading) {
     return (
       <section className="space-y-4" aria-busy="true">
-        <div className="h-4 bg-zinc-200/90 rounded w-1/3 max-w-xs animate-pulse" />
+        <div className="h-4 max-w-xs w-1/3 animate-pulse rounded bg-zinc-800" />
         <div className="grid gap-6 lg:grid-cols-1 xl:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="ab-card rounded-2xl p-6 animate-pulse">
-              <div className="h-3 bg-zinc-200 rounded w-2/5 mb-4" />
-              <div className={`${chartWrap} bg-zinc-100 rounded-xl`} />
+            <div key={i} className="dashboard-bento animate-pulse rounded-2xl p-6">
+              <div className="mb-4 h-3 w-2/5 rounded bg-zinc-800" />
+              <div className={`${chartWrap} rounded-xl bg-zinc-800/60`} />
             </div>
           ))}
         </div>
@@ -176,12 +182,12 @@ export function AdvancedCharts() {
 
   if (error) {
     return (
-      <section className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-950">
-        <p className="font-semibold">Métricas avanzadas no disponibles</p>
-        <p className="mt-1 text-amber-900/90">{error}</p>
-        <p className="mt-2 text-xs text-amber-800/80">
-          Requiere rol <code className="rounded bg-white/80 px-1">ADMIN</code> o{" "}
-          <code className="rounded bg-white/80 px-1">GESTOR</code> en el JWT (app_metadata.role).
+      <section className="dashboard-bento rounded-2xl px-4 py-4 text-sm text-zinc-500">
+        <p className="font-medium text-zinc-300">Métricas avanzadas no disponibles</p>
+        <p className="mt-2 text-xs text-zinc-600">
+          Requiere rol <code className="rounded bg-zinc-900 px-1 text-zinc-400">ADMIN</code> o{" "}
+          <code className="rounded bg-zinc-900 px-1 text-zinc-400">GESTOR</code> en el JWT (app_metadata.role). El detalle
+          del error aparece en el aviso.
         </p>
       </section>
     );
@@ -192,34 +198,34 @@ export function AdvancedCharts() {
       <div>
         <h2
           id="advanced-charts-heading"
-          className="text-lg font-bold text-[#0b1224] tracking-tight"
+          className="text-lg font-semibold tracking-tight text-zinc-100"
         >
           Dashboard económico avanzado
         </h2>
-        <p className="text-sm text-slate-500 mt-0.5">
+        <p className="mt-0.5 text-sm text-zinc-500">
           Facturación (Math Engine), gastos operativos, coste por km y huella CO₂ (últimos 6 meses).
         </p>
-        {nota ? <p className="text-xs text-slate-400 mt-1 max-w-3xl">{nota}</p> : null}
+        {nota ? <p className="mt-1 max-w-3xl text-xs text-zinc-600">{nota}</p> : null}
       </div>
 
       {!loading && !error ? <FleetAdminAlertsStrip /> : null}
 
       {!hasData ? (
-        <p className="text-sm text-slate-500 ab-card rounded-2xl p-6">
+        <p className="dashboard-bento rounded-2xl p-6 text-sm text-zinc-500">
           Sin datos suficientes en el periodo para graficar (facturas, gastos o portes).
         </p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-1 xl:grid-cols-3">
-          <div className="ab-card rounded-2xl p-4 sm:p-6 overflow-hidden">
-            <h3 className="text-sm font-bold text-zinc-800 mb-1">Margen de contribución</h3>
-            <p className="text-xs text-zinc-500 mb-3">Ingresos (verde) vs gastos operativos (rojo)</p>
+          <div className="dashboard-bento overflow-hidden rounded-2xl p-4 sm:p-6">
+            <h3 className="mb-1 text-sm font-semibold text-zinc-100">Margen de contribución</h3>
+            <p className="mb-3 text-xs text-zinc-500">Ingresos (verde) vs gastos operativos (rojo)</p>
             <div className={chartWrap}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} className="text-zinc-500" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+                  <XAxis dataKey="label" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
                   <YAxis
-                    tick={{ fontSize: 11 }}
+                    tick={{ fill: "#a1a1aa", fontSize: 11 }}
                     tickFormatter={(v) => `${Math.round(toFiniteNumber(v, 0) / 1000)}k`}
                   />
                   <Tooltip
@@ -233,6 +239,13 @@ export function AdvancedCharts() {
                         : undefined;
                       return row?.periodo ?? "";
                     }}
+                    contentStyle={{
+                      borderRadius: 12,
+                      borderColor: "#3f3f46",
+                      background: "#18181b",
+                      fontSize: 12,
+                      color: "#e4e4e7",
+                    }}
                   />
                   <Legend />
                   <Bar dataKey="ingresos" name="Ingresos" fill="#22c55e" radius={[4, 4, 0, 0]} />
@@ -242,18 +255,16 @@ export function AdvancedCharts() {
             </div>
           </div>
 
-          <div className="ab-card rounded-2xl p-4 sm:p-6 overflow-hidden">
-            <h3 className="text-sm font-bold text-zinc-800 mb-1">Coste real por km</h3>
-            <p className="text-xs text-zinc-500 mb-3">
-              (Combustible + peajes + mantenimiento) / km en portes
-            </p>
+          <div className="dashboard-bento overflow-hidden rounded-2xl p-4 sm:p-6">
+            <h3 className="mb-1 text-sm font-semibold text-zinc-100">Coste real por km</h3>
+            <p className="mb-3 text-xs text-zinc-500">(Combustible + peajes + mantenimiento) / km en portes</p>
             <div className={chartWrap}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+                  <XAxis dataKey="label" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
                   <YAxis
-                    tick={{ fontSize: 11 }}
+                    tick={{ fill: "#a1a1aa", fontSize: 11 }}
                     tickFormatter={(v) => `${toFiniteNumber(v, 0).toFixed(2)} €`}
                     domain={["auto", "auto"]}
                   />
@@ -261,6 +272,13 @@ export function AdvancedCharts() {
                     formatter={(value: number | string | ReadonlyArray<number | string> | undefined) =>
                       formatTooltipEurPerKm(value)
                     }
+                    contentStyle={{
+                      borderRadius: 12,
+                      borderColor: "#3f3f46",
+                      background: "#18181b",
+                      fontSize: 12,
+                      color: "#e4e4e7",
+                    }}
                   />
                   <Legend />
                   <Line
@@ -277,23 +295,23 @@ export function AdvancedCharts() {
             </div>
           </div>
 
-          <div className="ab-card rounded-2xl p-4 sm:p-6 overflow-hidden xl:col-span-1">
-            <h3 className="text-sm font-bold text-zinc-800 mb-1">EBITDA verde</h3>
-            <p className="text-xs text-zinc-500 mb-3">Ingresos (columnas) y emisiones CO₂ (línea)</p>
+          <div className="dashboard-bento overflow-hidden rounded-2xl p-4 sm:p-6 xl:col-span-1">
+            <h3 className="mb-1 text-sm font-semibold text-zinc-100">EBITDA verde</h3>
+            <p className="mb-3 text-xs text-zinc-500">Ingresos (columnas) y emisiones CO₂ (línea)</p>
             <div className={chartWrap}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+                  <XAxis dataKey="label" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
                   <YAxis
                     yAxisId="eur"
-                    tick={{ fontSize: 11 }}
+                    tick={{ fill: "#a1a1aa", fontSize: 11 }}
                     tickFormatter={(v) => `${Math.round(toFiniteNumber(v, 0) / 1000)}k`}
                   />
                   <YAxis
                     yAxisId="co2"
                     orientation="right"
-                    tick={{ fontSize: 11 }}
+                    tick={{ fill: "#a1a1aa", fontSize: 11 }}
                     tickFormatter={(v) => String(toFiniteNumber(v, 0))}
                   />
                   <Tooltip
@@ -305,6 +323,13 @@ export function AdvancedCharts() {
                       const label = String(name ?? "");
                       if (label === "Ingresos") return formatEUR(n);
                       return `${n.toFixed(1)} kg`;
+                    }}
+                    contentStyle={{
+                      borderRadius: 12,
+                      borderColor: "#3f3f46",
+                      background: "#18181b",
+                      fontSize: 12,
+                      color: "#e4e4e7",
                     }}
                   />
                   <Legend />

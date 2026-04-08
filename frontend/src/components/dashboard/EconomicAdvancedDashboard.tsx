@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import {
   Area,
   AreaChart,
@@ -14,6 +15,7 @@ import {
   YAxis,
 } from "recharts";
 import { Activity, BarChart3, Gauge, TrendingUp } from "lucide-react";
+import { toast } from "sonner";
 
 import { useEconomicInsights } from "@/hooks/useEconomicInsights";
 
@@ -31,6 +33,11 @@ type Props = {
 
 export function EconomicAdvancedDashboard({ enabled }: Props) {
   const { data, loading, error, refresh } = useEconomicInsights({ enabled });
+
+  useEffect(() => {
+    if (!enabled || !error) return;
+    toast.error(error, { id: "economic-advanced-error" });
+  }, [enabled, error]);
 
   if (!enabled) {
     return null;
@@ -60,13 +67,7 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
         </button>
       </div>
 
-      {error && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
-          {error}
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 shadow-xl shadow-black/40">
+      <div className="dashboard-bento rounded-2xl p-6 shadow-xl shadow-black/40">
         {loading && !data ? (
           <div className="animate-pulse grid grid-cols-12 gap-4 min-h-[320px]">
             <div className="col-span-12 h-8 bg-slate-800 rounded w-1/3" />
@@ -76,9 +77,9 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
           <div className="grid grid-cols-12 gap-4">
             {/* KPI row — 1 col móvil, 2 tablet, 3 desktop (tres métricas) */}
             <div className="col-span-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
-              <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold uppercase tracking-wide">
-                <Activity className="w-4 h-4 text-sky-400" />
+            <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/50 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <Activity className="h-4 w-4 text-sky-400" />
                 Coste medio / km (30d)
               </div>
               <p className="mt-2 text-2xl font-bold text-white tabular-nums">
@@ -91,9 +92,9 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
                 {formatEUR(data.gastos_operativos_ultimos_30d)} gastos
               </p>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
-              <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold uppercase tracking-wide">
-                <Gauge className="w-4 h-4 text-violet-400" />
+            <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/50 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <Gauge className="h-4 w-4 text-violet-400" />
                 Punto equilibrio (mes)
               </div>
               <p className="mt-2 text-lg font-bold text-white leading-tight">
@@ -108,9 +109,9 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
                 · GF {formatEUR(data.punto_equilibrio_mensual.gastos_fijos_mes_eur)}
               </p>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
-              <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold uppercase tracking-wide">
-                <TrendingUp className="w-4 h-4 text-emerald-400" />
+            <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/50 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <TrendingUp className="h-4 w-4 text-emerald-400" />
                 Contribución
               </div>
               <p className="mt-2 text-2xl font-bold text-white tabular-nums">

@@ -245,6 +245,18 @@ body {
   color: #0f172a;
 }
 
+/* Cuadro de Mando / Búnker — alineado con landing dark */
+.dashboard-bento {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(39, 39, 42, 0.5);
+  background-color: rgba(24, 24, 27, 0.5);
+  backdrop-filter: blur(12px);
+  transition: box-shadow 300ms ease;
+}
+.dashboard-bento:hover {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
+}
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

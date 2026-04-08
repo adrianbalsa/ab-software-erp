@@ -19,8 +19,8 @@ const PILLARS = [
       "Facturas con trazabilidad AEAT: badge Aceptada, Con errores o Rechazada visible antes del cierre.",
     href: "/facturas",
     icon: ShieldCheck,
-    accent: "from-emerald-500/20 to-teal-500/10",
-    ring: "ring-emerald-500/20",
+    accent: "from-emerald-500/30 to-teal-500/15",
+    iconRing: "ring-emerald-500/25",
   },
   {
     title: "Matriz CIP (margen vs CO₂)",
@@ -29,7 +29,7 @@ const PILLARS = [
     href: "/dashboard/analitica",
     icon: Route,
     accent: "from-sky-500/20 to-blue-500/10",
-    ring: "ring-sky-500/20",
+    iconRing: "ring-sky-500/20",
   },
   {
     title: "Salud de flota",
@@ -38,7 +38,7 @@ const PILLARS = [
     href: "/flota/mantenimiento",
     icon: Truck,
     accent: "from-amber-500/20 to-orange-500/10",
-    ring: "ring-amber-500/20",
+    iconRing: "ring-amber-500/20",
   },
   {
     title: "Simulador de escenarios",
@@ -46,8 +46,8 @@ const PILLARS = [
       "Sliders combustible, salarios y peajes → EBITDA y punto de ruptura tarifario para negociar con cargadores.",
     href: "/dashboard/finanzas/simulador",
     icon: SlidersHorizontal,
-    accent: "from-violet-500/20 to-indigo-500/10",
-    ring: "ring-violet-500/20",
+    accent: "from-violet-500/25 to-indigo-500/10",
+    iconRing: "ring-violet-500/25",
   },
 ] as const;
 
@@ -55,50 +55,50 @@ export function SupportCard() {
   return (
     <section
       aria-labelledby="support-card-heading"
-      className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-slate-50 via-white to-blue-50/50 shadow-md shadow-slate-200/40"
+      className="dashboard-bento relative overflow-hidden p-6 sm:p-7"
     >
       <div
-        className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-gradient-to-br from-blue-400/20 to-indigo-400/5 blur-3xl"
+        className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-gradient-to-br from-emerald-500/10 to-transparent blur-3xl"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute -bottom-16 -left-12 h-48 w-48 rounded-full bg-gradient-to-tr from-emerald-400/15 to-transparent blur-3xl"
+        className="pointer-events-none absolute -bottom-16 -left-12 h-48 w-48 rounded-full bg-gradient-to-tr from-emerald-400/5 to-transparent blur-3xl"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-400/35 to-transparent"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-500/25 to-transparent"
         aria-hidden
       />
 
-      <div className="relative p-6 sm:p-7">
+      <div className="relative">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-3 sm:gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-800 text-white shadow-lg shadow-blue-600/30 ring-2 ring-white/50">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-900 text-white shadow-lg shadow-emerald-900/40 ring-2 ring-emerald-500/20">
               <BookOpen className="h-5 w-5" aria-hidden />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700/90">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-400/90">
                 Guía rápida · AB Logistics OS
               </p>
               <h2
                 id="support-card-heading"
-                className="mt-1 text-lg font-bold tracking-tight text-slate-900 sm:text-xl"
+                className="mt-1 text-lg font-semibold tracking-tight text-zinc-100 sm:text-xl"
               >
                 Bienvenido al Búnker: control total, ROI medible
               </h2>
-              <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-600">
+              <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-zinc-400">
                 Cuatro pilares para blindar la facturación, priorizar rutas rentables, anticipar el taller y
                 negociar tarifas con datos. Use los accesos para profundizar en cada área.
               </p>
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:flex-col lg:items-end">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/90 bg-emerald-50/95 px-3 py-1.5 text-xs font-semibold text-emerald-950 shadow-sm">
-              <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300">
+              <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-400" aria-hidden />
               Tip ahorro: revise la Matriz CIP antes del cierre mensual
             </div>
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/90 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm">
-              <Leaf className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800/60 bg-zinc-900/40 px-3 py-1.5 text-xs font-medium text-zinc-400">
+              <Leaf className="h-3.5 w-3.5 shrink-0 text-emerald-500/90" aria-hidden />
               ESG + margen en un solo gráfico
             </div>
           </div>
@@ -111,19 +111,22 @@ export function SupportCard() {
               <li key={p.title}>
                 <Link
                   href={p.href}
-                  className={`group flex gap-3 rounded-xl border border-slate-200/80 bg-white/90 p-4 shadow-sm ring-1 ${p.ring} transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2`}
+                  className={`group flex gap-3 rounded-xl border border-zinc-800/50 bg-zinc-900/40 p-4 shadow-none backdrop-blur transition hover:border-emerald-500/30 hover:shadow-[0_0_20px_rgba(16,185,129,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950`}
                 >
                   <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${p.accent} text-slate-800 ring-1 ring-slate-200/50`}
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${p.accent} text-zinc-100 ring-1 ${p.iconRing}`}
                   >
                     <Icon className="h-5 w-5" aria-hidden />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-slate-900 group-hover:text-blue-800">{p.title}</p>
-                    <p className="mt-0.5 text-sm leading-snug text-slate-600">{p.description}</p>
-                    <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 group-hover:underline">
+                    <p className="font-semibold text-zinc-100 group-hover:text-emerald-300">{p.title}</p>
+                    <p className="mt-0.5 text-sm leading-snug text-zinc-500">{p.description}</p>
+                    <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 group-hover:underline">
                       Abrir módulo
-                      <ArrowRight className="h-3.5 w-3.5 opacity-80 transition group-hover:translate-x-0.5" aria-hidden />
+                      <ArrowRight
+                        className="h-3.5 w-3.5 opacity-80 transition group-hover:translate-x-0.5"
+                        aria-hidden
+                      />
                     </span>
                   </div>
                 </Link>
@@ -132,9 +135,9 @@ export function SupportCard() {
           })}
         </ul>
 
-        <p className="mt-5 border-t border-slate-200/80 pt-4 text-xs text-slate-500">
+        <p className="mt-5 border-t border-zinc-800/50 pt-4 text-xs text-zinc-500">
           Documentación ejecutiva completa:{" "}
-          <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700">
+          <code className="rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-[11px] text-zinc-400">
             QUICKSTART_GUIDE.md
           </code>{" "}
           en la raíz del repositorio.

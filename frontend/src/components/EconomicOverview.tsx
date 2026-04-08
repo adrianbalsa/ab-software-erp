@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import {
   Area,
   AreaChart,
@@ -15,6 +16,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { toast } from "sonner";
 
 import { useEconomicOverview } from "@/hooks/useEconomicOverview";
 
@@ -29,19 +31,19 @@ function formatEUR(n: number) {
 function OverviewSkeleton() {
   return (
     <div className="space-y-6 animate-pulse">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="ab-card rounded-2xl p-6 space-y-4">
-          <div className="h-4 bg-slate-200/90 rounded w-1/3" />
-          <div className="h-[280px] bg-slate-200/70 rounded-xl" />
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="dashboard-bento space-y-4 rounded-2xl p-6">
+          <div className="h-4 w-1/3 rounded bg-zinc-800" />
+          <div className="h-[280px] rounded-xl bg-zinc-800/60" />
         </div>
-        <div className="ab-card rounded-2xl p-6 space-y-4">
-          <div className="h-4 bg-slate-200/90 rounded w-2/5" />
-          <div className="h-[280px] bg-slate-200/70 rounded-xl" />
+        <div className="dashboard-bento space-y-4 rounded-2xl p-6">
+          <div className="h-4 w-2/5 rounded bg-zinc-800" />
+          <div className="h-[280px] rounded-xl bg-zinc-800/60" />
         </div>
       </div>
-      <div className="ab-card rounded-2xl p-6 space-y-4">
-        <div className="h-4 bg-slate-200/90 rounded w-1/2" />
-        <div className="h-[280px] bg-slate-200/70 rounded-xl" />
+      <div className="dashboard-bento space-y-4 rounded-2xl p-6">
+        <div className="h-4 w-1/2 rounded bg-zinc-800" />
+        <div className="h-[280px] rounded-xl bg-zinc-800/60" />
       </div>
     </div>
   );
@@ -50,17 +52,18 @@ function OverviewSkeleton() {
 export function EconomicOverview() {
   const { data, loading, error, refresh, hasAreaData } = useEconomicOverview();
 
+  useEffect(() => {
+    if (!error) return;
+    toast.error(`Visión económica: ${error}`, { id: "economic-overview-error" });
+  }, [error]);
+
   if (loading) {
     return (
       <section className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-lg font-bold text-[#0b1224] tracking-tight">
-              Visión económica (Math Engine)
-            </h2>
-            <p className="text-sm text-slate-500">
-              Costes por categoría, margen por cliente e ingresos vs gastos
-            </p>
+            <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Visión económica (Math Engine)</h2>
+            <p className="text-sm text-zinc-500">Costes por categoría, margen por cliente e ingresos vs gastos</p>
           </div>
         </div>
         <OverviewSkeleton />
@@ -71,25 +74,21 @@ export function EconomicOverview() {
   if (error || !data) {
     return (
       <section className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-lg font-bold text-[#0b1224] tracking-tight">
-              Visión económica (Math Engine)
-            </h2>
-            <p className="text-sm text-slate-500">
-              Requiere sesión y datos de finanzas, gastos y facturas
-            </p>
+            <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Visión económica (Math Engine)</h2>
+            <p className="text-sm text-zinc-500">Requiere sesión y datos de finanzas, gastos y facturas</p>
           </div>
           <button
             type="button"
             onClick={() => void refresh()}
-            className="text-sm font-semibold text-[#2563eb] hover:text-[#1d4ed8]"
+            className="text-sm font-semibold text-emerald-400 hover:text-emerald-300"
           >
             Reintentar
           </button>
         </div>
-        <div className="ab-card rounded-2xl px-4 py-3 text-sm text-amber-900 bg-amber-50 border border-amber-200/80">
-          {error ?? "Sin datos"}
+        <div className="dashboard-bento rounded-2xl px-4 py-3 text-sm text-zinc-500">
+          No se pudieron cargar los gráficos. El detalle se muestra en el aviso.
         </div>
       </section>
     );
@@ -105,38 +104,29 @@ export function EconomicOverview() {
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-lg font-bold text-[#0b1224] tracking-tight">
-            Visión económica (Math Engine)
-          </h2>
-          <p className="text-sm text-slate-500">
-            EBITDA {formatEUR(data.dashboard.ebitda)} · margen estimado por cliente
-            proporcional al ingreso
+          <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Visión económica (Math Engine)</h2>
+          <p className="text-sm text-zinc-500">
+            EBITDA {formatEUR(data.dashboard.ebitda)} · margen estimado por cliente proporcional al ingreso
           </p>
         </div>
         <button
           type="button"
           onClick={() => void refresh()}
-          className="text-sm font-semibold text-[#2563eb] hover:text-[#1d4ed8]"
+          className="text-sm font-semibold text-emerald-400 hover:text-emerald-300"
         >
           Actualizar gráficos
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="ab-card rounded-2xl p-6">
-          <h3 className="text-sm font-bold text-slate-800 mb-1">
-            Distribución de costes
-          </h3>
-          <p className="text-xs text-slate-500 mb-4">
-            Gastos operativos por categoría (neto sin IVA)
-          </p>
-          <div className="h-[min(260px,40vh)] min-h-[220px] sm:h-[280px] sm:min-h-[240px] w-full min-w-0">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="dashboard-bento rounded-2xl p-6">
+          <h3 className="mb-1 text-sm font-semibold text-zinc-100">Distribución de costes</h3>
+          <p className="mb-4 text-xs text-zinc-500">Gastos operativos por categoría (neto sin IVA)</p>
+          <div className="h-[min(260px,40vh)] min-h-[220px] w-full min-w-0 sm:h-[280px] sm:min-h-[240px]">
             {donutData.length === 0 ? (
-              <p className="text-sm text-slate-500 py-12 text-center">
-                Sin gastos clasificados para mostrar.
-              </p>
+              <p className="py-12 text-center text-sm text-zinc-500">Sin gastos clasificados para mostrar.</p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -159,15 +149,17 @@ export function EconomicOverview() {
                     formatter={(value) => formatEUR(Number(value ?? 0))}
                     contentStyle={{
                       borderRadius: 12,
-                      borderColor: "#e2e8f0",
+                      borderColor: "#3f3f46",
+                      background: "#18181b",
                       fontSize: 12,
+                      color: "#e4e4e7",
                     }}
                   />
                   <Legend
                     layout="horizontal"
                     verticalAlign="bottom"
                     align="center"
-                    wrapperStyle={{ fontSize: 11, color: "#475569" }}
+                    wrapperStyle={{ fontSize: 11, color: "#a1a1aa" }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -175,18 +167,12 @@ export function EconomicOverview() {
           </div>
         </div>
 
-        <div className="ab-card rounded-2xl p-6">
-          <h3 className="text-sm font-bold text-slate-800 mb-1">
-            Top 5 clientes por margen
-          </h3>
-          <p className="text-xs text-slate-500 mb-4">
-            Margen estimado = ingreso × (EBITDA ÷ ingresos)
-          </p>
-          <div className="h-[min(260px,40vh)] min-h-[220px] sm:h-[280px] sm:min-h-[240px] w-full min-w-0">
+        <div className="dashboard-bento rounded-2xl p-6">
+          <h3 className="mb-1 text-sm font-semibold text-zinc-100">Top 5 clientes por margen</h3>
+          <p className="mb-4 text-xs text-zinc-500">Margen estimado = ingreso × (EBITDA ÷ ingresos)</p>
+          <div className="h-[min(260px,40vh)] min-h-[220px] w-full min-w-0 sm:h-[280px] sm:min-h-[240px]">
             {barData.length === 0 ? (
-              <p className="text-sm text-slate-500 py-12 text-center">
-                Sin facturas con cliente para rankear.
-              </p>
+              <p className="py-12 text-center text-sm text-zinc-500">Sin facturas con cliente para rankear.</p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
@@ -194,24 +180,26 @@ export function EconomicOverview() {
                   layout="vertical"
                   margin={{ top: 4, right: 16, left: 0, bottom: 4 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" horizontal={false} />
                   <XAxis
                     type="number"
-                    tick={{ fill: "#64748b", fontSize: 11 }}
+                    tick={{ fill: "#a1a1aa", fontSize: 11 }}
                     tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
                   />
                   <YAxis
                     type="category"
                     dataKey="cliente"
                     width={120}
-                    tick={{ fill: "#475569", fontSize: 11 }}
+                    tick={{ fill: "#a1a1aa", fontSize: 11 }}
                   />
                   <Tooltip
                     formatter={(value) => formatEUR(Number(value ?? 0))}
                     contentStyle={{
                       borderRadius: 12,
-                      borderColor: "#e2e8f0",
+                      borderColor: "#3f3f46",
+                      background: "#18181b",
                       fontSize: 12,
+                      color: "#e4e4e7",
                     }}
                   />
                   <Bar
@@ -227,18 +215,12 @@ export function EconomicOverview() {
         </div>
       </div>
 
-      <div className="ab-card rounded-2xl p-6">
-        <h3 className="text-sm font-bold text-slate-800 mb-1">
-          Histórico ingresos vs gastos
-        </h3>
-        <p className="text-xs text-slate-500 mb-4">
-          Últimos 6 meses (ingresos por facturas; gastos por tickets)
-        </p>
-        <div className="h-[min(280px,42vh)] min-h-[220px] sm:h-[300px] sm:min-h-[260px] w-full min-w-0">
+      <div className="dashboard-bento rounded-2xl p-6">
+        <h3 className="mb-1 text-sm font-semibold text-zinc-100">Histórico ingresos vs gastos</h3>
+        <p className="mb-4 text-xs text-zinc-500">Últimos 6 meses (ingresos por facturas; gastos por tickets)</p>
+        <div className="h-[min(280px,42vh)] min-h-[220px] w-full min-w-0 sm:h-[300px] sm:min-h-[260px]">
           {!hasAreaData ? (
-            <p className="text-sm text-slate-500 py-12 text-center">
-              Sin movimientos en la ventana de 6 meses.
-            </p>
+            <p className="py-12 text-center text-sm text-zinc-500">Sin movimientos en la ventana de 6 meses.</p>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={areaRows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -252,13 +234,10 @@ export function EconomicOverview() {
                     <stop offset="95%" stopColor="#475569" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis
-                  dataKey="periodo"
-                  tick={{ fill: "#64748b", fontSize: 11 }}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" vertical={false} />
+                <XAxis dataKey="periodo" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
                 <YAxis
-                  tick={{ fill: "#64748b", fontSize: 11 }}
+                  tick={{ fill: "#a1a1aa", fontSize: 11 }}
                   tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
                 />
                 <Tooltip
@@ -266,11 +245,13 @@ export function EconomicOverview() {
                   labelFormatter={(l) => String(l)}
                   contentStyle={{
                     borderRadius: 12,
-                    borderColor: "#e2e8f0",
+                    borderColor: "#3f3f46",
+                    background: "#18181b",
                     fontSize: 12,
+                    color: "#e4e4e7",
                   }}
                 />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#a1a1aa" }} />
                 <Area
                   type="monotone"
                   dataKey="ingresos"

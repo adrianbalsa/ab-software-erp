@@ -19,6 +19,7 @@ import { SupportCard } from "@/components/docs/SupportCard";
 import { EconomicOverview } from "@/components/EconomicOverview";
 import { EmissionBadge } from "@/components/esg/EmissionBadge";
 import { ToastHost, type ToastPayload } from "@/components/ui/ToastHost";
+import { toast } from "sonner";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useEcoDashboard } from "@/hooks/useEcoDashboard";
 import { useFinanceDashboard } from "@/hooks/useFinanceDashboard";
@@ -62,7 +63,7 @@ export default function Dashboard() {
     error: fleetAlertsError,
     refresh: refreshFleetAlerts,
   } = useFleetAlerts({ enabled: canFleetAlerts });
-  const [toast, setToast] = useState<ToastPayload | null>(null);
+  const [welcomeToast, setWelcomeToast] = useState<ToastPayload | null>(null);
 
   const loadingAny = isOwner ? loading : statsLoading;
 
@@ -71,7 +72,7 @@ export default function Dashboard() {
       if (sessionStorage.getItem(OAUTH_WELCOME_KEY) === "1") {
         sessionStorage.removeItem(OAUTH_WELCOME_KEY);
         queueMicrotask(() =>
-          setToast({
+          setWelcomeToast({
             id: Date.now(),
             message: "Bienvenido",
             tone: "success",
@@ -82,6 +83,24 @@ export default function Dashboard() {
       /* ignore */
     }
   }, []);
+
+  useEffect(() => {
+    if (isOwner && error) {
+      toast.error(`KPI financieros: ${error}`, { id: "dash-finance-error" });
+    }
+  }, [isOwner, error]);
+
+  useEffect(() => {
+    if (!isOwner && statsError) {
+      toast.error(`KPI operativos: ${statsError}`, { id: "dash-stats-error" });
+    }
+  }, [isOwner, statsError]);
+
+  useEffect(() => {
+    if (ecoError) {
+      toast.error(`ESG: ${ecoError}`, { id: "dash-eco-error" });
+    }
+  }, [ecoError]);
 
   const onRefreshKpis = () => {
     if (isOwner) void refresh();
@@ -95,15 +114,15 @@ export default function Dashboard() {
       <RoleGuard allowedRoles={["owner", "traffic_manager"]}>
         <LogisAdvisorChat />
       </RoleGuard>
-      <ToastHost toast={toast} onDismiss={() => setToast(null)} durationMs={5200} />
-      <main className="flex-1 flex flex-col overflow-y-auto min-h-0">
-        <header className="h-16 ab-header border-b border-slate-200/80 flex items-center justify-between px-8 z-10">
+      <ToastHost toast={welcomeToast} onDismiss={() => setWelcomeToast(null)} durationMs={5200} />
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-zinc-950">
+        <header className="z-10 flex h-16 shrink-0 items-center justify-between border-b border-zinc-800/50 bg-zinc-950/80 px-8 backdrop-blur-md">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
+            <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">
               Cuadro de Mando Integral
             </h1>
             {!isOwner && (
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="mt-0.5 text-xs text-zinc-500">
                 Vista operativa · sin datos financieros globales
               </p>
             )}
@@ -113,114 +132,97 @@ export default function Dashboard() {
               type="button"
               onClick={() => onRefreshKpis()}
               disabled={loadingAny}
-              className="text-sm font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+              className="text-sm font-medium text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
             >
               {loadingAny ? "Actualizando…" : "Actualizar KPIs"}
             </button>
-            <span className="text-sm text-slate-500 font-medium">
+            <span className="text-sm font-medium text-zinc-500">
               {new Date().toLocaleDateString("es-ES", {
                 day: "numeric",
                 month: "long",
                 year: "numeric",
               })}
             </span>
-            <button className="p-2 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full transition-colors">
-              <Bell className="w-5 h-5" />
+            <button
+              type="button"
+              className="rounded-full bg-zinc-900/80 p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+              aria-label="Notificaciones"
+            >
+              <Bell className="h-5 w-5" />
             </button>
           </div>
         </header>
 
-        <div className="p-8 space-y-6 flex-1">
-          {isOwner && error && (
-            <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-lg text-sm">
-              KPI financieros: {error} (¿iniciaste sesión?).
-            </div>
-          )}
-          {!isOwner && statsError && (
-            <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-lg text-sm">
-              KPI operativos: {statsError} (¿iniciaste sesión?).
-            </div>
-          )}
-
+        <div className="flex-1 space-y-6 p-8">
           {isOwner ? (
             <>
               <SupportCard />
 
-              <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="ab-card p-6 rounded-2xl">
-                  <div className="flex justify-between items-start">
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+                <div className="dashboard-bento p-6">
+                  <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-sm font-medium text-slate-500 mb-1">
-                        EBITDA (real)
-                      </p>
-                      <h3 className="text-3xl font-bold text-slate-800">
+                      <p className="mb-1 text-sm font-medium text-zinc-400">EBITDA (real)</p>
+                      <h3 className="text-3xl font-bold tracking-tight text-zinc-100">
                         {loading ? "…" : data ? formatEUR(data.ebitda) : "—"}
                       </h3>
                     </div>
-                    <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
-                      <TrendingUp className="w-6 h-6" />
+                    <div className="rounded-xl bg-emerald-500/15 p-3 text-emerald-400">
+                      <TrendingUp className="h-6 w-6" />
                     </div>
                   </div>
-                  <p className="text-sm text-slate-500 mt-4">
+                  <p className="mt-4 text-sm text-zinc-500">
                     Ingresos − Gastos ·{" "}
-                    <Link href="/finanzas" className="text-[#2563eb] font-medium hover:underline">
+                    <Link href="/finanzas" className="font-medium text-emerald-400 hover:text-emerald-300 hover:underline">
                       Ver dashboard financiero
                     </Link>
                   </p>
                 </div>
 
-                <div className="ab-card p-6 rounded-2xl">
-                  <div className="flex justify-between items-start">
+                <div className="dashboard-bento p-6">
+                  <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-sm font-medium text-slate-500 mb-1">
-                        Ingresos (operación)
-                      </p>
-                      <h3 className="text-3xl font-bold text-slate-800">
+                      <p className="mb-1 text-sm font-medium text-zinc-400">Ingresos (operación)</p>
+                      <h3 className="text-3xl font-bold tracking-tight text-zinc-100">
                         {loading ? "…" : data ? formatEUR(data.ingresos) : "—"}
                       </h3>
                     </div>
-                    <div className="p-3 bg-amber-50 rounded-xl text-amber-600">
-                      <Euro className="w-6 h-6" />
+                    <div className="rounded-xl bg-amber-500/15 p-3 text-amber-400">
+                      <Euro className="h-6 w-6" />
                     </div>
                   </div>
-                  <p className="text-sm text-slate-500 mt-4">
+                  <p className="mt-4 text-sm text-zinc-500">
                     Bases facturadas (sin IVA) ·{" "}
-                    <code className="text-xs">GET /finance/dashboard</code>
+                    <code className="text-xs text-zinc-400">GET /finance/dashboard</code>
                   </p>
                 </div>
 
-                <div className="ab-card p-6 rounded-2xl">
-                  <div className="flex justify-between items-start">
+                <div className="dashboard-bento p-6">
+                  <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-sm font-medium text-slate-500 mb-1">
-                        Gastos (operativos)
-                      </p>
-                      <h3 className="text-3xl font-bold text-slate-800">
+                      <p className="mb-1 text-sm font-medium text-zinc-400">Gastos (operativos)</p>
+                      <h3 className="text-3xl font-bold tracking-tight text-zinc-100">
                         {loading ? "…" : data ? formatEUR(data.gastos) : "—"}
                       </h3>
                     </div>
-                    <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
-                      <MapPin className="w-6 h-6" />
+                    <div className="rounded-xl bg-sky-500/15 p-3 text-sky-400">
+                      <MapPin className="h-6 w-6" />
                     </div>
                   </div>
-                  <p className="text-sm text-slate-500 mt-4">
-                    Suma de gastos en `gastos`
-                  </p>
+                  <p className="mt-4 text-sm text-zinc-500">Suma de gastos en `gastos`</p>
                 </div>
 
-                <div className="ab-card p-6 rounded-2xl">
-                  <div className="flex justify-between items-start">
+                <div className="dashboard-bento p-6">
+                  <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-sm font-medium text-slate-500 mb-1">
-                        Bultos
-                      </p>
-                      <h3 className="text-3xl font-bold text-slate-800">—</h3>
+                      <p className="mb-1 text-sm font-medium text-zinc-400">Bultos</p>
+                      <h3 className="text-3xl font-bold tracking-tight text-zinc-100">—</h3>
                     </div>
-                    <div className="p-3 bg-indigo-50 rounded-xl text-indigo-600">
-                      <Package className="w-6 h-6" />
+                    <div className="rounded-xl bg-indigo-500/15 p-3 text-indigo-400">
+                      <Package className="h-6 w-6" />
                     </div>
                   </div>
-                  <p className="text-sm text-slate-500 mt-4">
+                  <p className="mt-4 text-sm text-zinc-500">
                     Margen neto/km y desglose en la sección inferior
                   </p>
                 </div>
@@ -229,13 +231,15 @@ export default function Dashboard() {
               <section className="space-y-4" aria-labelledby="dash-advanced-heading">
                 <h2
                   id="dash-advanced-heading"
-                  className="text-lg font-bold text-[#0b1224] tracking-tight"
+                  className="text-lg font-semibold tracking-tight text-zinc-100"
                 >
                   Tesorería, costes y eficiencia
                 </h2>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-zinc-500">
                   Datos del Math Engine vía{" "}
-                  <code className="bg-slate-100 px-1 rounded text-xs">GET /finance/dashboard</code>
+                  <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-400">
+                    GET /finance/dashboard
+                  </code>
                 </p>
                 <EfficiencyKpiCard
                   loading={loading}
@@ -263,25 +267,20 @@ export default function Dashboard() {
               <section className="space-y-4" aria-labelledby="dash-rentabilidad-avanzada">
                 <h2
                   id="dash-rentabilidad-avanzada"
-                  className="text-lg font-bold text-[#0b1224] tracking-tight"
+                  className="text-lg font-semibold tracking-tight text-zinc-100"
                 >
                   Análisis de Rentabilidad Avanzada
                 </h2>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-zinc-500">
                   Datos consolidados desde endpoints optimizados:
-                  <code className="bg-slate-100 px-1 rounded text-xs ml-1">
+                  <code className="ml-1 rounded bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-400">
                     GET /finance/dashboard
                   </code>
-                  <code className="bg-slate-100 px-1 rounded text-xs ml-1">
+                  <code className="ml-1 rounded bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-400">
                     GET /eco/dashboard/
                   </code>
                 </p>
-                {ecoError ? (
-                  <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-lg text-sm">
-                    ESG: {ecoError}
-                  </div>
-                ) : null}
-                <div className="grid lg:grid-cols-2 gap-6">
+                <div className="grid gap-6 lg:grid-cols-2">
                   <EfficiencyMatrix
                     loading={loading || ecoLoading}
                     margenNetoKm={data?.margen_neto_km_mes_actual ?? null}
@@ -302,14 +301,12 @@ export default function Dashboard() {
               </div>
             </>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="ab-card p-6 rounded-2xl md:col-span-1">
-                <div className="flex justify-between items-start">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+              <div className="dashboard-bento p-6 md:col-span-1">
+                <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium text-slate-500 mb-1">
-                      Km (mes en curso)
-                    </p>
-                    <h3 className="text-3xl font-bold text-slate-800">
+                    <p className="mb-1 text-sm font-medium text-zinc-400">Km (mes en curso)</p>
+                    <h3 className="text-3xl font-bold tracking-tight text-zinc-100">
                       {statsLoading
                         ? "…"
                         : statsOps != null
@@ -319,33 +316,33 @@ export default function Dashboard() {
                           : "—"}
                     </h3>
                   </div>
-                  <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
-                    <Route className="w-6 h-6" />
+                  <div className="rounded-xl bg-sky-500/15 p-3 text-sky-400">
+                    <Route className="h-6 w-6" />
                   </div>
                 </div>
-                <p className="text-sm text-slate-500 mt-4">
-                  Suma <code className="text-xs bg-slate-100 px-1 rounded">km_estimados</code> de
-                  portes del mes · <code className="text-xs">GET /dashboard/stats</code>
+                <p className="mt-4 text-sm text-zinc-500">
+                  Suma{" "}
+                  <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-400">
+                    km_estimados
+                  </code>{" "}
+                  de portes del mes ·{" "}
+                  <code className="text-xs text-zinc-400">GET /dashboard/stats</code>
                 </p>
               </div>
 
-              <div className="ab-card p-6 rounded-2xl md:col-span-1">
-                <div className="flex justify-between items-start">
+              <div className="dashboard-bento p-6 md:col-span-1">
+                <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium text-slate-500 mb-1">
-                      Bultos (mes)
-                    </p>
-                    <h3 className="text-3xl font-bold text-slate-800">
+                    <p className="mb-1 text-sm font-medium text-zinc-400">Bultos (mes)</p>
+                    <h3 className="text-3xl font-bold tracking-tight text-zinc-100">
                       {statsLoading ? "…" : statsOps != null ? (statsOps.bultos ?? 0) : "—"}
                     </h3>
                   </div>
-                  <div className="p-3 bg-indigo-50 rounded-xl text-indigo-600">
-                    <Package className="w-6 h-6" />
+                  <div className="rounded-xl bg-indigo-500/15 p-3 text-indigo-400">
+                    <Package className="h-6 w-6" />
                   </div>
                 </div>
-                <p className="text-sm text-slate-500 mt-4">
-                  Agregado operativo sin datos de facturación
-                </p>
+                <p className="mt-4 text-sm text-zinc-500">Agregado operativo sin datos de facturación</p>
               </div>
             </div>
           )}
@@ -359,47 +356,45 @@ export default function Dashboard() {
             />
           )}
 
-          <div className="ab-card rounded-2xl overflow-hidden">
-            <div className="px-6 py-5 border-b border-slate-100/80 flex justify-between items-center bg-slate-50/50">
-              <h2 className="text-lg font-bold text-slate-800">Accesos rápidos</h2>
-              <div className="flex gap-4 flex-wrap">
+          <div className="dashboard-bento overflow-hidden">
+            <div className="flex items-center justify-between border-b border-zinc-800/50 bg-zinc-900/30 px-6 py-5 backdrop-blur-sm">
+              <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Accesos rápidos</h2>
+              <div className="flex flex-wrap gap-4">
                 <Link
                   href="/portes"
-                  className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                  className="text-sm font-medium text-emerald-400 transition-colors hover:text-emerald-300"
                 >
                   Portes
                 </Link>
                 <RoleGuard allowedRoles={["owner", "traffic_manager"]}>
-                  <Link
-                    href="/flota"
-                    className="text-sm font-medium text-[#2563eb] hover:underline"
-                  >
+                  <Link href="/flota" className="text-sm font-medium text-emerald-400 hover:text-emerald-300 hover:underline">
                     Flota
                   </Link>
                 </RoleGuard>
                 {isOwner && (
-                  <Link
-                    href="/finanzas"
-                    className="text-sm font-medium text-slate-600 hover:text-slate-800"
-                  >
+                  <Link href="/finanzas" className="text-sm font-medium text-zinc-400 hover:text-zinc-200">
                     Finanzas
                   </Link>
                 )}
               </div>
             </div>
-            <div className="p-6 text-sm text-slate-600">
+            <div className="p-6 text-sm text-zinc-500">
               {isOwner ? (
                 <>
                   Los KPI y gráficos avanzados usan{" "}
-                  <code className="bg-slate-100 px-1 rounded">GET /finance/dashboard</code> con JWT
-                  (misma sesión que el resto de módulos).
+                  <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-zinc-400">
+                    GET /finance/dashboard
+                  </code>{" "}
+                  con JWT (misma sesión que el resto de módulos).
                 </>
               ) : (
                 <>
                   Los indicadores de esta vista provienen de{" "}
-                  <code className="bg-slate-100 px-1 rounded">GET /dashboard/stats</code> según tu
-                  rol; la facturación y el EBITDA solo están disponibles para el perfil{" "}
-                  <strong className="font-medium">owner</strong>.
+                  <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-zinc-400">
+                    GET /dashboard/stats
+                  </code>{" "}
+                  según tu rol; la facturación y el EBITDA solo están disponibles para el perfil{" "}
+                  <strong className="font-medium text-zinc-300">owner</strong>.
                 </>
               )}
             </div>

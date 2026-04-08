@@ -375,12 +375,12 @@ export function AppShell({ children, active }: Props) {
   const closeMobile = () => setMobileOpen(false);
 
   return (
-    <div className="flex min-h-screen ab-app-gradient font-sans text-slate-800 overflow-x-hidden">
+    <div className="flex min-h-screen bg-zinc-950 font-sans text-zinc-100 overflow-x-hidden">
       <aside
-        className="hidden lg:flex w-64 shrink-0 flex-col border-r border-slate-800/80 text-slate-300"
+        className="hidden lg:flex w-64 shrink-0 flex-col border-r border-zinc-800/50 text-slate-300"
         style={sidebarBg}
       >
-        <div className="h-16 flex items-center px-6 border-b border-slate-800/80 shrink-0">
+        <div className="h-16 flex items-center px-6 border-b border-zinc-800/50 shrink-0">
           <Truck className="w-6 h-6 text-[#60a5fa] mr-2 shrink-0" />
           <span className="text-white font-bold text-lg tracking-tight">
             AB Logistics OS
@@ -421,8 +421,8 @@ export function AppShell({ children, active }: Props) {
       </Sheet>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden px-3 pb-4 pt-0 sm:px-4 lg:px-0 lg:pb-0">
-        <div
-          className="lg:hidden sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-slate-800/80 px-2 text-slate-200 sm:px-3"
+          <div
+          className="lg:hidden sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-zinc-800/50 px-2 text-slate-200 sm:px-3"
           style={sidebarBg}
         >
           <button
