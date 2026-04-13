@@ -246,15 +246,23 @@ body {
 }
 
 /* Cuadro de Mando / Búnker — alineado con landing dark */
+/* Búnker / landing — tarjetas y paneles (zinc-950 + zinc-900/40) */
 .dashboard-bento {
   border-radius: 0.75rem;
-  border: 1px solid rgba(39, 39, 42, 0.5);
-  background-color: rgba(24, 24, 27, 0.5);
+  border: 1px solid rgb(39 39 42); /* zinc-800 */
+  background-color: rgb(24 24 27 / 0.4); /* zinc-900/40 */
   backdrop-filter: blur(12px);
-  transition: box-shadow 300ms ease;
+  transition: box-shadow 300ms ease, border-color 300ms ease;
 }
 .dashboard-bento:hover {
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.08);
+}
+
+.bunker-card {
+  border-radius: 0.75rem;
+  border: 1px solid rgb(39 39 42);
+  background-color: rgb(24 24 27 / 0.4);
+  color: rgb(244 244 245);
 }
 
 .dark {

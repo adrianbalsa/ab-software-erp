@@ -4,44 +4,43 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  BadgeCheck,
   BarChart3,
   Car,
   CreditCard,
-  FileText,
+  FileDown,
   FileSearch,
   GitCompare,
   LayoutDashboard,
+  Landmark,
   Leaf,
+  LineChart,
   Link2,
   MapPin,
   Menu,
-  Package,
   Receipt,
   Settings,
   Shield,
   Truck,
   Users,
   Wallet,
-  FileDown,
   X,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
+import type { ComponentProps, ReactNode } from "react";
 import { useEffect, useState } from "react";
 
-import { ConfiguracionNavSection, SidebarUserSection } from "@/components/layout/Sidebar";
+import {
+  ConfiguracionNavSection,
+  SidebarUserSection,
+  sidebarNavIcon,
+  sidebarNavRow,
+} from "@/components/layout/Sidebar";
 import { QuotaStatusCard } from "@/components/QuotaStatusCard";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useRole } from "@/hooks/useRole";
 import { isOwnerLike, type AppRbacRole } from "@/lib/api";
-
-const navLink =
-  "flex items-center px-3 py-2.5 rounded-lg transition-colors text-sm font-medium";
-const navInactive = "hover:bg-slate-800/80 hover:text-white text-slate-300";
-const navActive = "bg-[#2563eb]/15 text-[#60a5fa] border border-[#2563eb]/25";
-
-const sidebarBg = {
-  background: "linear-gradient(180deg, #0b1224 0%, #060a14 100%)",
-} as const;
+import { cn } from "@/lib/utils";
 
 type Props = {
   children: ReactNode;
@@ -63,9 +62,66 @@ type Props = {
     | "clientes"
     | "integrations"
     | "auditoria"
+    | "certificaciones"
     | "desarrolladores"
-    | "analitica";
+    | "analitica"
+    | "simulador";
 };
+
+function NavSectionHeader({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <div className="px-3 pb-2 pt-1">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{title}</p>
+      <p className="mt-0.5 text-[10px] font-medium normal-case tracking-normal text-zinc-600">
+        {subtitle}
+      </p>
+    </div>
+  );
+}
+
+function SidebarNavLink({
+  href,
+  active,
+  icon: Icon,
+  title,
+  subtitle,
+  id,
+  className,
+  ...rest
+}: {
+  href: string;
+  active: boolean;
+  icon: LucideIcon;
+  title: string;
+  subtitle?: string;
+  id?: string;
+  className?: string;
+} & Omit<ComponentProps<typeof Link>, "href" | "className" | "children">) {
+  return (
+    <Link
+      id={id}
+      href={href}
+      className={cn(sidebarNavRow(active), className)}
+      {...rest}
+    >
+      <Icon className={sidebarNavIcon(active)} aria-hidden />
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="leading-snug">{title}</span>
+        {subtitle ? (
+          <span className="text-[11px] font-normal leading-snug text-zinc-500 group-hover:text-zinc-400">
+            {subtitle}
+          </span>
+        ) : null}
+      </span>
+    </Link>
+  );
+}
 
 function showNavItem(
   key:
@@ -119,201 +175,253 @@ function ShellNavAndFooter({
 
   return (
     <>
-      <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-1 min-h-0">
-        <Link
-          id="tour-nav-dashboard"
-          href="/dashboard"
-          className={`${navLink} ${active === "dashboard" ? navActive : navInactive}`}
-          {...p}
-        >
-          <LayoutDashboard className="w-5 h-5 mr-3 shrink-0" />
-          Dashboard
-        </Link>
-        {isOwnerLike(role) && (
-          <Link
-            href="/dashboard/analitica"
-            className={`${navLink} ${active === "analitica" ? navActive : navInactive}`}
-            {...p}
-          >
-            <BarChart3 className="w-5 h-5 mr-3 shrink-0" />
-            Matriz CIP
-          </Link>
-        )}
-        {showNavItem("clientes", role) && (
-          <Link
-            id="tour-nav-clientes"
-            href="/clientes"
-            className={`nav-clientes ${navLink} ${active === "clientes" ? navActive : navInactive}`}
-            {...p}
-          >
-            <Users className="w-5 h-5 mr-3 shrink-0" />
-            Clientes
-          </Link>
-        )}
-        {showNavItem("finanzas", role) && (
-          <>
-            <Link
-              href="/finanzas"
-              className={`${navLink} ${active === "finanzas" ? navActive : navInactive}`}
+      <nav className="flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto px-4 py-6" aria-label="Navegación principal">
+        {/* INSTITUCIONAL */}
+        <section className="mt-0">
+          <NavSectionHeader title="Institucional" subtitle="Dashboards" />
+          <div className="flex flex-col gap-0.5">
+            <SidebarNavLink
+              id="tour-nav-dashboard"
+              href="/dashboard"
+              active={active === "dashboard"}
+              icon={LayoutDashboard}
+              title="Dashboard"
+              subtitle="Vista general"
               {...p}
-            >
-              <FileText className="w-5 h-5 mr-3 shrink-0" />
-              Finanzas
-            </Link>
-            <Link
-              href="/finanzas/conciliacion"
-              className={`${navLink} ${active === "conciliacion" ? navActive : navInactive}`}
-              {...p}
-            >
-              <GitCompare className="w-5 h-5 mr-3 shrink-0" />
-              Conciliación IA
-            </Link>
+            />
             {isOwnerLike(role) && (
-              <Link
-                id="tour-nav-finanzas"
-                href="/dashboard/finanzas/tesoreria"
-                className={`nav-finanzas ${navLink} ${active === "tesoreria" ? navActive : navInactive}`}
+              <SidebarNavLink
+                href="/dashboard/analitica"
+                active={active === "analitica"}
+                icon={BarChart3}
+                title="Matriz CIP"
+                subtitle="Margen vs CO₂"
                 {...p}
-              >
-                <Wallet className="w-5 h-5 mr-3 shrink-0" />
-                Tesorería y Riesgos
-              </Link>
+              />
             )}
-            {isOwnerLike(role) && (
-              <Link
-                href="/dashboard/finanzas/simulador"
-                className={`${navLink} ${active === "finanzas" ? navActive : navInactive}`}
+            {showNavItem("flota", role) && (
+              <SidebarNavLink
+                href="/operaciones/live"
+                active={active === "operaciones"}
+                icon={MapPin}
+                title="Centro de Mando"
+                subtitle="KPIs avanzados"
                 {...p}
-              >
-                <GitCompare className="w-5 h-5 mr-3 shrink-0" />
-                Simulador Impacto
-              </Link>
+              />
             )}
-            <Link
-              href="/finanzas/exportar"
-              className={`${navLink} ${active === "exportar" ? navActive : navInactive}`}
-              {...p}
-            >
-              <FileDown className="w-5 h-5 mr-3 shrink-0" />
-              Exportar
-            </Link>
-            {isOwnerLike(role) && (
-              <Link
-                href="/dashboard/finanzas/auditoria"
-                className={`${navLink} ${active === "auditoria" ? navActive : navInactive}`}
-                {...p}
-              >
-                <FileSearch className="w-5 h-5 mr-3 shrink-0" />
-                Auditoría Fiscal
-              </Link>
-            )}
-          </>
-        )}
-        <Link
-          id="tour-nav-portes"
-          href="/portes"
-          className={`nav-portes ${navLink} ${active === "portes" ? navActive : navInactive}`}
-          {...p}
-        >
-          <Truck className="w-5 h-5 mr-3 shrink-0" />
-          Portes
-        </Link>
-        {showNavItem("flota", role) && (
-          <>
-            <Link
-              id="tour-nav-flota"
-              href="/flota"
-              className={`nav-flota ${navLink} ${active === "flota" ? navActive : navInactive}`}
-              {...p}
-            >
-              <Car className="w-5 h-5 mr-3 shrink-0" />
-              Flota
-            </Link>
+          </div>
+        </section>
 
-            <Link
-              href="/flota/eficiencia"
-              className={`nav-flota-eficiencia ${navLink} ${active === "eficiencia" ? navActive : navInactive}`}
+        {/* OPERACIONES */}
+        <section className="mt-6">
+          <NavSectionHeader title="Operaciones" subtitle="Logistics" />
+          <div className="flex flex-col gap-0.5">
+            <SidebarNavLink
+              id="tour-nav-portes"
+              href="/portes"
+              active={active === "portes"}
+              icon={Truck}
+              title="Portes"
+              subtitle="Gestión de viajes y CMR"
+              className="nav-portes"
               {...p}
-            >
-              <Activity className="w-5 h-5 mr-3 shrink-0" />
-              Eficiencia
-            </Link>
-            <Link
-              href="/operaciones/live"
-              className={`${navLink} ${active === "operaciones" ? navActive : navInactive}`}
+            />
+            {showNavItem("flota", role) && (
+              <>
+                <SidebarNavLink
+                  id="tour-nav-flota"
+                  href="/flota"
+                  active={active === "flota"}
+                  icon={Car}
+                  title="Flota"
+                  subtitle="Vehículos y eficiencia"
+                  className="nav-flota"
+                  {...p}
+                />
+                <SidebarNavLink
+                  href="/flota/eficiencia"
+                  active={active === "eficiencia"}
+                  icon={Activity}
+                  title="Eficiencia"
+                  subtitle="Telemetría y consumo"
+                  className="nav-flota-eficiencia"
+                  {...p}
+                />
+              </>
+            )}
+            {showNavItem("sostenibilidad", role) && (
+              <SidebarNavLink
+                href="/sostenibilidad"
+                active={active === "sostenibilidad"}
+                icon={Leaf}
+                title="Sostenibilidad"
+                subtitle="Certificados ESG"
+                {...p}
+              />
+            )}
+          </div>
+        </section>
+
+        {/* FINANZAS & FISCAL */}
+        {showNavItem("finanzas", role) && (
+          <section className="mt-6">
+            <NavSectionHeader title="Finanzas & Fiscal" subtitle="Bunker" />
+            <div className="flex flex-col gap-0.5">
+              <SidebarNavLink
+                href="/finanzas"
+                active={active === "finanzas"}
+                icon={Wallet}
+                title="Finanzas"
+                subtitle="Panel y métricas"
+                {...p}
+              />
+              {showNavItem("facturas", role) && (
+                <SidebarNavLink
+                  href="/facturas"
+                  active={active === "facturas"}
+                  icon={Receipt}
+                  title="Facturación"
+                  subtitle="Módulo VeriFactu · AEAT"
+                  {...p}
+                />
+              )}
+              {showNavItem("gastos", role) && (
+                <SidebarNavLink
+                  href="/gastos"
+                  active={active === "gastos"}
+                  icon={CreditCard}
+                  title="Gastos"
+                  subtitle="Combustible y peajes"
+                  {...p}
+                />
+              )}
+              <SidebarNavLink
+                href="/finanzas/conciliacion"
+                active={active === "conciliacion"}
+                icon={GitCompare}
+                title="Conciliación IA"
+                subtitle="Automatización contable"
+                {...p}
+              />
+              {isOwnerLike(role) && (
+                <SidebarNavLink
+                  id="tour-nav-finanzas"
+                  href="/dashboard/finanzas/tesoreria"
+                  active={active === "tesoreria"}
+                  icon={Landmark}
+                  title="Tesorería"
+                  subtitle="Liquidez y riesgos"
+                  className="nav-finanzas"
+                  {...p}
+                />
+              )}
+              {isOwnerLike(role) && (
+                <SidebarNavLink
+                  href="/dashboard/finanzas/auditoria"
+                  active={active === "auditoria"}
+                  icon={FileSearch}
+                  title="Auditoría fiscal"
+                  subtitle="Logs inmutables"
+                  {...p}
+                />
+              )}
+              {isOwnerLike(role) && (
+                <SidebarNavLink
+                  href="/dashboard/certificaciones"
+                  active={active === "certificaciones"}
+                  icon={BadgeCheck}
+                  title="Certificaciones"
+                  subtitle="Cumplimiento y sellos"
+                  {...p}
+                />
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* GESTIÓN */}
+        {(showNavItem("clientes", role) || isOwnerLike(role)) && (
+          <section className="mt-6">
+            <NavSectionHeader title="Gestión" subtitle="Relación y escenarios" />
+            <div className="flex flex-col gap-0.5">
+              {showNavItem("clientes", role) && (
+                <SidebarNavLink
+                  id="tour-nav-clientes"
+                  href="/clientes"
+                  active={active === "clientes"}
+                  icon={Users}
+                  title="Clientes"
+                  subtitle="CRM"
+                  className="nav-clientes"
+                  {...p}
+                />
+              )}
+              {isOwnerLike(role) && (
+                <SidebarNavLink
+                  href="/dashboard/finanzas/simulador"
+                  active={active === "simulador"}
+                  icon={LineChart}
+                  title="Simulador de impacto"
+                  subtitle="Escenarios económicos"
+                  {...p}
+                />
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* SISTEMA */}
+        <section className="mt-6">
+          <NavSectionHeader title="Sistema" subtitle="Cuenta y datos" />
+          <div className="flex flex-col gap-0.5">
+            {showNavItem("admin", role) && (
+              <SidebarNavLink
+                href="/admin"
+                active={active === "admin"}
+                icon={Settings}
+                title="Configuración"
+                subtitle="Panel de administración"
+                {...p}
+              />
+            )}
+            {isOwnerLike(role) && (
+              <SidebarNavLink
+                href="/settings/integrations"
+                active={active === "integrations"}
+                icon={Link2}
+                title="Integraciones"
+                subtitle="Conectores y datos"
+                {...p}
+              />
+            )}
+            <ConfiguracionNavSection active={active} role={role} onNavLinkClick={onNavLinkClick} />
+            <SidebarNavLink
+              href="/perfil/seguridad"
+              active={active === "seguridad"}
+              icon={Shield}
+              title="Seguridad"
+              subtitle="Perfil y sesión"
               {...p}
-            >
-              <MapPin className="w-5 h-5 mr-3 shrink-0" />
-              Centro de mando
-            </Link>
-          </>
-        )}
-        {showNavItem("sostenibilidad", role) && (
-          <Link
-            href="/sostenibilidad"
-            className={`${navLink} ${active === "sostenibilidad" ? navActive : navInactive}`}
-            {...p}
-          >
-            <Package className="w-5 h-5 mr-3 shrink-0" />
-            Sostenibilidad
-          </Link>
-        )}
-        {showNavItem("facturas", role) && (
-          <Link
-            href="/facturas"
-            className={`${navLink} ${active === "facturas" ? navActive : navInactive}`}
-            {...p}
-          >
-            <Receipt className="w-5 h-5 mr-3 shrink-0" />
-            Facturas
-          </Link>
-        )}
-        {showNavItem("gastos", role) && (
-          <Link
-            href="/gastos"
-            className={`${navLink} ${active === "gastos" ? navActive : navInactive}`}
-            {...p}
-          >
-            <CreditCard className="w-5 h-5 mr-3 shrink-0" />
-            Gastos
-          </Link>
-        )}
-        {showNavItem("admin", role) && (
-          <Link
-            href="/admin"
-            className={`${navLink} ${active === "admin" ? navActive : navInactive}`}
-            {...p}
-          >
-            <Settings className="w-5 h-5 mr-3 shrink-0" />
-            Admin
-          </Link>
-        )}
-        {isOwnerLike(role) && (
-          <Link
-            href="/settings/integrations"
-            className={`${navLink} ${active === "integrations" ? navActive : navInactive}`}
-            {...p}
-          >
-            <Link2 className="w-5 h-5 mr-3 shrink-0" />
-            Integraciones
-          </Link>
-        )}
-        <ConfiguracionNavSection active={active} role={role} onNavLinkClick={onNavLinkClick} />
-        <Link
-          href="/perfil/seguridad"
-          className={`${navLink} ${active === "seguridad" ? navActive : navInactive}`}
-          {...p}
-        >
-          <Shield className="w-5 h-5 mr-3 shrink-0" />
-          Seguridad
-        </Link>
+            />
+            {showNavItem("finanzas", role) && (
+              <SidebarNavLink
+                href="/finanzas/exportar"
+                active={active === "exportar"}
+                icon={FileDown}
+                title="Exportar"
+                subtitle="Data center"
+                {...p}
+              />
+            )}
+          </div>
+        </section>
       </nav>
-      <div className="px-4 pb-3 shrink-0">
+      <div className="shrink-0 px-4 pb-3">
         <QuotaStatusCard />
       </div>
       <SidebarUserSection />
-      <div className="p-4 border-t border-slate-800/80 text-xs text-slate-500 flex items-center gap-2 shrink-0">
-        <Leaf className="w-4 h-4 text-emerald-500" />
+      <div className="flex shrink-0 items-center gap-2 border-t border-zinc-800/80 p-4 text-xs text-zinc-500">
+        <Leaf className="h-4 w-4 text-emerald-500" aria-hidden />
         <span>AB Logistics OS</span>
       </div>
     </>
@@ -330,13 +438,16 @@ export function AppShell({ children, active }: Props) {
     if (pathname.startsWith("/dashboard/configuracion")) return "desarrolladores";
     if (pathname === "/dashboard/analitica") return "analitica";
     if (pathname === "/dashboard/finanzas/tesoreria") return "tesoreria";
-    if (pathname === "/dashboard/finanzas/simulador") return "finanzas";
+    if (pathname === "/dashboard/finanzas/simulador") return "simulador";
     if (pathname === "/dashboard/finanzas/auditoria") return "auditoria";
+    if (pathname === "/dashboard/certificaciones") return "certificaciones";
+    if (pathname.startsWith("/dashboard/portes")) return "portes";
     if (pathname === "/finanzas/conciliacion") return "conciliacion";
     if (pathname === "/finanzas/exportar") return "exportar";
     if (pathname === "/finanzas" || pathname.startsWith("/finanzas/")) return "finanzas";
     if (pathname === "/dashboard" || pathname.startsWith("/dashboard")) return "dashboard";
     if (pathname.startsWith("/portes")) return "portes";
+    if (pathname.startsWith("/flota/eficiencia")) return "eficiencia";
     if (pathname.startsWith("/flota")) return "flota";
     if (pathname.startsWith("/operaciones")) return "operaciones";
     if (pathname.startsWith("/clientes")) return "clientes";
@@ -376,12 +487,9 @@ export function AppShell({ children, active }: Props) {
 
   return (
     <div className="flex min-h-screen bg-zinc-950 font-sans text-zinc-100 overflow-x-hidden">
-      <aside
-        className="hidden lg:flex w-64 shrink-0 flex-col border-r border-zinc-800/50 text-slate-300"
-        style={sidebarBg}
-      >
-        <div className="h-16 flex items-center px-6 border-b border-zinc-800/50 shrink-0">
-          <Truck className="w-6 h-6 text-[#60a5fa] mr-2 shrink-0" />
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 text-zinc-300 lg:flex">
+        <div className="flex h-16 shrink-0 items-center border-b border-zinc-800 px-6">
+          <Truck className="mr-2 h-6 w-6 shrink-0 text-emerald-500" />
           <span className="text-white font-bold text-lg tracking-tight">
             AB Logistics OS
           </span>
@@ -392,13 +500,12 @@ export function AppShell({ children, active }: Props) {
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent
           side="left"
-          className="text-slate-300"
-          style={sidebarBg}
+          className="border-zinc-800 bg-zinc-950 text-zinc-300"
           aria-label="Menú de navegación principal"
         >
-          <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-800/80 px-4">
+          <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-zinc-800 px-4">
             <div className="flex min-w-0 items-center">
-              <Truck className="mr-2 h-6 w-6 shrink-0 text-[#60a5fa]" />
+              <Truck className="mr-2 h-6 w-6 shrink-0 text-emerald-500" />
               <SheetTitle className="truncate border-0 p-0 text-sm font-bold text-white">
                 AB Logistics OS
               </SheetTitle>
@@ -406,7 +513,7 @@ export function AppShell({ children, active }: Props) {
             <button
               type="button"
               onClick={closeMobile}
-              className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-800/80 hover:text-white"
+              className="shrink-0 rounded-lg p-2 text-zinc-400 transition-all duration-200 hover:bg-zinc-900/80 hover:text-white"
               aria-label="Cerrar menú"
             >
               <X className="h-5 w-5" />
@@ -422,12 +529,11 @@ export function AppShell({ children, active }: Props) {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden px-3 pb-4 pt-0 sm:px-4 lg:px-0 lg:pb-0">
           <div
-          className="lg:hidden sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-zinc-800/50 px-2 text-slate-200 sm:px-3"
-          style={sidebarBg}
+          className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-zinc-800 bg-zinc-950 px-2 text-zinc-200 sm:px-3 lg:hidden"
         >
           <button
             type="button"
-            className="rounded-lg p-2 hover:bg-slate-800/80"
+            className="rounded-lg p-2 transition-all duration-200 hover:bg-zinc-900/80"
             aria-label="Abrir menú de navegación"
             onClick={() => setMobileOpen(true)}
           >

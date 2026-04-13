@@ -222,6 +222,7 @@ class VerifactuService:
                 self._db.table("facturas")
                 .select("huella_hash, hash_registro, hash_factura, numero_secuencial, fecha_emision, id")
                 .eq("empresa_id", eid)
+                .eq("bloqueado", True)
                 .order("numero_secuencial", desc=True)
                 .order("fecha_emision", desc=True)
                 .order("id", desc=True)

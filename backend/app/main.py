@@ -36,6 +36,7 @@ from app.api.routes import (
     reports,
     utils,
 )
+from app.api.v1 import advisor as advisor_v1
 from app.api.v1 import analytics as analytics_v1
 from app.api.v1 import bancos_conciliacion as bancos_conciliacion_v1
 from app.api.v1 import chat as chat_v1
@@ -57,7 +58,9 @@ from app.api.v1 import portal_cliente as portal_cliente_v1
 from app.api.v1 import portal_onboarding as portal_onboarding_v1
 from app.api.v1 import portes as portes_v1
 from app.api.v1 import routes_optimizer as routes_optimizer_v1
+from app.api.v1 import admin_compliance as admin_compliance_v1
 from app.api.v1 import stripe
+from app.api.v1 import stripe_webhook as stripe_webhook_v1
 from app.api.v1 import treasury as treasury_v1
 from app.api.v1 import verifactu as verifactu_v1
 from app.api.v1 import webhooks as webhooks_v1
@@ -227,6 +230,16 @@ def create_app() -> FastAPI:
     app.include_router(fleet_analytics_v1.router, prefix="/api/v1/fleet", tags=["Flota - Análisis"])
 
     app.include_router(stripe.router, prefix="/api/v1/stripe", tags=["Pagos"])
+    app.include_router(
+        stripe_webhook_v1.router,
+        prefix="/api/v1/webhooks",
+        tags=["Webhooks Stripe"],
+    )
+    app.include_router(
+        admin_compliance_v1.router,
+        prefix="/api/v1/admin",
+        tags=["Administración — cumplimiento"],
+    )
     app.include_router(payments_gocardless_v1.router, prefix="/api/v1/payments/gocardless", tags=["Pagos"])
     app.include_router(esg_reports_v1.router, prefix="/api/v1", tags=["ESG"])
     app.include_router(esg_auditoria_v1.router, prefix="/api/v1", tags=["ESG - Auditoría"])
@@ -259,6 +272,7 @@ def create_app() -> FastAPI:
         tags=["Onboarding"],
     )
     app.include_router(analytics_v1.router, prefix="/api/v1", tags=["Finanzas"])
+    app.include_router(advisor_v1.router, prefix="/api/v1/advisor", tags=["LogisAdvisor"])
 
     return app
 

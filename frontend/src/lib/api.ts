@@ -24,8 +24,9 @@ export class ApiValidationError extends Error {
 }
 
 /**
- * JWT para el cliente (localStorage). En RSC/SSR el token HttpOnly está en
- * `cookies().get("abl_auth_token")` — usar `getSessionAccessTokenForRole` en `server-api.ts`.
+ * JWT: localStorage (`abl_auth_token`) si el login lo guardó; OAuth usa cookie HttpOnly en la API.
+ * Peticiones con `credentials: 'include'` envían la cookie; el backend acepta Bearer o cookie.
+ * En RSC/SSR: `cookies().get("abl_auth_token")` — ver `getSessionAccessTokenForRole` en `server-api.ts`.
  */
 export function getAuthToken(): string | null {
   const t = getAuthTokenFromStore();
@@ -327,7 +328,54 @@ apiClient.interceptors.request.use(async (config) => {
   return config;
 });
 
+type AxiosConfigWith401Retry = AxiosRequestConfig & { __abl401Retry?: boolean };
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error: unknown) => {
+    if (!axios.isAxiosError(error)) return Promise.reject(error);
+    const status = error.response?.status;
+    const cfg = error.config as AxiosConfigWith401Retry | undefined;
+    if (!cfg || cfg.__abl401Retry || status !== 401) return Promise.reject(error);
+    if (typeof window === "undefined") return Promise.reject(error);
+    const path = `${cfg.baseURL ?? ""}${cfg.url ?? ""}`;
+    const method = (cfg.method || "get").toUpperCase();
+    if (method === "POST" && path.includes("/auth/login")) return Promise.reject(error);
+    cfg.__abl401Retry = true;
+    await wait(450);
+    const token = await resolveAccessToken();
+    cfg.headers = cfg.headers ?? {};
+    const hdr = cfg.headers as Record<string, string>;
+    if (token) hdr.Authorization = `Bearer ${token}`;
+    else delete hdr.Authorization;
+    return apiClient.request(cfg);
+  },
+);
+
 export type ApiFetchOptions = RequestInit;
+
+/** Mensaje típico de FastAPI cuando falta o no es válido el Bearer (ver `deps.get_current_user`). */
+const CREDENTIALS_DETAIL_SUBSTR = "validar las credenciales";
+
+/** True si el texto corresponde a un fallo de autenticación (401), no a un error de negocio. */
+export function isAuthCredentialErrorMessage(msg: string | null | undefined): boolean {
+  if (!msg || typeof msg !== "string") return false;
+  const m = msg.toLowerCase();
+  if (m.includes(CREDENTIALS_DETAIL_SUBSTR)) return true;
+  if (/^error http 401\b/i.test(m.trim())) return true;
+  return false;
+}
+
+function shouldRetry401AfterAuth(
+  input: string,
+  init: RequestInit,
+  response: Response,
+): boolean {
+  if (typeof window === "undefined" || response.status !== 401) return false;
+  const method = (init.method ?? "GET").toUpperCase();
+  if (method === "POST" && input.includes("/auth/login")) return false;
+  return true;
+}
 
 export async function apiFetch(input: string, options?: ApiFetchOptions): Promise<Response>;
 export async function apiFetch<T>(
@@ -341,10 +389,22 @@ export async function apiFetch<T>(
   schema?: ZodSchema<T>,
 ): Promise<Response | T> {
   const headers = new Headers(init.headers ?? {});
+  const credentials = init.credentials ?? "include";
+
   const token = await resolveAccessToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const credentials = init.credentials ?? "include";
-  const response = await fetch(input, { ...init, credentials, headers });
+
+  let response = await fetch(input, { ...init, credentials, headers });
+
+  if (shouldRetry401AfterAuth(input, init, response)) {
+    await wait(450);
+    const token2 = await resolveAccessToken();
+    if (token2) {
+      headers.set("Authorization", `Bearer ${token2}`);
+      response = await fetch(input, { ...init, credentials, headers });
+    }
+  }
+
   if (!schema) return response;
   if (!response.ok) {
     throw new Error(await parseApiError(response));
@@ -378,6 +438,7 @@ export async function parseApiError(res: Response): Promise<string> {
 }
 
 export type AiChatMessage = { role: "user" | "assistant" | "system"; content: string };
+
 export async function streamAdvisorChat(
   body: { message: string; history?: AiChatMessage[] },
   handlers: { onDelta: (chunk: string) => void; onError?: (msg: string) => void },
@@ -393,6 +454,81 @@ export async function streamAdvisorChat(
   }
   const text = await res.text();
   handlers.onDelta(text);
+}
+
+/**
+ * LogisAdvisor (`POST /api/v1/advisor/ask`) con SSE real: chunks `data: {"text":"..."}` y cierre `{"done":true,"model":"..."}`.
+ */
+export async function streamAdvisorAsk(
+  body: { message: string; stream?: boolean },
+  handlers: {
+    onDelta: (chunk: string) => void;
+    onDone?: (model?: string | null) => void;
+    onError?: (msg: string) => void;
+  },
+): Promise<void> {
+  const res = await apiFetch(`${API_BASE}/api/v1/advisor/ask`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream, application/json" },
+    body: JSON.stringify({ message: body.message, stream: body.stream ?? true }),
+  });
+  if (!res.ok) {
+    handlers.onError?.(await parseApiError(res));
+    return;
+  }
+
+  const ct = res.headers.get("content-type") ?? "";
+  if (ct.includes("application/json")) {
+    const data = (await res.json()) as { reply?: string; model?: string | null };
+    if (typeof data.reply === "string") handlers.onDelta(data.reply);
+    handlers.onDone?.(data.model);
+    return;
+  }
+
+  if (!res.body) {
+    handlers.onError?.("Respuesta vacía del servidor");
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+
+      let lineEnd: number;
+      while ((lineEnd = buffer.indexOf("\n")) >= 0) {
+        const rawLine = buffer.slice(0, lineEnd);
+        buffer = buffer.slice(lineEnd + 1);
+        const line = rawLine.replace(/\r$/, "");
+        if (!line.startsWith("data: ")) continue;
+        const payload = line.slice(6).trim();
+        if (!payload) continue;
+        try {
+          const json = JSON.parse(payload) as {
+            text?: string;
+            error?: string;
+            done?: boolean;
+            model?: string | null;
+          };
+          if (json.error) {
+            handlers.onError?.(json.error);
+            return;
+          }
+          if (json.text) handlers.onDelta(json.text);
+          if (json.done) handlers.onDone?.(json.model);
+        } catch {
+          // línea SSE malformada: ignorar
+        }
+      }
+      if (done) break;
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 export class FacturaEmailSendError extends Error {
@@ -519,7 +655,27 @@ export type VerifactuChainAudit = {
   is_valid: boolean;
   total_verified: number;
   factura_id?: number | null;
+  ejercicio?: number | null;
+  error?: string | null;
 };
+
+/** Fila de `GET /api/v1/audit-logs` (acciones pueden incluir valores distintos de INSERT/UPDATE/DELETE). */
+export type AuditLogRow = {
+  id: string;
+  empresa_id: string;
+  /** Tabla afectada (alias legacy posible: `tabla_origen`). */
+  table_name: string;
+  tabla_origen?: string;
+  record_id: string;
+  action: string;
+  old_data?: Record<string, unknown> | null;
+  new_data?: Record<string, unknown> | null;
+  changed_by?: string | null;
+  created_at: string;
+};
+
+export const fetchAuditLogs = async (limit = 10) =>
+  getJson<AuditLogRow[]>(`${API_BASE}/api/v1/audit-logs?limit=${encodeURIComponent(String(limit))}`);
 
 export type VerifactuQrPreview = {
   found: boolean;
@@ -547,6 +703,40 @@ export type OnboardingDashboardData = {
     operativos?: number;
   };
 };
+
+export type ClienteOperationalEstadoUi = "activo" | "inactivo" | "riesgo";
+
+export type ClienteOperationalDetail = {
+  cliente: {
+    id: string;
+    nombre: string;
+    email?: string | null;
+    limite_credito?: number;
+    riesgo_aceptado?: boolean;
+    mandato_activo?: boolean;
+    is_blocked?: boolean;
+    estado_ui: ClienteOperationalEstadoUi;
+  };
+  metricas: {
+    total_facturado: number;
+    portes_realizados: number;
+    dias_pago_promedio: number | null;
+  };
+  facturacion_mensual: Array<{ mes: string; total_facturado: number }>;
+  portes_recientes: Array<{
+    id: string;
+    origen: string;
+    destino: string;
+    fecha: string | null;
+    estado: string;
+    fecha_entrega_real: string | null;
+  }>;
+};
+
+export const fetchClienteOperationalDetail = async (clienteId: string) =>
+  getJson<ClienteOperationalDetail>(
+    `${API_BASE}/api/v1/clientes/${encodeURIComponent(clienteId)}/detail`,
+  );
 export type PortalFacturaRow = {
   id: string | number;
   numero_factura: string;
@@ -861,6 +1051,7 @@ export const api = Object.assign(apiClient, {
       getJson<unknown>(`${API_BASE}/api/v1/clientes/${encodeURIComponent(clienteId)}/resend-invite`, {
         method: "POST",
       }),
+    fetchOperationalDetail: (clienteId: string) => fetchClienteOperationalDetail(clienteId),
   },
   webhooks: {
     getEndpoints: () => listWebhooksB2B(),
@@ -872,8 +1063,10 @@ export const api = Object.assign(apiClient, {
     },
   },
   verifactu: {
-    verifyChain: (year?: number) =>
-      getJson<VerifactuChainAudit>(`${API_BASE}/api/v1/verifactu/audit/verify-chain${year ? `?year=${year}` : ""}`),
+    verifyChain: (ejercicio?: number) =>
+      getJson<VerifactuChainAudit>(
+        `${API_BASE}/api/v1/verifactu/audit/verify-chain${ejercicio != null ? `?ejercicio=${ejercicio}` : ""}`,
+      ),
     getQrPreview: (facturaId: number) =>
       getJson<VerifactuQrPreview>(
         `${API_BASE}/api/v1/verifactu/audit/qr-preview/${encodeURIComponent(String(facturaId))}`,
@@ -887,7 +1080,7 @@ export const api = Object.assign(apiClient, {
     getRouteMarginRanking: () =>
       getJson<RouteMarginRow[]>(`${API_BASE}/api/v1/finance/route-margin-ranking`),
     downloadEsgCertificatePdf: async () => {
-      const res = await apiFetch(`${API_BASE}/api/v1/finance/esg-certificate/pdf`);
+      const res = await apiFetch(`${API_BASE}/api/v1/finance/esg-report/download`, { credentials: "include" });
       if (!res.ok) throw new Error(await parseApiError(res));
       return res.blob();
     },
