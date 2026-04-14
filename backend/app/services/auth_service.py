@@ -6,6 +6,7 @@ from uuid import UUID
 
 from app.core.config import get_settings
 from app.core.rbac import normalize_rbac_role
+from app.models.auth import normalize_user_role
 from app.core.security import hash_password_argon2id, verify_password_against_stored
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserInDB, UserOut
@@ -82,6 +83,7 @@ class AuthService:
         return UserOut(
             username=user.username,
             empresa_id=user.empresa_id,
+            role=normalize_user_role(None, legacy_role=user.rol),
             rol=user.rol,
             rbac_role=rbac,
             cliente_id=None,
@@ -132,6 +134,7 @@ class AuthService:
         return UserOut(
             username=username,
             empresa_id=UUID(empresa_id),
+            role=normalize_user_role(None, legacy_role=rol),
             rol=rol,
             rbac_role=normalize_rbac_role(None, legacy_rol=rol),
             cliente_id=None,
@@ -290,6 +293,7 @@ class AuthService:
         if not rol:
             rol = "user"
         rbac_role = normalize_rbac_role(row.get("role"), legacy_rol=rol)
+        user_role = normalize_user_role(row.get("role"), legacy_role=rol)
         raw_vid = row.get("assigned_vehiculo_id")
         assigned_vid: UUID | None = None
         if raw_vid is not None and str(raw_vid).strip():
@@ -314,6 +318,7 @@ class AuthService:
         return UserOut(
             username=username,
             empresa_id=empresa_uuid,
+            role=user_role,
             rol=rol,
             rbac_role=rbac_role,
             cliente_id=cliente_uuid,

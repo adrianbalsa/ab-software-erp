@@ -5,15 +5,22 @@ import json
 import os
 from typing import Any
 from uuid import UUID
+from datetime import datetime, timezone
+from pathlib import Path
 
 import anyio
 import qrcode
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Image as RLImage
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+try:
+    from weasyprint import HTML
+except ModuleNotFoundError:  # pragma: no cover - handled in runtime/tests
+    HTML = None  # type: ignore[assignment]
 
 from app.db.supabase import SupabaseAsync
 from app.core.crypto import pii_crypto
@@ -25,6 +32,11 @@ AB_MUTED = colors.HexColor("#64748b")
 
 # Referencia Euro 6 / declaración CO2 (kg CO2 por litro diésel, marco UE habitual)
 KG_CO2_POR_LITRO_EURO6_REF = float(os.getenv("ESG_CO2_KG_PER_L_EURO6_REF") or "2.64")
+_TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
+_jinja_env = Environment(
+    loader=FileSystemLoader(str(_TEMPLATES_DIR)),
+    autoescape=select_autoescape(["html", "xml"]),
+)
 
 
 def _parse_porte_lineas_snapshot(raw: Any) -> list[dict[str, Any]]:
@@ -375,5 +387,101 @@ class ReportService:
                 co2_kg_mes=co2_kg_mes,
                 litros_estimados=litros_estimados,
             )
+
+        return await anyio.to_thread.run_sync(_run)
+
+    async def fleet_efficiency_pdf_bytes(
+        self,
+        *,
+        empresa_id: str | UUID,
+        advisor_context: dict[str, Any],
+    ) -> bytes:
+        eid = str(empresa_id).strip()
+        empresa_nombre = "AB Logistics"
+        try:
+            res_e: Any = await self._db.execute(
+                self._db.table("empresas")
+                .select("nombre_comercial, nombre_legal")
+                .eq("id", eid)
+                .limit(1)
+            )
+            er = (res_e.data or []) if hasattr(res_e, "data") else []
+            if er:
+                r0 = er[0]
+                empresa_nombre = str(r0.get("nombre_comercial") or r0.get("nombre_legal") or empresa_nombre)
+        except Exception:
+            pass
+
+        def _to_float(v: Any) -> float | None:
+            try:
+                if v is None or v == "":
+                    return None
+                return float(v)
+            except (TypeError, ValueError):
+                return None
+
+        def _to_money(v: Any) -> str:
+            n = _to_float(v)
+            if n is None:
+                return "-"
+            return f"{n:,.2f} EUR"
+
+        def _to_num(v: Any, *, digits: int = 2) -> str:
+            n = _to_float(v)
+            if n is None:
+                return "-"
+            return f"{n:,.{digits}f}"
+
+        bi = advisor_context.get("bi_intelligence") if isinstance(advisor_context, dict) else {}
+        routes_raw = bi.get("routes_efficiency_below_1") if isinstance(bi, dict) else []
+        routes: list[dict[str, Any]] = []
+        total_emisiones_co2_kg = 0.0
+        if isinstance(routes_raw, list):
+            for i, row in enumerate(routes_raw, start=1):
+                if not isinstance(row, dict):
+                    continue
+                eta = _to_float(row.get("efficiency_eta"))
+                km_val = _to_float(row.get("km_estimados")) or 0.0
+                emisiones = round((km_val * 750.0) / 1000.0, 2)
+                total_emisiones_co2_kg += emisiones
+                routes.append(
+                    {
+                        "idx": i,
+                        "route_label": str(row.get("route_label") or row.get("route") or f"Ruta #{i}"),
+                        "cliente_nombre": str(row.get("cliente_nombre") or "-"),
+                        "margen_eur": _to_money(row.get("margin_eur")),
+                        "km_estimados": _to_num(km_val),
+                        "efficiency_eta": _to_num(eta, digits=4),
+                        "emisiones_co2_kg": f"{emisiones:,.1f} kg",
+                        "is_vampire": bool(eta is not None and eta < 1.0),
+                    }
+                )
+
+        dashboard = advisor_context.get("cashflow_tesoreria") if isinstance(advisor_context, dict) else {}
+        ebitda = advisor_context.get("ebitda_snapshot") if isinstance(advisor_context, dict) else {}
+        cip_vampiros = advisor_context.get("cip_vampiros") if isinstance(advisor_context, dict) else []
+        generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+        template = _jinja_env.get_template("efficiency_report.html")
+        rendered_html = template.render(
+            empresa_id=eid,
+            empresa_nombre=empresa_nombre,
+            generated_at=generated_at,
+            routes=routes,
+            routes_total=len(routes),
+            vampire_count=len([r for r in routes if r["is_vampire"]]),
+            cip_vampiros_count=len(cip_vampiros) if isinstance(cip_vampiros, list) else 0,
+            ingresos=ebitda.get("ingresos_netos_sin_iva_eur") if isinstance(ebitda, dict) else None,
+            gastos=ebitda.get("gastos_netos_sin_iva_eur") if isinstance(ebitda, dict) else None,
+            ebitda=ebitda.get("ebitda_aprox_sin_iva_eur") if isinstance(ebitda, dict) else None,
+            margen_km=dashboard.get("margen_km_eur") if isinstance(dashboard, dict) else None,
+            km_mes=dashboard.get("km_facturados_mes_actual") if isinstance(dashboard, dict) else None,
+            total_emisiones_co2_kg=f"{total_emisiones_co2_kg:,.1f} kg",
+        )
+
+        def _run() -> bytes:
+            if HTML is None:
+                raise RuntimeError("WeasyPrint no esta instalado en el entorno actual")
+            return HTML(string=rendered_html).write_pdf()
 
         return await anyio.to_thread.run_sync(_run)

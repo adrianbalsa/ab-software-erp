@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Final
 
 # Factores simplificados por categoría EURO (kg CO2 / km).
@@ -189,6 +190,65 @@ def esg_certificate_co2_vs_euro_iii(
         "euro_iii_baseline_kg": round(float(baseline), 6),
         "ahorro_kg": round(ahorro, 6),
     }
+
+
+# Factores Euro VI operativos (kg CO₂ / km) por clase de MMA / articulado.
+# Referencia auditoría: transporte pesado — barras típicas 0,70–0,90 kg/km según masa.
+_EURO_VI_KG_CO2_PER_KM_WEIGHT_CLASS: Final[dict[str, float]] = {
+    "LIGHT": 0.70,  # ≤ 3,5 t
+    "MEDIUM": 0.78,  # ~ 7,5–12 t
+    "HEAVY": 0.85,  # 18–26 t (rigids)
+    "ARTIC": 0.90,  # +40 t / articulado
+    "UNKNOWN": 0.82,
+}
+
+
+def infer_weight_class_from_vehicle_label(vehiculo: str | None) -> str:
+    """
+    Infiere clase de peso desde texto libre de ``flota.vehiculo`` (p. ej. «Scania 12t», «40Tn»).
+    """
+    raw = (vehiculo or "").strip().lower()
+    if not raw:
+        return "UNKNOWN"
+    if any(
+        k in raw
+        for k in (
+            "articulado",
+            "artic",
+            "mega",
+            "roadtrain",
+            "tractor",
+        )
+    ):
+        return "ARTIC"
+    m = re.search(r"(\d+[.,]?\d*)\s*(t|tn|ton)\b", raw)
+    if m:
+        try:
+            t = float(m.group(1).replace(",", "."))
+        except ValueError:
+            t = 0.0
+        if t <= 3.5:
+            return "LIGHT"
+        if t <= 12.0:
+            return "MEDIUM"
+        if t < 40.0:
+            return "HEAVY"
+        return "ARTIC"
+    if "3.5" in raw or "3,5" in raw:
+        return "LIGHT"
+    if "12" in raw and "t" in raw:
+        return "MEDIUM"
+    if "40" in raw and ("t" in raw or "tn" in raw):
+        return "ARTIC"
+    return "UNKNOWN"
+
+
+def euro_vi_factor_kg_per_km_for_weight_class(weight_class: str) -> float:
+    """Factor kg CO₂/km (Euro VI) para la clase inferida."""
+    k = (weight_class or "UNKNOWN").strip().upper()
+    if k not in _EURO_VI_KG_CO2_PER_KM_WEIGHT_CLASS:
+        k = "UNKNOWN"
+    return float(_EURO_VI_KG_CO2_PER_KM_WEIGHT_CLASS[k])
 
 
 def calculate_co2_footprint(

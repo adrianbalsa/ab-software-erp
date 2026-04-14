@@ -20,7 +20,7 @@ from app.db import supabase as supabase_db
 from app.db.supabase import SupabaseAsync
 from app.schemas.flota import FlotaVehiculoIn
 from app.schemas.user import UserOut
-from app.core.rbac import VALID_ROLES, RoleChecker
+from app.models.auth import UserRole
 from app.services.auth_service import AuthService
 from app.services.clientes_service import ClientesService
 from app.services.refresh_token_service import RefreshTokenService
@@ -35,6 +35,7 @@ from app.services.portes_service import PortesService
 from app.services.presupuestos_service import PresupuestosService
 from app.services.report_service import ReportService
 from app.services.bank_service import BankService
+from app.services.banking_orchestrator import BankingOrchestratorService
 from app.services.matching_service import MatchingService
 from app.services.payment_service import PaymentService
 from app.services.reconciliation_service import ReconciliationService
@@ -50,6 +51,25 @@ from app.services.audit_logs_service import AuditLogsService
 from app.services.bi_service import BiService
 
 _deps_log = logging.getLogger(__name__)
+
+
+def _normalize_role(raw: str) -> UserRole:
+    v = str(raw or "").strip().lower()
+    mapping = {
+        "owner": UserRole.ADMIN,
+        "admin": UserRole.ADMIN,
+        "gestor": UserRole.GESTOR,
+        "traffic_manager": UserRole.GESTOR,
+        "transportista": UserRole.TRANSPORTISTA,
+        "driver": UserRole.TRANSPORTISTA,
+        "cliente": UserRole.CLIENTE,
+        "developer": UserRole.DEVELOPER,
+        "superadmin": UserRole.SUPERADMIN,
+    }
+    if v in mapping:
+        return mapping[v]
+    raise ValueError(f"Rol no válido: {raw!r}")
+
 
 async def get_supabase(
     token: str = Depends(get_access_token),
@@ -191,12 +211,19 @@ async def get_matching_service(db: SupabaseAsync = Depends(get_db)) -> MatchingS
     return MatchingService(db)
 
 
-async def get_payment_service(db: SupabaseAsync = Depends(get_db)) -> PaymentService:
-    return PaymentService(db)
-
-
 async def get_reconciliation_service(db: SupabaseAsync = Depends(get_db)) -> ReconciliationService:
     return ReconciliationService(db)
+
+
+async def get_banking_orchestrator(
+    matching: MatchingService = Depends(get_matching_service),
+    recon: ReconciliationService = Depends(get_reconciliation_service),
+) -> BankingOrchestratorService:
+    return BankingOrchestratorService(matching, recon)
+
+
+async def get_payment_service(db: SupabaseAsync = Depends(get_db)) -> PaymentService:
+    return PaymentService(db)
 
 
 async def get_treasury_service(db: SupabaseAsync = Depends(get_db)) -> TreasuryService:
@@ -261,9 +288,37 @@ async def get_current_user(
         if user_out.cliente_id is None or user_out.cliente_id != jc:
             raise credentials_exc
 
+    jwt_role = payload.get("role")
+    if jwt_role is not None and str(jwt_role).strip():
+        try:
+            expected_role = _normalize_role(str(jwt_role))
+        except ValueError:
+            raise credentials_exc
+        if user_out.role != expected_role:
+            raise credentials_exc
+
     await auth_service.ensure_empresa_context(empresa_id=user_out.empresa_id)
     await auth_service.ensure_rbac_context(user=user_out)
     return user_out
+
+
+class RoleChecker:
+    """
+    Único checker RBAC de API: fuente de verdad = current_user.role.
+    """
+
+    def __init__(self, allowed_roles: list[str | UserRole]):
+        self.allowed_roles = frozenset(
+            r if isinstance(r, UserRole) else _normalize_role(r) for r in allowed_roles
+        )
+
+    async def __call__(self, current_user: UserOut = Depends(get_current_user)) -> UserOut:
+        if current_user.role not in self.allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso denegado: Privilegios insuficientes.",
+            )
+        return current_user
 
 
 def require_role(*allowed_roles: str):
@@ -271,18 +326,10 @@ def require_role(*allowed_roles: str):
     Dependencia RBAC operativa (profiles.role). El JWT solo complementa UX;
     la fuente de verdad es el perfil recargado vía ``get_current_user``.
     """
-    allowed = frozenset(allowed_roles)
-    unknown = allowed - VALID_ROLES
-    if unknown:
-        raise ValueError(f"require_role: valores no válidos {sorted(unknown)}")
+    checker = RoleChecker(list(allowed_roles))
 
     async def _dep(current_user: UserOut = Depends(get_current_user)) -> UserOut:
-        if current_user.rbac_role not in allowed:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Permiso denegado para su rol operativo.",
-            )
-        return current_user
+        return await checker(current_user)
 
     return _dep
 
@@ -392,7 +439,7 @@ def require_tenant_resource(
 
 
 async def require_admin_user(current_user: UserOut = Depends(get_current_user)) -> UserOut:
-    if current_user.rol != "admin":
+    if current_user.role not in {UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.DEVELOPER}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acceso denegado: requiere rol admin",
@@ -404,7 +451,7 @@ async def require_admin_write_user(
     current_user: UserOut = Depends(bind_write_context),
 ) -> UserOut:
     """Admin con contexto de tenant re-afirmado (POST/PATCH/DELETE)."""
-    if current_user.rol != "admin":
+    if current_user.role not in {UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.DEVELOPER}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acceso denegado: requiere rol admin",
@@ -413,13 +460,13 @@ async def require_admin_write_user(
 
 
 async def require_portal_cliente(
-    _jwt_ok: dict = Depends(RoleChecker(["CLIENTE"])),
+    _jwt_ok: UserOut = Depends(RoleChecker(["cliente"])),
     current_user: UserOut = Depends(get_current_user),
 ) -> UserOut:
     """
     Usuario portal: JWT con rol cliente + perfil ``profiles.role=cliente`` y ``cliente_id`` obligatorio.
     """
-    if current_user.rbac_role != "cliente" or current_user.cliente_id is None:
+    if current_user.role != UserRole.CLIENTE or current_user.cliente_id is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Se requiere cuenta de portal cliente (perfil incompleto).",
@@ -435,7 +482,7 @@ async def require_admin_active_write_user(
     Empresa activa (facturación), rol admin y ``ensure_empresa_context`` antes de mutar datos
     (p. ej. Open Banking).
     """
-    if current_user.rol != "admin":
+    if current_user.role not in {UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.DEVELOPER}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acceso denegado: requiere rol admin",

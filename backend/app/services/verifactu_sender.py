@@ -3,9 +3,11 @@ Generación de XML de registro de facturación (VeriFactu / SIF 1.0, estructura 
 **firma XAdES-BES** del fragmento de registro y envío HTTP(S) con autenticación mutua
 (mTLS) hacia endpoints configurables (pruebas / producción).
 
-Flujo: XML registro → firma digital enveloped (``ds:Signature`` + metadatos XAdES) →
-envoltorio SOAP 1.2 → POST. El certificado de cliente TLS y el de firma XML deben ser
-el mismo par (o al menos el admitido por la AEAT para el NIF/empresa).
+Flujo: ``Cabecera`` + ``RegistroFactura``/``RegistroAlta`` (**SuministroLR.xsd**) → firma
+XAdES-BES enveloped del nodo ``RegistroAlta`` → composición del fragmento interior →
+validación XSD opcional → envoltorio SOAP 1.2 (``RegFactuSistemaFacturacion``) → POST.
+El certificado de cliente TLS y el de firma XML deben ser el mismo par (o al menos el
+admitido por la AEAT para el NIF/empresa).
 
 Certificados (dónde los subirá el titular del tenant en el futuro):
 - **Recomendado en producción**: almacenar el .p12 o pares .pem cifrados por aplicación
@@ -22,7 +24,6 @@ Sin ``AEAT_VERIFACTU_ENABLED=true`` o sin URL/certificado, no se realiza llamada
 from __future__ import annotations
 
 import asyncio
-import io
 import logging
 import os
 import random
@@ -30,11 +31,11 @@ import re
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any, Mapping, cast
 from xml.etree import ElementTree as ET
 
 import anyio
-import httpx
+from lxml import etree
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs12
 
@@ -42,6 +43,16 @@ from app.core.config import Settings
 from app.core.config import get_settings
 from app.core.crypto import pii_crypto
 from app.core.xades_signer import sign_xml_xades
+from app.services.suministro_lr_xml import FacturaRectificadaRefAEAT
+from app.services.suministro_lr_xml import RegistroAnteriorAEAT
+from app.services.suministro_lr_xml import fecha_iso_u_otra_a_dd_mm_yyyy
+from app.services.suministro_lr_xml import inner_xml_fragment_from_signed_registro_alta
+from app.services.suministro_lr_xml import inner_xml_fragment_unsigned_alta_for_tests
+from app.services.suministro_lr_xml import build_registro_alta_unsigned
+from app.services.aeat_client_py import AEATZeepClient
+from app.services.aeat_client_py import RegFactuPostResult
+from app.services.aeat_client_py import VeriFactuException
+from app.services.aeat_client_py.zeep_client import default_aeat_verifactu_wsdl_url
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.db.supabase import get_supabase
@@ -53,20 +64,12 @@ logger = logging.getLogger(__name__)
 _NS_SOAP12 = "http://www.w3.org/2003/05/soap-envelope"
 _NS_SF_DEFAULT = (
     "https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/"
-    "es/aeat/tikeV1.0/cont/ws/SuministroLR.xsd"
+    "es/aeat/tike/cont/ws/SuministroLR.xsd"
 )
 _NS_SJE_DEFAULT = (
     "https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/"
-    "es/aeat/tikeV1.0/cont/ws/SuministroInformacion.xsd"
+    "es/aeat/tike/cont/ws/SuministroInformacion.xsd"
 )
-
-
-def _txt(parent: ET.Element, tag: str, value: Any) -> None:
-    el = ET.SubElement(parent, tag)
-    if value is None:
-        el.text = ""
-    else:
-        el.text = str(value).strip()
 
 
 def generar_xml_registro_facturacion_alta(
@@ -77,88 +80,114 @@ def generar_xml_registro_facturacion_alta(
     hash_registro: str,
     fingerprint: str,
     prev_fingerprint: str | None,
+    registro_anterior: RegistroAnteriorAEAT | None = None,
+    rectificada: FacturaRectificadaRefAEAT | None = None,
 ) -> str:
     """
-    XML de **Registro de Facturación Alta** (formato lógico 1.0, alineado con ``aeat_xml_service``).
+    Fragmento interior del sobre AEAT (hijo de ``RegFactuSistemaFacturacion``): ``Cabecera`` +
+    ``RegistroFactura`` → ``RegistroAlta`` según **SuministroLR.xsd** / SuministroInformacion.
 
-    Incluye ``HashRegistro`` (cadena histórica al emitir), ``Huella`` (fingerprint final)
-    y ``HuellaAnterior`` (prev_fingerprint de cadena de finalización).
+    ``hash_registro`` se conserva en la firma de la función por compatibilidad con llamadas
+    existentes; el XSD oficial no incluye ese campo en ``RegistroAlta``.
     """
-    num = str(
-        factura.get("num_factura") or factura.get("numero_factura") or ""
-    ).strip()
-    fecha = str(factura.get("fecha_emision") or "").strip()
-    if len(fecha) >= 10:
-        fecha = fecha[:10]
+    _ = hash_registro
+    pfp = str(prev_fingerprint or "").strip()
+    if pfp and registro_anterior is None:
+        raise ValueError(
+            "Encadenamiento AEAT: con prev_fingerprint debe proporcionarse registro_anterior "
+            "(datos de la factura previa)."
+        )
+    if (not pfp) and registro_anterior is not None:
+        raise ValueError("registro_anterior no debe informarse sin prev_fingerprint.")
+    inner = inner_xml_fragment_unsigned_alta_for_tests(
+        factura=factura,
+        empresa=empresa,
+        cliente=cliente,
+        fingerprint=str(fingerprint).strip(),
+        registro_anterior=registro_anterior,
+        rectificada=rectificada,
+    )
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + inner
 
-    try:
-        base = float(factura.get("base_imponible") or 0.0)
-    except (TypeError, ValueError):
-        base = 0.0
-    try:
-        cuota = float(factura.get("cuota_iva") or 0.0)
-    except (TypeError, ValueError):
-        cuota = 0.0
-    try:
-        total = float(factura.get("total_factura") or 0.0)
-    except (TypeError, ValueError):
-        total = 0.0
 
-    tipo = str(factura.get("tipo_factura") or "F1").strip().upper() or "F1"
-    nif_emisor = str(factura.get("nif_emisor") or empresa.get("nif") or "").strip()
-    nif_dest = str(cliente.get("nif") or "").strip()
+async def _obtener_registro_anterior_aeat(
+    db: SupabaseAsync,
+    *,
+    empresa_id: str,
+    prev_fingerprint: str | None,
+) -> RegistroAnteriorAEAT | None:
+    pfp = str(prev_fingerprint or "").strip()
+    if not pfp:
+        return None
+    res: Any = await db.execute(
+        db.table("facturas")
+        .select("nif_emisor, num_factura, fecha_emision")
+        .eq("empresa_id", empresa_id)
+        .eq("fingerprint", pfp)
+        .limit(1)
+    )
+    rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+    if not rows:
+        raise ValueError(
+            "AEAT encadenamiento: no se halló la factura previa para el fingerprint de cadena."
+        )
+    row = rows[0]
+    raw_nif = row.get("nif_emisor")
+    nif_plain = raw_nif
+    if isinstance(raw_nif, str) and raw_nif.strip():
+        nif_plain = pii_crypto.decrypt_pii(raw_nif) or raw_nif
+    nif_s = str(nif_plain or "").strip()
+    num = str(row.get("num_factura") or "").strip()
+    fecha = fecha_iso_u_otra_a_dd_mm_yyyy(str(row.get("fecha_emision") or ""))
+    return RegistroAnteriorAEAT(
+        id_emisor_factura=nif_s,
+        num_serie_factura=num or "SIN-NUM",
+        fecha_expedicion=fecha,
+        huella=pfp,
+    )
 
-    tipo_iva_pct: float | None = None
-    if base and abs(base) > 1e-9:
-        try:
-            tipo_iva_pct = round((cuota / base) * 100.0, 2)
-        except (ZeroDivisionError, TypeError, ValueError):
-            tipo_iva_pct = None
 
-    nombre_emisor = str(
-        empresa.get("nombre_comercial") or empresa.get("nombre_legal") or ""
-    ).strip()
-    nombre_dest = str(cliente.get("nombre") or "").strip()
-
-    root = ET.Element("RegistroFacturacionAltaVeriFactu")
-    root.set("versionFormato", "1.0")
-
-    cab = ET.SubElement(root, "Cabecera")
-    _txt(cab, "IdVersion", "1.0")
-    _txt(cab, "NIFEmisor", nif_emisor)
-    _txt(cab, "NombreEmisor", nombre_emisor or nif_emisor)
-
-    reg = ET.SubElement(root, "RegistroFactura")
-    _txt(reg, "NumeroFactura", num)
-    _txt(reg, "FechaExpedicion", fecha)
-    _txt(reg, "TipoFactura", tipo)
-    _txt(reg, "NIFDestinatario", nif_dest)
-    _txt(reg, "NombreDestinatario", nombre_dest or nif_dest)
-    _txt(reg, "ImporteTotal", f"{total:.2f}")
-    _txt(reg, "HashRegistro", str(hash_registro).strip())
-    _txt(reg, "Huella", str(fingerprint).strip())
-    if prev_fingerprint and str(prev_fingerprint).strip():
-        _txt(reg, "HuellaAnterior", str(prev_fingerprint).strip())
-    else:
-        _txt(reg, "HuellaAnterior", "")
-
+async def _obtener_factura_rectificada_aeat(
+    db: SupabaseAsync,
+    *,
+    empresa_id: str,
+    factura: Mapping[str, Any],
+) -> FacturaRectificadaRefAEAT | None:
+    tipo = str(factura.get("tipo_factura") or "").strip().upper()
+    if not tipo.startswith("R"):
+        return None
     rect_id = factura.get("factura_rectificada_id")
-    if rect_id is not None:
-        _txt(reg, "FacturaRectificadaId", str(rect_id).strip())
-    motivo = factura.get("motivo_rectificacion")
-    if motivo:
-        _txt(reg, "MotivoRectificacion", str(motivo).strip()[:500])
-
-    des = ET.SubElement(root, "DesgloseIVA")
-    _txt(des, "BaseImponible", f"{base:.2f}")
-    _txt(des, "CuotaIVA", f"{cuota:.2f}")
-    if tipo_iva_pct is not None:
-        _txt(des, "TipoImpositivo", f"{tipo_iva_pct:.2f}")
-
-    tree = ET.ElementTree(root)
-    buf = io.BytesIO()
-    tree.write(buf, encoding="utf-8", xml_declaration=True)
-    return buf.getvalue().decode("utf-8")
+    if rect_id is None:
+        return None
+    try:
+        rid = int(rect_id)
+    except (TypeError, ValueError):
+        return None
+    res: Any = await db.execute(
+        db.table("facturas")
+        .select("nif_emisor, num_factura, fecha_emision")
+        .eq("empresa_id", empresa_id)
+        .eq("id", rid)
+        .limit(1)
+    )
+    rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+    if not rows:
+        raise ValueError(
+            f"AEAT rectificativa: no existe la factura rectificada id={rid} para esta empresa."
+        )
+    row = rows[0]
+    raw_nif = row.get("nif_emisor")
+    nif_plain = raw_nif
+    if isinstance(raw_nif, str) and raw_nif.strip():
+        nif_plain = pii_crypto.decrypt_pii(raw_nif) or raw_nif
+    nif_s = str(nif_plain or "").strip()
+    num = str(row.get("num_factura") or "").strip()
+    fecha = fecha_iso_u_otra_a_dd_mm_yyyy(str(row.get("fecha_emision") or ""))
+    return FacturaRectificadaRefAEAT(
+        id_emisor_factura=nif_s,
+        num_serie_factura=num or "SIN-NUM",
+        fecha_expedicion=fecha,
+    )
 
 
 def envolver_soap12(
@@ -194,6 +223,106 @@ class AeatEnvioResultado:
     csv_aeat: str | None
     http_status: int | None
     response_snippet: str | None
+
+
+def interpretar_respuesta_zeeo(
+    *,
+    parsed: dict[str, Any],
+    http_status: int | None,
+    raw_body: str,
+) -> AeatEnvioResultado:
+    """
+    Mapea ``RespuestaRegFactuSistemaFacturacion`` deserializada por Zeep (WSDL AEAT)
+    al modelo interno de persistencia.
+    """
+    raw = (raw_body or "")[:24000]
+    estado_envio = str(parsed.get("EstadoEnvio") or "").strip()
+    csv_top = (parsed.get("CSV") or "").strip() or None
+    lineas = parsed.get("RespuestaLinea") or []
+    if not isinstance(lineas, list):
+        lineas = []
+
+    codes: list[str] = []
+    descs: list[str] = []
+    agg_estado: str | None = None
+
+    for ln in lineas:
+        if not isinstance(ln, dict):
+            continue
+        sr = str(ln.get("EstadoRegistro") or "").strip()
+        if sr == "Incorrecto":
+            agg_estado = "rechazado"
+        elif sr == "AceptadoConErrores" and agg_estado != "rechazado":
+            agg_estado = "aceptado_con_errores"
+        c = ln.get("CodigoErrorRegistro")
+        if c is not None and str(c).strip():
+            if isinstance(c, (int, float)):
+                codes.append(str(int(c)))
+            else:
+                codes.append(str(c).strip())
+        d = ln.get("DescripcionErrorRegistro")
+        if d is not None and str(d).strip():
+            descs.append(str(d).strip())
+
+    if agg_estado is None and lineas:
+        if all(
+            str((x or {}).get("EstadoRegistro") or "").strip() == "Correcto"
+            for x in lineas
+            if isinstance(x, dict)
+        ):
+            agg_estado = "aceptado"
+
+    if agg_estado is None:
+        if estado_envio == "Incorrecto":
+            agg_estado = "rechazado"
+        elif estado_envio == "ParcialmenteCorrecto":
+            agg_estado = "aceptado_con_errores"
+        elif estado_envio == "Correcto":
+            agg_estado = "aceptado"
+        else:
+            agg_estado = "aceptado_con_errores"
+
+    codigo_e = codes[0] if codes else None
+    descr_e = " | ".join(descs) if descs else None
+
+    estado_tabla = {
+        "aceptado": "Aceptado",
+        "aceptado_con_errores": "Aceptado con Errores",
+        "rechazado": "Rechazado",
+    }.get(agg_estado, "Aceptado con Errores")
+
+    return AeatEnvioResultado(
+        estado_envio_tabla=estado_tabla,
+        estado_factura_codigo=agg_estado,
+        codigo_error=codigo_e,
+        descripcion_error=descr_e,
+        csv_aeat=csv_top,
+        http_status=http_status,
+        response_snippet=raw[:8000],
+    )
+
+
+def interpretar_respuesta_soap_fault(
+    *,
+    fault: dict[str, Any],
+    http_status: int | None,
+    raw_body: str,
+) -> AeatEnvioResultado:
+    raw = (raw_body or "")[:24000]
+    fs = str(fault.get("faultstring") or "").strip()
+    fc = fault.get("faultcode")
+    code = str(fc).strip() if fc is not None else None
+    st = http_status or 0
+    tech = st >= 500 or st == 0
+    return AeatEnvioResultado(
+        estado_envio_tabla="Error técnico" if tech else "Rechazado",
+        estado_factura_codigo="error_tecnico" if tech else "rechazado",
+        codigo_error=code or (str(st) if st else "SOAP_FAULT"),
+        descripcion_error=fs or (raw[:2000] if raw else None),
+        csv_aeat=None,
+        http_status=http_status,
+        response_snippet=raw[:8000],
+    )
 
 
 _CSV_RE = re.compile(r"CSV\s*[:=]\s*([A-Za-z0-9\-_/]+)", re.I)
@@ -252,10 +381,30 @@ def _parse_respuesta_reg_factu(cuerpo: str) -> dict[str, str | None]:
     return out
 
 
-def interpretar_respuesta_aeat(*, cuerpo: str, http_status: int | None) -> AeatEnvioResultado:
+def interpretar_respuesta_aeat(
+    *,
+    cuerpo: str,
+    http_status: int | None,
+    post_result: RegFactuPostResult | None = None,
+) -> AeatEnvioResultado:
     """
-    Heurística sobre XML/HTML/texto de respuesta hasta contar con validación de esquema oficial.
+    Prioriza el resultado estructurado Zeep (WSDL oficial). Si no hay datos
+    tipados, aplica la heurística histórica sobre XML/HTML/texto.
     """
+    if post_result is not None:
+        if post_result.soap_fault:
+            return interpretar_respuesta_soap_fault(
+                fault=post_result.soap_fault,
+                http_status=post_result.http_status,
+                raw_body=post_result.raw_body,
+            )
+        if post_result.respuesta is not None:
+            return interpretar_respuesta_zeeo(
+                parsed=cast(dict[str, Any], post_result.respuesta),
+                http_status=post_result.http_status,
+                raw_body=post_result.raw_body,
+            )
+
     raw = (cuerpo or "")[:24000]
     low = raw.lower()
     parsed_xml = _parse_respuesta_reg_factu(raw)
@@ -436,7 +585,7 @@ def _preparar_certificado_mtls(
     empresa: Mapping[str, Any], settings: Settings
 ) -> tuple[tuple[str, str] | None, list[str]]:
     """
-    Devuelve ``(cert_path, key_path)`` para ``httpx.AsyncClient(cert=...)`` y rutas a borrar.
+    Devuelve ``(cert_path, key_path)`` para mTLS (``requests``/Zeep) y rutas a borrar.
     """
     c, k, p12 = _tls_paths_desde_empresa_y_settings(empresa, settings)
     cleanup: list[str] = []
@@ -463,55 +612,82 @@ AEAT_HTTP_MAX_ATTEMPTS = 6
 AEAT_BACKOFF_BASE_SEC = 1.5
 
 
+def _post_reg_factu_zeeo_sync(
+    *,
+    url: str,
+    soap_body: str,
+    signed_inner_xml: str,
+    cert_tuple: tuple[str, str],
+    settings: Settings,
+) -> tuple[int, str, RegFactuPostResult]:
+    wsdl = (settings.AEAT_VERIFACTU_WSDL_URL or "").strip() or default_aeat_verifactu_wsdl_url()
+    client = AEATZeepClient(
+        wsdl_url=wsdl,
+        cert_file=cert_tuple[0],
+        key_file=cert_tuple[1],
+        app_settings=settings,
+    )
+    try:
+        out = client.post_registro_facturacion(
+            service_url=url,
+            soap12_body=soap_body,
+            signed_inner_xml_for_optional_xsd=signed_inner_xml,
+        )
+        return out.http_status, out.raw_body, out
+    finally:
+        client.close()
+
+
 async def _post_soap_aeat_with_retries(
     *,
     url: str,
     soap_body: str,
+    signed_inner_xml: str,
     cert_tuple: tuple[str, str],
-) -> tuple[int, str]:
+    settings: Settings,
+) -> tuple[int, str, RegFactuPostResult | None]:
     """
     Reintentos con backoff exponencial ante 429/5xx y errores de red (AEAT inestable).
     Los 4xx de validación (salvo 429) no se reintentan.
+
+    El envío usa ``AEATZeepClient`` (Zeep + requests + mTLS) y parseo WSDL de respuesta.
     """
     delay = AEAT_BACKOFF_BASE_SEC
     last_exc: Exception | None = None
     for attempt in range(AEAT_HTTP_MAX_ATTEMPTS):
         try:
-            async with httpx.AsyncClient(
-                http2=False,
-                cert=cert_tuple,
-                verify=True,
-                timeout=httpx.Timeout(120.0),
-                follow_redirects=False,
-            ) as client:
-                r = await client.post(
-                    url,
-                    content=soap_body.encode("utf-8"),
-                    headers={
-                        "Content-Type": 'application/soap+xml; charset=utf-8; action="RegistroFactura"',
-                    },
+
+            def _sync() -> tuple[int, str, RegFactuPostResult]:
+                return _post_reg_factu_zeeo_sync(
+                    url=url,
+                    soap_body=soap_body,
+                    signed_inner_xml=signed_inner_xml,
+                    cert_tuple=cert_tuple,
+                    settings=settings,
                 )
-                code = r.status_code
-                text = r.text or ""
-                if code in (429, 500, 502, 503, 504) and attempt < AEAT_HTTP_MAX_ATTEMPTS - 1:
-                    jitter = random.uniform(0.0, 0.35 * delay)
-                    logger.warning(
-                        "AEAT HTTP %s intento %s/%s; reintento en %.2fs",
-                        code,
-                        attempt + 1,
-                        AEAT_HTTP_MAX_ATTEMPTS,
-                        delay + jitter,
-                    )
-                    await asyncio.sleep(delay + jitter)
-                    delay = min(delay * 2.0, 90.0)
-                    continue
-                return code, text
-        except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError, httpx.NetworkError) as exc:
+
+            code, text, zres = await anyio.to_thread.run_sync(_sync)
+            if code in (429, 500, 502, 503, 504) and attempt < AEAT_HTTP_MAX_ATTEMPTS - 1:
+                jitter = random.uniform(0.0, 0.35 * delay)
+                logger.warning(
+                    "AEAT HTTP %s intento %s/%s; reintento en %.2fs",
+                    code,
+                    attempt + 1,
+                    AEAT_HTTP_MAX_ATTEMPTS,
+                    delay + jitter,
+                )
+                await asyncio.sleep(delay + jitter)
+                delay = min(delay * 2.0, 90.0)
+                continue
+            return code, text, zres
+        except VeriFactuException as exc:
+            if getattr(exc, "code", None) in {"XSD_REQUEST", "SOAP_MALFORMED"}:
+                raise
             last_exc = exc
             if attempt < AEAT_HTTP_MAX_ATTEMPTS - 1:
                 jitter = random.uniform(0.0, 0.35 * delay)
                 logger.warning(
-                    "AEAT red error (%s) intento %s/%s; reintento en %.2fs",
+                    "AEAT cliente VeriFactu (%s) intento %s/%s; reintento en %.2fs",
                     type(exc).__name__,
                     attempt + 1,
                     AEAT_HTTP_MAX_ATTEMPTS,
@@ -523,11 +699,16 @@ async def _post_soap_aeat_with_retries(
             raise
     if last_exc:
         raise last_exc
-    return 500, ""
+    return 500, "", RegFactuPostResult(
+        http_status=500,
+        raw_body="",
+        respuesta=None,
+        soap_fault=None,
+    )
 
 
 def _leer_pem_certificado_y_clave(cert_path: str, key_path: str) -> tuple[bytes, bytes]:
-    """Lee PEM en disco (mismo material que usa ``httpx`` para mTLS)."""
+    """Lee PEM en disco (mismo material que usa el cliente TLS para mTLS)."""
     with open(cert_path, "rb") as f:
         cert_pem = f.read()
     with open(key_path, "rb") as f:
@@ -556,24 +737,12 @@ async def enviar_registro_y_persistir(
     actualiza columnas ``aeat_sif_*`` en ``facturas``. Devuelve ``factura_row`` fusionado.
     """
     fid = int(factura_row["id"])
-    url = url_envio_efectiva(settings)
     now_iso = datetime.now(timezone.utc).isoformat()
-    xml_payload_persistido = str(factura_row.get("xml_verifactu") or "").strip()
-    xml_payload = xml_payload_persistido or generar_xml_registro_facturacion_alta(
-        factura=factura_row,
-        empresa=empresa_row,
-        cliente=cliente,
-        hash_registro=str(
-            factura_row.get("hash_registro") or factura_row.get("hash_factura") or ""
-        ).strip(),
-        fingerprint=str(factura_row.get("fingerprint") or "").strip(),
-        prev_fingerprint=(
-            str(factura_row.get("prev_fingerprint") or "").strip() or None
-        ),
-    )
 
     if not settings.AEAT_VERIFACTU_ENABLED:
         return factura_row
+
+    url = url_envio_efectiva(settings)
 
     if not url:
         ins = {
@@ -633,16 +802,41 @@ async def enviar_registro_y_persistir(
         cert_pem, key_pem = _leer_pem_certificado_y_clave(cert_tuple[0], cert_tuple[1])
         pwd = _password_clave_pem(settings)
 
+        prev_fp = str(factura_row.get("prev_fingerprint") or "").strip() or None
+        registro_ant = await _obtener_registro_anterior_aeat(
+            db, empresa_id=empresa_id, prev_fingerprint=prev_fp
+        )
+        rectificada_ref = await _obtener_factura_rectificada_aeat(
+            db, empresa_id=empresa_id, factura=factura_row
+        )
+        alta_u = build_registro_alta_unsigned(
+            factura=factura_row,
+            empresa=empresa_row,
+            cliente=cliente,
+            fingerprint=str(factura_row.get("fingerprint") or "").strip(),
+            registro_anterior=registro_ant,
+            rectificada=rectificada_ref,
+        )
+        alta_xml = etree.tostring(
+            alta_u,
+            xml_declaration=True,
+            encoding="utf-8",
+        )
+
         def _sign_payload() -> bytes:
             return sign_xml_xades(
-                xml_payload.encode("utf-8"),
+                alta_xml,
                 cert_pem,
                 key_pem,
                 pwd,
             )
 
         xml_firmado = await anyio.to_thread.run_sync(_sign_payload)
-        xml_para_soap = xml_firmado.decode("utf-8")
+        xml_para_soap = inner_xml_fragment_from_signed_registro_alta(
+            empresa=empresa_row,
+            factura=factura_row,
+            signed_registro_alta_xml=xml_firmado,
+        )
         asyncio.create_task(
             run_webhook_deliveries_for_event(
                 empresa_id,
@@ -677,15 +871,69 @@ async def enviar_registro_y_persistir(
         _limpiar_temp(cleanup)
         return {**factura_row, "aeat_sif_estado": "error_tecnico"}
 
-    soap = envolver_soap12(
-        re.sub(r"^\s*<\?xml[^>]*\?>\s*", "", xml_para_soap.strip(), count=1)
-    )
+    inner_for_soap = xml_para_soap.strip()
+    soap = envolver_soap12(inner_for_soap)
     try:
-        status, body = await _post_soap_aeat_with_retries(
+        status, body, zres = await _post_soap_aeat_with_retries(
             url=url,
             soap_body=soap,
+            signed_inner_xml=inner_for_soap,
             cert_tuple=cert_tuple,
+            settings=settings,
         )
+    except VeriFactuException as exc:
+        if getattr(exc, "code", None) in {"XSD_REQUEST", "SOAP_MALFORMED"}:
+            ins = {
+                "empresa_id": empresa_id,
+                "factura_id": fid,
+                "estado": "Error técnico",
+                "codigo_error": str(getattr(exc, "code", None) or "XSD"),
+                "descripcion_error": str(exc)[:2000],
+                "csv_aeat": None,
+                "http_status": None,
+                "response_snippet": None,
+                "soap_action": None,
+                "created_at": now_iso,
+            }
+            await db.execute(db.table("verifactu_envios").insert(ins))
+            await _patch_factura_aeat(
+                db,
+                empresa_id=empresa_id,
+                factura_id=fid,
+                estado="error_tecnico",
+                codigo=str(getattr(exc, "code", None) or "XSD"),
+                descripcion=ins["descripcion_error"],
+                csv=None,
+                actualizado_en=now_iso,
+            )
+            _limpiar_temp(cleanup)
+            return {**factura_row, "aeat_sif_estado": "error_tecnico"}
+        logger.exception("AEAT: error VeriFactu tras reintentos")
+        ins = {
+            "empresa_id": empresa_id,
+            "factura_id": fid,
+            "estado": "Pendiente de envío (cola)",
+            "codigo_error": "REINTENTO_AGOTADO",
+            "descripcion_error": str(exc)[:2000],
+            "csv_aeat": None,
+            "http_status": getattr(exc, "http_status", None),
+            "response_snippet": None,
+            "soap_action": "RegistroFactura",
+            "created_at": now_iso,
+        }
+        await db.execute(db.table("verifactu_envios").insert(ins))
+        await _patch_factura_aeat(
+            db,
+            empresa_id=empresa_id,
+            factura_id=fid,
+            estado="pendiente_envio",
+            codigo="REINTENTO_AGOTADO",
+            descripcion=ins["descripcion_error"],
+            csv=None,
+            actualizado_en=now_iso,
+        )
+        _limpiar_temp(cleanup)
+        return {**factura_row, "aeat_sif_estado": "pendiente_envio"}
     except Exception as exc:
         logger.exception("AEAT: agotados reintentos HTTP/red")
         ins = {
@@ -743,7 +991,9 @@ async def enviar_registro_y_persistir(
 
     _limpiar_temp(cleanup)
 
-    parsed = interpretar_respuesta_aeat(cuerpo=body, http_status=status)
+    parsed = interpretar_respuesta_aeat(
+        cuerpo=body, http_status=status, post_result=zres
+    )
     ins = {
         "empresa_id": empresa_id,
         "factura_id": fid,

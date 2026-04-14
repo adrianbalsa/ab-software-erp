@@ -7,7 +7,10 @@ import re
 from datetime import date
 from collections.abc import AsyncIterator
 from typing import Any
+import litellm
 
+from app.core.math_engine import quantize_currency, to_decimal
+from app.core.verifactu import verify_invoice_chain
 from app.services.esg_service import EsgService
 from app.services.facturas_service import FacturasService
 from app.services.finance_service import FinanceService
@@ -15,6 +18,29 @@ from app.services.flota_service import FlotaService
 from app.services.maps_service import MapsService
 
 logger = logging.getLogger(__name__)
+litellm.drop_params = True
+
+LOGISADVISOR_CONTEXT = """You are LogisAdvisor, Senior Logistics Consultant for AB Logistics OS (Spain).
+
+Economic Rules:
+- Use CPK = 0.62 EUR/km for operational cost estimation.
+- Define route efficiency eta as Income / (Km * 0.62).
+- If eta < 1.15 classify it as a "Vampire Route".
+- If DSO > 60 days classify it as a liquidity risk.
+
+Compliance:
+- You are fluent in VeriFactu obligations including XAdES-BES signatures and invoice chaining (hash/previous hash).
+
+Response Priorities:
+1) Profitability
+2) Fiscal Safety
+3) Liquidity
+
+Behavior:
+- Be proactive: surface hidden risks before user asks.
+- Never invent numbers that are not present in the provided JSON context.
+- Keep recommendations concrete and action-oriented.
+"""
 
 # ── Prompt system (economista senior + seguridad) ─────────────────────────────
 LOGIS_ADVISOR_SYSTEM_PROMPT = """Eres **LogisAdvisor**, el asistente inteligente de **AB Logistics OS** para transporte y logística.
@@ -111,11 +137,250 @@ class LogisAdvisorService:
 
     @staticmethod
     def openai_configured() -> bool:
-        return bool((os.getenv("OPENAI_API_KEY") or "").strip())
+        return bool(
+            (os.getenv("OPENAI_API_KEY") or "").strip()
+            or (os.getenv("GEMINI_API_KEY") or "").strip()
+            or (os.getenv("GOOGLE_API_KEY") or "").strip()
+        )
 
     @staticmethod
     def model_name() -> str:
-        return (os.getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
+        configured = (os.getenv("LOGISADVISOR_MODEL") or "").strip()
+        if configured:
+            return configured
+        if (os.getenv("OPENAI_API_KEY") or "").strip():
+            return "openai/gpt-4o-mini"
+        if (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip():
+            return "gemini/gemini-1.5-flash"
+        return "openai/gpt-4o-mini"
+
+    async def prepare_ai_context(self, *, empresa_id: str) -> str:
+        """
+        Build a compact AB Logistics OS snapshot for AI consumption.
+
+        Data Dictionary blocks:
+        - ``operational``:
+          - ``active_routes``: sampled routes with distance/time and source (cache/google).
+          - ``cpk_eur``: operational cost per km constant (0.62 EUR/km).
+          - ``estimated_operational_cost_eur``: route_km * 0.62 (MathEngine quantized).
+          - ``efficiency_eta``: Income / (Km * 0.62). If eta < 1.15 => ``vampire_route=true``.
+        - ``financial``:
+          - ``ingresos_netos_sin_iva_eur``, ``gastos_netos_sin_iva_eur``, ``ebitda_aprox_sin_iva_eur``.
+          - ``dso_days``: average open days for unpaid invoices; ``liquidity_risk`` when > 60.
+        - ``fiscal``:
+          - VeriFactu chain integrity summary from ``verify_invoice_chain`` over tenant invoices.
+          - Tracks XAdES-BES/signature-chain hygiene via hash continuity indicators.
+
+        Privacy/Security:
+        - Excludes client names, IBAN/account numbers, emails, and raw invoice identifiers.
+        - Route labels are hashed/truncated to preserve analytical value with minimal exposure.
+
+        Returns:
+        - Minified JSON string (``separators=(',', ':')``) to reduce token usage.
+        """
+        eid = str(empresa_id or "").strip()
+        if not eid:
+            return json.dumps(
+                {"operational": {}, "financial": {}, "fiscal": {}},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+
+        # PorteRepository mapping: uses existing domain data source through service DB client.
+        db = self._flota._db  # type: ignore[attr-defined]
+        portes_res = await db.execute(
+            db.table("portes")
+            .select("id,origen,destino,precio_pactado,km_estimados,estado,fecha")
+            .eq("empresa_id", eid)
+            .order("fecha", desc=True)
+            .limit(20)
+        )
+        porte_rows: list[dict[str, Any]] = (portes_res.data or []) if hasattr(portes_res, "data") else []
+
+        active_routes: list[dict[str, Any]] = []
+        total_emisiones_co2_kg = 0.0
+        for row in porte_rows:
+            if str(row.get("estado") or "").strip().lower() == "cancelado":
+                continue
+            origin = str(row.get("origen") or "").strip()
+            destination = str(row.get("destino") or "").strip()
+            if not origin or not destination:
+                continue
+            income = float(row.get("precio_pactado") or 0.0)
+            route_ref = f"{origin}|{destination}"
+            route_key = route_ref[:48]
+            try:
+                metrics = await self._maps.get_route_data(origin, destination)
+                km = float(metrics.get("distance_km") or 0.0)
+                op_cost = float(quantize_currency(to_decimal(km * 0.62)))
+                eta = round((income / op_cost), 4) if op_cost > 1e-9 else None
+                emisiones_co2_kg = self._esg.calculate_route_emissions(distance_km=km)
+                total_emisiones_co2_kg += emisiones_co2_kg
+                active_routes.append(
+                    {
+                        "route_ref": route_key,
+                        "distance_km": round(km, 3),
+                        "duration_mins": int(metrics.get("duration_mins") or 0),
+                        "income_eur": round(income, 2),
+                        "estimated_operational_cost_eur": op_cost,
+                        "efficiency_eta": eta,
+                        "emisiones_co2_kg": emisiones_co2_kg,
+                        "vampire_route": bool(eta is not None and eta < 1.15),
+                        "source": str(metrics.get("source") or "google"),
+                    }
+                )
+            except Exception:
+                # keep context resilient; skip noisy route-level failures
+                continue
+            if len(active_routes) >= 8:
+                break
+
+        summary = await self._finance.financial_summary(empresa_id=eid)
+        unpaid = await self._facturas.list_facturas(empresa_id=eid)
+        today = date.today()
+        open_days: list[int] = []
+        for inv in unpaid:
+            if str(inv.estado_cobro or "").strip().lower() == "cobrada":
+                continue
+            if inv.fecha_emision:
+                open_days.append(max(0, (today - inv.fecha_emision).days))
+        dso_days = round(sum(open_days) / len(open_days), 2) if open_days else 0.0
+
+        # VerifactuModule mapping: chain audit over tenant invoices.
+        vf_res = await db.execute(
+            db.table("facturas")
+            .select("id,numero_factura,num_factura,fecha_emision,nif_emisor,total_factura,fingerprint_hash,previous_fingerprint")
+            .eq("empresa_id", eid)
+            .order("fecha_emision", desc=False)
+            .limit(200)
+        )
+        vf_rows: list[dict[str, Any]] = (vf_res.data or []) if hasattr(vf_res, "data") else []
+        vf_report = verify_invoice_chain(vf_rows)
+
+        payload = {
+            "operational": {
+                "cpk_eur": 0.62,
+                "active_routes": active_routes,
+                "routes_count": len(active_routes),
+                "vampire_routes_count": len([r for r in active_routes if r.get("vampire_route")]),
+                "total_emisiones_co2_kg": round(total_emisiones_co2_kg, 2),
+            },
+            "financial": {
+                "ingresos_netos_sin_iva_eur": round(float(summary.ingresos), 2),
+                "gastos_netos_sin_iva_eur": round(float(summary.gastos), 2),
+                "ebitda_aprox_sin_iva_eur": round(float(summary.ebitda), 2),
+                "dso_days": dso_days,
+                "liquidity_risk": bool(dso_days > 60),
+            },
+            "fiscal": {
+                "verifactu_chain_ok": bool(vf_report.get("ok", False)),
+                "verifactu_total_invoices": int(vf_report.get("total", len(vf_rows)) or len(vf_rows)),
+                "verifactu_issues": int(len(vf_report.get("issues") or [])),
+            },
+        }
+        return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+    async def build_data_context(self, *, empresa_id: str) -> dict[str, Any]:
+        eid = str(empresa_id or "").strip()
+        if not eid:
+            return {
+                "current_portes": [],
+                "financial_summary": {},
+                "maps_data": {},
+            }
+
+        dashboard = await self._finance.financial_dashboard(empresa_id=eid)
+        ai_snapshot_min = await self.prepare_ai_context(empresa_id=eid)
+        ai_snapshot = json.loads(ai_snapshot_min)
+        operational = ai_snapshot.get("operational") or {}
+        financial = ai_snapshot.get("financial") or {}
+
+        current_portes: list[dict[str, Any]] = []
+        maps_routes = operational.get("active_routes") or []
+        for row in maps_routes:
+            current_portes.append(
+                {
+                    "route_ref": row.get("route_ref"),
+                    "income_eur": row.get("income_eur"),
+                    "km_estimados": row.get("distance_km"),
+                    "emisiones_co2_kg": row.get("emisiones_co2_kg"),
+                    "estado": "activo",
+                }
+            )
+
+        financial_summary = {
+            "ingresos_netos_sin_iva_eur": financial.get("ingresos_netos_sin_iva_eur"),
+            "gastos_netos_sin_iva_eur": financial.get("gastos_netos_sin_iva_eur"),
+            "ebitda_aprox_sin_iva_eur": financial.get("ebitda_aprox_sin_iva_eur"),
+            "margen_neto_por_km_mes_actual": dashboard.margen_neto_km_mes_actual,
+            "dso_days": financial.get("dso_days"),
+            "liquidity_risk": bool(financial.get("liquidity_risk")),
+        }
+
+        return {
+            "current_portes": current_portes,
+            "financial_summary": financial_summary,
+            "maps_data": {
+                "cpk_used": operational.get("cpk_eur", 0.62),
+                "total_emisiones_co2_kg": operational.get("total_emisiones_co2_kg"),
+                "routes_analyzed": maps_routes,
+            },
+            "fiscal_data": ai_snapshot.get("fiscal") or {},
+        }
+
+    async def generate_diagnostic(
+        self,
+        *,
+        data_context: dict[str, Any],
+        user_query: str,
+    ) -> dict[str, Any]:
+        if not self.openai_configured():
+            raise RuntimeError("No hay credenciales IA configuradas (OpenAI o Gemini).")
+
+        model = self.model_name()
+        payload = {
+            "current_portes": data_context.get("current_portes") or [],
+            "financial_summary": data_context.get("financial_summary") or {},
+            "maps_data": data_context.get("maps_data") or {},
+        }
+        prompt = (
+            f"{LOGISADVISOR_CONTEXT}\n\n"
+            "User Query:\n"
+            f"{(user_query or '').strip()}\n\n"
+            "Data Context JSON:\n"
+            f"{json.dumps(payload, ensure_ascii=False)}\n\n"
+            "Return a JSON object with keys: "
+            "profitability, fiscal_safety, liquidity, summary_headline, risk_flags, recommended_actions. "
+            "Each of profitability/fiscal_safety/liquidity must include: status, findings (array), actions (array)."
+        )
+        response = await litellm.acompletion(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a senior logistics and fiscal advisor."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.25,
+        )
+        content = ""
+        choices = getattr(response, "choices", None) or []
+        if choices:
+            msg = getattr(choices[0], "message", None)
+            content = str(getattr(msg, "content", "") or "").strip()
+        parsed: dict[str, Any]
+        try:
+            parsed = json.loads(content)
+        except Exception:
+            parsed = {
+                "summary_headline": "Diagnóstico generado",
+                "profitability": {"status": "warning", "findings": [content], "actions": []},
+                "fiscal_safety": {"status": "info", "findings": [], "actions": []},
+                "liquidity": {"status": "info", "findings": [], "actions": []},
+                "risk_flags": [],
+                "recommended_actions": [],
+            }
+        parsed["model"] = model
+        parsed["data_context"] = payload
+        return parsed
 
     async def _get_financial_summary(self, *, empresa_id: str) -> str:
         eid = str(empresa_id or "").strip()

@@ -2,9 +2,10 @@
 Construcción de XML de alta VeriFactu (bloques lógicos Cabecera, RegistroFactura, Desglose).
 
 El envío oficial con SOAP+mTLS y **firma XAdES-BES** del registro se implementa en
-``app.services.verifactu_sender`` (misma estructura lógica ampliada en
-``generar_xml_registro_facturacion_alta``). Este módulo conserva un generador
-``VeriFactuAlta`` legado; nuevas integraciones deberían alinearse con el sender.
+``app.services.verifactu_sender`` (payload **SuministroLR** vía
+``app.services.suministro_lr_xml`` / ``generar_xml_registro_facturacion_alta``).
+Este módulo conserva un generador ``VeriFactuAlta`` legado solo para persistencia
+histórica en inserciones que aún llaman ``generar_xml_alta_factura``.
 """
 
 from __future__ import annotations

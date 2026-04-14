@@ -9,6 +9,9 @@ persiste ``aeat_sif_estado = 'enviado_ok'`` en ``public.facturas``.
 from __future__ import annotations
 
 from typing import Any
+
+from app.services.suministro_lr_xml import FacturaRectificadaRefAEAT
+from app.services.suministro_lr_xml import RegistroAnteriorAEAT
 from uuid import UUID
 
 from app.core.config import Settings, get_settings
@@ -29,6 +32,8 @@ def build_verifactu_xml_registro_alta(
     hash_registro: str,
     fingerprint: str,
     prev_fingerprint: str | None,
+    registro_anterior: RegistroAnteriorAEAT | None = None,
+    rectificada: FacturaRectificadaRefAEAT | None = None,
 ) -> str:
     """XML interno de alta (misma firma que el envío oficial vía ``verifactu_sender``)."""
     return generar_xml_registro_facturacion_alta(
@@ -38,6 +43,8 @@ def build_verifactu_xml_registro_alta(
         hash_registro=hash_registro,
         fingerprint=fingerprint,
         prev_fingerprint=prev_fingerprint,
+        registro_anterior=registro_anterior,
+        rectificada=rectificada,
     )
 
 

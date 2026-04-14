@@ -13,6 +13,7 @@ import anyio
 from rapidfuzz import fuzz
 
 from app.db.supabase import SupabaseAsync
+from app.schemas.banking import ConciliationCandidate, Transaccion
 from app.schemas.conciliacion import ConciliacionSugerenciaLLM, ConciliarAiOut
 
 _log = logging.getLogger(__name__)
@@ -393,6 +394,149 @@ class ReconciliationService:
         if not content:
             raise RuntimeError("LLM devolvió respuesta vacía")
         return content
+
+    def _llm_bank_orchestrator_sync(
+        self,
+        *,
+        transaction_json: str,
+        candidates_json: str,
+    ) -> str:
+        """Un solo movimiento ``bank_transactions`` y ≤5 candidatos fuzzy (ahorro de tokens)."""
+        from openai import OpenAI
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY no configurada")
+
+        system = (
+            "Eres un contable experto en conciliación bancaria. Recibes UN movimiento bancario y una lista "
+            "corta de facturas candidatas (mismo importe exacto, preordenadas por similitud fuzzy).\n"
+            "Debes elegir como mucho UNA factura de la lista, o ninguna si ninguna encaja de forma razonable.\n"
+            "No inventes factura_id: debe ser uno de los ids del bloque CANDIDATOS o null.\n"
+            "Responde SOLO JSON UTF-8 sin markdown, forma exacta:\n"
+            '{"factura_id":<entero o null>,"confidence_score":<0.0 a 1.0>,"razonamiento":"<breve, español>"}\n'
+        )
+        user = (
+            "MOVIMIENTO_JSON:\n"
+            f"{transaction_json}\n\n"
+            "CANDIDATOS_FUZZY (máx. 5, no inventar ids):\n"
+            f"{candidates_json}"
+        )
+        client = OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model=self._llm_model(),
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+        content = (resp.choices[0].message.content or "").strip()
+        if not content:
+            raise RuntimeError("LLM devolvió respuesta vacía (orchestrator banco)")
+        return content
+
+    def _parse_bank_orchestrator_llm(
+        self,
+        raw: str,
+        *,
+        allowed_factura_ids: set[int],
+    ) -> tuple[int | None, float, str]:
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"JSON inválido del LLM (orchestrator): {e}") from e
+        if not isinstance(data, dict):
+            raise ValueError("Respuesta LLM no es un objeto JSON")
+
+        fid_raw = data.get("factura_id")
+        if fid_raw is None:
+            razon = str(data.get("razonamiento") or "Sin emparejamiento").strip()
+            return None, 0.0, razon[:4000]
+        try:
+            fid = int(fid_raw)
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"factura_id inválido: {fid_raw!r}") from e
+        if fid not in allowed_factura_ids:
+            raise ValueError(f"factura_id {fid} no está entre los candidatos permitidos")
+
+        try:
+            conf = float(data.get("confidence_score"))
+        except (TypeError, ValueError) as e:
+            raise ValueError("confidence_score inválido") from e
+        conf = min(1.0, max(0.0, conf))
+        razon = str(data.get("razonamiento") or "").strip()
+        if not razon:
+            raise ValueError("razonamiento vacío")
+        return fid, conf, razon[:4000]
+
+    async def suggest_bank_pair_orchestrator_llm(
+        self,
+        *,
+        empresa_id: str,
+        transaction: Transaccion,
+        top_candidates: list[ConciliationCandidate],
+    ) -> tuple[ConciliationCandidate | None, str | None, str | None]:
+        """
+        IA focalizada: un movimiento ``bank_transactions`` y hasta 5 candidatos fuzzy.
+
+        Retorno: ``(candidate, razonamiento, error)``.
+        - Match: ``(cand, razon, None)``.
+        - Sin match válido según LLM: ``(None, razon, None)``.
+        - Fallo (config/parsing): ``(None, None, mensaje)``.
+        """
+        eid = str(empresa_id or "").strip()
+        if not eid:
+            return None, None, "empresa_id requerido"
+        if not top_candidates:
+            return None, None, "sin candidatos para el LLM"
+        if not self._openai_configured():
+            return None, None, "OPENAI_API_KEY no configurada"
+
+        tx_payload = {
+            "transaction_id": str(transaction.transaction_id),
+            "amount": float(transaction.amount),
+            "booked_date": transaction.booked_date_iso(),
+            "reference_blob": transaction.reference_blob()[:4000],
+        }
+        cand_payload: list[dict[str, Any]] = []
+        for c in top_candidates[:5]:
+            cand_payload.append(
+                {
+                    "factura_id": c.factura_id,
+                    "fuzzy_confidence": c.score,
+                    "reference_score": c.reference_score,
+                    "date_score": c.date_score,
+                    "invoice_number": c.invoice_number,
+                    "invoice_date": c.invoice_date,
+                }
+            )
+        allowed = {c.factura_id for c in top_candidates[:5]}
+        tx_json = json.dumps(tx_payload, ensure_ascii=False)
+        cand_json = json.dumps(cand_payload, ensure_ascii=False)
+
+        try:
+            raw = await anyio.to_thread.run_sync(
+                self._llm_bank_orchestrator_sync,
+                transaction_json=tx_json,
+                candidates_json=cand_json,
+            )
+            fid, conf, razon = self._parse_bank_orchestrator_llm(
+                raw,
+                allowed_factura_ids=allowed,
+            )
+        except (ValueError, RuntimeError) as exc:
+            return None, None, str(exc)
+
+        if fid is None:
+            return None, razon, None
+
+        picked = next((c for c in top_candidates if c.factura_id == fid), None)
+        if picked is None:
+            return None, None, "candidato interno no encontrado tras el LLM"
+        merged = picked.model_copy(update={"score": round(float(conf), 4)})
+        return merged, razon, None
 
     def _parsear_y_validar_sugerencias_llm(
         self,

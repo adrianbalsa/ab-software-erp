@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import os
 import time
@@ -12,20 +11,13 @@ import anyio
 import httpx
 
 from app.db.supabase import SupabaseAsync
+from app.services.geo_service import GeoBatchCache, GeoService, normalize_addr, route_cache_key
 
 _DISTANCE_MATRIX_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
-_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
-
-
-def _normalize_addr(s: str) -> str:
-    return " ".join((s or "").strip().split()).lower()
 
 
 def _cache_key(origin: str, destination: str) -> str:
-    a = _normalize_addr(origin)
-    b = _normalize_addr(destination)
-    raw = f"{a}|{b}".encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
+    return route_cache_key(origin, destination)
 
 
 def _mem_storage_key(tenant_empresa_id: str | UUID | None, route_key: str) -> str:
@@ -46,9 +38,42 @@ class MapsService:
 
     def __init__(self, db: SupabaseAsync | None = None) -> None:
         self._db = db
+        self._geo = GeoService(db)
         self._mem: dict[str, float] = {}
-        self._geo_mem: dict[str, tuple[float, float]] = {}
+        self._route_mem: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
+
+    @staticmethod
+    def calculate_operational_cost(distance_km: float) -> float:
+        return round(max(0.0, float(distance_km)) * 0.62, 2)
+
+    async def get_route_data(
+        self,
+        origin: str,
+        destination: str,
+        *,
+        batch: GeoBatchCache | None = None,
+    ) -> dict[str, Any]:
+        """
+        Cache-first route lookup backed by ``geo_cache`` (Routes API v2 en ``GeoService``).
+        Retorna:
+        { distance_meters, duration_seconds, distance_km, duration_mins, estimated_cost, source }
+        """
+        o = (origin or "").strip()
+        d = (destination or "").strip()
+        if not o or not d:
+            raise ValueError("origin y destination son obligatorios")
+
+        route_key = _cache_key(o, d)
+        async with self._lock:
+            mem_row = self._route_mem.get(route_key)
+            if mem_row is not None:
+                return dict(mem_row)
+
+        out = await self._geo.get_route_data(o, d, batch=batch)
+        async with self._lock:
+            self._route_mem[route_key] = out
+        return dict(out)
 
     @staticmethod
     def maps_api_key() -> str | None:
@@ -74,7 +99,7 @@ class MapsService:
         d = (destination or "").strip()
         if not o or not d:
             raise ValueError("Origen y destino son obligatorios para calcular la distancia")
-        if _normalize_addr(o) == _normalize_addr(d):
+        if normalize_addr(o) == normalize_addr(d):
             return 0.0
 
         key = _cache_key(o, d)
@@ -112,47 +137,50 @@ class MapsService:
         )
         return km
 
-    async def geocode_lat_lng(self, address: str) -> tuple[float, float] | None:
+    async def geocode_lat_lng(
+        self,
+        address: str,
+        *,
+        batch: GeoBatchCache | None = None,
+    ) -> tuple[float, float] | None:
         """
-        Geocodificación (lat, lng) vía Geocoding API; caché en memoria por dirección normalizada.
-        No persiste en Postgres (el front puede cachear en LocalStorage).
+        Geocodificación (lat, lng) vía Geocoding API con caché en ``geo_cache`` + RAM.
         """
-        a = (address or "").strip()
-        if not a:
-            return None
-        key = _normalize_addr(a)
-        async with self._lock:
-            if key in self._geo_mem:
-                return self._geo_mem[key]
+        return await self._geo.get_coordinates(address, batch=batch)
 
-        api_key = self.maps_api_key()
-        if not api_key:
-            return None
-
-        params = {"address": a[:500], "key": api_key}
+    async def try_porte_geo_payload(self, origen: str, destino: str) -> dict[str, Any]:
+        """
+        Coordenadas origen/destino + distancia real (m) para persistir en ``portes``.
+        Falla de API o clave ausente → dict vacío (no bloquea alta de porte).
+        """
+        out: dict[str, Any] = {}
+        o = (origen or "").strip()
+        d = (destino or "").strip()
+        if not o or not d:
+            return out
+        batch = GeoBatchCache()
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(12.0)) as client:
-                resp = await client.get(_GEOCODE_URL, params=params)
-                resp.raise_for_status()
-                data = resp.json()
+            co = await self._geo.get_coordinates(o, batch=batch)
+            if co:
+                out["lat_origin"] = float(co[0])
+                out["lng_origin"] = float(co[1])
         except Exception:
-            return None
-
-        if str(data.get("status") or "") != "OK":
-            return None
-        results = data.get("results") or []
-        if not results:
-            return None
-        loc = (results[0].get("geometry") or {}).get("location") or {}
+            pass
         try:
-            lat = float(loc.get("lat"))
-            lng = float(loc.get("lng"))
-        except (TypeError, ValueError):
-            return None
-
-        async with self._lock:
-            self._geo_mem[key] = (lat, lng)
-        return lat, lng
+            cd = await self._geo.get_coordinates(d, batch=batch)
+            if cd:
+                out["lat_dest"] = float(cd[0])
+                out["lng_dest"] = float(cd[1])
+        except Exception:
+            pass
+        try:
+            rd = await self._geo.get_route_data(o, d, batch=batch)
+            dm = rd.get("distance_meters")
+            if dm is not None:
+                out["real_distance_meters"] = float(dm)
+        except Exception:
+            pass
+        return out
 
     async def get_distance_and_duration(
         self,
@@ -169,7 +197,7 @@ class MapsService:
         d = (destination or "").strip()
         if not o or not d:
             raise ValueError("Origen y destino son obligatorios para calcular la distancia")
-        if _normalize_addr(o) == _normalize_addr(d):
+        if normalize_addr(o) == normalize_addr(d):
             return 0.0, 0
 
         key = _cache_key(o, d)
@@ -327,7 +355,7 @@ class MapsService:
         d = (destino or "").strip()
         if not o or not d:
             raise ValueError("Origen y destino son obligatorios")
-        if _normalize_addr(o) == _normalize_addr(d):
+        if normalize_addr(o) == normalize_addr(d):
             return {
                 "distancia_km": 0.0,
                 "tiempo_estimado_min": 0,

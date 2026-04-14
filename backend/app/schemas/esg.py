@@ -90,3 +90,83 @@ class EsgAnnualMemoryOut(BaseModel):
     desglose_normativa: EsgAnnualMemoryNormativaOut
     top_clientes: list[EsgAnnualMemoryTopClienteOut]
     metodologia: str
+
+
+class PorteEmissionsCalculatedOut(BaseModel):
+    """Resultado de ``calculate_porte_emissions`` (motor Euro VI × km reales)."""
+
+    porte_id: str
+    distance_km: float = Field(..., ge=0, description="Km usados en el cálculo")
+    distance_confidence: str = Field(
+        ...,
+        description="high: real_distance_meters; medium: Google Distance Matrix; low: km_estimados",
+    )
+    weight_class: str = Field(..., description="LIGHT | MEDIUM | HEAVY | ARTIC | UNKNOWN")
+    euro_vi_factor_kg_per_km: float = Field(..., ge=0, description="Factor Euro VI aplicado (kg/km)")
+    co2_kg: float = Field(..., ge=0, description="CO₂e persistido en ``portes.co2_kg``")
+    factor_emision_aplicado: float = Field(..., ge=0, description="Factor de emisión aplicado (kg/km)")
+
+
+class EsgMonthlyReportRowOut(BaseModel):
+    month: str = Field(..., description="Mes en formato YYYY-MM")
+    total_portes: int = Field(..., ge=0)
+    total_distance_km: float = Field(..., ge=0)
+    total_co2_kg: float = Field(..., ge=0)
+    avg_factor_emision: float = Field(..., ge=0)
+
+
+class EsgMonthlyReportOut(BaseModel):
+    empresa_id: str
+    rows: list[EsgMonthlyReportRowOut] = Field(default_factory=list)
+
+
+class RechartsBarPoint(BaseModel):
+    """Serie simple para gráficos de barras (Recharts ``<BarChart data={...} />``)."""
+
+    name: str = Field(..., description="Etiqueta eje X / leyenda")
+    value: float = Field(..., ge=0, description="Valor numérico (p. ej. kg CO₂)")
+    fill: str | None = Field(
+        default=None,
+        description="Color CSS opcional para ``<Cell />`` o tema",
+    )
+
+
+class SustainabilityReportOut(BaseModel):
+    """
+    Informe mensual de sostenibilidad: totales reales vs referencia «ruta verde teórica»
+    (km optimista × factor Euro VI bajo), más datos listos para Recharts.
+    """
+
+    empresa_id: str
+    year: int = Field(..., ge=2000, le=2100)
+    month: int = Field(..., ge=1, le=12)
+    total_co2_kg_actual: float = Field(..., ge=0, description="Huella con metodología GLEC mensual")
+    total_km_reales: float = Field(..., ge=0)
+    num_portes_facturados: int = Field(..., ge=0)
+    theoretical_green_route_co2_kg: float = Field(
+        ...,
+        ge=0,
+        description=(
+            "Referencia inferior: mismos km × factor mínimo Euro VI ligero (0,70 kg/km). "
+            "No es una segunda medición de ruta; sirve de benchmark de eficiencia."
+        ),
+    )
+    green_route_km_factor: float = Field(
+        default=0.93,
+        ge=0,
+        le=1,
+        description="Opcional: penalización de km por suboptimización de ruta (env ESG_GREEN_ROUTE_KM_FACTOR).",
+    )
+    co2_delta_vs_green_kg: float = Field(
+        ...,
+        description="actual − theoretical_green (positivo = por encima del benchmark).",
+    )
+    metodologia: str = Field(..., description="Resumen para auditoría / pie de gráfico")
+    chart_comparison: list[RechartsBarPoint] = Field(
+        default_factory=list,
+        description="Dos barras: real vs referencia verde (Benchmark)",
+    )
+    chart_by_vehicle: list[dict[str, float | str | None]] = Field(
+        default_factory=list,
+        description="Desglose por vehículo: keys name, co2_kg, km (Recharts)",
+    )

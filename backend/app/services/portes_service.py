@@ -212,6 +212,12 @@ class PortesService:
             # Huella simplificada para cuadro financiero ESG (factor por normativa EURO del vehículo).
             "co2_kg": calculate_co2_emissions(km_val, euro_co2),
         }
+        try:
+            geo_extra = await self._maps.try_porte_geo_payload(porte_in.origen, porte_in.destino)
+            if geo_extra:
+                payload.update(geo_extra)
+        except Exception:
+            pass
         if vid_create:
             payload["vehiculo_id"] = vid_create
         if porte_in.peso_ton is not None:

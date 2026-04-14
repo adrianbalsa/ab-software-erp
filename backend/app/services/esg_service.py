@@ -4,15 +4,22 @@ import calendar
 import csv
 from collections import defaultdict
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
 from typing import Any
+from uuid import UUID
 
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.schemas.esg import (
     EsgAuditReadyOut,
     EsgAuditReadyRow,
+    EsgMonthlyReportOut,
+    EsgMonthlyReportRowOut,
     HuellaCarbonoMensualOut,
+    PorteEmissionsCalculatedOut,
+    RechartsBarPoint,
+    SustainabilityReportOut,
     VehiculoHuellaMesOut,
 )
 from app.core.esg_engine import (
@@ -64,6 +71,40 @@ class EsgService:
     def __init__(self, db: SupabaseAsync, maps: MapsService) -> None:
         self._db = db
         self._maps = maps
+
+    @staticmethod
+    def _to_decimal(value: Any, default: str = "0") -> Decimal:
+        try:
+            if value is None:
+                return Decimal(default)
+            return Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError):
+            return Decimal(default)
+
+    @staticmethod
+    def _q6(value: Decimal) -> Decimal:
+        return value.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+
+    async def _fetch_factor_for_categoria(self, categoria_vehiculo: str) -> Decimal:
+        categoria = str(categoria_vehiculo or "").strip()
+        if not categoria:
+            raise ValueError("Vehículo sin categoria_vehiculo")
+        try:
+            res: Any = await self._db.execute(
+                self._db.table("estandares_emision_flota")
+                .select("factor_emision_kg_km")
+                .eq("categoria_vehiculo", categoria)
+                .limit(1)
+            )
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        except Exception as exc:
+            raise ValueError(f"No se pudo consultar estandares_emision_flota: {exc}") from exc
+        if not rows:
+            raise ValueError(f"No hay factor de emisión para categoría '{categoria}'")
+        factor = self._to_decimal(rows[0].get("factor_emision_kg_km"), "0")
+        if factor < 0:
+            raise ValueError("El factor de emisión recuperado es inválido")
+        return factor
 
     async def nombre_empresa_publico(self, *, empresa_id: str) -> str:
         eid = str(empresa_id or "").strip()
@@ -565,3 +606,243 @@ class EsgService:
             co2_kg *= 1.0 - (bonus_pct / 100.0)
 
         return round(co2_kg, 6)
+
+    @staticmethod
+    def calculate_route_emissions(distance_km: float, factor_co2_km: float = 750.0) -> float:
+        """
+        Calcula emisiones por ruta en kg CO2.
+
+        Formula:
+            (distance_km * factor_co2_km) / 1000
+
+        Donde ``factor_co2_km`` esta en gramos de CO2 por km.
+        """
+        try:
+            km = max(0.0, float(distance_km))
+        except (TypeError, ValueError):
+            km = 0.0
+        try:
+            factor = max(0.0, float(factor_co2_km))
+        except (TypeError, ValueError):
+            factor = 750.0
+        emisiones_kg = (km * factor) / 1000.0
+        return round(emisiones_kg, 2)
+
+    async def calculate_porte_emissions(self, porte_id: UUID) -> PorteEmissionsCalculatedOut:
+        """
+        CO₂e = (d / 1000) × EF × CF
+        - d: ``real_distance_meters`` de ``portes``.
+        - EF: ``estandares_emision_flota.factor_emision_kg_km`` según ``vehiculos.categoria_vehiculo``.
+        - CF: load factor (por defecto 1.0).
+        """
+        pid = str(porte_id).strip()
+        if not pid:
+            raise ValueError("porte_id inválido")
+
+        try:
+            q = filter_not_deleted(
+                self._db.table("portes")
+                .select(
+                    "id, empresa_id, real_distance_meters, vehiculo_id"
+                )
+                .eq("id", pid)
+                .limit(1)
+            )
+            res: Any = await self._db.execute(q)
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        except Exception as exc:
+            raise ValueError(f"No se pudo cargar el porte: {exc}") from exc
+
+        if not rows:
+            raise ValueError("Porte no encontrado")
+        row = dict(rows[0])
+        eid = str(row.get("empresa_id") or "").strip()
+        if not eid:
+            raise ValueError("Porte sin empresa_id")
+
+        distance_meters = self._to_decimal(row.get("real_distance_meters"), "0")
+        if distance_meters <= 0:
+            raise ValueError("El porte no tiene real_distance_meters válido")
+
+        vehiculo_id = str(row.get("vehiculo_id") or "").strip()
+        if not vehiculo_id:
+            raise ValueError("El porte no tiene vehiculo_id asignado")
+
+        try:
+            veh_res: Any = await self._db.execute(
+                filter_not_deleted(
+                    self._db.table("vehiculos")
+                    .select("id,categoria_vehiculo")
+                    .eq("empresa_id", eid)
+                    .eq("id", vehiculo_id)
+                    .limit(1)
+                )
+            )
+            veh_rows: list[dict[str, Any]] = (veh_res.data or []) if hasattr(veh_res, "data") else []
+        except Exception as exc:
+            raise ValueError(f"No se pudo cargar vehículo del porte: {exc}") from exc
+        if not veh_rows:
+            raise ValueError("Vehículo del porte no encontrado")
+
+        categoria_vehiculo = str(veh_rows[0].get("categoria_vehiculo") or "").strip()
+        factor = await self._fetch_factor_for_categoria(categoria_vehiculo)
+        load_factor = Decimal("1.0")
+        co2_kg = self._q6((distance_meters / Decimal("1000")) * factor * load_factor)
+        distance_km = self._q6(distance_meters / Decimal("1000"))
+
+        try:
+            await self._db.execute(
+                self._db.table("portes")
+                .update(
+                    {
+                        "co2_kg": str(co2_kg),
+                        "co2_emitido": str(co2_kg),
+                        "factor_emision_aplicado": str(self._q6(factor)),
+                    }
+                )
+                .eq("id", pid)
+                .eq("empresa_id", eid)
+            )
+        except Exception as exc:
+            raise ValueError(f"No se pudo persistir co2_kg: {exc}") from exc
+
+        return PorteEmissionsCalculatedOut(
+            porte_id=pid,
+            distance_km=float(distance_km),
+            distance_confidence="high",
+            weight_class=categoria_vehiculo,
+            euro_vi_factor_kg_per_km=float(self._q6(factor)),
+            co2_kg=float(co2_kg),
+            factor_emision_aplicado=float(self._q6(factor)),
+        )
+
+    async def get_monthly_company_report(self, *, empresa_id: UUID | str) -> EsgMonthlyReportOut:
+        eid = str(empresa_id).strip()
+        if not eid:
+            return EsgMonthlyReportOut(empresa_id="", rows=[])
+        try:
+            res: Any = await self._db.execute(
+                filter_not_deleted(
+                    self._db.table("portes")
+                    .select("fecha,real_distance_meters,co2_kg,factor_emision_aplicado")
+                    .eq("empresa_id", eid)
+                )
+            )
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        except Exception as exc:
+            raise ValueError(f"No se pudo generar reporte ESG mensual: {exc}") from exc
+
+        agg: dict[str, dict[str, Decimal | int]] = defaultdict(
+            lambda: {
+                "total_portes": 0,
+                "total_distance_km": Decimal("0"),
+                "total_co2_kg": Decimal("0"),
+                "sum_factor": Decimal("0"),
+                "factor_count": 0,
+            }
+        )
+
+        for row in rows:
+            fecha_raw = str(row.get("fecha") or "").strip()
+            if len(fecha_raw) < 7:
+                continue
+            month_key = fecha_raw[:7]
+            distance_km = self._to_decimal(row.get("real_distance_meters"), "0") / Decimal("1000")
+            co2_kg = self._to_decimal(row.get("co2_kg"), "0")
+            factor = self._to_decimal(row.get("factor_emision_aplicado"), "0")
+
+            bucket = agg[month_key]
+            bucket["total_portes"] = int(bucket["total_portes"]) + 1
+            bucket["total_distance_km"] = Decimal(bucket["total_distance_km"]) + max(Decimal("0"), distance_km)
+            bucket["total_co2_kg"] = Decimal(bucket["total_co2_kg"]) + max(Decimal("0"), co2_kg)
+            if factor > 0:
+                bucket["sum_factor"] = Decimal(bucket["sum_factor"]) + factor
+                bucket["factor_count"] = int(bucket["factor_count"]) + 1
+
+        out_rows: list[EsgMonthlyReportRowOut] = []
+        for month in sorted(agg.keys()):
+            b = agg[month]
+            factor_count = int(b["factor_count"])
+            avg_factor = Decimal("0")
+            if factor_count > 0:
+                avg_factor = Decimal(b["sum_factor"]) / Decimal(str(factor_count))
+            out_rows.append(
+                EsgMonthlyReportRowOut(
+                    month=month,
+                    total_portes=int(b["total_portes"]),
+                    total_distance_km=float(self._q6(Decimal(b["total_distance_km"]))),
+                    total_co2_kg=float(self._q6(Decimal(b["total_co2_kg"]))),
+                    avg_factor_emision=float(self._q6(avg_factor)),
+                )
+            )
+
+        return EsgMonthlyReportOut(empresa_id=eid, rows=out_rows)
+
+    async def get_company_sustainability_report(
+        self,
+        *,
+        empresa_id: UUID | str,
+        month: int,
+        year: int,
+    ) -> SustainabilityReportOut:
+        """
+        Informe mensual agregado: total CO₂ (GLEC) vs benchmark «ruta verde teórica»
+        (km × factor km subóptimo × Euro VI ligero).
+        """
+        eid = str(empresa_id).strip()
+        base = await self.calcular_huella_carbono_mensual(empresa_id=eid, mes=month, anio=year)
+
+        try:
+            green_km_factor = float(os.getenv("ESG_GREEN_ROUTE_KM_FACTOR", "0.93"))
+        except (TypeError, ValueError):
+            green_km_factor = 0.93
+        green_km_factor = max(0.5, min(1.0, green_km_factor))
+
+        km_eff = max(0.0, base.total_km_reales) * green_km_factor
+        theoretical_green = km_eff * 0.70
+        delta = round(float(base.total_co2_kg) - theoretical_green, 6)
+
+        chart_comparison: list[RechartsBarPoint] = [
+            RechartsBarPoint(
+                name="Huella real (GLEC mensual)",
+                value=round(float(base.total_co2_kg), 6),
+                fill="#64748b",
+            ),
+            RechartsBarPoint(
+                name="Referencia ruta verde (benchmark)",
+                value=round(float(theoretical_green), 6),
+                fill="#22c55e",
+            ),
+        ]
+
+        chart_by_vehicle: list[dict[str, float | str | None]] = []
+        for v in base.por_vehiculo:
+            chart_by_vehicle.append(
+                {
+                    "name": v.etiqueta or v.matricula,
+                    "co2_kg": round(float(v.co2_kg), 6),
+                    "km": round(float(v.km_reales), 4),
+                    "vehiculo_id": v.vehiculo_id,
+                }
+            )
+
+        metodologia = (
+            "Huella real: suma mensual con motor GLEC (km carretera vía Maps/caché, tramo cargado/vacío). "
+            "Benchmark: mismos km ajustados por ESG_GREEN_ROUTE_KM_FACTOR (ruta subóptima vs ideal) "
+            f"× {green_km_factor:.2f} × 0,70 kg CO₂/km (Euro VI clase ligera). Comparación orientativa, no sustituye verificación en laboratorio."
+        )
+
+        return SustainabilityReportOut(
+            empresa_id=eid,
+            year=year,
+            month=month,
+            total_co2_kg_actual=round(float(base.total_co2_kg), 6),
+            total_km_reales=round(float(base.total_km_reales), 4),
+            num_portes_facturados=int(base.num_portes_facturados),
+            theoretical_green_route_co2_kg=round(float(theoretical_green), 6),
+            green_route_km_factor=green_km_factor,
+            co2_delta_vs_green_kg=delta,
+            metodologia=metodologia,
+            chart_comparison=chart_comparison,
+            chart_by_vehicle=chart_by_vehicle,
+        )

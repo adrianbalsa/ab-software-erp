@@ -1,108 +1,77 @@
 from __future__ import annotations
 
+import asyncio
 import os
+import traceback
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
+from app.core.config import get_settings
 
-def _env(name: str, default: str = "") -> str:
-    return (os.getenv(name) or default).strip()
+DISCORD_COLOR_CRITICAL = 0xED4245
 
 
-def _build_text(subject: str, body: str) -> str:
-    ts = datetime.now(timezone.utc).isoformat()
-    environment = _env("ALERT_ENVIRONMENT", "Production") or "Production"
-    audit_logs_url = _env(
-        "ALERT_AUDIT_LOGS_URL",
-        "https://app.ablogistics-os.com/dashboard/admin/audit-logs",
+def short_traceback_from_exc(exc: BaseException, *, limit_lines: int = 12) -> str:
+    tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    lines = [ln.rstrip() for ln in tb.splitlines() if ln.strip()]
+    return "\n".join(lines[:limit_lines])
+
+
+class AlertService:
+    def __init__(self) -> None:
+        self._settings = get_settings()
+        self._webhook_url = (os.getenv("DISCORD_WEBHOOK_URL") or "").strip()
+
+    async def send_critical_alert(self, message: str, details: dict[str, Any] | None = None) -> None:
+        if not self._webhook_url:
+            return
+
+        detail_lines = []
+        for key, value in (details or {}).items():
+            detail_lines.append(f"**{key}:** `{value}`")
+        detail_text = "\n".join(detail_lines) if detail_lines else "No extra details."
+
+        payload = {
+            "embeds": [
+                {
+                    "title": "Critical System Failure",
+                    "description": message[:3000],
+                    "color": DISCORD_COLOR_CRITICAL,
+                    "fields": [
+                        {"name": "Environment", "value": self._settings.ENVIRONMENT, "inline": True},
+                        {"name": "Timestamp (UTC)", "value": datetime.now(timezone.utc).isoformat(), "inline": True},
+                        {"name": "Details", "value": detail_text[:1024], "inline": False},
+                    ],
+                }
+            ]
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+                await client.post(self._webhook_url, json=payload)
+        except Exception:
+            # Never break API execution because alerting fails.
+            return
+
+
+alert_service = AlertService()
+
+
+async def notify_critical_error(error_detail: str) -> None:
+    await alert_service.send_critical_alert(
+        message=error_detail or "Internal Server Error",
+        details={"source": "backend", "severity": "critical"},
     )
-    return (
-        f"[SENTINEL ALERT]\n"
-        f"Subject: {subject}\n"
-        f"Timestamp: {ts}\n"
-        f"Environment: {environment}\n"
-        f"Audit Logs: {audit_logs_url}\n\n"
-        f"{body.strip()}\n"
-    )
-
-
-def _send_resend(
-    *,
-    api_key: str,
-    sender: str,
-    recipients: list[str],
-    subject: str,
-    text: str,
-) -> dict[str, Any]:
-    payload = {
-        "from": sender,
-        "to": recipients,
-        "subject": subject,
-        "text": text,
-    }
-    with httpx.Client(timeout=20.0) as client:
-        r = client.post(
-            "https://api.resend.com/emails",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=payload,
-        )
-    r.raise_for_status()
-    return {"provider": "resend", "status_code": r.status_code, "response": r.json()}
-
-
-def _send_sendgrid(
-    *,
-    api_key: str,
-    sender: str,
-    recipients: list[str],
-    subject: str,
-    text: str,
-) -> dict[str, Any]:
-    payload = {
-        "personalizations": [{"to": [{"email": rcpt} for rcpt in recipients]}],
-        "from": {"email": sender},
-        "subject": subject,
-        "content": [{"type": "text/plain", "value": text}],
-    }
-    with httpx.Client(timeout=20.0) as client:
-        r = client.post(
-            "https://api.sendgrid.com/v3/mail/send",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=payload,
-        )
-    r.raise_for_status()
-    return {"provider": "sendgrid", "status_code": r.status_code, "response": r.text}
 
 
 def send_critical_alert(subject: str, body: str) -> dict[str, Any]:
-    sender = _env("ALERT_EMAIL_FROM")
-    recipients_raw = _env("ALERT_EMAIL_TO")
-    recipients = [x.strip() for x in recipients_raw.split(",") if x.strip()]
-    if not sender or not recipients:
-        raise RuntimeError("ALERT_EMAIL_FROM / ALERT_EMAIL_TO no configurados")
-
-    text = _build_text(subject=subject, body=body)
-
-    resend_key = _env("RESEND_API_KEY")
-    if resend_key:
-        return _send_resend(
-            api_key=resend_key,
-            sender=sender,
-            recipients=recipients,
-            subject=subject,
-            text=text,
+    # Kept for scripts that still use a synchronous API.
+    asyncio.run(
+        alert_service.send_critical_alert(
+            message=subject,
+            details={"body": body},
         )
-
-    sendgrid_key = _env("SENDGRID_API_KEY")
-    if sendgrid_key:
-        return _send_sendgrid(
-            api_key=sendgrid_key,
-            sender=sender,
-            recipients=recipients,
-            subject=subject,
-            text=text,
-        )
-
-    raise RuntimeError("No hay proveedor de email configurado (RESEND_API_KEY o SENDGRID_API_KEY)")
+    )
+    return {"provider": "discord_webhook", "status": "queued"}

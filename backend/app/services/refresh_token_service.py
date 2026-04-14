@@ -377,6 +377,7 @@ class RefreshTokenService:
         access = create_access_token(
             subject=user_out.username,
             empresa_id=user_out.empresa_id,
+            role=user_out.role.value,
             rbac_role=user_out.rbac_role,
             assigned_vehiculo_id=str(user_out.assigned_vehiculo_id) if user_out.assigned_vehiculo_id else None,
             cliente_id=str(user_out.cliente_id) if user_out.cliente_id else None,
