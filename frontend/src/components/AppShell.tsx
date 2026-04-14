@@ -64,6 +64,7 @@ type Props = {
     | "desarrolladores"
     | "analitica"
     | "bi"
+    | "vampire_radar"
     | "simulador"
     | "mapa";
 };
@@ -206,6 +207,16 @@ function ShellNavAndFooter({
                 icon={Target}
                 title="Inteligencia BI"
                 subtitle="DSO · trayectos · ESG"
+                {...p}
+              />
+            )}
+            {isOwnerLike(role) && (
+              <SidebarNavLink
+                href="/dashboard/vampire-radar"
+                active={active === "vampire_radar"}
+                icon={Activity}
+                title="Radar de Vampiros"
+                subtitle="Fugas de margen por ruta"
                 {...p}
               />
             )}
@@ -459,6 +470,9 @@ export function AppShell({ children, active }: Props) {
     if (pathname.startsWith("/dashboard/configuracion")) return "desarrolladores";
     if (pathname === "/dashboard/analitica") return "analitica";
     if (pathname === "/dashboard/bi" || pathname.startsWith("/dashboard/bi/")) return "bi";
+    if (pathname === "/dashboard/vampire-radar" || pathname.startsWith("/dashboard/vampire-radar/")) {
+      return "vampire_radar";
+    }
     if (pathname === "/dashboard/finanzas/tesoreria") return "tesoreria";
     if (pathname === "/dashboard/finanzas/simulador") return "simulador";
     if (pathname === "/dashboard/finanzas/auditoria") return "auditoria";

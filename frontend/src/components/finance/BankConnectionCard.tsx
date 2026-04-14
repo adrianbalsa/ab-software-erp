@@ -14,7 +14,7 @@ import type { BankSyncApi } from "@/hooks/useBankSync";
 
 type Props = {
   bank: BankSyncApi;
-  /** Tras POST /bank/sync con éxito (conciliaciones automáticas). */
+  /** Tras POST /api/v1/banking/sync con éxito (conciliaciones automáticas). */
   onReconciled?: (coincidencias: number) => void;
 };
 

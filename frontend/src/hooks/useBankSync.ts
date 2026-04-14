@@ -26,7 +26,7 @@ export type BankSyncOut = {
 };
 
 function buildConnectUrl(institutionId: string, redirectUrl?: string): string {
-  const u = new URL(`${API_BASE}/bank/connect`);
+  const u = new URL(`${API_BASE}/api/v1/banking/connect`);
   u.searchParams.set("institution_id", institutionId.trim());
   if (redirectUrl?.trim()) {
     u.searchParams.set("redirect_url", redirectUrl.trim());
@@ -35,7 +35,7 @@ function buildConnectUrl(institutionId: string, redirectUrl?: string): string {
 }
 
 function buildSyncUrl(dateFrom?: string, dateTo?: string): string {
-  const u = new URL(`${API_BASE}/bank/sync`);
+  const u = new URL(`${API_BASE}/api/v1/banking/sync`);
   if (dateFrom?.trim()) u.searchParams.set("date_from", dateFrom.trim());
   if (dateTo?.trim()) u.searchParams.set("date_to", dateTo.trim());
   return u.toString();

@@ -8,7 +8,6 @@ clasifica sin contactar con Hacienda.
 
 from __future__ import annotations
 
-import re
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -19,11 +18,11 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
 from app.core.xades_signer import sign_xml_xades
-from app.services.verifactu_sender import (
-    envolver_soap12,
-    generar_xml_registro_facturacion_alta,
-    interpretar_respuesta_aeat,
-)
+from app.services.suministro_lr_xml import RegistroAnteriorAEAT
+from app.services.suministro_lr_xml import build_registro_alta_unsigned
+from app.services.suministro_lr_xml import inner_xml_fragment_from_signed_registro_alta
+from app.services.verifactu_sender import envolver_soap12, interpretar_respuesta_aeat
+from lxml import etree
 
 
 def _certificado_y_clave_pem() -> tuple[bytes, bytes]:
@@ -50,7 +49,8 @@ def _certificado_y_clave_pem() -> tuple[bytes, bytes]:
 
 
 def test_generar_xml_registro_y_firma_xades_contiene_signatura() -> None:
-    xml_str = generar_xml_registro_facturacion_alta(
+    prev_h = "cc" * 32
+    alta_u = build_registro_alta_unsigned(
         factura={
             "num_factura": "F-2026-042",
             "fecha_emision": "2026-04-01",
@@ -62,12 +62,24 @@ def test_generar_xml_registro_y_firma_xades_contiene_signatura() -> None:
         },
         empresa={"nif": "B12345678", "nombre_comercial": "Empresa Test SL"},
         cliente={"nif": "A11111111", "nombre": "Cliente Test"},
-        hash_registro="aa" * 32,
         fingerprint="bb" * 32,
-        prev_fingerprint="cc" * 32,
+        registro_anterior=RegistroAnteriorAEAT(
+            id_emisor_factura="B12345678",
+            num_serie_factura="F-2026-041",
+            fecha_expedicion="31-03-2026",
+            huella=prev_h,
+        ),
+        rectificada=None,
     )
     cert_pem, key_pem = _certificado_y_clave_pem()
-    signed = sign_xml_xades(xml_str.encode("utf-8"), cert_pem, key_pem, None)
+    alta_xml = etree.tostring(alta_u, xml_declaration=True, encoding="utf-8")
+    signed = sign_xml_xades(alta_xml, cert_pem, key_pem, None)
+    inner = inner_xml_fragment_from_signed_registro_alta(
+        empresa={"nif": "B12345678", "nombre_comercial": "Empresa Test SL"},
+        factura={"nif_emisor": "B12345678"},
+        signed_registro_alta_xml=signed,
+    )
+    assert "Cabecera" in inner and "RegistroFactura" in inner
     assert b"ds:Signature" in signed or b"Signature" in signed
     assert b"http://uri.etsi.org/01903/v1.3.2#" in signed
 
@@ -75,7 +87,7 @@ def test_generar_xml_registro_y_firma_xades_contiene_signatura() -> None:
 @pytest.mark.asyncio
 async def test_soap_firmado_post_mock_aeat_sin_red_interpreta_aceptado() -> None:
     """Simula POST SOAP tras firma; el handler valida que el cuerpo contiene firma XML."""
-    xml_str = generar_xml_registro_facturacion_alta(
+    alta_u = build_registro_alta_unsigned(
         factura={
             "num_factura": "F-2026-099",
             "fecha_emision": "2026-05-01",
@@ -87,13 +99,18 @@ async def test_soap_firmado_post_mock_aeat_sin_red_interpreta_aceptado() -> None
         },
         empresa={"nif": "B87654321", "nombre_comercial": "Emp Mock"},
         cliente={"nif": "B00000000", "nombre": "Destinatario"},
-        hash_registro="ff" * 32,
         fingerprint="ee" * 32,
-        prev_fingerprint=None,
+        registro_anterior=None,
+        rectificada=None,
     )
     cert_pem, key_pem = _certificado_y_clave_pem()
-    signed = sign_xml_xades(xml_str.encode("utf-8"), cert_pem, key_pem, None)
-    inner = re.sub(r"^\s*<\?xml[^>]*\?>\s*", "", signed.decode("utf-8"), count=1)
+    alta_xml = etree.tostring(alta_u, xml_declaration=True, encoding="utf-8")
+    signed = sign_xml_xades(alta_xml, cert_pem, key_pem, None)
+    inner = inner_xml_fragment_from_signed_registro_alta(
+        empresa={"nif": "B87654321", "nombre_comercial": "Emp Mock"},
+        factura={"nif_emisor": "B87654321"},
+        signed_registro_alta_xml=signed,
+    )
     soap = envolver_soap12(inner)
 
     def aeat_handler(request: httpx.Request) -> httpx.Response:

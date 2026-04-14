@@ -19,7 +19,7 @@ function AuthCallbackInner() {
       setError("No se pudo preparar la sesión en este navegador.");
       return;
     }
-    router.replace("/dashboard");
+    router.replace("/onboarding");
   }, [router]);
 
   if (error) {

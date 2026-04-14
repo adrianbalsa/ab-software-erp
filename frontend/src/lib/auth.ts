@@ -5,11 +5,10 @@
  * usan `credentials: 'include'` y el backend acepta Bearer o cookie.
  */
 
+import { getPublicApiBase } from "@/lib/api-base";
+
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE ||
-  "https://api.ablogistics-os.com";
+  getPublicApiBase().replace(/\/$/, "") || "https://api.ablogistics-os.com";
 
 export const AUTH_TOKEN_KEY = "abl_auth_token";
 

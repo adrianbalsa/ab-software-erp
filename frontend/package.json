@@ -30,6 +30,7 @@
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-hook-form": "^7.72.1",
     "react-joyride": "^2.9.3",
     "react-markdown": "^10.1.0",
     "react-pdf": "^10.4.1",

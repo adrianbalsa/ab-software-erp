@@ -2,12 +2,9 @@ import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
 import { createBrowserClient } from "@supabase/ssr";
 import { z, type ZodSchema } from "zod";
 import { getAuthToken as getAuthTokenFromStore } from "@/lib/auth";
+import { resolveApiBase } from "@/lib/api-base";
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE ||
-  "https://api.ablogistics-os.com";
+export const API_BASE = resolveApiBase();
 
 export const ABL_JWT_UPDATED_EVENT = "abl:jwt-updated";
 
@@ -657,6 +654,11 @@ export type PorteListRow = {
   estado: string;
   subcontratado?: boolean;
   factura_id?: number | null;
+  lat_origin?: number | null;
+  lng_origin?: number | null;
+  lat_dest?: number | null;
+  lng_dest?: number | null;
+  real_distance_meters?: number | null;
 };
 
 /** `GET /portes/{id}` — detalle con campos ESG enriquecidos (GLEC + Euro III). */
@@ -1065,11 +1067,32 @@ export type PortalOnboardingMyRisk = {
   reasons: string[];
 };
 
+export type OnboardingSetupInput = {
+  company_name: string;
+  cif: string;
+  address: string;
+  initial_fleet_type: string;
+  target_margin_pct?: number | null;
+};
+
+export type OnboardingSetupResponse = {
+  empresa_id: string;
+  profile_id: string;
+  role: string;
+};
+
 export const fetchPortalMyRisk = async () =>
   getJson<PortalOnboardingMyRisk>(`${API_BASE}/api/v1/portal/onboarding/my-risk`);
 
 export const postPortalAcceptRisk = async (payload: Record<string, unknown> = {}) =>
   getJson<unknown>(`${API_BASE}/api/v1/portal/onboarding/accept-risk`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+export const postAuthOnboardingSetup = async (payload: OnboardingSetupInput) =>
+  getJson<OnboardingSetupResponse>(`${API_BASE}/auth/onboarding/setup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -1103,13 +1126,13 @@ export const postFirmaEntrega = async (
   });
 };
 export const getSugerenciasPendientes = async () =>
-  getJson<MovimientoSugeridoConciliacion[]>(`${API_BASE}/api/v1/bancos/sugerencias-pendientes`);
+  getJson<MovimientoSugeridoConciliacion[]>(`${API_BASE}/api/v1/banking/reconciliation/suggestions`);
 export type ConciliarAiResponse = {
   sugerencias_guardadas: number;
 };
 
 export const postConciliarAi = async (payload: Record<string, unknown> = {}) =>
-  getJson<ConciliarAiResponse>(`${API_BASE}/api/v1/bancos/conciliar-ai`, {
+  getJson<ConciliarAiResponse>(`${API_BASE}/api/v1/banking/reconciliation/ai`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -1123,7 +1146,7 @@ export const postConfirmarSugerencia = async (
     typeof payloadOrId === "string"
       ? { movimiento_id: payloadOrId, aprobar: Boolean(aprobar) }
       : payloadOrId;
-  return getJson<unknown>(`${API_BASE}/api/v1/bancos/confirmar-sugerencia`, {
+  return getJson<unknown>(`${API_BASE}/api/v1/banking/reconciliation/suggestions/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

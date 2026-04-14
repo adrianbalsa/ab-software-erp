@@ -1,11 +1,17 @@
-"""XML registro facturación alta (fingerprints y campos fiscales)."""
+"""XML registro facturación alta (SuministroLR: Cabecera, RegistroFactura, RegistroAlta)."""
 
 from __future__ import annotations
 
+import re
+
+from app.services.aeat_client_py.xsd_validate import validate_reg_factu_payload_against_suministro_lr_xsd
+from app.services.aeat_client_py.zeep_client import default_aeat_suministro_lr_xsd_url
+from app.services.suministro_lr_xml import RegistroAnteriorAEAT
 from app.services.verifactu_sender import generar_xml_registro_facturacion_alta, interpretar_respuesta_aeat
 
 
-def test_xml_incluye_huella_y_huella_anterior() -> None:
+def test_xml_incluye_huella_y_encadenamiento_registro_anterior() -> None:
+    prev_huella = "cc" * 32
     xml = generar_xml_registro_facturacion_alta(
         factura={
             "num_factura": "F-2026-001",
@@ -20,12 +26,47 @@ def test_xml_incluye_huella_y_huella_anterior() -> None:
         cliente={"nif": "A11111111", "nombre": "Cli"},
         hash_registro="aa" * 32,
         fingerprint="bb" * 32,
-        prev_fingerprint="cc" * 32,
+        prev_fingerprint=prev_huella,
+        registro_anterior=RegistroAnteriorAEAT(
+            id_emisor_factura="B12345678",
+            num_serie_factura="F-2026-000",
+            fecha_expedicion="31-03-2026",
+            huella=prev_huella,
+        ),
     )
-    assert "bb" * 32 in xml and "<Huella>" in xml
-    assert "cc" * 32 in xml and "<HuellaAnterior>" in xml
-    assert "aa" * 32 in xml and "<HashRegistro>" in xml
-    assert "RegistroFacturacionAltaVeriFactu" in xml
+    assert "bb" * 32 in xml
+    assert "Huella" in xml
+    assert "<Cabecera" in xml or "Cabecera" in xml
+    assert "ObligadoEmision" in xml
+    assert "RegistroFactura" in xml
+    assert "RegistroAlta" in xml
+    assert "RegistroAnterior" in xml
+    assert prev_huella in xml
+
+
+def test_xml_generado_valida_contra_suministro_lr_xsd() -> None:
+    xml_decl = generar_xml_registro_facturacion_alta(
+        factura={
+            "num_factura": "XSD-1",
+            "fecha_emision": "2026-01-15",
+            "base_imponible": 10.0,
+            "cuota_iva": 2.1,
+            "total_factura": 12.1,
+            "tipo_factura": "F1",
+            "nif_emisor": "B99887766",
+        },
+        empresa={"nif": "B99887766", "nombre_comercial": "Emp XSD"},
+        cliente={"nif": "A11222333", "nombre": "Cli"},
+        hash_registro="aa" * 32,
+        fingerprint="bb" * 32,
+        prev_fingerprint=None,
+        registro_anterior=None,
+    )
+    inner = re.sub(r"^\s*<\?xml[^>]*\?>\s*", "", xml_decl.strip(), count=1)
+    validate_reg_factu_payload_against_suministro_lr_xsd(
+        reg_factu_inner_xml=inner,
+        schema_location=default_aeat_suministro_lr_xsd_url(),
+    )
 
 
 def test_interpretar_http_503() -> None:

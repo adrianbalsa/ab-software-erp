@@ -77,6 +77,9 @@ class _FakeMaps:
     async def get_distance_km(self, *_args: object, **_kwargs: object) -> float:
         return 120.0
 
+    async def try_porte_geo_payload(self, *_args: object, **_kwargs: object) -> dict[str, Any]:
+        return {}
+
 
 CID = "11111111-1111-1111-1111-111111111111"
 

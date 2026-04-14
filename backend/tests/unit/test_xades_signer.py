@@ -36,11 +36,15 @@ def _certificado_y_clave_pem() -> tuple[bytes, bytes]:
 
 
 def test_sign_xml_xades_enveloped_ds_y_xades() -> None:
+    _ns = (
+        b"https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/"
+        b"es/aeat/tike/cont/ws/SuministroInformacion.xsd"
+    )
     xml = (
         b'<?xml version="1.0" encoding="UTF-8"?>'
-        b'<RegistroFacturacionAltaVeriFactu versionFormato="1.0">'
-        b"<Cabecera><IdVersion>1.0</IdVersion></Cabecera>"
-        b"</RegistroFacturacionAltaVeriFactu>"
+        b'<RegistroAlta xmlns="' + _ns + b'">'
+        b"<IDVersion>1.0</IDVersion>"
+        b"</RegistroAlta>"
     )
     cert_pem, key_pem = _certificado_y_clave_pem()
     out = sign_xml_xades(xml, cert_pem, key_pem, None)

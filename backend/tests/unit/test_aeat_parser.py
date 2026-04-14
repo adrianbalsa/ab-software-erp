@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock
 
-import httpx
 import pytest
 
-sys.modules.setdefault("signxml", MagicMock(name="signxml_test_double"))
-sys.modules.setdefault("signxml.xades", MagicMock(name="signxml_xades_test_double"))
-
+from app.services.aeat_client_py.zeep_client import RegFactuPostResult
 from app.services import verifactu_sender as sender
 
 
@@ -70,6 +65,34 @@ def test_interpretar_respuesta_aeat_rechazo_duplicado() -> None:
     assert parsed.codigo_error == "3001"
     assert mapped["aeat_sif_csv"] is None
     assert "duplicada" in (mapped["aeat_sif_mensaje"] or "").lower()
+
+
+def test_interpretar_respuesta_aeat_zeeo_tipado_desde_wsd() -> None:
+    """Respuesta conforme a RespuestaRegFactuSistemaFacturacion (Zeep / AEAT)."""
+    body = "<irrelevante/>"
+    zres = RegFactuPostResult(
+        http_status=200,
+        raw_body=body,
+        respuesta={
+            "CSV": "ZZ99-AA",
+            "EstadoEnvio": "Correcto",
+            "Cabecera": {
+                "ObligadoEmision": {"NombreRazon": "X", "NIF": "A0000001A"}
+            },
+            "TiempoEsperaEnvio": "1",
+            "RespuestaLinea": [
+                {
+                    "EstadoRegistro": "Correcto",
+                }
+            ],
+        },
+        soap_fault=None,
+    )
+    parsed = sender.interpretar_respuesta_aeat(
+        cuerpo=body, http_status=200, post_result=zres
+    )
+    assert parsed.estado_factura_codigo == "aceptado"
+    assert parsed.csv_aeat == "ZZ99-AA"
 
 
 def test_interpretar_respuesta_aeat_error_firma_huella() -> None:
@@ -141,22 +164,10 @@ class _FakeDb:
         return _FakeResult(data=[])
 
 
-class _FakeTimeoutClient:
-    def __init__(self, **_kwargs: Any) -> None:
-        pass
-
-    async def __aenter__(self) -> _FakeTimeoutClient:
-        return self
-
-    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
-        return None
-
-    async def post(self, *_args: Any, **_kwargs: Any) -> Any:
-        raise httpx.ConnectTimeout("timeout AEAT")
-
-
 @pytest.mark.asyncio
 async def test_enviar_registro_timeout_clasifica_error_tecnico(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.aeat_client_py.exceptions import VeriFactuException
+
     db = _FakeDb()
     settings = SimpleNamespace(
         AEAT_VERIFACTU_ENABLED=True,
@@ -166,6 +177,9 @@ async def test_enviar_registro_timeout_clasifica_error_tecnico(monkeypatch: pyte
         AEAT_VERIFACTU_SUBMIT_URL_TEST="https://www2.agenciatributaria.gob.es/test",
         AEAT_VERIFACTU_SUBMIT_URL_PROD=None,
         AEAT_CLIENT_KEY_PASSWORD=None,
+        AEAT_VERIFACTU_WSDL_URL=None,
+        AEAT_VERIFACTU_XSD_VALIDATE_REQUEST=False,
+        AEAT_VERIFACTU_SUMINISTRO_LR_XSD_URL=None,
     )
     factura_row = {
         "id": 10,
@@ -178,8 +192,9 @@ async def test_enviar_registro_timeout_clasifica_error_tecnico(monkeypatch: pyte
         "cuota_iva": 21.0,
         "total_factura": 121.0,
         "tipo_factura": "F1",
+        "nif_emisor": "B12345678",
     }
-    empresa_row = {"nif": "B12345678"}
+    empresa_row = {"nif": "B12345678", "nombre_comercial": "Empresa unit test"}
     cliente = {"nif": "12345678Z", "nombre": "Cliente Test"}
 
     monkeypatch.setattr(
@@ -192,9 +207,24 @@ async def test_enviar_registro_timeout_clasifica_error_tecnico(monkeypatch: pyte
         "_leer_pem_certificado_y_clave",
         lambda *_args, **_kwargs: (b"cert", b"key"),
     )
-    monkeypatch.setattr(sender, "sign_xml_xades", lambda *_args, **_kwargs: b"<Signed/>")
+    _ns_sf = (
+        "https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/"
+        "es/aeat/tike/cont/ws/SuministroInformacion.xsd"
+    )
+
+    def _stub_sign(*_a: object, **_k: object) -> bytes:
+        return (
+            f'<?xml version="1.0" encoding="utf-8"?>'
+            f'<RegistroAlta xmlns="{_ns_sf}"><IDVersion>1.0</IDVersion></RegistroAlta>'
+        ).encode("utf-8")
+
+    monkeypatch.setattr(sender, "sign_xml_xades", _stub_sign)
     monkeypatch.setattr(sender, "_limpiar_temp", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(sender.httpx, "AsyncClient", _FakeTimeoutClient)
+    monkeypatch.setattr(
+        sender,
+        "_post_reg_factu_zeeo_sync",
+        lambda **_kwargs: (_ for _ in ()).throw(VeriFactuException("timeout AEAT", code="AEAT_TRANSPORT")),
+    )
 
     out = await sender.enviar_registro_y_persistir(
         db,
