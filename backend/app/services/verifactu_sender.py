@@ -23,7 +23,9 @@ from __future__ import annotations
 
 import asyncio
 import io
+import logging
 import os
+import random
 import re
 import tempfile
 from dataclasses import dataclass
@@ -31,6 +33,7 @@ from datetime import datetime, timezone
 from typing import Any, Mapping
 from xml.etree import ElementTree as ET
 
+import anyio
 import httpx
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs12
@@ -44,6 +47,8 @@ from app.db.supabase import SupabaseAsync
 from app.db.supabase import get_supabase
 from app.models.webhook import WebhookEventType
 from app.services.webhook_service import run_webhook_deliveries_for_event
+
+logger = logging.getLogger(__name__)
 
 _NS_SOAP12 = "http://www.w3.org/2003/05/soap-envelope"
 _NS_SF_DEFAULT = (
@@ -454,6 +459,73 @@ def _limpiar_temp(paths: list[str]) -> None:
             pass
 
 
+AEAT_HTTP_MAX_ATTEMPTS = 6
+AEAT_BACKOFF_BASE_SEC = 1.5
+
+
+async def _post_soap_aeat_with_retries(
+    *,
+    url: str,
+    soap_body: str,
+    cert_tuple: tuple[str, str],
+) -> tuple[int, str]:
+    """
+    Reintentos con backoff exponencial ante 429/5xx y errores de red (AEAT inestable).
+    Los 4xx de validación (salvo 429) no se reintentan.
+    """
+    delay = AEAT_BACKOFF_BASE_SEC
+    last_exc: Exception | None = None
+    for attempt in range(AEAT_HTTP_MAX_ATTEMPTS):
+        try:
+            async with httpx.AsyncClient(
+                http2=False,
+                cert=cert_tuple,
+                verify=True,
+                timeout=httpx.Timeout(120.0),
+                follow_redirects=False,
+            ) as client:
+                r = await client.post(
+                    url,
+                    content=soap_body.encode("utf-8"),
+                    headers={
+                        "Content-Type": 'application/soap+xml; charset=utf-8; action="RegistroFactura"',
+                    },
+                )
+                code = r.status_code
+                text = r.text or ""
+                if code in (429, 500, 502, 503, 504) and attempt < AEAT_HTTP_MAX_ATTEMPTS - 1:
+                    jitter = random.uniform(0.0, 0.35 * delay)
+                    logger.warning(
+                        "AEAT HTTP %s intento %s/%s; reintento en %.2fs",
+                        code,
+                        attempt + 1,
+                        AEAT_HTTP_MAX_ATTEMPTS,
+                        delay + jitter,
+                    )
+                    await asyncio.sleep(delay + jitter)
+                    delay = min(delay * 2.0, 90.0)
+                    continue
+                return code, text
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError, httpx.NetworkError) as exc:
+            last_exc = exc
+            if attempt < AEAT_HTTP_MAX_ATTEMPTS - 1:
+                jitter = random.uniform(0.0, 0.35 * delay)
+                logger.warning(
+                    "AEAT red error (%s) intento %s/%s; reintento en %.2fs",
+                    type(exc).__name__,
+                    attempt + 1,
+                    AEAT_HTTP_MAX_ATTEMPTS,
+                    delay + jitter,
+                )
+                await asyncio.sleep(delay + jitter)
+                delay = min(delay * 2.0, 90.0)
+                continue
+            raise
+    if last_exc:
+        raise last_exc
+    return 500, ""
+
+
 def _leer_pem_certificado_y_clave(cert_path: str, key_path: str) -> tuple[bytes, bytes]:
     """Lee PEM en disco (mismo material que usa ``httpx`` para mTLS)."""
     with open(cert_path, "rb") as f:
@@ -559,12 +631,17 @@ async def enviar_registro_y_persistir(
 
     try:
         cert_pem, key_pem = _leer_pem_certificado_y_clave(cert_tuple[0], cert_tuple[1])
-        xml_firmado = sign_xml_xades(
-            xml_payload.encode("utf-8"),
-            cert_pem,
-            key_pem,
-            _password_clave_pem(settings),
-        )
+        pwd = _password_clave_pem(settings)
+
+        def _sign_payload() -> bytes:
+            return sign_xml_xades(
+                xml_payload.encode("utf-8"),
+                cert_pem,
+                key_pem,
+                pwd,
+            )
+
+        xml_firmado = await anyio.to_thread.run_sync(_sign_payload)
         xml_para_soap = xml_firmado.decode("utf-8")
         asyncio.create_task(
             run_webhook_deliveries_for_event(
@@ -603,35 +680,23 @@ async def enviar_registro_y_persistir(
     soap = envolver_soap12(
         re.sub(r"^\s*<\?xml[^>]*\?>\s*", "", xml_para_soap.strip(), count=1)
     )
-    status: int | None = None
-    body = ""
     try:
-        async with httpx.AsyncClient(
-            http2=False,
-            cert=cert_tuple,
-            verify=True,
-            timeout=httpx.Timeout(120.0),
-            follow_redirects=False,
-        ) as client:
-            r = await client.post(
-                url,
-                content=soap.encode("utf-8"),
-                headers={
-                    "Content-Type": 'application/soap+xml; charset=utf-8; action="RegistroFactura"',
-                },
-            )
-            status = r.status_code
-            body = r.text or ""
-    except httpx.ConnectTimeout as exc:
+        status, body = await _post_soap_aeat_with_retries(
+            url=url,
+            soap_body=soap,
+            cert_tuple=cert_tuple,
+        )
+    except Exception as exc:
+        logger.exception("AEAT: agotados reintentos HTTP/red")
         ins = {
             "empresa_id": empresa_id,
             "factura_id": fid,
-            "estado": "Error técnico",
-            "codigo_error": "TIMEOUT",
+            "estado": "Pendiente de envío (cola)",
+            "codigo_error": "REINTENTO_AGOTADO",
             "descripcion_error": str(exc)[:2000],
             "csv_aeat": None,
-            "http_status": status,
-            "response_snippet": body[:8000] if body else None,
+            "http_status": None,
+            "response_snippet": None,
             "soap_action": "RegistroFactura",
             "created_at": now_iso,
         }
@@ -640,26 +705,25 @@ async def enviar_registro_y_persistir(
             db,
             empresa_id=empresa_id,
             factura_id=fid,
-            estado="error_tecnico",
-            codigo="TIMEOUT",
+            estado="pendiente_envio",
+            codigo="REINTENTO_AGOTADO",
             descripcion=ins["descripcion_error"],
             csv=None,
             actualizado_en=now_iso,
         )
         _limpiar_temp(cleanup)
-        return {**factura_row, "aeat_sif_estado": "error_tecnico"}
-    except httpx.ConnectError as exc:
-        desc = str(exc)[:2000]
-        code = "CERT" if ("certificate" in desc.lower() or "tls" in desc.lower()) else "CONN"
+        return {**factura_row, "aeat_sif_estado": "pendiente_envio"}
+
+    if status is not None and (status >= 500 or status == 429):
         ins = {
             "empresa_id": empresa_id,
             "factura_id": fid,
-            "estado": "Error técnico",
-            "codigo_error": code,
-            "descripcion_error": desc,
+            "estado": "Pendiente de envío (5xx/429)",
+            "codigo_error": str(status),
+            "descripcion_error": (body or "")[:2000],
             "csv_aeat": None,
             "http_status": status,
-            "response_snippet": body[:8000] if body else None,
+            "response_snippet": (body or "")[:8000],
             "soap_action": "RegistroFactura",
             "created_at": now_iso,
         }
@@ -668,42 +732,16 @@ async def enviar_registro_y_persistir(
             db,
             empresa_id=empresa_id,
             factura_id=fid,
-            estado="error_tecnico",
-            codigo=code,
+            estado="pendiente_envio",
+            codigo=str(status),
             descripcion=ins["descripcion_error"],
             csv=None,
             actualizado_en=now_iso,
         )
         _limpiar_temp(cleanup)
-        return {**factura_row, "aeat_sif_estado": "error_tecnico"}
-    except httpx.RequestError as exc:
-        ins = {
-            "empresa_id": empresa_id,
-            "factura_id": fid,
-            "estado": "Error técnico",
-            "codigo_error": "HTTPX",
-            "descripcion_error": str(exc)[:2000],
-            "csv_aeat": None,
-            "http_status": status,
-            "response_snippet": body[:8000] if body else None,
-            "soap_action": "RegistroFactura",
-            "created_at": now_iso,
-        }
-        await db.execute(db.table("verifactu_envios").insert(ins))
-        await _patch_factura_aeat(
-            db,
-            empresa_id=empresa_id,
-            factura_id=fid,
-            estado="error_tecnico",
-            codigo="HTTPX",
-            descripcion=ins["descripcion_error"],
-            csv=None,
-            actualizado_en=now_iso,
-        )
-        _limpiar_temp(cleanup)
-        return {**factura_row, "aeat_sif_estado": "error_tecnico"}
-    finally:
-        _limpiar_temp(cleanup)
+        return {**factura_row, "aeat_sif_estado": "pendiente_envio"}
+
+    _limpiar_temp(cleanup)
 
     parsed = interpretar_respuesta_aeat(cuerpo=body, http_status=status)
     ins = {

@@ -14,6 +14,7 @@ import httpx
 from app.db.supabase import SupabaseAsync
 
 _DISTANCE_MATRIX_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
+_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 
 
 def _normalize_addr(s: str) -> str:
@@ -46,6 +47,7 @@ class MapsService:
     def __init__(self, db: SupabaseAsync | None = None) -> None:
         self._db = db
         self._mem: dict[str, float] = {}
+        self._geo_mem: dict[str, tuple[float, float]] = {}
         self._lock = asyncio.Lock()
 
     @staticmethod
@@ -109,6 +111,48 @@ class MapsService:
             tenant_empresa_id=tenant_empresa_id,
         )
         return km
+
+    async def geocode_lat_lng(self, address: str) -> tuple[float, float] | None:
+        """
+        Geocodificación (lat, lng) vía Geocoding API; caché en memoria por dirección normalizada.
+        No persiste en Postgres (el front puede cachear en LocalStorage).
+        """
+        a = (address or "").strip()
+        if not a:
+            return None
+        key = _normalize_addr(a)
+        async with self._lock:
+            if key in self._geo_mem:
+                return self._geo_mem[key]
+
+        api_key = self.maps_api_key()
+        if not api_key:
+            return None
+
+        params = {"address": a[:500], "key": api_key}
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(12.0)) as client:
+                resp = await client.get(_GEOCODE_URL, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception:
+            return None
+
+        if str(data.get("status") or "") != "OK":
+            return None
+        results = data.get("results") or []
+        if not results:
+            return None
+        loc = (results[0].get("geometry") or {}).get("location") or {}
+        try:
+            lat = float(loc.get("lat"))
+            lng = float(loc.get("lng"))
+        except (TypeError, ValueError):
+            return None
+
+        async with self._lock:
+            self._geo_mem[key] = (lat, lng)
+        return lat, lng
 
     async def get_distance_and_duration(
         self,

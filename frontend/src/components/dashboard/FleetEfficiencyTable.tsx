@@ -23,7 +23,7 @@ interface FleetEfficiencyTableProps {
 export function FleetEfficiencyTable({ data }: FleetEfficiencyTableProps) {
   // Configuración de colores para el consumo
   const getConsumptionColor = (consumo: number) => {
-    if (consumo < 28) return "bg-green-500";
+    if (consumo < 28) return "bg-emerald-500";
     if (consumo > 35) return "bg-red-500";
     return "bg-yellow-500";
   };
@@ -35,7 +35,7 @@ export function FleetEfficiencyTable({ data }: FleetEfficiencyTableProps) {
   };
 
   return (
-    <div className="rounded-md border bg-card">
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40">
       <Table>
         <TableHeader>
           <TableRow>

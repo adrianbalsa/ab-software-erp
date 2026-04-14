@@ -8,6 +8,9 @@ import { AppShell } from "@/components/AppShell";
 import { RoleGuard } from "@/components/auth/RoleGuard";
 import { API_BASE, apiFetch } from "@/lib/api";
 
+const inputClass =
+  "mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/25";
+
 type ClienteRow = {
   id: string;
   nombre: string;
@@ -85,69 +88,67 @@ function ClientesContent() {
   };
 
   return (
-    <div className="p-6 md:p-8 max-w-4xl mx-auto w-full">
-      <div className="flex items-start justify-between gap-4 mb-8">
+    <div className="mx-auto w-full max-w-4xl bg-zinc-950 p-6 md:p-8">
+      <div className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Users className="w-7 h-7 text-[#2563eb]" />
+          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-100">
+            <Users className="h-7 w-7 text-emerald-500" aria-hidden />
             Clientes
           </h1>
-          <p className="text-slate-600 mt-1 text-sm">
-            Alta y listado de clientes para portes y facturación.
-          </p>
+          <p className="mt-1 text-sm text-zinc-400">Alta y listado de clientes para portes y facturación.</p>
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href="/dashboard/clientes/onboarding"
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            href="/dashboard/clientes"
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50"
           >
-            <BarChart3 className="w-4 h-4" />
+            <BarChart3 className="h-4 w-4" aria-hidden />
             Dashboard Onboarding
           </Link>
           <button
             type="button"
             onClick={() => void load()}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
             Actualizar
           </button>
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm mb-8">
-        <h2 className="text-sm font-semibold text-slate-800 mb-3">Nuevo cliente</h2>
+      <div className="mb-8 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+        <h2 className="mb-3 text-sm font-semibold text-zinc-100">Nuevo cliente</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
-            <span className="text-slate-600">Nombre / razón social</span>
+            <span className="text-zinc-400">Nombre / razón social</span>
             <input
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              className={inputClass}
               placeholder="Ej. Transportes García SL"
             />
           </label>
           <label className="block text-sm">
-            <span className="text-slate-600">CIF / NIF (opcional)</span>
+            <span className="text-zinc-400">CIF / NIF (opcional)</span>
             <input
               value={nif}
               onChange={(e) => setNif(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              className={inputClass}
               placeholder="B12345678"
             />
           </label>
         </div>
-        {formError && <p className="text-sm text-red-600 mt-2">{formError}</p>}
+        {formError && <p className="mt-2 text-sm text-red-400">{formError}</p>}
         <button
           type="button"
           onClick={() => void crear()}
           disabled={saving}
-          className="mt-4 inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+          className="mt-4 inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-emerald-500 disabled:opacity-50"
         >
           {saving ? (
             <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
               Guardando…
             </>
           ) : (
@@ -157,46 +158,42 @@ function ClientesContent() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 mb-4">
+        <div className="mb-4 rounded-lg border border-red-500/35 bg-red-950/40 px-4 py-3 text-sm text-red-300">
           {error}
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
-          <h2 className="text-sm font-semibold text-slate-800">Clientes activos</h2>
+      <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/40">
+        <div className="border-b border-zinc-800 bg-zinc-950/40 px-5 py-3">
+          <h2 className="text-sm font-semibold text-zinc-100">Clientes activos</h2>
         </div>
         {loading ? (
-          <div className="flex items-center justify-center py-16 text-slate-500 gap-2">
-            <Loader2 className="w-5 h-5 animate-spin" />
+          <div className="flex items-center justify-center gap-2 py-16 text-zinc-400">
+            <Loader2 className="h-5 w-5 animate-spin text-emerald-500" aria-hidden />
             Cargando…
           </div>
         ) : rows.length === 0 ? (
-          <p className="px-5 py-10 text-center text-sm text-slate-500">
+          <p className="px-5 py-10 text-center text-sm text-zinc-500">
             Aún no hay clientes. Crea el primero arriba para usarlo en{" "}
-            <Link href="/portes" className="text-[#2563eb] font-medium hover:underline">
+            <Link href="/portes" className="font-medium text-emerald-500 hover:text-emerald-400 hover:underline">
               Portes
             </Link>
             .
           </p>
         ) : (
-          <div className="w-full overflow-x-auto min-w-0">
-            <table className="w-full min-w-[800px] text-sm text-left">
+          <div className="min-w-0 w-full overflow-x-auto">
+            <table className="w-full min-w-[800px] text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/80 text-slate-600">
+                <tr className="border-b border-zinc-800 text-xs uppercase tracking-wide text-zinc-500">
                   <th className="px-5 py-3 font-semibold">Nombre / razón social</th>
-                  <th className="hidden md:table-cell px-5 py-3 font-semibold w-[40%]">
-                    ID (sistema)
-                  </th>
+                  <th className="hidden w-[40%] px-5 py-3 font-semibold md:table-cell">ID (sistema)</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-zinc-900">
                 {rows.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50/60">
-                    <td className="px-5 py-3 font-medium text-slate-900 align-top">
-                      {r.nombre}
-                    </td>
-                    <td className="hidden md:table-cell px-5 py-3 text-xs text-slate-500 font-mono break-all align-top">
+                  <tr key={r.id} className="transition-colors hover:bg-zinc-800/30">
+                    <td className="align-top px-5 py-3 font-medium text-zinc-100">{r.nombre}</td>
+                    <td className="hidden align-top px-5 py-3 font-mono text-xs break-all text-zinc-400 md:table-cell">
                       {r.id}
                     </td>
                   </tr>
@@ -216,9 +213,9 @@ export default function ClientesPage() {
       <RoleGuard
         allowedRoles={["owner"]}
         fallback={
-          <div className="p-8 max-w-lg">
-            <p className="text-slate-700">Esta sección solo está disponible para el perfil de administrador.</p>
-            <Link href="/dashboard" className="inline-block mt-4 text-[#2563eb] font-medium hover:underline">
+          <div className="max-w-lg bg-zinc-950 p-8">
+            <p className="text-zinc-300">Esta sección solo está disponible para el perfil de administrador.</p>
+            <Link href="/dashboard" className="mt-4 inline-block font-medium text-emerald-500 hover:text-emerald-400 hover:underline">
               Volver al dashboard
             </Link>
           </div>

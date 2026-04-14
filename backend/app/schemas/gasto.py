@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, model_validator
+
+from app.core.security import fernet_encrypt_string
 
 
 def _normalize_nif(value: str | None) -> str | None:
@@ -24,7 +27,11 @@ class GastoCreate(BaseModel):
     moneda: str = Field(default="EUR", min_length=3, max_length=3)
 
     # VeriFactu / trazabilidad fiscal (EUR)
-    nif_proveedor: str | None = Field(default=None, max_length=20)
+    nif_proveedor: str | None = Field(
+        default=None,
+        max_length=512,
+        description="NIF proveedor (entrada normalizada; se cifra para persistencia)",
+    )
     iva: float | None = Field(default=None, ge=0, description="Cuota de IVA en EUR (si consta en el ticket)")
     total_eur: float | None = Field(
         default=None,
@@ -34,12 +41,23 @@ class GastoCreate(BaseModel):
 
     evidencia_url: str | None = None
 
-    @field_validator("nif_proveedor", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def _nif(cls, v: object) -> str | None:
-        if v is None or v == "":
-            return None
-        return _normalize_nif(str(v))
+    def _normalize_and_encrypt_nif(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        raw = out.get("nif_proveedor")
+        if raw is None or str(raw).strip() == "":
+            out["nif_proveedor"] = None
+            return out
+        norm = _normalize_nif(str(raw))
+        if not norm:
+            out["nif_proveedor"] = None
+            return out
+        enc = fernet_encrypt_string(norm)
+        out["nif_proveedor"] = enc if enc else None
+        return out
 
 
 class GastoOut(BaseModel):
@@ -74,3 +92,13 @@ class GastoOCRHint(BaseModel):
     concepto: str | None = None
     nif_proveedor: str | None = None
     iva: float | None = None
+    ocr_confidence: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Confianza agregada Azure DI (0–1).",
+    )
+    requires_manual_review: bool = Field(
+        default=False,
+        description="True si confianza menor que 90 %: revisión humana recomendada antes de firmar/contabilizar.",
+    )

@@ -120,6 +120,8 @@ async def send_to_aeat(
     )
 
     est = str(merged.get("aeat_sif_estado") or "").strip().lower()
+    if est == "pendiente_envio":
+        return merged
     if est == "aceptado":
         await db.execute(
             db.table("facturas")

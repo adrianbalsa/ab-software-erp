@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import logging
 from os import getenv
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api import deps
 from app.core.config import get_settings
@@ -13,8 +11,6 @@ from app.schemas.payments import StripeCheckoutCreate, StripeCheckoutOut, Stripe
 from app.schemas.user import UserOut
 from app.db.supabase import SupabaseAsync
 from app.services import stripe_service
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -100,41 +96,3 @@ async def create_portal(
             detail=str(e),
         ) from e
     return StripePortalOut(url=url)
-
-
-@router.post("/webhook")
-async def stripe_webhook(
-    request: Request,
-    db: SupabaseAsync = Depends(deps.get_db_admin),
-) -> JSONResponse:
-    """
-    Webhook Stripe (sin JWT). Autenticación mediante cabecera ``Stripe-Signature``.
-    """
-    sig = request.headers.get("Stripe-Signature")
-    payload = await request.body()
-
-    try:
-        result = await stripe_service.handle_webhook(payload=payload, sig_header=sig, db=db)
-    except RuntimeError as e:
-        logger.warning("webhook stripe: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(e),
-        ) from e
-    except ValueError as e:
-        logger.warning("webhook stripe payload: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Payload inválido",
-        ) from e
-    except Exception as e:
-        mod = getattr(e, "__module__", "") or ""
-        if mod.startswith("stripe"):
-            logger.warning("webhook stripe SDK: %s", e)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Firma o evento inválido",
-            ) from e
-        raise
-
-    return JSONResponse(content=result)

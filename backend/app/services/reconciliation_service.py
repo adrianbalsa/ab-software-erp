@@ -54,6 +54,7 @@ def _tx_reference_blob(transaction: dict[str, Any]) -> str:
         str(transaction.get("reference") or ""),
         str(transaction.get("concept") or ""),
         str(transaction.get("concepto") or ""),
+        str(transaction.get("remittance_info") or ""),
         str(transaction.get("remittance_information") or ""),
         str(transaction.get("end_to_end_id") or ""),
         str(transaction.get("transaction_id") or ""),

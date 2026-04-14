@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Final
 from urllib.request import Request, urlopen
 
+from cryptography.fernet import Fernet, InvalidToken
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
@@ -200,3 +202,66 @@ def create_access_token(
     if rr == "cliente" and cj:
         payload["cliente_id"] = cj
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+
+# --- Fernet (application-layer encryption for PII at rest) --------------------
+
+
+@lru_cache(maxsize=1)
+def _fernet_from_pii_env() -> Fernet | None:
+    """Clave dedicada PII (44 caracteres base64 url-safe)."""
+    raw = (os.getenv("PII_ENCRYPTION_KEY") or "").strip()
+    if len(raw) != 44:
+        return None
+    try:
+        return Fernet(raw.encode("ascii"))
+    except Exception:
+        return None
+
+
+def fernet_encrypt_string(plain: str | None) -> str | None:
+    """
+    Cifra una cadena UTF-8 antes de persistir (NIF, IBAN, etc.).
+
+    - ``None`` → ``None``; cadena vacía tras strip → ``""``.
+    - Idempotente: si el valor ya parece token Fernet (prefijo ``gAAAA``), no se re-cifra.
+    - Con ``PII_ENCRYPTION_KEY`` válida se usa Fernet directo; si no, ``encrypt_sensitive_data``
+      (``ENCRYPTION_KEY`` / derivación legacy en ``app.core.encryption``).
+    """
+    if plain is None:
+        return None
+    s = str(plain).strip()
+    if s == "":
+        return ""
+    if s.startswith("gAAAA"):
+        return s
+    f = _fernet_from_pii_env()
+    if f is not None:
+        return f.encrypt(s.encode("utf-8")).decode("ascii")
+    from app.core.encryption import encrypt_sensitive_data
+
+    return encrypt_sensitive_data(s)
+
+
+def fernet_decrypt_string(cipher: str | None) -> str | None:
+    """
+    Descifra un token producido por ``fernet_encrypt_string``.
+
+    Orden: Fernet con ``PII_ENCRYPTION_KEY`` → ``decrypt_sensitive_data`` (tolerante a legado/claro).
+    """
+    if cipher is None:
+        return None
+    if not isinstance(cipher, str):
+        return str(cipher)
+    s = cipher.strip()
+    if s == "":
+        return ""
+    f = _fernet_from_pii_env()
+    if f is not None:
+        try:
+            return f.decrypt(s.encode("ascii")).decode("utf-8")
+        except (InvalidToken, ValueError, UnicodeEncodeError):
+            pass
+    from app.core.encryption import decrypt_sensitive_data
+
+    return decrypt_sensitive_data(s)

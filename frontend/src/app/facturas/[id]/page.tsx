@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { pdf } from "@react-pdf/renderer";
-import { ArrowLeft, Download, Loader2 } from "lucide-react";
+import { ArrowLeft, Download, Leaf, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
-import { FacturaDocument, type FacturaPdfPayload } from "@/components/facturas/FacturaPdfTemplate";
 import { InvoiceQR } from "@/components/facturas/InvoiceQR";
-import { getFacturaPdfData, type FacturaPdfData } from "@/lib/api";
+import { api, getFacturaPdfData, type FacturaPdfData } from "@/lib/api";
+import { generateEsgCertificadoFromFactura } from "@/lib/esgGenerator";
+import { generateVerifactuInvoicePdfBlob } from "@/lib/pdfGenerator";
 
 function slugFilePart(raw: string, max = 48): string {
   const t = (raw || "Cliente").trim();
@@ -25,6 +25,7 @@ export default function FacturaDetallePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [esgDownloading, setEsgDownloading] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -45,12 +46,49 @@ export default function FacturaDetallePage() {
     void load();
   }, [load]);
 
-  const descargarVerifactu = async () => {
+  const tieneEsgAgregado =
+    data != null &&
+    data.esg_total_co2_kg != null &&
+    data.esg_euro_iii_baseline_kg != null &&
+    data.esg_total_km != null &&
+    data.esg_portes_count != null;
+
+  const descargarEsg = async () => {
     if (!data) return;
+    setEsgDownloading(true);
+    try {
+      const blob = await generateEsgCertificadoFromFactura(data);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Certificado_Huella_CO2_${slugFilePart(data.numero_factura)}_${slugFilePart(data.receptor.nombre)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "No se pudo generar el certificado ESG");
+    } finally {
+      setEsgDownloading(false);
+    }
+  };
+
+  const descargarVerifactu = async () => {
+    if (!data || !id) return;
     setDownloading(true);
     try {
-      const payload = data as FacturaPdfPayload;
-      const blob = await pdf(<FacturaDocument data={payload} />).toBlob();
+      const facturaId = Number(id);
+      const [factura, preview] = await Promise.all([
+        api.facturas.get(facturaId),
+        api.verifactu.getQrPreview(facturaId).catch(() => null),
+      ]);
+      if (Number(factura.id) !== Number(data.factura_id)) {
+        console.warn("Factura API y pdf-data con distinto id; se usa pdf-data para el cuerpo del PDF.");
+      }
+      const blob = await generateVerifactuInvoicePdfBlob({
+        pdfData: data,
+        verifactuPreview: preview,
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -68,7 +106,7 @@ export default function FacturaDetallePage() {
 
   return (
     <AppShell active="facturas">
-      <header className="h-16 ab-header flex shrink-0 items-center justify-between border-b border-slate-200/80 px-8">
+      <header className="min-h-16 ab-header flex shrink-0 flex-col gap-3 border-b border-slate-200/80 px-8 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <Link
             href="/facturas"
@@ -87,19 +125,41 @@ export default function FacturaDetallePage() {
             )}
           </div>
         </div>
-        <button
-          type="button"
-          disabled={!data || downloading}
-          onClick={() => void descargarVerifactu()}
-          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#2563eb] px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[#1d4ed8] disabled:opacity-50"
-        >
-          {downloading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="h-4 w-4" />
-          )}
-          Descargar PDF (VeriFactu)
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={!data || !tieneEsgAgregado || esgDownloading}
+            title={
+              !data
+                ? undefined
+                : tieneEsgAgregado
+                  ? undefined
+                  : "Solo disponible si la factura tiene portes vinculados con huella calculada."
+            }
+            onClick={() => void descargarEsg()}
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-900 shadow-sm hover:bg-emerald-100 disabled:opacity-50"
+          >
+            {esgDownloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Leaf className="h-4 w-4" />
+            )}
+            Certificado ESG
+          </button>
+          <button
+            type="button"
+            disabled={!data || downloading}
+            onClick={() => void descargarVerifactu()}
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#2563eb] px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[#1d4ed8] disabled:opacity-50"
+          >
+            {downloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            Descargar PDF (VeriFactu)
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto p-8">
@@ -192,7 +252,11 @@ export default function FacturaDetallePage() {
             <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-6">
               <h2 className="mb-4 text-sm font-bold text-emerald-900">VeriFactu</h2>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <InvoiceQR url={data.verifactu_validation_url} size={120} />
+                <InvoiceQR
+                  url={data.verifactu_validation_url}
+                  hash={data.verifactu_hash_audit}
+                  size={120}
+                />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-emerald-900/90">
                     Huella (auditoría):{" "}

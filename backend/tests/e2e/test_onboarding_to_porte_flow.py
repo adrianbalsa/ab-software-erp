@@ -75,14 +75,26 @@ class _FakeDb:
     def table(self, name: str) -> _FakeQuery:
         return _FakeQuery(name)
 
+    async def rpc(self, fn: str, params: dict[str, Any] | None = None) -> _FakeResult:
+        if fn == "audit_logs_insert_api_event" and params:
+            row = {
+                "empresa_id": params.get("p_empresa_id"),
+                "table_name": params.get("p_table_name"),
+                "record_id": params.get("p_record_id"),
+                "action": params.get("p_action"),
+                "old_data": params.get("p_old_data"),
+                "new_data": params.get("p_new_data"),
+                "changed_by": params.get("p_changed_by"),
+            }
+            self.audit_logs.append(row)
+            return _FakeResult(data=[{"id": str(uuid4())}])
+        return _FakeResult(data=[])
+
     async def execute(self, query: _FakeQuery) -> _FakeResult:
         if query.table == "clientes":
             return self._exec_clientes(query)
         if query.table == "profiles":
             return self._exec_profiles(query)
-        if query.table == "audit_logs" and query.action == "insert":
-            self.audit_logs.append(dict(query.payload))
-            return _FakeResult(data=[query.payload])
         if query.table == "portes" and query.action == "insert":
             row = {"id": str(uuid4()), **query.payload}
             self.portes.append(row)

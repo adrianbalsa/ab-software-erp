@@ -224,7 +224,7 @@ export default function DesarrolladoresWebhooksPage() {
                 resetForm();
                 setDialogOpen(true);
               }}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 shrink-0"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-zinc-950 hover:bg-emerald-500"
             >
               <Plus className="w-4 h-4" />
               Nuevo endpoint
@@ -369,7 +369,7 @@ export default function DesarrolladoresWebhooksPage() {
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     placeholder="https://api.tudominio.com/webhooks/ab"
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
                   />
                 </div>
                 <div>
@@ -380,7 +380,7 @@ export default function DesarrolladoresWebhooksPage() {
                       onClick={() => setSubscribeAll((s) => !s)}
                       className={`text-xs font-medium rounded-lg px-2.5 py-1 border ${
                         subscribeAll
-                          ? "border-blue-600 bg-blue-50 text-blue-800"
+                          ? "border-emerald-500/50 bg-emerald-950/40 text-emerald-300"
                           : "border-zinc-200 text-zinc-600 hover:bg-zinc-50"
                       }`}
                     >
@@ -428,7 +428,7 @@ export default function DesarrolladoresWebhooksPage() {
                   type="button"
                   onClick={() => void onCreate()}
                   disabled={saving}
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-500 disabled:opacity-60"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   Crear

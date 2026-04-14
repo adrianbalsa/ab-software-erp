@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { loginAction } from "./actions";
 import { notifyJwtUpdated } from "@/lib/api";
@@ -9,7 +8,6 @@ import { setAuthToken } from "@/lib/auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [state, action, isPending] = useActionState(loginAction, null);
   const [oauthError, setOauthError] = useState<string | null>(null);
   const [oauthPending, setOauthPending] = useState(false);
@@ -18,10 +16,10 @@ export default function LoginPage() {
     if (state && "success" in state && state.success) {
       setAuthToken(state.accessToken);
       notifyJwtUpdated();
-      router.push("/dashboard");
-      router.refresh();
+      /* Navegación completa: garantiza que localStorage y la primera tanda de peticiones al API vean el JWT. */
+      window.location.assign("/dashboard");
     }
-  }, [state, router]);
+  }, [state]);
 
   const onGoogleSignIn = async () => {
     setOauthError(null);
@@ -52,7 +50,7 @@ export default function LoginPage() {
       <section className="w-full max-w-md rounded-2xl border border-zinc-200/90 bg-white p-8 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
         <div className="mb-6 flex flex-col items-center gap-4 text-center text-slate-800">
           <Image
-            src="/logo.png"
+            src="/logo.svg"
             alt="AB Logistics OS"
             width={64}
             height={64}

@@ -205,7 +205,7 @@ async def test_enviar_registro_timeout_clasifica_error_tecnico(monkeypatch: pyte
         cliente=cliente,
     )
 
-    assert out.get("aeat_sif_estado") == "error_tecnico"
+    assert out.get("aeat_sif_estado") == "pendiente_envio"
     assert out.get("aeat_sif_csv") is None
     factura_updates = [
         payload
@@ -213,9 +213,9 @@ async def test_enviar_registro_timeout_clasifica_error_tecnico(monkeypatch: pyte
         if table == "facturas"
     ]
     assert factura_updates, "Se esperaba update sobre facturas con campos aeat_sif_*"
-    aeat_sif_mensaje = factura_updates[-1].get("aeat_sif_descripcion")
-    assert "timeout" in str(aeat_sif_mensaje).lower()
+    aeat_sif_codigo = factura_updates[-1].get("aeat_sif_codigo")
+    assert aeat_sif_codigo == "REINTENTO_AGOTADO"
     assert any(
-        table == "verifactu_envios" and row.get("codigo_error") == "TIMEOUT"
+        table == "verifactu_envios" and row.get("codigo_error") == "REINTENTO_AGOTADO"
         for table, row in db.inserts
     )

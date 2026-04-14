@@ -49,11 +49,11 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
         <div>
           <h2
             id="dash-economic-advanced"
-            className="text-lg font-bold text-slate-100 tracking-tight"
+            className="text-lg font-bold tracking-tight text-zinc-100"
           >
             Vista económica avanzada
           </h2>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-zinc-400">
             Math Engine · margen/km, combustible, equilibrio y rentabilidad por cliente (solo owner)
           </p>
         </div>
@@ -61,7 +61,7 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
           type="button"
           onClick={() => void refresh()}
           disabled={loading}
-          className="text-sm font-semibold text-sky-400 hover:text-sky-300 disabled:opacity-50"
+          className="text-sm font-semibold text-emerald-500 hover:text-emerald-400 disabled:opacity-50"
         >
           {loading ? "Cargando…" : "Actualizar"}
         </button>
@@ -70,16 +70,16 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
       <div className="dashboard-bento rounded-2xl p-6 shadow-xl shadow-black/40">
         {loading && !data ? (
           <div className="animate-pulse grid grid-cols-12 gap-4 min-h-[320px]">
-            <div className="col-span-12 h-8 bg-slate-800 rounded w-1/3" />
-            <div className="col-span-12 h-64 bg-slate-900 rounded-xl" />
+            <div className="col-span-12 h-8 w-1/3 rounded bg-zinc-800" />
+            <div className="col-span-12 h-64 rounded-xl bg-zinc-900" />
           </div>
         ) : data ? (
           <div className="grid grid-cols-12 gap-4">
             {/* KPI row — 1 col móvil, 2 tablet, 3 desktop (tres métricas) */}
             <div className="col-span-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/50 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                <Activity className="h-4 w-4 text-sky-400" />
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                <Activity className="h-4 w-4 text-emerald-500" />
                 Coste medio / km (30d)
               </div>
               <p className="mt-2 text-2xl font-bold text-white tabular-nums">
@@ -87,14 +87,14 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
                   ? formatEUR4(data.coste_medio_km_ultimos_30d)
                   : "—"}
               </p>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="mt-1 text-xs text-zinc-500">
                 {data.km_operativos_ultimos_30d.toLocaleString("es-ES", { maximumFractionDigits: 1 })} km ·{" "}
                 {formatEUR(data.gastos_operativos_ultimos_30d)} gastos
               </p>
             </div>
-            <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/50 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                <Gauge className="h-4 w-4 text-violet-400" />
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                <Gauge className="h-4 w-4 text-amber-400" />
                 Punto equilibrio (mes)
               </div>
               <p className="mt-2 text-lg font-bold text-white leading-tight">
@@ -102,16 +102,16 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
                   ? formatEUR(data.punto_equilibrio_mensual.ingreso_equilibrio_estimado_eur)
                   : "—"}
               </p>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="mt-1 text-xs text-zinc-500">
                 {data.punto_equilibrio_mensual.km_equilibrio_estimados != null
                   ? `${data.punto_equilibrio_mensual.km_equilibrio_estimados.toLocaleString("es-ES")} km eq.`
                   : "Km eq. N/D"}{" "}
                 · GF {formatEUR(data.punto_equilibrio_mensual.gastos_fijos_mes_eur)}
               </p>
             </div>
-            <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/50 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                <TrendingUp className="h-4 w-4 text-emerald-400" />
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
                 Contribución
               </div>
               <p className="mt-2 text-2xl font-bold text-white tabular-nums">
@@ -119,7 +119,7 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
                   ? `${(data.punto_equilibrio_mensual.margen_contribucion_ratio * 100).toFixed(1)} %`
                   : "—"}
               </p>
-              <p className="text-xs text-slate-500 mt-1 truncate" title={data.punto_equilibrio_mensual.nota_metodologia}>
+              <p className="mt-1 truncate text-xs text-zinc-500" title={data.punto_equilibrio_mensual.nota_metodologia}>
                 {data.punto_equilibrio_mensual.nota_metodologia.length > 90
                   ? `${data.punto_equilibrio_mensual.nota_metodologia.slice(0, 90)}…`
                   : data.punto_equilibrio_mensual.nota_metodologia}
@@ -128,9 +128,9 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
             </div>
 
             {/* Ingresos vs Gastos — áreas */}
-            <div className="col-span-12 lg:col-span-7 rounded-xl border border-slate-800 bg-slate-900/50 p-4 min-h-[300px]">
-              <div className="flex items-center gap-2 mb-3 text-slate-300 text-sm font-semibold">
-                <BarChart3 className="w-4 h-4 text-cyan-400" />
+            <div className="col-span-12 min-h-[300px] rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 lg:col-span-7">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-300">
+                <BarChart3 className="h-4 w-4 text-emerald-500" />
                 Ingresos vs gastos (12 meses)
               </div>
               <div className="h-[min(260px,40vh)] min-h-[220px] sm:h-[280px] sm:min-h-[240px] w-full min-w-0">
@@ -177,8 +177,8 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
             </div>
 
             {/* Treemap categorías */}
-            <div className="col-span-12 lg:col-span-5 rounded-xl border border-slate-800 bg-slate-900/50 p-4 min-h-[300px]">
-              <div className="flex items-center gap-2 mb-3 text-slate-300 text-sm font-semibold">
+            <div className="col-span-12 min-h-[300px] rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 lg:col-span-5">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-300">
                 Gastos por categoría
               </div>
               <div className="h-[min(260px,40vh)] min-h-[220px] sm:h-[280px] sm:min-h-[240px] w-full min-w-0">
@@ -188,7 +188,7 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
                     dataKey="value"
                     nameKey="name"
                     stroke="#0f172a"
-                    fill="#3b82f6"
+                    fill="#10b981"
                   >
                     <Tooltip
                       contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8 }}
@@ -200,11 +200,11 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
             </div>
 
             {/* Margen/km vs gasoil/km */}
-            <div className="col-span-12 rounded-xl border border-slate-800 bg-slate-900/50 p-4 min-h-[320px]">
-              <div className="flex items-center gap-2 mb-3 text-slate-300 text-sm font-semibold">
+            <div className="col-span-12 min-h-[320px] rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-300">
                 Margen neto / km vs coste combustible / km
               </div>
-              <p className="text-xs text-slate-500 mb-2">
+              <p className="mb-2 text-xs text-zinc-500">
                 Responde: cuánto queda por km tras gastos operativos del mes frente al coste de gasoil imputado por km
                 facturado.
               </p>
@@ -259,12 +259,12 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
             </div>
 
             {/* Top clientes */}
-            <div className="col-span-12 rounded-xl border border-slate-800 bg-slate-900/50 p-4 min-w-0">
-              <div className="text-slate-300 text-sm font-semibold mb-3">Top 5 rentabilidad (margen % · prorrateo)</div>
-              <div className="w-full overflow-x-auto min-w-0">
-              <table className="w-full min-w-[800px] text-sm text-left text-slate-300">
+            <div className="col-span-12 min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+              <div className="mb-3 text-sm font-semibold text-zinc-300">Top 5 rentabilidad (margen % · prorrateo)</div>
+              <div className="min-w-0 w-full overflow-x-auto">
+              <table className="w-full min-w-[800px] text-left text-sm text-zinc-300">
                 <thead>
-                  <tr className="border-b border-slate-800 text-slate-500 text-xs uppercase">
+                  <tr className="border-b border-zinc-800 text-xs uppercase text-zinc-500">
                     <th className="py-2 pr-4">Cliente</th>
                     <th className="py-2 pr-4">Ingreso neto</th>
                     <th className="py-2 pr-4">Gasto asignado</th>
@@ -274,17 +274,17 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
                 <tbody>
                   {data.top_clientes_rentabilidad.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-6 text-slate-500">
+                      <td colSpan={4} className="py-6 text-zinc-500">
                         Sin datos de facturación por cliente.
                       </td>
                     </tr>
                   ) : (
                     data.top_clientes_rentabilidad.map((r) => (
-                      <tr key={r.cliente_id} className="border-b border-slate-800/80">
+                      <tr key={r.cliente_id} className="border-b border-zinc-900 transition-colors hover:bg-zinc-800/30">
                         <td className="py-2 pr-4 font-medium text-white">{r.cliente_nombre}</td>
                         <td className="py-2 pr-4 tabular-nums">{formatEUR(r.ingresos_netos_eur)}</td>
                         <td className="py-2 pr-4 tabular-nums">{formatEUR(r.gasto_asignado_eur)}</td>
-                        <td className="py-2 tabular-nums text-emerald-400">{r.margen_pct.toFixed(1)} %</td>
+                        <td className="py-2 tabular-nums text-emerald-500">{r.margen_pct.toFixed(1)} %</td>
                       </tr>
                     ))
                   )}

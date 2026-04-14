@@ -1,4 +1,8 @@
-"""Rutas API v1 para portes (CMR, entrega POD, albarán)."""
+"""Rutas API v1 para portes (CMR, entrega POD, albarán).
+
+El cálculo de márgenes en ``POST /portes/cotizar`` vive en ``app.api.routes.portes``;
+allí se anulan ``margen_proyectado`` / ``precio_sugerido`` para ``traffic_manager``.
+"""
 
 from __future__ import annotations
 

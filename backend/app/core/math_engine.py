@@ -8,10 +8,10 @@ alineada con ``numeric(12,2)`` en PostgreSQL/Supabase.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from decimal import (
     ROUND_HALF_EVEN,
-    ROUND_HALF_UP,
     Context,
     Decimal,
     InvalidOperation,
@@ -34,11 +34,25 @@ class RoundingIntegrityError(FinancialDomainError):
 
 
 def to_decimal(value: float | str | Decimal | None) -> Decimal:
-    """Convierte entrada a ``Decimal`` sin pasar por binarios de ``float`` cuando es posible."""
+    """
+    Convierte entrada a ``Decimal``.
+
+    - ``str`` / ``Decimal``: sin pérdida de precisión de representación.
+    - ``float``: se usa ``Decimal(str(value))`` (convención del proyecto); los importes
+      monetarios deben preferir **cadena** o ``Decimal`` en APIs para evitar binarios IEEE.
+    - ``NaN`` / ``inf``: rechazo explícito (no son importes válidos).
+    """
     if value is None:
         return Decimal("0")
     if isinstance(value, Decimal):
         return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise FinancialDomainError(f"Importe no finito (NaN/inf): {value!r}")
+        try:
+            return Decimal(str(value).strip())
+        except (InvalidOperation, ValueError, TypeError) as e:
+            raise FinancialDomainError(f"Importe no numérico: {value!r}") from e
     if isinstance(value, str):
         s = value.strip()
         if not s:
@@ -160,7 +174,8 @@ def quantize_financial(value: float | str | Decimal | None) -> Decimal:
 
 def decimal_to_db_numeric(value: Decimal) -> Decimal:
     """
-    Salida estable para columnas ``numeric(12,2)``: siempre 2 decimales, HALF_UP.
+    Salida estable para columnas ``numeric(12,2)``: siempre 2 decimales (**ROUND_HALF_EVEN**,
+    misma cuantía que ``round_fiat`` / ``quantize_financial``).
     """
     return quantize_currency(value)
 

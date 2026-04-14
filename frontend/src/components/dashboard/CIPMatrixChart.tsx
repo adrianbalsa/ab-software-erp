@@ -41,26 +41,26 @@ const CustomTooltip = ({ active, payload }: CipScatterTooltipProps) => {
     const data = first?.payload;
     if (!data) return null;
     return (
-      <div className="bg-white/95 backdrop-blur-sm border border-slate-200 p-4 rounded-lg shadow-xl shadow-slate-200/50">
-        <p className="font-semibold text-slate-800 mb-3 border-b border-slate-100 pb-2">
+      <div className="rounded-lg border border-zinc-700 bg-zinc-950/95 p-4 shadow-xl shadow-black/40 backdrop-blur-sm">
+        <p className="mb-3 border-b border-zinc-800 pb-2 font-semibold text-zinc-100">
           {data.ruta}
         </p>
         <div className="space-y-1.5 text-sm">
           <div className="flex justify-between gap-4">
-            <span className="text-slate-500">Margen Neto:</span>
-            <span className="font-medium text-emerald-600">
+            <span className="text-zinc-400">Margen Neto:</span>
+            <span className="font-medium text-emerald-500">
               {formatCurrency(data.margen_neto)}
             </span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-slate-500">Emisiones CO₂:</span>
-            <span className="font-medium text-rose-600">
+            <span className="text-zinc-400">Emisiones CO₂:</span>
+            <span className="font-medium text-rose-400">
               {formatNumber(data.emisiones_co2)} kg
             </span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-slate-500">Volumen:</span>
-            <span className="font-medium text-slate-700">
+            <span className="text-zinc-400">Volumen:</span>
+            <span className="font-medium text-zinc-200">
               {data.total_portes} portes
             </span>
           </div>
@@ -107,15 +107,15 @@ export function CIPMatrixChart({ className }: CIPMatrixChartProps) {
   if (isLoading) {
     return shell(
       <div className="flex min-h-[400px] w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-500/80" />
       </div>,
     );
   }
 
   if (error || !data || data.length === 0) {
     return shell(
-      <div className="flex min-h-[400px] w-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50">
-        <p className="text-sm text-slate-500">
+      <div className="flex min-h-[400px] w-full items-center justify-center rounded-xl border border-dashed border-zinc-800 bg-zinc-900/30">
+        <p className="text-sm text-zinc-400">
           {error || "No hay suficientes datos (se requieren rutas con múltiples portes)."}
         </p>
       </div>,

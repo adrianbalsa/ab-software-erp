@@ -1,8 +1,8 @@
 """
 Módulo estable para ``from app.api.v1 import stripe`` en ``app.main``.
 
-El paquete pip ``stripe`` sigue importándose en ``endpoints/stripe_pago.py`` como ``import stripe``;
-este módulo solo reexporta el router HTTP y no debe llamarse ``stripe`` en rutas internas ambiguas.
+El paquete pip ``stripe`` se importa en ``endpoints/stripe_pago.py``; el webhook canónico está en
+``stripe_webhook.py`` (``POST /api/v1/webhooks/stripe``).
 """
 from __future__ import annotations
 

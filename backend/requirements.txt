@@ -42,6 +42,7 @@ isodate==0.7.2
 itsdangerous==2.2.0
 jiter==0.13.0
 limits==5.8.0
+litellm==1.83.7
 lxml==6.0.2
 msrest==0.7.1
 numpy==2.4.4

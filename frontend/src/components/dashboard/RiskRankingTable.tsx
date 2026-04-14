@@ -57,12 +57,12 @@ export function RiskRankingTable({ rows }: Props) {
 
           return (
             <TableRow key={row.cliente_id}>
-              <TableCell className="font-medium text-zinc-900">
+              <TableCell className="font-medium text-zinc-100">
                 <span className="inline-flex items-center gap-2">
                   {row.mandato_sepa_activo ? (
                     <span title="Mandato SEPA activo" className="inline-flex">
                       <ShieldCheck
-                        className="h-4 w-4 shrink-0 text-emerald-600"
+                        className="h-4 w-4 shrink-0 text-emerald-500"
                         aria-label="Mandato SEPA activo"
                       />
                     </span>
@@ -70,22 +70,22 @@ export function RiskRankingTable({ rows }: Props) {
                   {row.nombre}
                 </span>
               </TableCell>
-              <TableCell className="text-right tabular-nums text-zinc-700">
+              <TableCell className="text-right tabular-nums text-zinc-300">
                 {formatEUR(row.saldo_pendiente)}
               </TableCell>
-              <TableCell className="text-right tabular-nums text-zinc-700">
+              <TableCell className="text-right tabular-nums text-zinc-300">
                 {row.riesgo_score.toLocaleString("es-ES", { maximumFractionDigits: 2 })}
               </TableCell>
               <TableCell>
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2 text-xs text-zinc-600">
-                    <span className="tabular-nums font-medium text-zinc-800">
+                  <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                    <span className="tabular-nums font-medium text-zinc-200">
                       {formatEUR(row.valor_riesgo)}
                     </span>
                   </div>
                   <Progress
                     value={barPct}
-                    className="h-2.5 bg-zinc-200/90"
+                    className="h-2.5 bg-zinc-800/90"
                     indicatorClassName="shadow-sm"
                     indicatorStyle={{ backgroundColor: fill }}
                   />

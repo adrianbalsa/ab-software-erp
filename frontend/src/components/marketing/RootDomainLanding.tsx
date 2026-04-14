@@ -17,7 +17,7 @@ export function RootDomainLanding() {
       <header className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-6">
         <div className="flex items-center gap-3">
           <Image
-            src="/logo.png"
+            src="/logo.svg"
             alt="AB Logistics OS"
             width={48}
             height={48}

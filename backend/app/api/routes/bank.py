@@ -5,7 +5,13 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api import deps
-from app.schemas.banco import BancoConectarOut, BancoSyncOut
+from app.schemas.banco import (
+    BancoConectarOut,
+    BancoCuentaOut,
+    BancoMovimientoOut,
+    BancoOAuthCompleteOut,
+    BancoSyncOut,
+)
 from app.schemas.user import UserOut
 from app.services.bank_service import BankService, _gocardless_configured
 
@@ -51,6 +57,80 @@ async def bank_connect(
             redirect_url=redirect_url,
         )
         return BancoConectarOut(**out)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+@router.get("/accounts", response_model=list[BancoCuentaOut])
+async def bank_list_accounts(
+    current_user: UserOut = Depends(deps.require_admin_active_write_user),
+    service: BankService = Depends(deps.get_bank_service),
+) -> list[BancoCuentaOut]:
+    """Cuentas enlazadas tras autorizar el banco (GoCardless Bank Account Data)."""
+    if not _gocardless_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Integración bancaria no configurada (GOCARDLESS_SECRET_ID / GOCARDLESS_SECRET_KEY)",
+        )
+    try:
+        rows = await service.list_accounts(empresa_id=str(current_user.empresa_id))
+        return [BancoCuentaOut(**r) for r in rows]
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+@router.get("/transactions", response_model=list[BancoMovimientoOut])
+async def bank_fetch_transactions(
+    days: int = Query(default=90, ge=1, le=365, description="Días hacia atrás desde hoy"),
+    current_user: UserOut = Depends(deps.require_admin_active_write_user),
+    service: BankService = Depends(deps.get_bank_service),
+) -> list[BancoMovimientoOut]:
+    """Descarga y persiste movimientos recientes; devuelve el lote importado (metadatos)."""
+    if not _gocardless_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Integración bancaria no configurada (GOCARDLESS_SECRET_ID / GOCARDLESS_SECRET_KEY)",
+        )
+    try:
+        rows = await service.fetch_transactions(empresa_id=str(current_user.empresa_id), days=days)
+        return [BancoMovimientoOut(**r) for r in rows]
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+@router.get("/oauth/complete", response_model=BancoOAuthCompleteOut)
+async def bank_oauth_complete(
+    ref: str = Query(..., min_length=8, description="requisition_id devuelto por GoCardless en el redirect (?ref=)"),
+    days: int = Query(default=90, ge=1, le=365),
+    current_user: UserOut = Depends(deps.require_admin_active_write_user),
+    service: BankService = Depends(deps.get_bank_service),
+) -> BancoOAuthCompleteOut:
+    """
+    Completa el flujo tras el redirect: valida ``ref``, sincroniza cuentas y movimientos.
+    """
+    if not _gocardless_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Integración bancaria no configurada (GOCARDLESS_SECRET_ID / GOCARDLESS_SECRET_KEY)",
+        )
+    try:
+        out = await service.complete_oauth_redirect(
+            empresa_id=str(current_user.empresa_id),
+            ref=ref,
+            days=days,
+        )
+        return BancoOAuthCompleteOut(
+            requisition_id=out["requisition_id"],
+            accounts=[BancoCuentaOut(**a) for a in out["accounts"]],
+            transactions_imported=int(out["transactions_imported"]),
+            transactions=[BancoMovimientoOut(**t) for t in out["transactions"]],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
 

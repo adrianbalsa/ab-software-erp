@@ -88,6 +88,42 @@ class PorteOut(BaseModel):
         description="Porte subcontratado (Scope 3).",
     )
     factura_id: int | None = None
+    co2_kg: float | None = Field(
+        default=None,
+        description="kg CO₂ (norma EURO km) persistido en BD; ver ``calculate_co2_emissions``.",
+    )
+    vehiculo_matricula: str | None = Field(
+        default=None,
+        description="Matrícula del vehículo de flota asignado (enriquecido en GET detalle).",
+    )
+    vehiculo_modelo: str | None = Field(
+        default=None,
+        description="Denominación del vehículo en inventario flota.",
+    )
+    vehiculo_normativa_euro: str | None = Field(
+        default=None,
+        description="Normativa EURO resuelta para reporting CO₂ (p. ej. Euro VI).",
+    )
+    vehiculo_engine_class: str | None = Field(
+        default=None,
+        description="Clase motor GLEC (p. ej. EURO_VI) desde flota.",
+    )
+    vehiculo_fuel_type: str | None = Field(
+        default=None,
+        description="Tipo de combustible GLEC (p. ej. DIESEL) desde flota.",
+    )
+    esg_co2_total_kg: float | None = Field(
+        default=None,
+        description="CO₂ total kg (motor GLEC cargado/vacío; ``calculate_co2_footprint``).",
+    )
+    esg_co2_euro_iii_baseline_kg: float | None = Field(
+        default=None,
+        description="Mismo recorrido con motor Euro III (línea base certificado).",
+    )
+    esg_co2_ahorro_vs_euro_iii_kg: float | None = Field(
+        default=None,
+        description="Ahorro kg CO₂ vs línea base Euro III (≥ 0).",
+    )
     nombre_consignatario_final: str | None = Field(
         default=None,
         description="Nombre quien firma la entrega (POD).",
@@ -102,7 +138,17 @@ class PorteOut(BaseModel):
         description="Opcional: maestro cliente (no viene de PostgREST en el SELECT * estándar)",
     )
 
-    @field_serializer("km_estimados", "precio_pactado", "co2_emitido", "peso_ton", mode="plain")
+    @field_serializer(
+        "km_estimados",
+        "precio_pactado",
+        "co2_emitido",
+        "co2_kg",
+        "peso_ton",
+        "esg_co2_total_kg",
+        "esg_co2_euro_iii_baseline_kg",
+        "esg_co2_ahorro_vs_euro_iii_kg",
+        mode="plain",
+    )
     def _ser_porte_qty(self, v: float | None) -> float | None:
         if v is None:
             return None
@@ -158,7 +204,10 @@ class PorteCotizarOut(BaseModel):
     kilometros_totales: float
     tiempo_estimado_min: int
     coste_operativo_estimado: float
-    margen_proyectado: float
+    margen_proyectado: float | None = Field(
+        default=None,
+        description="Null para rol traffic_manager (no visibilidad de margen proyectado).",
+    )
     es_rentable: bool | None = Field(
         default=None,
         description="True si precio_oferta > coste_operativo; null si no se indicó precio.",

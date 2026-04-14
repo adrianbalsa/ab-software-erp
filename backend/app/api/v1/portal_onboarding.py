@@ -9,6 +9,7 @@ from app.api import deps
 from app.core.risk_engine import RiskEngine
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserOut
+from app.services.audit_logs_service import AuditLogsService
 
 router = APIRouter()
 
@@ -64,32 +65,29 @@ async def accept_risk(
         # Compatibilidad con esquemas donde las columnas de onboarding no existan aun.
         pass
 
-    await db.execute(
-        db.table("audit_logs").insert(
-            {
-                "empresa_id": empresa_id,
-                "table_name": "clientes",
-                "record_id": cliente_id,
-                "action": "RISK_ACCEPTED",
-                "old_data": {
-                    "riesgo_aceptado": cliente.get("riesgo_aceptado"),
-                    "riesgo_aceptado_at": cliente.get("riesgo_aceptado_at"),
-                },
-                "new_data": {
-                    "riesgo_aceptado": True,
-                    "riesgo_aceptado_at": now_iso,
-                    "score": risk_payload.get("score"),
-                    "creditLimitEur": risk_payload.get("creditLimitEur"),
-                    "collectionTerms": risk_payload.get("collectionTerms"),
-                    "reasons": risk_payload.get("reasons") or [],
-                    "acceptance_text": (
-                        "Acepto mi evaluacion de riesgo y el sistema de cobro automatico "
-                        "SEPA como condicion para operar"
-                    ),
-                },
-                "changed_by": str(portal_user.usuario_id) if portal_user.usuario_id else None,
-            }
-        )
+    audit = AuditLogsService(db)
+    await audit.log_sensitive_action(
+        empresa_id=empresa_id,
+        table_name="clientes",
+        record_id=cliente_id,
+        action="RISK_ACCEPTED",
+        old_value={
+            "riesgo_aceptado": cliente.get("riesgo_aceptado"),
+            "riesgo_aceptado_at": cliente.get("riesgo_aceptado_at"),
+        },
+        new_value={
+            "riesgo_aceptado": True,
+            "riesgo_aceptado_at": now_iso,
+            "score": risk_payload.get("score"),
+            "creditLimitEur": risk_payload.get("creditLimitEur"),
+            "collectionTerms": risk_payload.get("collectionTerms"),
+            "reasons": risk_payload.get("reasons") or [],
+            "acceptance_text": (
+                "Acepto mi evaluacion de riesgo y el sistema de cobro automatico "
+                "SEPA como condicion para operar"
+            ),
+        },
+        user_id=portal_user.usuario_id,
     )
 
     return {"status": "ok", "detail": "Aceptacion registrada"}

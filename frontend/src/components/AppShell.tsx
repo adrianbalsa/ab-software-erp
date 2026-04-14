@@ -16,6 +16,8 @@ import {
   Leaf,
   LineChart,
   Link2,
+  Target,
+  Map as MapIcon,
   MapPin,
   Menu,
   Receipt,
@@ -30,16 +32,12 @@ import type { LucideIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { useEffect, useState } from "react";
 
-import {
-  ConfiguracionNavSection,
-  SidebarUserSection,
-  sidebarNavIcon,
-  sidebarNavRow,
-} from "@/components/layout/Sidebar";
+import { ConfiguracionNavSection, SidebarUserSection } from "@/components/layout/Sidebar";
+import { sidebarNavIcon, sidebarNavRow } from "@/components/layout/sidebarNavStyles";
 import { QuotaStatusCard } from "@/components/QuotaStatusCard";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useRole } from "@/hooks/useRole";
-import { isOwnerLike, type AppRbacRole } from "@/lib/api";
+import { isOwnerLike, isTrafficManager, type AppRbacRole } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -65,7 +63,9 @@ type Props = {
     | "certificaciones"
     | "desarrolladores"
     | "analitica"
-    | "simulador";
+    | "bi"
+    | "simulador"
+    | "mapa";
 };
 
 function NavSectionHeader({
@@ -153,9 +153,9 @@ function showNavItem(
     return key !== "flota" && key !== "sostenibilidad";
   }
   
-  // Traffic manager (STAFF operativo) puede ver flota y sostenibilidad
+  // Traffic manager (STAFF operativo) puede ver flota y sostenibilidad (sin módulos fiscal-búnker)
   if (role === "traffic_manager") {
-    return key === "flota" || key === "sostenibilidad" || key === "facturas" || key === "gastos";
+    return key === "flota" || key === "sostenibilidad";
   }
   
   // Driver y cliente: acceso muy limitado
@@ -164,13 +164,13 @@ function showNavItem(
 
 function ShellNavAndFooter({
   active,
-  role,
   onNavLinkClick,
 }: {
   active: Props["active"];
-  role: AppRbacRole;
   onNavLinkClick?: () => void;
 }) {
+  const { role } = useRole();
+  const hideFinanceBunkerAndAdminNav = isTrafficManager(role);
   const p = onNavLinkClick ? { onClick: onNavLinkClick } : {};
 
   return (
@@ -196,6 +196,16 @@ function ShellNavAndFooter({
                 icon={BarChart3}
                 title="Matriz CIP"
                 subtitle="Margen vs CO₂"
+                {...p}
+              />
+            )}
+            {isOwnerLike(role) && (
+              <SidebarNavLink
+                href="/dashboard/bi"
+                active={active === "bi"}
+                icon={Target}
+                title="Inteligencia BI"
+                subtitle="DSO · trayectos · ESG"
                 {...p}
               />
             )}
@@ -247,6 +257,16 @@ function ShellNavAndFooter({
                   className="nav-flota-eficiencia"
                   {...p}
                 />
+                {!hideFinanceBunkerAndAdminNav ? (
+                  <SidebarNavLink
+                    href="/dashboard/mapa"
+                    active={active === "mapa"}
+                    icon={MapIcon}
+                    title="Mapa inteligencia"
+                    subtitle="Rentabilidad y CO₂"
+                    {...p}
+                  />
+                ) : null}
               </>
             )}
             {showNavItem("sostenibilidad", role) && (
@@ -262,8 +282,8 @@ function ShellNavAndFooter({
           </div>
         </section>
 
-        {/* FINANZAS & FISCAL */}
-        {showNavItem("finanzas", role) && (
+        {/* FINANZAS & FISCAL (Búnker) — oculto explícitamente para traffic_manager */}
+        {!hideFinanceBunkerAndAdminNav && showNavItem("finanzas", role) && (
           <section className="mt-6">
             <NavSectionHeader title="Finanzas & Fiscal" subtitle="Bunker" />
             <div className="flex flex-col gap-0.5">
@@ -374,7 +394,7 @@ function ShellNavAndFooter({
         <section className="mt-6">
           <NavSectionHeader title="Sistema" subtitle="Cuenta y datos" />
           <div className="flex flex-col gap-0.5">
-            {showNavItem("admin", role) && (
+            {!hideFinanceBunkerAndAdminNav && showNavItem("admin", role) && (
               <SidebarNavLink
                 href="/admin"
                 active={active === "admin"}
@@ -394,7 +414,9 @@ function ShellNavAndFooter({
                 {...p}
               />
             )}
-            <ConfiguracionNavSection active={active} role={role} onNavLinkClick={onNavLinkClick} />
+            {!hideFinanceBunkerAndAdminNav ? (
+              <ConfiguracionNavSection active={active} role={role} onNavLinkClick={onNavLinkClick} />
+            ) : null}
             <SidebarNavLink
               href="/perfil/seguridad"
               active={active === "seguridad"}
@@ -403,7 +425,7 @@ function ShellNavAndFooter({
               subtitle="Perfil y sesión"
               {...p}
             />
-            {showNavItem("finanzas", role) && (
+            {!hideFinanceBunkerAndAdminNav && showNavItem("finanzas", role) && (
               <SidebarNavLink
                 href="/finanzas/exportar"
                 active={active === "exportar"}
@@ -430,13 +452,13 @@ function ShellNavAndFooter({
 
 export function AppShell({ children, active }: Props) {
   const pathname = usePathname();
-  const { role } = useRole();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const resolvedActive: Props["active"] = (() => {
     if (active) return active;
     if (pathname.startsWith("/dashboard/configuracion")) return "desarrolladores";
     if (pathname === "/dashboard/analitica") return "analitica";
+    if (pathname === "/dashboard/bi" || pathname.startsWith("/dashboard/bi/")) return "bi";
     if (pathname === "/dashboard/finanzas/tesoreria") return "tesoreria";
     if (pathname === "/dashboard/finanzas/simulador") return "simulador";
     if (pathname === "/dashboard/finanzas/auditoria") return "auditoria";
@@ -448,6 +470,7 @@ export function AppShell({ children, active }: Props) {
     if (pathname === "/dashboard" || pathname.startsWith("/dashboard")) return "dashboard";
     if (pathname.startsWith("/portes")) return "portes";
     if (pathname.startsWith("/flota/eficiencia")) return "eficiencia";
+    if (pathname === "/dashboard/mapa" || pathname.startsWith("/dashboard/mapa/")) return "mapa";
     if (pathname.startsWith("/flota")) return "flota";
     if (pathname.startsWith("/operaciones")) return "operaciones";
     if (pathname.startsWith("/clientes")) return "clientes";
@@ -494,7 +517,7 @@ export function AppShell({ children, active }: Props) {
             AB Logistics OS
           </span>
         </div>
-        <ShellNavAndFooter active={resolvedActive} role={role} />
+        <ShellNavAndFooter active={resolvedActive} />
       </aside>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -519,11 +542,7 @@ export function AppShell({ children, active }: Props) {
               <X className="h-5 w-5" />
             </button>
           </div>
-          <ShellNavAndFooter
-            active={resolvedActive}
-            role={role}
-            onNavLinkClick={closeMobile}
-          />
+          <ShellNavAndFooter active={resolvedActive} onNavLinkClick={closeMobile} />
         </SheetContent>
       </Sheet>
 

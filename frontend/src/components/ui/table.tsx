@@ -2,16 +2,14 @@
 
 import * as React from "react";
 
-function joinClasses(...parts: Array<string | undefined>) {
-  return parts.filter(Boolean).join(" ");
-}
+import { cn } from "@/lib/utils";
 
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
     <div className="relative w-full overflow-x-auto">
       <table
         ref={ref}
-        className={joinClasses("w-full caption-bottom text-sm", className)}
+        className={cn("w-full caption-bottom text-sm", className)}
         {...props}
       />
     </div>
@@ -23,7 +21,7 @@ const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <thead ref={ref} className={joinClasses("[&_tr]:border-b border-zinc-200", className)} {...props} />
+  <thead ref={ref} className={cn("[&_tr]:border-b [&_tr]:border-zinc-800", className)} {...props} />
 ));
 TableHeader.displayName = "TableHeader";
 
@@ -31,7 +29,7 @@ const TableBody = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <tbody ref={ref} className={joinClasses("[&_tr:last-child]:border-0", className)} {...props} />
+  <tbody ref={ref} className={cn("[&_tr:last-child]:border-b-0", className)} {...props} />
 ));
 TableBody.displayName = "TableBody";
 
@@ -39,8 +37,8 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
   ({ className, ...props }, ref) => (
     <tr
       ref={ref}
-      className={joinClasses(
-        "border-b border-zinc-100 transition-colors hover:bg-zinc-50/80 data-[state=selected]:bg-zinc-100",
+      className={cn(
+        "border-b border-zinc-900 transition-colors hover:bg-zinc-800/30 data-[state=selected]:bg-zinc-800/40",
         className,
       )}
       {...props}
@@ -53,8 +51,8 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
   ({ className, ...props }, ref) => (
     <th
       ref={ref}
-      className={joinClasses(
-        "h-11 px-4 text-left align-middle text-xs font-medium text-zinc-500 [&:has([role=checkbox])]:pr-0",
+      className={cn(
+        "h-11 px-4 text-left align-middle text-xs font-medium text-zinc-400 [&:has([role=checkbox])]:pr-0",
         className,
       )}
       {...props}
@@ -65,7 +63,7 @@ TableHead.displayName = "TableHead";
 
 const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(
   ({ className, ...props }, ref) => (
-    <td ref={ref} className={joinClasses("p-4 align-middle", className)} {...props} />
+    <td ref={ref} className={cn("p-4 align-middle text-zinc-300", className)} {...props} />
   ),
 );
 TableCell.displayName = "TableCell";

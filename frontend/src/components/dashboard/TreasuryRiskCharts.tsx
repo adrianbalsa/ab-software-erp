@@ -75,10 +75,10 @@ export function TreasuryRiskCharts({
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      <Card>
+      <Card className="bunker-card">
         <CardHeader>
-          <CardTitle>Exposicion de la Deuda</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-zinc-100">Exposicion de la Deuda</CardTitle>
+          <CardDescription className="text-zinc-400">
             Pendiente segmentado entre SEPA garantizado, riesgo alto y moderado.
           </CardDescription>
         </CardHeader>
@@ -105,7 +105,9 @@ export function TreasuryRiskCharts({
                   formatter={(value) => formatEUR(Number(value ?? 0))}
                   contentStyle={{
                     borderRadius: 12,
-                    borderColor: "#e4e4e7",
+                    borderColor: "#3f3f46",
+                    background: "#18181b",
+                    color: "#e4e4e7",
                     fontSize: 12,
                   }}
                 />
@@ -113,7 +115,7 @@ export function TreasuryRiskCharts({
                   layout="horizontal"
                   verticalAlign="bottom"
                   align="center"
-                  wrapperStyle={{ fontSize: 12, color: "#52525b" }}
+                  wrapperStyle={{ fontSize: 12, color: "#a1a1aa" }}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -121,10 +123,10 @@ export function TreasuryRiskCharts({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="bunker-card">
         <CardHeader>
-          <CardTitle>Proyeccion de Cash Flow</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-zinc-100">Proyeccion de Cash Flow</CardTitle>
+          <CardDescription className="text-zinc-400">
             Evolucion mensual en barras apiladas: cobrado y pendiente.
           </CardDescription>
         </CardHeader>
@@ -132,10 +134,10 @@ export function TreasuryRiskCharts({
           <div className="h-[320px] w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cashflowData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} />
-                <XAxis dataKey="mes" tick={{ fill: "#71717a", fontSize: 11 }} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fill: "#a1a1aa", fontSize: 11 }} tickLine={false} />
                 <YAxis
-                  tick={{ fill: "#71717a", fontSize: 11 }}
+                  tick={{ fill: "#a1a1aa", fontSize: 11 }}
                   tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
                 />
                 <Tooltip
@@ -146,12 +148,14 @@ export function TreasuryRiskCharts({
                   }}
                   contentStyle={{
                     borderRadius: 12,
-                    borderColor: "#e4e4e7",
+                    borderColor: "#3f3f46",
+                    background: "#18181b",
+                    color: "#e4e4e7",
                     fontSize: 12,
                   }}
                 />
-                <Legend wrapperStyle={{ fontSize: 12, color: "#52525b" }} />
-                <Bar dataKey="cobrado" name="Cobrado" stackId="cash" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#a1a1aa" }} />
+                <Bar dataKey="cobrado" name="Cobrado" stackId="cash" fill="#10b981" radius={[4, 4, 0, 0]} />
                 <Bar
                   dataKey="pendiente"
                   name="Pendiente"

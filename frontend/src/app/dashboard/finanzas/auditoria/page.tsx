@@ -55,7 +55,7 @@ export default function AuditoriaFiscalPage() {
   };
 
   return (
-    <AppShell active="finanzas">
+    <AppShell active="auditoria">
       <RoleGuard
         allowedRoles={["owner"]}
         fallback={
@@ -66,21 +66,21 @@ export default function AuditoriaFiscalPage() {
           </main>
         }
       >
-        <main className="p-8 space-y-6">
+        <main className="space-y-6 bg-zinc-950 p-8">
           <header>
-            <h1 className="text-2xl font-bold text-zinc-900 flex items-center gap-2">
-              <ShieldCheck className="w-6 h-6 text-blue-600" />
+            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-100">
+              <ShieldCheck className="h-6 w-6 text-emerald-500" aria-hidden />
               Auditoría de Integridad VeriFactu
             </h1>
-            <p className="text-sm text-zinc-500 mt-1">
+            <p className="mt-1 text-sm text-zinc-400">
               Verificación criptográfica de encadenamiento fiscal.
             </p>
           </header>
 
-          <Card>
+          <Card className="bunker-card">
             <CardHeader>
-              <CardTitle>Verificación de cadena fiscal</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-zinc-100">Verificación de cadena fiscal</CardTitle>
+              <CardDescription className="text-zinc-400">
                 Comprueba que cada factura enlaza con el hash anterior sin alteraciones.
               </CardDescription>
             </CardHeader>
@@ -89,14 +89,14 @@ export default function AuditoriaFiscalPage() {
                 type="button"
                 onClick={() => void onVerify()}
                 disabled={loading}
-                className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:opacity-60"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 Verificar Integridad Fiscal
               </button>
 
               {error && (
-                <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                <div className="rounded-md border border-rose-500/35 bg-rose-950/40 px-3 py-2 text-sm text-rose-300">
                   {error}
                 </div>
               )}
@@ -105,8 +105,8 @@ export default function AuditoriaFiscalPage() {
                 <div
                   className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
                     result.is_valid
-                      ? "bg-emerald-100 text-emerald-800"
-                      : "bg-rose-100 text-rose-800"
+                      ? "bg-emerald-950/50 text-emerald-400 ring-1 ring-emerald-500/30"
+                      : "bg-rose-950/50 text-rose-300 ring-1 ring-rose-500/30"
                   }`}
                 >
                   {result.is_valid
@@ -117,10 +117,10 @@ export default function AuditoriaFiscalPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bunker-card">
             <CardHeader>
-              <CardTitle>Previsualización QR de factura</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-zinc-100">Previsualización QR de factura</CardTitle>
+              <CardDescription className="text-zinc-400">
                 Comprueba que el QR codifica correctamente número, fecha, importe y huella fiscal.
               </CardDescription>
             </CardHeader>
@@ -132,13 +132,13 @@ export default function AuditoriaFiscalPage() {
                   value={facturaIdInput}
                   onChange={(e) => setFacturaIdInput(e.target.value)}
                   placeholder="ID de factura"
-                  className="w-48 rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+                  className="w-48 rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500"
                 />
                 <button
                   type="button"
                   onClick={() => void onPreviewQr()}
                   disabled={previewLoading}
-                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:opacity-60"
                 >
                   {previewLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   Previsualizar QR
@@ -184,7 +184,7 @@ export default function AuditoriaFiscalPage() {
                         </button>
                       </div>
                       {urlCopied ? (
-                        <p className="mt-1 text-xs text-emerald-600">Copiado al portapapeles</p>
+                        <p className="mt-1 text-xs text-emerald-500">Copiado al portapapeles</p>
                       ) : null}
                     </div>
                   ) : null}

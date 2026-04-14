@@ -24,6 +24,19 @@ def _redact_porte_for_driver(p: PorteOut, user: UserOut) -> PorteOut:
     return p.model_copy(update={"precio_pactado": None, "cliente_id": None, "cliente_detalle": None})
 
 
+def _mask_porte_cotizar_financials(out: PorteCotizarOut, user: UserOut) -> PorteCotizarOut:
+    """Traffic manager: sin margen proyectado ni señales derivadas de rentabilidad."""
+    if (user.rbac_role or "").strip().lower() != "traffic_manager":
+        return out
+    return out.model_copy(
+        update={
+            "margen_proyectado": None,
+            "es_rentable": None,
+            "precio_sugerido": None,
+        }
+    )
+
+
 @router.get("/", response_model=list[PorteOut])
 async def list_portes(
     current_user: UserOut = Depends(deps.get_current_user),
@@ -87,7 +100,7 @@ async def cotizar_porte(
             km_estimados=payload.km_estimados,
             waypoints=payload.waypoints,
         )
-        return PorteCotizarOut(**out)
+        return _mask_porte_cotizar_financials(PorteCotizarOut(**out), current_user)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 

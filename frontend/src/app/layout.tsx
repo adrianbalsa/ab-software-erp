@@ -18,6 +18,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AB Logistics OS",
   description: "Operaciones, finanzas, VeriFactu y sostenibilidad — AB Software",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml", sizes: "any" }],
+    apple: [{ url: "/apple-icon.svg", type: "image/svg+xml", sizes: "180x180" }],
+  },
 };
 
 export default async function RootLayout({

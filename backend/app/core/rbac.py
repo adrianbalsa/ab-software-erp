@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+
+from app.api.auth_token import get_access_token
 
 AppRbacRole = Literal["owner", "traffic_manager", "driver", "cliente", "developer"]
 
@@ -28,9 +29,6 @@ def normalize_rbac_role(
     if lr == "admin":
         return "owner"
     return "traffic_manager"
-
-
-_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 def _norm_role_str(raw: object) -> str:
@@ -101,7 +99,7 @@ class RoleChecker:
     def __init__(self, allowed_roles: list[str]):
         self.allowed_roles = allowed_roles
 
-    def __call__(self, token: str = Depends(_oauth2_scheme)) -> dict[str, Any]:
+    def __call__(self, token: str = Depends(get_access_token)) -> dict[str, Any]:
         """
         100% estricto:
         - Extrae `payload["app_metadata"]["role"]` (solo clave exacta `role`)

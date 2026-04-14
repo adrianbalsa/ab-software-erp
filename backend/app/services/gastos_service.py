@@ -98,7 +98,7 @@ class GastosService:
             "evidencia_url": evidencia_url,
         }
         if gasto_in.nif_proveedor is not None:
-            payload["nif_proveedor"] = pii_crypto.encrypt_pii(gasto_in.nif_proveedor)
+            payload["nif_proveedor"] = gasto_in.nif_proveedor
         if gasto_in.iva is not None:
             payload["iva"] = float(gasto_in.iva)
         if total_eur is not None:
@@ -148,6 +148,8 @@ class GastosService:
         total = data.get("total")
         iva = data.get("iva")
 
+        oc = data.get("ocr_confidence")
+        conf_f = float(oc) if oc is not None else None
         return GastoOCRHint(
             proveedor=_empty_to_none(data.get("proveedor")),
             fecha=data.get("fecha") or None,
@@ -156,6 +158,8 @@ class GastosService:
             concepto=_empty_to_none(data.get("concepto")),
             nif_proveedor=_empty_to_none(data.get("nif_proveedor")),
             iva=float(iva) if iva is not None else None,
+            ocr_confidence=conf_f,
+            requires_manual_review=bool(data.get("requires_manual_review")),
         )
 
     async def ocr_extract_hint(self, *, content: bytes, filename: str) -> GastoOCRHint:

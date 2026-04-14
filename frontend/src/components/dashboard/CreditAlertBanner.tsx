@@ -37,19 +37,19 @@ export function CreditAlertBanner({ alerts }: { alerts: CreditAlert[] }) {
             key={a.cliente_id}
             className={
               isCritical
-                ? "border-red-300 bg-red-50/90 text-red-950 dark:border-red-900 dark:bg-red-950/40 dark:text-red-50"
-                : "border-amber-300 bg-amber-50/90 text-amber-950 dark:border-amber-800 dark:bg-amber-950/35 dark:text-amber-50"
+                ? "border-red-500/40 bg-red-950/40 text-red-50"
+                : "border-amber-500/40 bg-amber-950/35 text-amber-50"
             }
           >
             <div className="flex gap-3">
               {isCritical ? (
                 <AlertTriangle
-                  className="h-5 w-5 shrink-0 text-red-600 dark:text-red-400"
+                  className="h-5 w-5 shrink-0 text-red-400"
                   aria-hidden
                 />
               ) : (
                 <AlertCircle
-                  className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
+                  className="h-5 w-5 shrink-0 text-amber-400"
                   aria-hidden
                 />
               )}
@@ -57,24 +57,24 @@ export function CreditAlertBanner({ alerts }: { alerts: CreditAlert[] }) {
                 <p
                   className={
                     isCritical
-                      ? "font-semibold text-red-900 dark:text-red-100"
-                      : "font-semibold text-amber-900 dark:text-amber-100"
+                      ? "font-semibold text-red-200"
+                      : "font-semibold text-amber-200"
                   }
                 >
                   {message}
                 </p>
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">{a.nombre_cliente}</p>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                <p className="text-sm font-medium text-zinc-100">{a.nombre_cliente}</p>
+                <p className="text-xs text-zinc-400">
                   Pendiente {formatEUR2(a.saldo_pendiente)} · Límite {formatEUR2(a.limite_credito)} ·{" "}
                   <span className="font-medium tabular-nums">{a.porcentaje_consumo.toFixed(2)}%</span>
                 </p>
                 <Progress
-                  className="h-1 w-full bg-zinc-200/80 dark:bg-zinc-800/80"
+                  className="h-1 w-full bg-zinc-800/80"
                   value={consumptionBarPercent(a.porcentaje_consumo)}
                   indicatorClassName={
                     isCritical
-                      ? "bg-red-600 dark:bg-red-500"
-                      : "bg-amber-500 dark:bg-amber-400"
+                      ? "bg-red-500"
+                      : "bg-amber-500"
                   }
                 />
               </AlertDescription>

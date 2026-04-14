@@ -3,28 +3,19 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { FileText, Loader2 } from "lucide-react";
+import { FileText, Leaf, Loader2 } from "lucide-react";
 
 import { CmrPdfViewerModal } from "@/components/portes/CmrPdfViewerModal";
 import { generateCmrPdfBlob } from "@/components/portes/CmrPdfTemplate";
-import { API_BASE, apiFetch, getPorteCmrData } from "@/lib/api";
+import { api, getPorteCmrData, type PorteDetailOut } from "@/lib/api";
 import { RouteMap } from "@/components/maps/RouteMap";
-
-type PorteDetail = {
-  id: string;
-  origen: string;
-  destino: string;
-  km_estimados: number;
-  precio_pactado: number;
-  fecha: string;
-  estado: string;
-};
+import { generateEsgCertificadoFromPorte } from "@/lib/esgGenerator";
 
 export default function PorteDetailPage() {
   const params = useParams();
   const id = typeof params?.id === "string" ? params.id : "";
 
-  const [porte, setPorte] = useState<PorteDetail | null>(null);
+  const [porte, setPorte] = useState<PorteDetailOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,20 +23,14 @@ export default function PorteDetailPage() {
   const [cmrPdfUrl, setCmrPdfUrl] = useState<string | null>(null);
   const [cmrLoading, setCmrLoading] = useState(false);
   const [cmrError, setCmrError] = useState<string | null>(null);
+  const [esgDownloading, setEsgDownloading] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch(`${API_BASE}/portes/${encodeURIComponent(id)}`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { detail?: string };
-        throw new Error(err?.detail || `HTTP ${res.status}`);
-      }
-      setPorte((await res.json()) as PorteDetail);
+      setPorte(await api.portes.get(id));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Error");
       setPorte(null);
@@ -72,6 +57,26 @@ export default function PorteDetailPage() {
     });
     setCmrError(null);
   }, []);
+
+  const descargarEsg = useCallback(async () => {
+    if (!porte) return;
+    setEsgDownloading(true);
+    try {
+      const blob = await generateEsgCertificadoFromPorte(porte);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Certificado_Huella_CO2_porte_${String(porte.id).slice(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "No se pudo generar el certificado ESG");
+    } finally {
+      setEsgDownloading(false);
+    }
+  }, [porte]);
 
   const generarCmr = useCallback(async () => {
     if (!id) return;
@@ -147,19 +152,34 @@ export default function PorteDetailPage() {
                   <h1 className="text-xl font-bold text-slate-900">Detalle del porte</h1>
                   <p className="text-sm text-slate-500 mt-1 font-mono">{porte.id}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void generarCmr()}
-                  disabled={cmrLoading}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60"
-                >
-                  {cmrLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <FileText className="w-4 h-4" />
-                  )}
-                  Generar CMR
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void descargarEsg()}
+                    disabled={esgDownloading}
+                    className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-900 shadow-sm hover:bg-emerald-100 disabled:opacity-60"
+                  >
+                    {esgDownloading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Leaf className="w-4 h-4" />
+                    )}
+                    Certificado ESG
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void generarCmr()}
+                    disabled={cmrLoading}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {cmrLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <FileText className="w-4 h-4" />
+                    )}
+                    Generar CMR
+                  </button>
+                </div>
               </div>
               <dl className="mt-4 grid gap-2 text-sm">
                 <div className="flex items-baseline gap-2">

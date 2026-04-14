@@ -15,13 +15,28 @@ from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
+from app.core.security import fernet_encrypt_string
+
+
+def _normalize_iban(value: str | None) -> str | None:
+    if value is None:
+        return None
+    s = "".join(str(value).split()).upper()
+    return s if s else None
+
 
 class EmpresaCreate(BaseModel):
     """Alta de empresa. Acepta JSON en snake_case o claves legacy sin guiones."""
 
     model_config = ConfigDict(populate_by_name=True)
 
-    nif: str = Field(..., min_length=1, max_length=12, description="NIF o CIF de la empresa legal válido según AEAT", examples=["A12345678"])
+    nif: str = Field(
+        ...,
+        min_length=1,
+        max_length=512,
+        description="NIF o CIF (entrada ≤12; tras validar se cifra para persistencia y ocupa más bytes)",
+        examples=["A12345678"],
+    )
     nombre_legal: str = Field(
         ...,
         min_length=1,
@@ -43,11 +58,29 @@ class EmpresaCreate(BaseModel):
     direccion: str | None = Field(default=None, max_length=255, description="Sede o dirección principal", examples=["Av. Transporte 42, Planta 3"])
     iban: str | None = Field(
         default=None,
-        max_length=34,
-        description="IBAN bancario (se persiste cifrado en base de datos)",
-        examples=["ES9121000418451234567890"]
+        max_length=512,
+        description="IBAN (entrada IBAN; tras validar se cifra para persistencia)",
+        examples=["ES9121000418451234567890"],
     )
     activa: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def _encrypt_nif_iban_for_storage(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        nif = str(out.get("nif") or "").strip().upper()
+        if not nif:
+            return out
+        nif_enc = fernet_encrypt_string(nif)
+        if not nif_enc:
+            raise ValueError("No se pudo cifrar el NIF (configure PII_ENCRYPTION_KEY o ENCRYPTION_KEY).")
+        out["nif"] = nif_enc
+        iban_raw = _normalize_iban(out.get("iban"))
+        if iban_raw:
+            out["iban"] = fernet_encrypt_string(iban_raw)
+        return out
 
 
 class EmpresaUpdate(BaseModel):
@@ -67,9 +100,28 @@ class EmpresaUpdate(BaseModel):
     direccion: str | None = Field(default=None, max_length=255)
     iban: str | None = Field(
         default=None,
-        max_length=34,
+        max_length=512,
         description="IBAN; se cifra antes de guardar",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _encrypt_iban_for_storage(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        if "iban" not in out:
+            return out
+        raw = out.get("iban")
+        if raw is None:
+            return out
+        iban_n = _normalize_iban(str(raw))
+        if not iban_n:
+            out["iban"] = ""
+            return out
+        enc = fernet_encrypt_string(iban_n)
+        out["iban"] = enc if enc else ""
+        return out
 
 
 class EmpresaOut(BaseModel):

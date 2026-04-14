@@ -101,8 +101,9 @@ def attach_custom_openapi(app: FastAPI) -> None:
             "scheme": "bearer",
             "bearerFormat": "JWT",
             "description": (
-                "Token de acceso JWT (Supabase Auth o emisión propia tras `POST /auth/login`). "
-                "Enviar como `Authorization: Bearer <token>`."
+                "Token de acceso JWT (Supabase Auth o emisión propia tras `POST /auth/login` / OAuth). "
+                "Enviar como `Authorization: Bearer <token>` o cookie HttpOnly (`ACCESS_TOKEN_COOKIE_NAME`, "
+                "por defecto `abl_auth_token`) en el mismo sitio que la API."
             ),
         }
 
@@ -118,12 +119,11 @@ def attach_custom_openapi(app: FastAPI) -> None:
             ),
         }
 
-        # Refuerzo de la descripción del esquema OAuth2 que genera FastAPI desde OAuth2PasswordBearer
         oauth2 = schemes.get("OAuth2PasswordBearer")
         if isinstance(oauth2, dict):
             oauth2["description"] = (
                 "OAuth2 password flow contra `POST /auth/login`. La respuesta incluye `access_token` "
-                "(JWT) para `Authorization: Bearer` en el resto de la API."
+                "(JWT) y cookies HttpOnly de acceso/refresh en el dominio de la API."
             )
 
         app.openapi_schema = openapi_schema

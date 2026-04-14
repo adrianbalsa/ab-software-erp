@@ -29,16 +29,16 @@ function formatEUR(value: number) {
 
 function EmptyState() {
   return (
-    <Card className="border-dashed">
+    <Card className="bunker-card border-dashed border-zinc-700">
       <CardHeader>
-        <CardTitle>Sin datos de tesoreria todavia</CardTitle>
-        <CardDescription>
+        <CardTitle className="text-zinc-100">Sin datos de tesorería todavía</CardTitle>
+        <CardDescription className="text-zinc-400">
           Crea tu primer porte para empezar a ver la magia financiera en tiempo real.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-zinc-600">
-          Cuando tengas actividad, aqui apareceran KPIs de riesgo y evolucion mensual de cobros.
+        <p className="text-sm text-zinc-400">
+          Cuando tengas actividad, aquí aparecerán KPIs de riesgo y evolución mensual de cobros.
         </p>
       </CardContent>
     </Card>
@@ -60,21 +60,23 @@ function KpiCard({
 }) {
   const toneClass =
     tone === "blue"
-      ? "border-blue-200"
+      ? "border-emerald-500/35"
       : tone === "green"
-        ? "border-emerald-200"
+        ? "border-emerald-500/50"
         : tone === "amber"
-          ? "border-amber-200"
-          : "border-zinc-200";
+          ? "border-amber-500/40"
+          : "border-zinc-800";
 
   return (
-    <Card className={`${toneClass} ${highlight ? "ring-2 ring-rose-300" : ""}`}>
+    <Card
+      className={`bunker-card ${toneClass} ${highlight ? "ring-2 ring-rose-500/40" : ""}`}
+    >
       <CardHeader className="pb-1">
-        <CardDescription>{title}</CardDescription>
-        <CardTitle className="text-2xl">{value}</CardTitle>
+        <CardDescription className="text-zinc-400">{title}</CardDescription>
+        <CardTitle className="text-2xl text-zinc-100">{value}</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-zinc-600">{subtitle}</p>
+        <p className="text-xs text-zinc-500">{subtitle}</p>
       </CardContent>
     </Card>
   );
@@ -153,20 +155,20 @@ export default function DashboardTesoreriaPage() {
       <RoleGuard
         allowedRoles={["owner"]}
         fallback={
-          <main className="p-8">
-            <p className="text-sm text-zinc-600">Acceso restringido: solo direccion.</p>
+          <main className="bg-zinc-950 p-8">
+            <p className="text-sm text-zinc-400">Acceso restringido: solo dirección.</p>
           </main>
         }
       >
-        <main className="flex-1 min-h-0 overflow-y-auto p-8 space-y-6">
+        <main className="min-h-0 flex-1 space-y-6 overflow-y-auto bg-zinc-950 p-8">
           <header className="flex items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-zinc-900 flex items-center gap-2">
-                <Wallet className="w-6 h-6 text-blue-600" />
-                Dashboard de Tesoreria y Riesgos
+              <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-100">
+                <Wallet className="h-6 w-6 text-emerald-500" aria-hidden />
+                Dashboard de Tesorería y Riesgos
               </h1>
-              <p className="text-sm text-zinc-500 mt-1">
-                Seguimiento de deuda, cobertura SEPA y proyeccion de cash flow.
+              <p className="mt-1 text-sm text-zinc-400">
+                Seguimiento de deuda, cobertura SEPA y proyección de cash flow.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -174,7 +176,7 @@ export default function DashboardTesoreriaPage() {
                 type="button"
                 onClick={() => void loadData()}
                 disabled={loading}
-                className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:opacity-60"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
                 Actualizar
@@ -185,17 +187,17 @@ export default function DashboardTesoreriaPage() {
           <CreditAlertBanner alerts={creditAlerts} />
 
           {error && (
-            <Card className="border-rose-200 bg-rose-50">
+            <Card className="border border-rose-500/35 bg-rose-950/40">
               <CardContent className="pt-6">
-                <p className="text-sm text-rose-700">{error}</p>
+                <p className="text-sm text-rose-300">{error}</p>
               </CardContent>
             </Card>
           )}
 
           {loading && !data ? (
-            <Card>
+            <Card className="bunker-card">
               <CardContent className="pt-6">
-                <p className="text-sm text-zinc-600">Cargando tesoreria...</p>
+                <p className="text-sm text-zinc-400">Cargando tesorería…</p>
               </CardContent>
             </Card>
           ) : !data || !hasAnyData ? (
@@ -225,17 +227,17 @@ export default function DashboardTesoreriaPage() {
               </section>
 
               {esgReport && (
-                <Card className="border-emerald-200 bg-emerald-50/40">
+                <Card className="bunker-card border-emerald-500/35">
                   <CardHeader className="pb-1">
-                    <CardTitle className="text-lg">Sostenibilidad ESG</CardTitle>
-                    <CardDescription>
-                      Resumen mensual para certificacion de huella de carbono.
+                    <CardTitle className="text-lg text-zinc-100">Sostenibilidad ESG</CardTitle>
+                    <CardDescription className="text-zinc-400">
+                      Resumen mensual para certificación de huella de carbono.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <p className="text-sm text-emerald-800">
+                    <p className="text-sm text-zinc-300">
                       Periodo {esgReport.periodo}:{" "}
-                      <span className="font-semibold">
+                      <span className="font-semibold text-emerald-400">
                         {esgReport.total_co2_kg.toLocaleString("es-ES", { maximumFractionDigits: 2 })} kg CO2
                       </span>{" "}
                       en {esgReport.total_portes} portes.
@@ -244,7 +246,7 @@ export default function DashboardTesoreriaPage() {
                       type="button"
                       onClick={() => void downloadEsgCertificate()}
                       disabled={downloadingCert}
-                      className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100/60 disabled:opacity-60"
+                      className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-950/50 disabled:opacity-60"
                     >
                       <FileDown className="w-4 h-4" />
                       {downloadingCert ? "Descargando..." : "Descargar Certificado Mensual"}
@@ -254,10 +256,10 @@ export default function DashboardTesoreriaPage() {
               )}
 
               {highRiskPct > 15 && (
-                <Card className="border-amber-300 bg-amber-50">
-                  <CardContent className="pt-6 flex items-start gap-3">
-                    <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-                    <p className="text-sm text-amber-800">
+                <Card className="border border-amber-500/40 bg-amber-950/30">
+                  <CardContent className="flex items-start gap-3 pt-6">
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" aria-hidden />
+                    <p className="text-sm text-amber-200">
                       Riesgo alto por encima del 15%. Conviene priorizar seguimiento de cobro y
                       revision de limites.
                     </p>
@@ -272,10 +274,10 @@ export default function DashboardTesoreriaPage() {
                 trendData={data.cashflow_trend}
               />
 
-              <Card>
+              <Card className="bunker-card">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Ranking de riesgo por cliente</CardTitle>
-                  <CardDescription>
+                  <CardTitle className="text-lg text-zinc-100">Ranking de riesgo por cliente</CardTitle>
+                  <CardDescription className="text-zinc-400">
                     Top exposiciones por valor en riesgo (
                     <span className="font-serif italic">V</span>
                     <sub className="text-[10px]">r</sub>
@@ -287,10 +289,10 @@ export default function DashboardTesoreriaPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bunker-card">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Ranking de margen por ruta</CardTitle>
-                  <CardDescription>
+                  <CardTitle className="text-lg text-zinc-100">Ranking de margen por ruta</CardTitle>
+                  <CardDescription className="text-zinc-400">
                     Top rutas por margen neto (
                     <span className="font-serif italic">M</span>
                     <sub className="text-[10px]">n</sub>

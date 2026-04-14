@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import os
 from typing import Any
-from urllib.parse import quote
 
 from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.starlette_client import OAuth
@@ -89,6 +88,31 @@ def _attach_refresh_cookie(response: Response, *, raw_refresh: str, max_age: int
     )
 
 
+def _attach_access_cookie(response: Response, *, access_token: str, max_age: int) -> None:
+    settings = get_settings()
+    response.set_cookie(
+        key=settings.ACCESS_TOKEN_COOKIE_NAME,
+        value=access_token,
+        max_age=max_age,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        path="/",
+        domain=settings.COOKIE_DOMAIN,
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    """Borra JWT de acceso y refresh (mismos atributos que al fijarlos)."""
+    settings = get_settings()
+    for key in (settings.ACCESS_TOKEN_COOKIE_NAME, settings.REFRESH_TOKEN_COOKIE_NAME):
+        response.delete_cookie(
+            key=key,
+            path="/",
+            domain=settings.COOKIE_DOMAIN,
+        )
+
+
 @router.post("/login")
 @router.post("/login/", include_in_schema=False)
 async def login(
@@ -150,6 +174,12 @@ async def login(
         refresh_token=raw_refresh,
     ).model_dump()
     response = JSONResponse(content=body)
+    s = get_settings()
+    _attach_access_cookie(
+        response,
+        access_token=access_token,
+        max_age=max(60, s.ACCESS_TOKEN_EXPIRE_MINUTES * 60),
+    )
     if raw_refresh is not None and max_age is not None:
         _attach_refresh_cookie(response, raw_refresh=raw_refresh, max_age=max_age)
 
@@ -211,7 +241,25 @@ async def refresh_session(
 
     body = Token(access_token=access_token, token_type=TOKEN_TYPE).model_dump()
     response = JSONResponse(content=body)
+    s = get_settings()
+    _attach_access_cookie(
+        response,
+        access_token=access_token,
+        max_age=max(60, s.ACCESS_TOKEN_EXPIRE_MINUTES * 60),
+    )
     _attach_refresh_cookie(response, raw_refresh=new_raw, max_age=max_age)
+    return response
+
+
+@router.post("/logout")
+@router.post("/logout/", include_in_schema=False)
+async def logout() -> Response:
+    """
+    Borra cookies HttpOnly de acceso y refresh en el dominio de la API.
+    El cliente debe llamar con ``credentials: include`` (y CORS con credenciales).
+    """
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    _clear_auth_cookies(response)
     return response
 
 
@@ -317,7 +365,7 @@ async def oauth_google_callback(
     """
     Callback OAuth: valida ``state`` (sesión) con ``authorize_access_token``, obtiene identidad Google,
     vincula ``provider_subject`` en ``user_accounts`` si el email existe en ``usuarios``,
-    emite access + refresh y redirige al frontend con el JWT en query (token URL-encoded).
+    emite access + refresh, fija JWT en cookie HttpOnly y redirige al frontend **sin** token en la URL.
     """
     s = get_settings()
     if not (s.GOOGLE_CLIENT_ID and s.GOOGLE_CLIENT_SECRET):
@@ -416,10 +464,14 @@ async def oauth_google_callback(
             ),
         )
 
-    # Token en query string (URL-safe); el front lo traslada a localStorage y limpia la URL.
-    safe_token = quote(access_token, safe="")
-    redirect_url = f"{base}/auth/callback?token={safe_token}"
+    redirect_url = f"{base}/auth/callback"
     response = RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+    s = get_settings()
+    _attach_access_cookie(
+        response,
+        access_token=access_token,
+        max_age=max(60, s.ACCESS_TOKEN_EXPIRE_MINUTES * 60),
+    )
     if raw_refresh is not None and max_age is not None:
         _attach_refresh_cookie(response, raw_refresh=raw_refresh, max_age=max_age)
     return response

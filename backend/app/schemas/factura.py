@@ -199,7 +199,7 @@ class FacturaRecalculateIn(BaseModel):
 
 
 class FacturaRecalculateOut(BaseModel):
-    """Desglose MathEngine (ROUND_HALF_UP, coherente a céntimo)."""
+    """Desglose MathEngine (ROUND_HALF_EVEN a céntimo, coherente con ``math_engine``)."""
 
     factura_id: int
     base_imponible: float
@@ -287,12 +287,36 @@ class FacturaPdfDataOut(BaseModel):
         default=None,
         description="CSV/traza del último registro en ``verifactu_envios`` (si existe).",
     )
+    esg_portes_count: int | None = Field(
+        default=None,
+        description="Número de portes vinculados a la factura para agregado ESG.",
+    )
+    esg_total_km: float | None = Field(
+        default=None,
+        description="Suma km estimados de portes facturados (distancia operativa declarada).",
+    )
+    esg_total_co2_kg: float | None = Field(
+        default=None,
+        description="Suma CO₂ kg (GLEC ``calculate_co2_footprint`` por porte).",
+    )
+    esg_euro_iii_baseline_kg: float | None = Field(
+        default=None,
+        description="Suma línea base Euro III (mismo recorrido por porte).",
+    )
+    esg_ahorro_vs_euro_iii_kg: float | None = Field(
+        default=None,
+        description="Ahorro total kg CO₂ vs Euro III (agregado factura).",
+    )
 
     @field_serializer(
         "base_imponible",
         "tipo_iva_porcentaje",
         "cuota_iva",
         "total_factura",
+        "esg_total_km",
+        "esg_total_co2_kg",
+        "esg_euro_iii_baseline_kg",
+        "esg_ahorro_vs_euro_iii_kg",
         mode="plain",
     )
     def _ser_pdf_totals(self, v: float) -> float:

@@ -70,7 +70,7 @@ class AdminService:
 
     async def create_empresa(self, *, empresa_in: EmpresaCreate) -> EmpresaOut:
         payload: dict[str, Any] = {
-            "nif": pii_crypto.encrypt_pii(empresa_in.nif.strip().upper()),
+            "nif": empresa_in.nif,
             "nombre_legal": empresa_in.nombre_legal.strip(),
             "nombre_comercial": (empresa_in.nombre_comercial or empresa_in.nombre_legal).strip(),
             "plan": empresa_in.plan,
@@ -81,7 +81,7 @@ class AdminService:
         }
         iban_n = _normalize_iban(empresa_in.iban)
         if iban_n:
-            payload["iban"] = pii_crypto.encrypt_pii(iban_n)
+            payload["iban"] = empresa_in.iban
         res: Any = await self._db.execute(self._db.table("empresas").insert(payload))
         rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
         if not rows:
@@ -103,8 +103,7 @@ class AdminService:
         if patch.direccion is not None:
             changes["direccion"] = patch.direccion
         if patch.iban is not None:
-            iban_n = _normalize_iban(patch.iban)
-            changes["iban"] = pii_crypto.encrypt_pii(iban_n) if iban_n else ""
+            changes["iban"] = patch.iban
 
         # Nota: EmpresaUpdate no incluye `nif`; se cifra solo en create.
 

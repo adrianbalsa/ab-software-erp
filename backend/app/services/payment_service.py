@@ -11,6 +11,7 @@ import anyio
 from app.core.config import get_settings
 from app.core.math_engine import round_fiat, to_decimal
 from app.db.supabase import SupabaseAsync
+from app.services.audit_logs_service import AuditLogsService
 
 _log = logging.getLogger(__name__)
 
@@ -176,27 +177,23 @@ class PaymentService:
             .eq("empresa_id", eid)
         )
 
-        await self._db.execute(
-            self._db.table("audit_logs").insert(
-                {
-                    "empresa_id": eid,
-                    "table_name": "facturas",
-                    "record_id": str(int(factura_id)),
-                    "action": "UPDATE",
-                    "old_data": {"pago_id": row.get("pago_id"), "estado_cobro": row.get("estado_cobro")},
-                    "new_data": {
-                        "factura_id": int(factura_id),
-                        "empresa_id": eid,
-                        "customer_id": str(customer_id).strip(),
-                        "payment_id": payment_id,
-                        "status": payment_status,
-                        "timestamp": now_iso,
-                        "amount": str(total_dec),
-                        "currency": currency_code,
-                    },
-                    "changed_by": None,
-                }
-            )
+        await AuditLogsService(self._db).log_sensitive_action(
+            empresa_id=eid,
+            table_name="facturas",
+            record_id=str(int(factura_id)),
+            action="UPDATE",
+            old_value={"pago_id": row.get("pago_id"), "estado_cobro": row.get("estado_cobro")},
+            new_value={
+                "factura_id": int(factura_id),
+                "empresa_id": eid,
+                "customer_id": str(customer_id).strip(),
+                "payment_id": payment_id,
+                "status": payment_status,
+                "timestamp": now_iso,
+                "amount": str(total_dec),
+                "currency": currency_code,
+            },
+            user_id=None,
         )
 
         return {
@@ -316,25 +313,21 @@ class PaymentService:
             raise PaymentIntegrationError("Respuesta GoCardless sin authorisation_url.")
 
         now_iso = datetime.now(timezone.utc).isoformat()
-        await self._db.execute(
-            self._db.table("audit_logs").insert(
-                {
-                    "empresa_id": empresa_id,
-                    "table_name": "clientes",
-                    "record_id": cid,
-                    "action": "UPDATE",
-                    "old_data": None,
-                    "new_data": {
-                        "evento": "mandate_setup_initiated",
-                        "cliente_id": cid,
-                        "empresa_id": empresa_id,
-                        "gocardless_customer_id": gocardless_customer_id,
-                        "billing_request_id": billing_request_id,
-                        "timestamp": now_iso,
-                    },
-                    "changed_by": None,
-                }
-            )
+        await AuditLogsService(self._db).log_sensitive_action(
+            empresa_id=empresa_id,
+            table_name="clientes",
+            record_id=cid,
+            action="UPDATE",
+            old_value=None,
+            new_value={
+                "evento": "mandate_setup_initiated",
+                "cliente_id": cid,
+                "empresa_id": empresa_id,
+                "gocardless_customer_id": gocardless_customer_id,
+                "billing_request_id": billing_request_id,
+                "timestamp": now_iso,
+            },
+            user_id=None,
         )
 
         return {"redirect_url": redirect_url}

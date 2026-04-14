@@ -11,6 +11,7 @@ from app.db.supabase import SupabaseAsync
 from app.schemas.cliente import ClienteCreate, ClienteOut
 from app.core.crypto import pii_crypto
 from app.services import email_service
+from app.services.audit_logs_service import AuditLogsService
 
 
 def _eid(empresa_id: str | UUID) -> str:
@@ -128,17 +129,14 @@ class ClientesService:
 
         # Best-effort: no bloquea reenvío si falla por compatibilidad de esquema.
         try:
-            await self._db.execute(
-                self._db.table("audit_logs").insert(
-                    {
-                        "empresa_id": str(empresa_id).strip(),
-                        "table_name": "clientes",
-                        "record_id": str(cliente_id).strip(),
-                        "action": "INVITE_RESENT",
-                        "old_data": {},
-                        "new_data": {"invite_email": email, "invite_channel": "resend_email"},
-                    }
-                )
+            await AuditLogsService(self._db).log_sensitive_action(
+                empresa_id=str(empresa_id).strip(),
+                table_name="clientes",
+                record_id=str(cliente_id).strip(),
+                action="INVITE_RESENT",
+                old_value={},
+                new_value={"invite_email": email, "invite_channel": "resend_email"},
+                user_id=None,
             )
         except Exception:
             pass

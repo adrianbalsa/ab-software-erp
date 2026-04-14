@@ -323,4 +323,21 @@ async def handle_webhook(*, payload: bytes, sig_header: str | None, db: Supabase
         )
         return {"received": True, "event": etype}
 
+    if etype == "invoice.paid":
+        # Cobro confirmado; la suscripción activa ya se refleja vía checkout.session.completed.
+        inv = data
+        cust = inv.get("customer")
+        if isinstance(cust, dict):
+            cust = cust.get("id")
+        sub = inv.get("subscription")
+        if isinstance(sub, dict):
+            sub = sub.get("id")
+        logger.info(
+            "invoice.paid customer=%s subscription=%s amount_paid=%s",
+            cust,
+            sub,
+            inv.get("amount_paid"),
+        )
+        return {"received": True, "event": etype}
+
     return {"received": True, "ignored": etype}

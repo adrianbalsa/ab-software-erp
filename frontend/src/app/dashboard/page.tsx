@@ -6,6 +6,7 @@ import { TrendingUp, Package, MapPin, Euro, Bell, Route } from "lucide-react";
 import Link from "next/link";
 import { AlertasCriticas } from "@/components/AlertasCriticas";
 import { AppShell } from "@/components/AppShell";
+import { DashboardMotionFadeIn } from "@/components/dashboard/DashboardMotionFadeIn";
 import { RoleGuard } from "@/components/auth/RoleGuard";
 import { LogisAdvisorChat } from "@/components/dashboard/LogisAdvisorChat";
 import { CashFlowChart } from "@/components/dashboard/CashFlowChart";
@@ -25,7 +26,7 @@ import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useEcoDashboard } from "@/hooks/useEcoDashboard";
 import { useFinanceDashboard } from "@/hooks/useFinanceDashboard";
 import { useFleetAlerts } from "@/hooks/useFleetAlerts";
-import { isOwnerLike } from "@/lib/api";
+import { isAuthCredentialErrorMessage, isOwnerLike } from "@/lib/api";
 import { useRole } from "@/hooks/useRole";
 
 const OAUTH_WELCOME_KEY = "abl_oauth_welcome";
@@ -86,19 +87,28 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (isOwner && error) {
+    if (!isOwner || !error) return;
+    if (isAuthCredentialErrorMessage(error)) {
+      toast.error("Sesión no válida o expirada. Vuelve a iniciar sesión.", { id: "abl-dash-auth" });
+    } else {
       toast.error(`KPI financieros: ${error}`, { id: "dash-finance-error" });
     }
   }, [isOwner, error]);
 
   useEffect(() => {
-    if (!isOwner && statsError) {
+    if (isOwner || !statsError) return;
+    if (isAuthCredentialErrorMessage(statsError)) {
+      toast.error("Sesión no válida o expirada. Vuelve a iniciar sesión.", { id: "abl-dash-auth" });
+    } else {
       toast.error(`KPI operativos: ${statsError}`, { id: "dash-stats-error" });
     }
   }, [isOwner, statsError]);
 
   useEffect(() => {
-    if (ecoError) {
+    if (!ecoError) return;
+    if (isAuthCredentialErrorMessage(ecoError)) {
+      toast.error("Sesión no válida o expirada. Vuelve a iniciar sesión.", { id: "abl-dash-auth" });
+    } else {
       toast.error(`ESG: ${ecoError}`, { id: "dash-eco-error" });
     }
   }, [ecoError]);
@@ -117,7 +127,7 @@ export default function Dashboard() {
       </RoleGuard>
       <ToastHost toast={welcomeToast} onDismiss={() => setWelcomeToast(null)} durationMs={5200} />
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-zinc-950">
-        <header className="z-10 flex h-16 shrink-0 items-center justify-between border-b border-zinc-800/50 bg-zinc-950/80 px-8 backdrop-blur-md">
+        <header className="z-10 flex h-16 shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950/90 px-8 backdrop-blur-md">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">
               Cuadro de Mando Integral
@@ -133,7 +143,7 @@ export default function Dashboard() {
               type="button"
               onClick={() => onRefreshKpis()}
               disabled={loadingAny}
-              className="text-sm font-medium text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
+              className="text-sm font-medium text-emerald-500 hover:text-emerald-400 disabled:opacity-50"
             >
               {loadingAny ? "Actualizando…" : "Actualizar KPIs"}
             </button>
@@ -157,9 +167,11 @@ export default function Dashboard() {
         <div className="flex-1 space-y-6 p-8">
           {isOwner ? (
             <>
-              <SupportCard />
+              <DashboardMotionFadeIn>
+                <SupportCard />
+              </DashboardMotionFadeIn>
 
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+              <DashboardMotionFadeIn delay={0.06} className="grid grid-cols-1 gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
                 <div className="dashboard-bento p-6">
                   <div className="flex items-start justify-between">
                     <div>
@@ -174,7 +186,7 @@ export default function Dashboard() {
                   </div>
                   <p className="mt-4 text-sm text-zinc-500">
                     Ingresos − Gastos ·{" "}
-                    <Link href="/finanzas" className="font-medium text-emerald-400 hover:text-emerald-300 hover:underline">
+                    <Link href="/finanzas" className="font-medium text-emerald-500 hover:text-emerald-400 hover:underline">
                       Ver dashboard financiero
                     </Link>
                   </p>
@@ -206,7 +218,7 @@ export default function Dashboard() {
                         {loading ? "…" : data ? formatEUR(data.gastos) : "—"}
                       </h3>
                     </div>
-                    <div className="rounded-xl bg-sky-500/15 p-3 text-sky-400">
+                    <div className="rounded-xl bg-emerald-500/12 p-3 text-emerald-500">
                       <MapPin className="h-6 w-6" />
                     </div>
                   </div>
@@ -219,7 +231,7 @@ export default function Dashboard() {
                       <p className="mb-1 text-sm font-medium text-zinc-400">Bultos</p>
                       <h3 className="text-3xl font-bold tracking-tight text-zinc-100">—</h3>
                     </div>
-                    <div className="rounded-xl bg-indigo-500/15 p-3 text-indigo-400">
+                    <div className="rounded-xl bg-emerald-500/10 p-3 text-emerald-400">
                       <Package className="h-6 w-6" />
                     </div>
                   </div>
@@ -227,8 +239,9 @@ export default function Dashboard() {
                     Margen neto/km y desglose en la sección inferior
                   </p>
                 </div>
-              </div>
+              </DashboardMotionFadeIn>
 
+              <DashboardMotionFadeIn delay={0.1}>
               <section className="space-y-4" aria-labelledby="dash-advanced-heading">
                 <h2
                   id="dash-advanced-heading"
@@ -270,7 +283,9 @@ export default function Dashboard() {
                   </AppErrorBoundary>
                 </div>
               </section>
+              </DashboardMotionFadeIn>
 
+              <DashboardMotionFadeIn delay={0.14}>
               <section className="space-y-4" aria-labelledby="dash-rentabilidad-avanzada">
                 <h2
                   id="dash-rentabilidad-avanzada"
@@ -304,21 +319,26 @@ export default function Dashboard() {
                   </AppErrorBoundary>
                 </div>
               </section>
+              </DashboardMotionFadeIn>
 
+              <DashboardMotionFadeIn delay={0.18}>
               <AppErrorBoundary>
                 <EconomicOverview />
               </AppErrorBoundary>
+              </DashboardMotionFadeIn>
+              <DashboardMotionFadeIn delay={0.2}>
               <AppErrorBoundary>
                 <EconomicAdvancedDashboard enabled={isOwner} />
               </AppErrorBoundary>
-              <div className="w-full max-w-[100vw] overflow-x-auto">
+              </DashboardMotionFadeIn>
+              <DashboardMotionFadeIn delay={0.22} className="w-full max-w-[100vw] overflow-x-auto">
                 <AppErrorBoundary>
                   <AdvancedCharts />
                 </AppErrorBoundary>
-              </div>
+              </DashboardMotionFadeIn>
             </>
           ) : (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            <DashboardMotionFadeIn className="grid grid-cols-1 gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
               <div className="dashboard-bento p-6 md:col-span-1">
                 <div className="flex items-start justify-between">
                   <div>
@@ -333,7 +353,7 @@ export default function Dashboard() {
                           : "—"}
                     </h3>
                   </div>
-                  <div className="rounded-xl bg-sky-500/15 p-3 text-sky-400">
+                  <div className="rounded-xl bg-emerald-500/12 p-3 text-emerald-500">
                     <Route className="h-6 w-6" />
                   </div>
                 </div>
@@ -355,13 +375,13 @@ export default function Dashboard() {
                       {statsLoading ? "…" : statsOps != null ? (statsOps.bultos ?? 0) : "—"}
                     </h3>
                   </div>
-                  <div className="rounded-xl bg-indigo-500/15 p-3 text-indigo-400">
+                  <div className="rounded-xl bg-emerald-500/10 p-3 text-emerald-400">
                     <Package className="h-6 w-6" />
                   </div>
                 </div>
                 <p className="mt-4 text-sm text-zinc-500">Agregado operativo sin datos de facturación</p>
               </div>
-            </div>
+            </DashboardMotionFadeIn>
           )}
 
           {canFleetAlerts && (
@@ -374,17 +394,17 @@ export default function Dashboard() {
           )}
 
           <div className="dashboard-bento overflow-hidden">
-            <div className="flex items-center justify-between border-b border-zinc-800/50 bg-zinc-900/30 px-6 py-5 backdrop-blur-sm">
+            <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/30 px-6 py-5 backdrop-blur-sm">
               <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Accesos rápidos</h2>
               <div className="flex flex-wrap gap-4">
                 <Link
                   href="/portes"
-                  className="text-sm font-medium text-emerald-400 transition-colors hover:text-emerald-300"
+                  className="text-sm font-medium text-emerald-500 transition-colors hover:text-emerald-400"
                 >
                   Portes
                 </Link>
                 <RoleGuard allowedRoles={["owner", "traffic_manager"]}>
-                  <Link href="/flota" className="text-sm font-medium text-emerald-400 hover:text-emerald-300 hover:underline">
+                  <Link href="/flota" className="text-sm font-medium text-emerald-500 hover:text-emerald-400 hover:underline">
                     Flota
                   </Link>
                 </RoleGuard>

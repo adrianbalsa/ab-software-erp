@@ -50,31 +50,31 @@ export function RouteMarginTable({ rows }: Props) {
 
           return (
             <TableRow key={`${row.ruta}-${i}`}>
-              <TableCell className="font-medium text-zinc-900 max-w-[260px] truncate" title={row.ruta}>
+              <TableCell className="max-w-[260px] truncate font-medium text-zinc-100" title={row.ruta}>
                 {row.ruta}
               </TableCell>
-              <TableCell className="text-right tabular-nums text-zinc-700">
+              <TableCell className="text-right tabular-nums text-zinc-300">
                 {row.total_portes.toLocaleString("es-ES")}
               </TableCell>
-              <TableCell className="text-right tabular-nums text-zinc-700">
+              <TableCell className="text-right tabular-nums text-zinc-300">
                 {formatEUR2(row.ingresos_totales)}
               </TableCell>
-              <TableCell className="text-right tabular-nums text-zinc-700">
+              <TableCell className="text-right tabular-nums text-zinc-300">
                 {formatEUR2(row.costes_totales)}
               </TableCell>
               <TableCell
-                className={`text-right tabular-nums font-medium ${
+                className={`text-right font-medium tabular-nums ${
                   negative
-                    ? "text-red-600 dark:text-red-500"
+                    ? "text-red-400"
                     : strongPositive
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-zinc-900"
+                      ? "text-emerald-500"
+                      : "text-zinc-100"
                 }`}
               >
                 <span className="inline-flex items-center justify-end gap-1.5">
                   {negative ? (
                     <AlertTriangle
-                      className="h-4 w-4 shrink-0 text-red-600 dark:text-red-500"
+                      className="h-4 w-4 shrink-0 text-red-400"
                       aria-label="Margen negativo"
                     />
                   ) : null}
@@ -84,10 +84,10 @@ export function RouteMarginTable({ rows }: Props) {
               <TableCell
                 className={`text-right tabular-nums ${
                   negative
-                    ? "text-red-600 dark:text-red-500"
+                    ? "text-red-400"
                     : strongPositive
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-zinc-700"
+                      ? "text-emerald-500"
+                      : "text-zinc-300"
                 }`}
               >
                 {formatPct(row.margen_porcentual)}

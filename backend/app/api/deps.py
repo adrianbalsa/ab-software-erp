@@ -5,7 +5,8 @@ from typing import Any, Callable
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer
+
+from app.api.auth_token import get_access_token
 from app.core.plans import (
     PLAN_ENTERPRISE,
     PLAN_PRO,
@@ -34,6 +35,7 @@ from app.services.portes_service import PortesService
 from app.services.presupuestos_service import PresupuestosService
 from app.services.report_service import ReportService
 from app.services.bank_service import BankService
+from app.services.matching_service import MatchingService
 from app.services.payment_service import PaymentService
 from app.services.reconciliation_service import ReconciliationService
 from app.services.accounting_export import AccountingExportService
@@ -45,36 +47,17 @@ from app.services.stripe_service import assert_empresa_billing_active
 from app.services.ai_service import LogisAdvisorService
 from app.services.esg_audit_service import EsgAuditService
 from app.services.audit_logs_service import AuditLogsService
+from app.services.bi_service import BiService
 
 _deps_log = logging.getLogger(__name__)
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
-
-# Mismo esquema OAuth2 pero sin 401 si falta Authorization (login, health, docs).
-reusable_oauth2 = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
-
-
 async def get_supabase(
-    request: Request,
-    token: str = Depends(oauth2_scheme),
+    token: str = Depends(get_access_token),
 ) -> SupabaseAsync:
     """
     Cliente Supabase **siempre** inicializado con el JWT del request para aplicar RLS por usuario.
+    Acepta ``Authorization: Bearer`` o cookie HttpOnly (nombre en ``ACCESS_TOKEN_COOKIE_NAME``).
     """
-    auth_header = request.headers.get("Authorization") or request.headers.get("authorization") or ""
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authorization header requerido",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    header_token = auth_header.split(" ", 1)[1].strip()
-    if not header_token or header_token != token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
     return await supabase_db.get_supabase(jwt_token=token)
 
 
@@ -182,6 +165,10 @@ async def get_audit_logs_service(db: SupabaseAsync = Depends(get_db)) -> AuditLo
     return AuditLogsService(db)
 
 
+async def get_bi_service(db: SupabaseAsync = Depends(get_db)) -> BiService:
+    return BiService(db)
+
+
 async def get_logis_advisor_service(
     finance: FinanceService = Depends(get_finance_service),
     facturas: FacturasService = Depends(get_facturas_service),
@@ -198,6 +185,10 @@ async def get_report_service(db: SupabaseAsync = Depends(get_db)) -> ReportServi
 
 async def get_bank_service(db: SupabaseAsync = Depends(get_db)) -> BankService:
     return BankService(db)
+
+
+async def get_matching_service(db: SupabaseAsync = Depends(get_db)) -> MatchingService:
+    return MatchingService(db)
 
 
 async def get_payment_service(db: SupabaseAsync = Depends(get_db)) -> PaymentService:
@@ -229,7 +220,7 @@ async def get_accounting_export_service(db: SupabaseAsync = Depends(get_db)) -> 
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    token: str = Depends(get_access_token),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> UserOut:
     credentials_exc = HTTPException(

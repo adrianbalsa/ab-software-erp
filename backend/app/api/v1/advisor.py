@@ -18,11 +18,14 @@ from app.schemas.user import UserOut
 from app.services.advisor_service import (
     gather_advisor_context,
     get_advisor_response,
+    mask_advisor_context_for_rbac,
     openai_configured,
     stream_advisor_response,
 )
 from app.services.audit_logs_service import AuditLogsService
+from app.services.bi_service import BiService
 from app.services.finance_service import FinanceService
+from app.services.maps_service import MapsService
 from app.services.portes_service import PortesService
 from app.db.supabase import SupabaseAsync
 
@@ -46,10 +49,13 @@ async def advisor_ask(
     finance: FinanceService = Depends(deps.get_finance_service),
     portes: PortesService = Depends(deps.get_portes_service),
     audit_logs: AuditLogsService = Depends(deps.get_audit_logs_service),
+    maps: MapsService = Depends(deps.get_maps_service),
+    bi: BiService = Depends(deps.get_bi_service),
 ):
     """
     Contexto: EBITDA, serie 6m, matriz CIP (y heurística “vampiros”), tesorería/cashflow,
-    flota por normativa Euro (Euro III destacado), cadena VeriFactu y últimos audit logs.
+    flota por normativa Euro (Euro III destacado), cadena VeriFactu, últimos audit logs,
+    e inteligencia BI (DSO, trayectos con η inferior a 1, ranking de presión de cobro por cliente).
     """
     eid = str(current_user.empresa_id)
 
@@ -66,6 +72,12 @@ async def advisor_ask(
             finance=finance,
             portes=portes,
             audit_logs=audit_logs,
+            maps=maps,
+            bi=bi,
+        )
+        contexto = mask_advisor_context_for_rbac(
+            contexto,
+            rbac_role=str(current_user.rbac_role or ""),
         )
     except Exception:
         logger.exception("advisor_ask: error gather_advisor_context")

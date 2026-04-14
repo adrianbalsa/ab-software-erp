@@ -1,7 +1,15 @@
 /**
  * Persistencia de sesión (JWT) y cabeceras para la API.
  * Clave canónica: `abl_auth_token` (migración automática desde `jwt_token` legacy).
+ * Tras login con Google, el JWT va en cookie HttpOnly en el dominio de la API; las peticiones
+ * usan `credentials: 'include'` y el backend acepta Bearer o cookie.
  */
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE ||
+  "https://api.ablogistics-os.com";
 
 export const AUTH_TOKEN_KEY = "abl_auth_token";
 
@@ -55,6 +63,10 @@ const JWT_UPDATED_EVENT = "abl:jwt-updated";
 export function logout(): void {
   clearAuthToken();
   if (typeof window !== "undefined") {
+    const base = API_BASE.replace(/\/$/, "");
+    void fetch(`${base}/auth/logout`, { method: "POST", credentials: "include" }).catch(() => {
+      /* ignore */
+    });
     void fetch("/api/auth/logout", { method: "POST" }).catch(() => {
       /* ignore */
     });

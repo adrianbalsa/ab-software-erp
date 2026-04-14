@@ -28,6 +28,7 @@ class Settings:
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     REFRESH_TOKEN_EXPIRE_DAYS: int
     REFRESH_TOKEN_COOKIE_NAME: str
+    ACCESS_TOKEN_COOKIE_NAME: str
     REFRESH_REUSE_GRACE_SECONDS: int
     COOKIE_SECURE: bool
     COOKIE_DOMAIN: str | None
@@ -243,6 +244,7 @@ def get_settings() -> Settings:
     expire_minutes = int(getenv("ACCESS_TOKEN_EXPIRE_MINUTES") or "15")
     refresh_days = int(getenv("REFRESH_TOKEN_EXPIRE_DAYS") or "7")
     refresh_cookie = (getenv("REFRESH_TOKEN_COOKIE_NAME") or "abl_refresh").strip() or "abl_refresh"
+    access_cookie = (getenv("ACCESS_TOKEN_COOKIE_NAME") or "abl_auth_token").strip() or "abl_auth_token"
     reuse_grace = int(getenv("REFRESH_REUSE_GRACE_SECONDS") or "8")
 
     environment = (getenv("ENVIRONMENT") or "development").strip().lower()
@@ -398,6 +400,7 @@ def get_settings() -> Settings:
         ACCESS_TOKEN_EXPIRE_MINUTES=expire_minutes,
         REFRESH_TOKEN_EXPIRE_DAYS=max(1, min(365, refresh_days)),
         REFRESH_TOKEN_COOKIE_NAME=refresh_cookie,
+        ACCESS_TOKEN_COOKIE_NAME=access_cookie,
         REFRESH_REUSE_GRACE_SECONDS=max(0, min(120, reuse_grace)),
         COOKIE_SECURE=cookie_secure,
         COOKIE_DOMAIN=cookie_domain,

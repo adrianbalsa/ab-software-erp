@@ -17,6 +17,8 @@ class AuditLogsService:
         empresa_id: str,
         limit: int = 100,
         table_name: str | None = None,
+        record_id: str | None = None,
+        ascending: bool = False,
     ) -> list[AuditLogOut]:
         eid = str(empresa_id or "").strip()
         if not eid:
@@ -26,10 +28,12 @@ class AuditLogsService:
             self._db.table("audit_logs")
             .select("*")
             .eq("empresa_id", eid)
-            .order("created_at", desc=True)
+            .order("created_at", desc=not ascending)
         )
         if table_name and str(table_name).strip():
             q = q.eq("table_name", str(table_name).strip())
+        if record_id and str(record_id).strip():
+            q = q.eq("record_id", str(record_id).strip())
         q = q.limit(lim)
         res: Any = await self._db.execute(q)
         rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
@@ -75,19 +79,19 @@ class AuditLogsService:
             )
         """
         try:
-            audit_data = {
-                "empresa_id": str(empresa_id),
-                "table_name": str(table_name).strip(),
-                "record_id": str(record_id),
-                "action": action.upper(),
-                "old_data": old_value,
-                "new_data": new_value,
-                "changed_by": str(user_id) if user_id else None,
+            params: dict[str, Any] = {
+                "p_empresa_id": str(empresa_id).strip(),
+                "p_table_name": str(table_name).strip(),
+                "p_record_id": str(record_id).strip(),
+                "p_action": str(action).strip().upper(),
             }
-
-            await self._db.execute(
-                self._db.table("audit_logs").insert(audit_data)
-            )
+            if old_value is not None:
+                params["p_old_data"] = old_value
+            if new_value is not None:
+                params["p_new_data"] = new_value
+            if user_id:
+                params["p_changed_by"] = str(user_id).strip()
+            await self._db.rpc("audit_logs_insert_api_event", params)
         except Exception as e:
             # No fallar la operación principal si falla el audit log
             # Solo registrar el error para investigación

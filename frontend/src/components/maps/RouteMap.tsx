@@ -55,8 +55,8 @@ export type RouteMapProps = {
  */
 export function RouteMap({ origin, destination }: RouteMapProps) {
   const apiKey =
-    process.env.NEXT_PUBLIC_MAPS_API_KEY ||
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
+    process.env.NEXT_PUBLIC_MAPS_API_KEY ||
     "";
 
   if (!apiKey) {

@@ -93,6 +93,11 @@ export function isOwnerLike(role: AppRbacRole): boolean {
   return role === "owner" || role === "admin";
 }
 
+/** Rol operativo sin acceso a finanzas / Búnker fiscal en navegación ni a márgenes agregados en API. */
+export function isTrafficManager(role: AppRbacRole): boolean {
+  return role === "traffic_manager";
+}
+
 type JwtMeta = {
   rbac_role?: unknown;
   role?: unknown;
@@ -582,6 +587,11 @@ export type FacturaPdfData = {
   fingerprint_completo: string | null;
   hash_registro: string | null;
   aeat_csv_ultimo_envio: string | null;
+  esg_portes_count?: number | null;
+  esg_total_km?: number | null;
+  esg_total_co2_kg?: number | null;
+  esg_euro_iii_baseline_kg?: number | null;
+  esg_ahorro_vs_euro_iii_kg?: number | null;
 };
 
 type CmrParty = {
@@ -628,6 +638,111 @@ export type LiveFleetVehicle = {
   ultima_actualizacion_gps?: string | null;
 };
 
+/** Fila de `GET /api/v1/portes/` (portes pendientes = activos en pipeline). */
+export type PorteListRow = {
+  id: string;
+  empresa_id?: string;
+  cliente_id?: string | null;
+  fecha: string;
+  origen: string;
+  destino: string;
+  km_estimados: number;
+  km_vacio?: number | null;
+  bultos?: number;
+  descripcion?: string | null;
+  precio_pactado?: number | null;
+  vehiculo_id?: string | null;
+  co2_emitido?: number | null;
+  peso_ton?: number | null;
+  estado: string;
+  subcontratado?: boolean;
+  factura_id?: number | null;
+};
+
+/** `GET /portes/{id}` — detalle con campos ESG enriquecidos (GLEC + Euro III). */
+export type PorteDetailOut = PorteListRow & {
+  co2_kg?: number | null;
+  vehiculo_matricula?: string | null;
+  vehiculo_modelo?: string | null;
+  vehiculo_normativa_euro?: string | null;
+  vehiculo_engine_class?: string | null;
+  vehiculo_fuel_type?: string | null;
+  esg_co2_total_kg?: number | null;
+  esg_co2_euro_iii_baseline_kg?: number | null;
+  esg_co2_ahorro_vs_euro_iii_kg?: number | null;
+};
+
+/** Fila de `GET /flota/inventario` (normativa motor para mapa). */
+export type FlotaInventarioRow = {
+  id: string;
+  matricula: string;
+  vehiculo: string;
+  normativa_euro?: string | null;
+  engine_class?: string | null;
+  certificacion_emisiones?: string | null;
+};
+
+const GEOCODE_CACHE_PREFIX = "abl:geocode:v1:";
+
+/** Normaliza la dirección para clave de caché (LocalStorage). */
+export function normalizeGeocodeQuery(address: string): string {
+  return address.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** Lee coordenadas cacheadas (solo cliente). */
+export function readGeocodeCache(address: string): { lat: number; lng: number } | null {
+  if (typeof window === "undefined") return null;
+  const k = GEOCODE_CACHE_PREFIX + normalizeGeocodeQuery(address);
+  try {
+    const raw = localStorage.getItem(k);
+    if (!raw) return null;
+    const j = JSON.parse(raw) as { lat?: unknown; lng?: unknown };
+    if (typeof j.lat === "number" && typeof j.lng === "number") {
+      return { lat: j.lat, lng: j.lng };
+    }
+  } catch {
+    /* ignore corrupt cache */
+  }
+  return null;
+}
+
+/** Persiste coordenadas en LocalStorage (Supabase sync opcional vía edge job). */
+export function writeGeocodeCache(address: string, pos: { lat: number; lng: number }): void {
+  if (typeof window === "undefined") return;
+  const k = GEOCODE_CACHE_PREFIX + normalizeGeocodeQuery(address);
+  try {
+    localStorage.setItem(k, JSON.stringify(pos));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+/**
+ * Geocodifica con `google.maps.Geocoder`, usando caché local para reducir coste.
+ * Debe ejecutarse en el cliente con Maps JS ya cargado.
+ */
+export async function geocodeAddressWithCache(
+  geocoder: google.maps.Geocoder,
+  address: string,
+): Promise<{ lat: number; lng: number } | null> {
+  const q = normalizeGeocodeQuery(address);
+  if (!q) return null;
+  const cached = readGeocodeCache(q);
+  if (cached) return cached;
+  return new Promise((resolve) => {
+    geocoder.geocode({ address: q }, (results, status) => {
+      if (status === "OK" && results?.[0]?.geometry?.location) {
+        const loc = results[0].geometry.location;
+        const pos = { lat: loc.lat(), lng: loc.lng() };
+        writeGeocodeCache(q, pos);
+        resolve(pos);
+      } else {
+        resolve(null);
+      }
+    });
+  });
+}
+
 export type SimulationInput = {
   cambio_combustible_pct: number;
   cambio_salarios_pct: number;
@@ -649,6 +764,56 @@ export type CIPMatrixPoint = {
   margen_neto: number;
   emisiones_co2: number;
   total_portes: number;
+};
+
+/** `GET /api/v1/bi/dashboard/summary` */
+export type BiDashboardSummary = {
+  dso_days: number | null;
+  dso_sample_size: number;
+  avg_margin_eur: number | null;
+  avg_margin_portes: number;
+  total_co2_saved_kg: number | null;
+  co2_saved_portes: number;
+  avg_efficiency_eur_per_eur_km: number | null;
+  efficiency_sample_size: number;
+};
+
+/** Punto `GET /api/v1/bi/charts/profitability` (Recharts: km vs margin_eur). */
+export type BiProfitabilityPoint = {
+  porte_id: string;
+  km: number;
+  margin_eur: number;
+  precio_pactado?: number | null;
+  estado?: string | null;
+  cliente?: string | null;
+  vehiculo?: string | null;
+  route_label?: string | null;
+};
+
+export type BiProfitabilityCharts = {
+  points: BiProfitabilityPoint[];
+  coste_operativo_eur_km: number;
+};
+
+export type BiTreemapNode = {
+  name: string;
+  size: number;
+  margen_estimado?: number | null;
+  porte_id?: string | null;
+};
+
+export type BiHeatmapCell = {
+  x_bin: string;
+  y_bin: string;
+  count: number;
+  total_co2_kg: number;
+};
+
+export type BiEsgImpactCharts = {
+  matrix: unknown[];
+  heatmap_cells: BiHeatmapCell[];
+  treemap_nodes: BiTreemapNode[];
+  meta?: Record<string, unknown>;
 };
 
 export type VerifactuChainAudit = {
@@ -922,6 +1087,8 @@ export const portalAlbaranPdfUrl = (id: string | number) => `${API_BASE}/api/v1/
 export const getFacturaPdfData = async (id: string | number) =>
   getJson<FacturaPdfData>(`${API_BASE}/api/v1/facturas/${id}/pdf-data`);
 export const getPorteCmrData = async (id: string | number) => getJson<CmrDataOut>(`${API_BASE}/api/v1/portes/${id}/cmr`);
+export const getPorteDetail = async (id: string | number) =>
+  getJson<PorteDetailOut>(`${API_BASE}/portes/${encodeURIComponent(String(id))}`);
 export const getLiveFleetTracking = async () =>
   getJson<LiveFleetVehicle[]>(`${API_BASE}/api/v1/flota/live-tracking`);
 export const postFirmaEntrega = async (
@@ -1027,7 +1194,16 @@ export type FacturaEmailSendResponse = {
 };
 
 export const api = Object.assign(apiClient, {
+  portes: {
+    /** Portes pendientes (activos en pipeline). */
+    list: () => getJson<PorteListRow[]>(`${API_BASE}/api/v1/portes/`),
+    get: (id: string | number) => getPorteDetail(id),
+  },
+  flota: {
+    inventario: () => getJson<FlotaInventarioRow[]>(`${API_BASE}/flota/inventario`),
+  },
   facturas: {
+    get: (facturaId: number) => getJson<Factura>(`${API_BASE}/facturas/${encodeURIComponent(String(facturaId))}`),
     getAll: () => getJson<Factura[]>(`${API_BASE}/facturas`),
     sendByEmail: async (facturaId: number) => {
       const res = await apiFetch(`${API_BASE}/facturas/${facturaId}/send-email`, { method: "POST" });
@@ -1045,6 +1221,21 @@ export const api = Object.assign(apiClient, {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       }),
+  },
+  bi: {
+    /** ``from`` / ``to``: YYYY-MM-DD (inclusive). Query params ``from`` y ``to`` en la API. */
+    summary: (from: string, to: string) =>
+      getJson<BiDashboardSummary>(
+        `${API_BASE}/api/v1/bi/dashboard/summary?${new URLSearchParams({ from, to }).toString()}`,
+      ),
+    profitability: (from: string, to: string) =>
+      getJson<BiProfitabilityCharts>(
+        `${API_BASE}/api/v1/bi/charts/profitability?${new URLSearchParams({ from, to }).toString()}`,
+      ),
+    esgImpact: (from: string, to: string) =>
+      getJson<BiEsgImpactCharts>(
+        `${API_BASE}/api/v1/bi/charts/esg-impact?${new URLSearchParams({ from, to }).toString()}`,
+      ),
   },
   clientes: {
     resendInvite: (clienteId: string) =>

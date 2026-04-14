@@ -38,7 +38,7 @@ async def recalcular_totales_factura(
     service: FacturasService = Depends(deps.get_facturas_service),
 ) -> FacturaRecalculateOut:
     """
-    Recalcula base / IVA / total con MathEngine (Decimal, ROUND_HALF_UP) desde el snapshot.
+    Recalcula base / IVA / total con MathEngine (Decimal, ROUND_HALF_EVEN) desde el snapshot.
     No persiste; rechaza si ya hay huella VeriFactu en la factura.
     """
     try:
@@ -65,6 +65,25 @@ async def list_facturas(
         empresa_id=current_user.empresa_id,
         estado_aeat=estado_aeat,
     )
+
+
+@router.get("/{factura_id}", response_model=FacturaOut)
+async def obtener_factura(
+    factura_id: int,
+    current_user: UserOut = Depends(deps.require_role("owner")),
+    _tenant_guard: None = Depends(
+        deps.require_tenant_resource(table_name="facturas", path_param="factura_id")
+    ),
+    service: FacturasService = Depends(deps.get_facturas_service),
+) -> FacturaOut:
+    """Detalle de factura por id (misma empresa que el usuario)."""
+    try:
+        return await service.get_factura(empresa_id=current_user.empresa_id, factura_id=factura_id)
+    except ValueError as e:
+        msg = str(e).lower()
+        if "no encontrada" in msg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
 
 @router.post(

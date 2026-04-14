@@ -1,36 +1,26 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 import { notifyJwtUpdated } from "@/lib/api";
-import { setAuthToken } from "@/lib/auth";
 
 const WELCOME_FLAG = "abl_oauth_welcome";
 
 function AuthCallbackInner() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = searchParams.get("token");
-    if (!token || !token.trim()) {
-      setError("No se recibió el token de acceso. Vuelve a iniciar sesión con Google.");
-      return;
-    }
-
     try {
-      setAuthToken(token.trim());
-      notifyJwtUpdated();
       sessionStorage.setItem(WELCOME_FLAG, "1");
+      notifyJwtUpdated();
     } catch {
-      setError("No se pudo guardar la sesión en este navegador.");
+      setError("No se pudo preparar la sesión en este navegador.");
       return;
     }
-
     router.replace("/dashboard");
-  }, [router, searchParams]);
+  }, [router]);
 
   if (error) {
     return (

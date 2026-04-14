@@ -36,17 +36,17 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
     if (state && "success" in state && state.success) {
       setAuthToken(state.accessToken);
       notifyJwtUpdated();
-      router.replace(redirectTo);
-      router.refresh();
+      const target = redirectTo.startsWith("/") ? redirectTo : `/${redirectTo}`;
+      window.location.assign(target);
     }
-  }, [state, router, redirectTo]);
+  }, [state, redirectTo]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#f4f6fb] p-6">
       <div className="w-full max-w-md rounded-2xl border border-zinc-200/90 bg-white p-8 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
         <div className="mb-6 flex flex-col items-center gap-4 text-center text-slate-800">
           <Image
-            src="/logo.png"
+            src="/logo.svg"
             alt="AB Logistics OS"
             width={64}
             height={64}

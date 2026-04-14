@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, ShieldAlert } from "lucide-react";
 
 import type { FleetAlert } from "@/hooks/useFleetAlerts";
+import { isAuthCredentialErrorMessage } from "@/lib/api";
 
 type Props = {
   alerts: FleetAlert[];
@@ -18,6 +21,19 @@ function borderForPrioridad(p: FleetAlert["prioridad"]): string {
 }
 
 export function AlertasCriticas({ alerts, loading, error, onRetry }: Props) {
+  const authToastSent = useRef(false);
+
+  useEffect(() => {
+    if (!error) {
+      authToastSent.current = false;
+      return;
+    }
+    if (isAuthCredentialErrorMessage(error) && !authToastSent.current) {
+      authToastSent.current = true;
+      toast.error("Sesión no válida o expirada. Vuelve a iniciar sesión.", { id: "abl-dash-auth" });
+    }
+  }, [error]);
+
   return (
     <section
       className="rounded-2xl border overflow-hidden"
@@ -47,7 +63,7 @@ export function AlertasCriticas({ alerts, loading, error, onRetry }: Props) {
       </div>
 
       <div className="p-6">
-        {error && (
+        {error && !isAuthCredentialErrorMessage(error) && (
           <p className="text-sm text-amber-950 bg-amber-50 border-2 border-amber-700 rounded-xl px-3 py-2 mb-4">
             {error}
           </p>

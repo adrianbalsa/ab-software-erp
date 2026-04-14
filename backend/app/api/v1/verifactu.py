@@ -1,23 +1,37 @@
 from __future__ import annotations
 
 import base64
+import logging
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.api import deps
+from app.core.config import get_settings
 from app.core.alerts import schedule_critical_error_alert
 from app.core.verifactu import verify_invoice_chain
+from app.core.verifactu_chain_repair import diagnose_fingerprint_hash_chain, repair_recommendations
 from app.core.verifactu_qr import generate_verifactu_qr_with_url
 from app.core.crypto import pii_crypto
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserOut
+from app.services.facturas_service import FacturasService
 from app.services.verifactu_service import VerifactuService
 
 from pydantic import BaseModel
 
+logger = logging.getLogger(__name__)
+
+
 class HTTPError(BaseModel):
     detail: str
+
+
+class RetryPendingVerifactuOut(BaseModel):
+    processed: int
+    success: int
+    failed: int
 
 router = APIRouter()
 
@@ -80,6 +94,136 @@ async def audit_verify_chain(
         "ejercicio": ejercicio,
         **report,
     }
+
+
+@router.get(
+    "/audit/chain-repair",
+    summary="Diagnóstico de cadena fiscal y recomendaciones (sin modificar datos)",
+)
+async def audit_chain_repair(
+    _: UserOut = Depends(deps.require_role("owner")),
+    db: SupabaseAsync = Depends(deps.get_db),
+    current_user: UserOut = Depends(deps.get_current_user),
+) -> dict[str, object]:
+    """
+    Cruza ``verificar_cadena_facturas`` (hash_registro / huella) con el análisis de
+    ``fingerprint_hash`` / ``previous_fingerprint``. Solo lectura; la reparación efectiva
+    requiere intervención manual o script bajo copia de seguridad.
+    """
+    eid = str(current_user.empresa_id)
+    svc = VerifactuService(db)
+    db_audit = await svc.verificar_cadena_facturas(empresa_id=eid, limit=500)
+    q = filter_not_deleted(
+        db.table("facturas")
+        .select(
+            "id,numero_secuencial,num_factura,numero_factura,fecha_emision,"
+            "nif_emisor,total_factura,fingerprint_hash,previous_fingerprint"
+        )
+        .eq("empresa_id", eid)
+        .eq("bloqueado", True)
+        .order("numero_secuencial", desc=False)
+        .order("id", desc=False)
+    )
+    res = await db.execute(q)
+    rows: list[dict] = list((res.data or []) if hasattr(res, "data") else [])
+    fh = diagnose_fingerprint_hash_chain(rows)
+    recs = repair_recommendations(
+        db_discrepancies=db_audit.get("discrepancies"),
+        fingerprint_hash_report=fh,
+    )
+    return {
+        "empresa_id": eid,
+        "hash_factura_verification": db_audit,
+        "fingerprint_hash_chain": fh,
+        "recommendations": recs,
+    }
+
+
+@router.post(
+    "/retry-pending",
+    response_model=RetryPendingVerifactuOut,
+    summary="Reintentar envíos VeriFactu pendientes (AEAT)",
+)
+async def retry_pending_verifactu(
+    current_user: UserOut = Depends(deps.require_role("owner")),
+    db: SupabaseAsync = Depends(deps.get_db),
+    facturas: FacturasService = Depends(deps.get_facturas_service),
+) -> RetryPendingVerifactuOut:
+    """
+    Reintenta el envío a la AEAT para facturas con ``aeat_sif_estado = pendiente_envio``.
+
+    - Solo facturas **creadas** en las últimas **48 h** (margen de seguridad).
+    - Máximo **50** facturas por llamada.
+    - Ejecución **secuencial** con registro en log por factura.
+    """
+    eid = str(current_user.empresa_id)
+    cfg = get_settings()
+    if not cfg.AEAT_VERIFACTU_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Envío AEAT desactivado (AEAT_VERIFACTU_ENABLED).",
+        )
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+    cutoff_iso = cutoff.isoformat()
+
+    q = filter_not_deleted(
+        db.table("facturas")
+        .select("id, created_at")
+        .eq("empresa_id", eid)
+        .eq("aeat_sif_estado", "pendiente_envio")
+        .gte("created_at", cutoff_iso)
+        .order("created_at", desc=False)
+        .limit(50)
+    )
+    res = await db.execute(q)
+    rows: list[dict] = list((res.data or []) if hasattr(res, "data") else [])
+    ids: list[int] = []
+    for r in rows:
+        try:
+            ids.append(int(r["id"]))
+        except (TypeError, ValueError, KeyError):
+            continue
+
+    processed = 0
+    success = 0
+    failed = 0
+    uid = str(current_user.usuario_id) if current_user.usuario_id else None
+
+    for fid in ids:
+        processed += 1
+        try:
+            out = await facturas.reenviar_aeat_sif(
+                empresa_id=eid,
+                factura_id=fid,
+                usuario_id=uid,
+            )
+            merged = out.model_dump()
+            est = str(merged.get("aeat_sif_estado") or "").strip().lower()
+            if est in ("pendiente_envio", "error_tecnico"):
+                failed += 1
+                logger.warning(
+                    "retry-pending: factura_id=%s sigue en estado %s tras reintento",
+                    fid,
+                    est,
+                )
+            else:
+                success += 1
+                logger.info(
+                    "retry-pending: factura_id=%s aeat_sif_estado=%s",
+                    fid,
+                    est,
+                )
+        except Exception as exc:
+            failed += 1
+            logger.warning(
+                "retry-pending: factura_id=%s error: %s",
+                fid,
+                exc,
+                exc_info=False,
+            )
+
+    return RetryPendingVerifactuOut(processed=processed, success=success, failed=failed)
 
 
 @router.get(

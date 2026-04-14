@@ -39,6 +39,26 @@ def _parse_currency_field(field: Any) -> tuple[float, str | None]:
     return amount, currency
 
 
+def _field_confidence(field: Any) -> float | None:
+    """Azure DocumentField expone ``confidence`` en [0,1] cuando está disponible."""
+    if field is None:
+        return None
+    c = getattr(field, "confidence", None)
+    if c is None:
+        return None
+    try:
+        return float(c)
+    except (TypeError, ValueError):
+        return None
+
+
+def _aggregate_confidence(fields: list[Any]) -> float | None:
+    vals = [c for f in fields if (c := _field_confidence(f)) is not None]
+    if not vals:
+        return None
+    return float(min(vals))
+
+
 def _invoice_date_to_iso(field: Any) -> str | None:
     if field is None or getattr(field, "value", None) is None:
         return None
@@ -199,6 +219,17 @@ class OCRService:
         prov_out = proveedor.strip().upper()[:100] if proveedor.strip() else None
         nif_out = nif_proveedor.strip()[:20] if nif_proveedor.strip() else None
 
+        conf = _aggregate_confidence(
+            [
+                vendor_name,
+                vendor_tax,
+                fields.get("InvoiceDate"),
+                total_tax_field,
+                total_field,
+            ]
+        )
+        needs_review = conf is not None and conf < 0.90
+
         return {
             "fecha": fecha_iso,
             "proveedor": prov_out,
@@ -207,4 +238,6 @@ class OCRService:
             "iva": round(float(iva_val), 2) if iva_val and iva_val > 0 else None,
             "moneda": moneda,
             "concepto": concepto.upper().strip()[:200] if concepto else None,
+            "ocr_confidence": conf,
+            "requires_manual_review": needs_review,
         }

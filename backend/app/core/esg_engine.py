@@ -147,6 +147,50 @@ def _factor_gco2_per_km(*, engine_class: str | None, fuel_type: str | None, load
     return _GLEC_GCO2_PER_KM["EURO_VI_DIESEL_EMPTY" if load == "EMPTY" else "EURO_VI_DIESEL_FULL"]
 
 
+def esg_certificate_co2_vs_euro_iii(
+    *,
+    km_estimados: float,
+    km_vacio: float | None,
+    engine_class: str | None,
+    fuel_type: str | None,
+    subcontratado: bool,
+) -> dict[str, float]:
+    """
+    Huella CO₂ del porte con el motor **GLEC** (``calculate_co2_footprint``) frente al mismo
+    recorrido con motor de referencia **Euro III** (ISO 14001 / comparativas de flota).
+
+    Returns:
+        ``actual_total_kg``, ``euro_iii_baseline_kg``, ``ahorro_kg`` (≥ 0).
+    """
+    km_total = max(0.0, float(km_estimados or 0.0))
+    km_v = max(0.0, float(km_vacio or 0.0))
+    if km_v > km_total:
+        km_v = km_total
+    km_cargado = max(0.0, km_total - km_v)
+    ec = engine_class or "EURO_VI"
+    ft = fuel_type or "DIESEL"
+    actual = calculate_co2_footprint(
+        km_cargado=km_cargado,
+        km_vacio=km_v,
+        engine_class=ec,
+        fuel_type=ft,
+        subcontratado=subcontratado,
+    )["total_co2_kg"]
+    baseline = calculate_co2_footprint(
+        km_cargado=km_cargado,
+        km_vacio=km_v,
+        engine_class="EURO_III",
+        fuel_type=ft,
+        subcontratado=subcontratado,
+    )["total_co2_kg"]
+    ahorro = max(0.0, float(baseline) - float(actual))
+    return {
+        "actual_total_kg": round(float(actual), 6),
+        "euro_iii_baseline_kg": round(float(baseline), 6),
+        "ahorro_kg": round(ahorro, 6),
+    }
+
+
 def calculate_co2_footprint(
     *,
     km_cargado: float,

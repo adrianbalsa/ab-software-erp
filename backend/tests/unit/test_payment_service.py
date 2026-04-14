@@ -55,6 +55,12 @@ class _FakeDb:
     def table(self, name: str) -> _FakeQuery:
         return _FakeQuery(name)
 
+    async def rpc(self, fn: str, params: dict[str, Any] | None = None) -> _FakeResult:
+        if fn == "audit_logs_insert_api_event":
+            self.audit_payload = dict(params or {})
+            return _FakeResult(data=[{"id": "00000000-0000-4000-8000-000000000001"}])
+        return _FakeResult(data=[])
+
     async def execute(self, query: _FakeQuery) -> _FakeResult:
         if query.table == "facturas" and query.action == "select":
             if self.invoice_row is None:
@@ -65,9 +71,6 @@ class _FakeDb:
             if self.invoice_row is not None:
                 self.invoice_row.update(query.payload)
             return _FakeResult(data=[self.invoice_row] if self.invoice_row else [])
-        if query.table == "audit_logs" and query.action == "insert":
-            self.audit_payload = query.payload
-            return _FakeResult(data=[query.payload])
         return _FakeResult(data=[])
 
 

@@ -28,8 +28,8 @@ const PILLARS = [
       "Burbujas por ruta: Estrellas (margen alto, huella contenida) frente a Vampiros (sangría de margen).",
     href: "/dashboard/analitica",
     icon: Route,
-    accent: "from-sky-500/20 to-blue-500/10",
-    iconRing: "ring-sky-500/20",
+    accent: "from-emerald-500/25 to-teal-600/10",
+    iconRing: "ring-emerald-500/25",
   },
   {
     title: "Salud de flota",
@@ -46,8 +46,8 @@ const PILLARS = [
       "Sliders combustible, salarios y peajes → EBITDA y punto de ruptura tarifario para negociar con cargadores.",
     href: "/dashboard/finanzas/simulador",
     icon: SlidersHorizontal,
-    accent: "from-violet-500/25 to-indigo-500/10",
-    iconRing: "ring-violet-500/25",
+    accent: "from-emerald-600/20 to-zinc-900/40",
+    iconRing: "ring-emerald-500/20",
   },
 ] as const;
 

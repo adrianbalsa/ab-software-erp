@@ -7,7 +7,11 @@ from typing import Any
 from uuid import UUID
 
 from app.core.math_engine import as_float_fiat, round_fiat, safe_divide, to_decimal
-from app.core.esg_engine import calculate_co2_emissions, resolve_normativa_euro_for_co2
+from app.core.esg_engine import (
+    calculate_co2_emissions,
+    esg_certificate_co2_vs_euro_iii,
+    resolve_normativa_euro_for_co2,
+)
 from app.core.plans import PLAN_ENTERPRISE, fetch_empresa_plan, normalize_plan
 from app.db.soft_delete import filter_not_deleted, soft_delete_payload
 from app.db.supabase import SupabaseAsync
@@ -385,7 +389,55 @@ class PortesService:
         if not rows:
             return None
         try:
-            return PorteOut(**rows[0])
+            row = dict(rows[0])
+            vid = str(row.get("vehiculo_id") or "").strip()
+            flota_row: dict[str, Any] = {}
+            if vid:
+                try:
+                    res_f: Any = await self._db.execute(
+                        filter_not_deleted(
+                            self._db.table("flota")
+                            .select(
+                                "matricula, vehiculo, normativa_euro, certificacion_emisiones, engine_class, fuel_type"
+                            )
+                            .eq("empresa_id", eid)
+                            .eq("id", vid)
+                            .limit(1)
+                        )
+                    )
+                    fr = (res_f.data or []) if hasattr(res_f, "data") else []
+                    if fr:
+                        flota_row = dict(fr[0])
+                except Exception:
+                    flota_row = {}
+
+            row["vehiculo_matricula"] = (
+                str(flota_row.get("matricula")).strip() if flota_row.get("matricula") else None
+            ) or None
+            row["vehiculo_modelo"] = (
+                str(flota_row.get("vehiculo")).strip() if flota_row.get("vehiculo") else None
+            ) or None
+            row["vehiculo_normativa_euro"] = resolve_normativa_euro_for_co2(
+                normativa_euro=flota_row.get("normativa_euro"),
+                certificacion_emisiones=flota_row.get("certificacion_emisiones"),
+            )
+            ec_raw = flota_row.get("engine_class")
+            ft_raw = flota_row.get("fuel_type")
+            row["vehiculo_engine_class"] = str(ec_raw).strip() if ec_raw not in (None, "") else None
+            row["vehiculo_fuel_type"] = str(ft_raw).strip() if ft_raw not in (None, "") else None
+
+            cert = esg_certificate_co2_vs_euro_iii(
+                km_estimados=float(row.get("km_estimados") or 0.0),
+                km_vacio=row.get("km_vacio"),
+                engine_class=row.get("vehiculo_engine_class"),
+                fuel_type=row.get("vehiculo_fuel_type"),
+                subcontratado=bool(row.get("subcontratado")),
+            )
+            row["esg_co2_total_kg"] = cert["actual_total_kg"]
+            row["esg_co2_euro_iii_baseline_kg"] = cert["euro_iii_baseline_kg"]
+            row["esg_co2_ahorro_vs_euro_iii_kg"] = cert["ahorro_kg"]
+
+            return PorteOut(**row)
         except Exception:
             return None
 
