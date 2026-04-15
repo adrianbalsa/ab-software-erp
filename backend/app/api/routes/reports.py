@@ -2,14 +2,22 @@ from __future__ import annotations
 
 import io
 import re
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 from app.api import deps
 from app.schemas.user import UserOut
+from app.services.advisor_service import gather_advisor_context, mask_advisor_context_for_rbac
+from app.services.audit_logs_service import AuditLogsService
+from app.services.bi_service import BiService
 from app.services.eco_service import EcoService
+from app.services.finance_service import FinanceService
+from app.services.maps_service import MapsService
+from app.services.portes_service import PortesService
 from app.services.report_service import ReportService
+from app.db.supabase import SupabaseAsync
 
 router = APIRouter()
 
@@ -77,4 +85,49 @@ async def descargar_certificado_huella_co2(
         io.BytesIO(pdf),
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.get("/efficiency/{empresa_id}")
+async def descargar_reporte_eficiencia_flota(
+    empresa_id: UUID,
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
+    report_service: ReportService = Depends(deps.get_report_service),
+    db: SupabaseAsync = Depends(deps.get_db),
+    finance: FinanceService = Depends(deps.get_finance_service),
+    portes: PortesService = Depends(deps.get_portes_service),
+    audit_logs: AuditLogsService = Depends(deps.get_audit_logs_service),
+    maps: MapsService = Depends(deps.get_maps_service),
+    bi: BiService = Depends(deps.get_bi_service),
+) -> StreamingResponse:
+    eid = str(empresa_id)
+    if eid != str(current_user.empresa_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="empresa_id no coincide con la sesion actual",
+        )
+
+    advisor_context = await gather_advisor_context(
+        db=db,
+        empresa_id=eid,
+        finance=finance,
+        portes=portes,
+        audit_logs=audit_logs,
+        maps=maps,
+        bi=bi,
+    )
+    advisor_context = mask_advisor_context_for_rbac(
+        advisor_context,
+        rbac_role=str(current_user.rbac_role or ""),
+    )
+    pdf = await report_service.fleet_efficiency_pdf_bytes(
+        empresa_id=eid,
+        advisor_context=advisor_context,
+    )
+    return StreamingResponse(
+        io.BytesIO(pdf),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="Fleet_Efficiency_Audit_{eid}.pdf"',
+        },
     )

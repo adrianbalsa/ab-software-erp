@@ -7,7 +7,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from app.api import deps
-from app.core.rbac import RoleChecker
 from app.schemas.economic_insights import AdvancedMetricsOut, EconomicInsightsOut
 from app.schemas.treasury import TreasuryProjectionOut
 from app.schemas.user import UserOut
@@ -24,7 +23,7 @@ router = APIRouter()
 )
 async def advanced_metrics(
     current_user: UserOut = Depends(deps.get_current_user),
-    _: None = Depends(RoleChecker(["ADMIN", "GESTOR"])),
+    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
     service: FinanceService = Depends(deps.get_finance_service),
 ) -> AdvancedMetricsOut:
     """
@@ -41,7 +40,7 @@ async def advanced_metrics(
 )
 async def economic_insights(
     current_user: UserOut = Depends(deps.get_current_user),
-    _: None = Depends(RoleChecker(["ADMIN"])),
+    _: None = Depends(deps.RoleChecker(["admin"])),
     service: FinanceService = Depends(deps.get_finance_service),
 ) -> EconomicInsightsOut:
     """

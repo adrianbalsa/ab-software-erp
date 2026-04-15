@@ -50,6 +50,7 @@ OPENAPI_TAGS: list[dict[str, str]] = [
     {"name": "Portes", "description": "Transporte, CMR, firma de entrega y documentación operativa."},
     {"name": "Dashboard económico", "description": "Math Engine: KPIs, márgenes e insights económicos avanzados."},
     {"name": "Tesorería", "description": "Liquidez, vencimientos y proyección de caja."},
+    {"name": "Banking", "description": "Open Banking (GoCardless), sincronización, conciliación fuzzy y asistida por IA."},
     {"name": "Bancos y conciliación", "description": "Movimientos bancarios, conciliación asistida e importaciones."},
     {"name": "Exportación", "description": "Exportación contable (CSV/Excel) para gestoría."},
     {"name": "ESG - Auditoría", "description": "Auditoría de combustible, importaciones y reporting anual detallado."},

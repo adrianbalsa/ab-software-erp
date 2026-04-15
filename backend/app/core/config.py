@@ -52,7 +52,7 @@ class Settings:
     SMTP_PASSWORD: Optional[str]
     # Remitente From para SMTP (si falta, se puede alinear con EMAIL_FROM_ADDRESS en get_settings)
     EMAILS_FROM_EMAIL: Optional[str]
-    # GoCardless Bank Account Data (ex-Nordigen); opcional — sin credenciales no hay /bancos/*
+    # GoCardless Bank Account Data (ex-Nordigen); opcional — sin credenciales no hay /api/v1/banking/*
     GOCARDLESS_SECRET_ID: Optional[str]
     GOCARDLESS_SECRET_KEY: Optional[str]
     # GoCardless Pro (pagos) — token API y entorno
@@ -87,8 +87,14 @@ class Settings:
     AEAT_CLIENT_KEY_PATH: Optional[str]
     AEAT_CLIENT_P12_PATH: Optional[str]
     AEAT_CLIENT_P12_PASSWORD: Optional[str]
-    # Contraseña de la clave privada PEM (si el .key está cifrado); distinta de la del .p12
+    # Contraseña de la clave privada PEM (si el .key está cifrada); distinta de la del .p12
     AEAT_CLIENT_KEY_PASSWORD: Optional[str]
+    # WSDL oficial SistemaFacturacion (Zeep); si falta, el cliente usa la URL por defecto AEAT.
+    AEAT_VERIFACTU_WSDL_URL: Optional[str]
+    # Si True, valida el XML bajo RegFactu contra SuministroLR.xsd antes del POST (exige payload oficial).
+    AEAT_VERIFACTU_XSD_VALIDATE_REQUEST: bool
+    # Override opcional de la URL del XSD SuministroLR (p. ej. espejo offline).
+    AEAT_VERIFACTU_SUMINISTRO_LR_XSD_URL: Optional[str]
 
 
 def _parse_debug_flag(*, environment: str) -> bool:
@@ -328,6 +334,9 @@ def get_settings() -> Settings:
     aeat_p12 = _opt("AEAT_CLIENT_P12_PATH")
     aeat_p12_pwd = _opt("AEAT_CLIENT_P12_PASSWORD")
     aeat_key_pwd = _opt("AEAT_CLIENT_KEY_PASSWORD")
+    aeat_wsdl = _opt("AEAT_VERIFACTU_WSDL_URL")
+    aeat_xsd_validate_req = _env_bool("AEAT_VERIFACTU_XSD_VALIDATE_REQUEST", True)
+    aeat_lr_xsd = _opt("AEAT_VERIFACTU_SUMINISTRO_LR_XSD_URL")
 
     # ─── CORS: producción estricta (dominio oficial); desarrollo incluye localhost ───
     official = (getenv("OFFICIAL_FRONTEND_ORIGIN") or "").strip().rstrip("/")
@@ -444,5 +453,8 @@ def get_settings() -> Settings:
         AEAT_CLIENT_P12_PATH=aeat_p12,
         AEAT_CLIENT_P12_PASSWORD=aeat_p12_pwd,
         AEAT_CLIENT_KEY_PASSWORD=aeat_key_pwd,
+        AEAT_VERIFACTU_WSDL_URL=aeat_wsdl,
+        AEAT_VERIFACTU_XSD_VALIDATE_REQUEST=aeat_xsd_validate_req,
+        AEAT_VERIFACTU_SUMINISTRO_LR_XSD_URL=aeat_lr_xsd,
     )
 

@@ -124,6 +124,26 @@ class PorteOut(BaseModel):
         default=None,
         description="Ahorro kg CO₂ vs línea base Euro III (≥ 0).",
     )
+    lat_origin: float | None = Field(
+        default=None,
+        description="Latitud geocodificada del origen (Google Geocoding).",
+    )
+    lng_origin: float | None = Field(
+        default=None,
+        description="Longitud geocodificada del origen.",
+    )
+    lat_dest: float | None = Field(
+        default=None,
+        description="Latitud geocodificada del destino.",
+    )
+    lng_dest: float | None = Field(
+        default=None,
+        description="Longitud geocodificada del destino.",
+    )
+    real_distance_meters: float | None = Field(
+        default=None,
+        description="Distancia carretera en metros (Routes API) para CO₂ / reporting.",
+    )
     nombre_consignatario_final: str | None = Field(
         default=None,
         description="Nombre quien firma la entrega (POD).",
@@ -147,6 +167,11 @@ class PorteOut(BaseModel):
         "esg_co2_total_kg",
         "esg_co2_euro_iii_baseline_kg",
         "esg_co2_ahorro_vs_euro_iii_kg",
+        "lat_origin",
+        "lng_origin",
+        "lat_dest",
+        "lng_dest",
+        "real_distance_meters",
         mode="plain",
     )
     def _ser_porte_qty(self, v: float | None) -> float | None:

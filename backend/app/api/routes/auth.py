@@ -14,7 +14,9 @@ from app.api import deps
 from app.core.config import get_settings
 from app.core.http_client_meta import get_client_ip
 from app.core.security import TOKEN_TYPE, create_access_token
-from app.schemas.auth import ActiveSessionOut, Token
+from app.models.auth import normalize_user_role
+from app.schemas.auth import ActiveSessionOut, OnboardingSetupIn, OnboardingSetupOut, Token
+from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserOut
 from app.services.auth_service import AuthService
 from app.services.refresh_token_service import RefreshTokenService
@@ -149,6 +151,7 @@ async def login(
     access_token = create_access_token(
         subject=user.username,
         empresa_id=user.empresa_id,
+        role=user.role.value,
         rbac_role=user.rbac_role,
         assigned_vehiculo_id=str(user.assigned_vehiculo_id) if user.assigned_vehiculo_id else None,
         cliente_id=str(user.cliente_id) if user.cliente_id else None,
@@ -261,6 +264,62 @@ async def logout() -> Response:
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     _clear_auth_cookies(response)
     return response
+
+
+@router.post("/onboarding/setup", response_model=OnboardingSetupOut)
+@router.post("/onboarding/setup/", include_in_schema=False, response_model=OnboardingSetupOut)
+async def onboarding_setup(
+    payload: OnboardingSetupIn,
+    db: SupabaseAsync = Depends(deps.get_db),
+) -> OnboardingSetupOut:
+    """
+    Onboarding autónomo: crea empresa y vincula el perfil autenticado como admin.
+    Requiere JWT válido y que el perfil no tenga empresa previa.
+    """
+    try:
+        rpc_res: Any = await db.rpc(
+            "auth_onboarding_setup",
+            {
+                "p_company_name": payload.company_name.strip(),
+                "p_cif": payload.cif.strip().upper(),
+                "p_address": payload.address.strip(),
+                "p_initial_fleet_type": payload.initial_fleet_type.strip(),
+                "p_target_margin_pct": payload.target_margin_pct,
+            },
+        )
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "already_onboarded" in msg:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="El usuario ya pertenece a una empresa.",
+            ) from exc
+        if "profile_not_found" in msg:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No existe perfil para el usuario autenticado.",
+            ) from exc
+        if "auth_uid_missing" in msg:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Sesión no válida para onboarding.",
+            ) from exc
+        raise
+
+    rows = []
+    if hasattr(rpc_res, "data") and isinstance(rpc_res.data, list):
+        rows = rpc_res.data
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="No se pudo completar el onboarding.",
+        )
+    row = rows[0]
+    return OnboardingSetupOut(
+        empresa_id=str(row.get("empresa_id") or ""),
+        profile_id=str(row.get("profile_id") or ""),
+        role=str(row.get("role") or "admin"),
+    )
 
 
 @router.get("/sessions", response_model=list[ActiveSessionOut])
@@ -425,6 +484,7 @@ async def oauth_google_callback(
         user_out = UserOut(
             username=udb.username,
             empresa_id=udb.empresa_id,
+            role=normalize_user_role(None, legacy_role=udb.rol),
             rol=udb.rol,
             usuario_id=None,
         )
@@ -437,6 +497,7 @@ async def oauth_google_callback(
     access_token = create_access_token(
         subject=user_out.username,
         empresa_id=user_out.empresa_id,
+        role=user_out.role.value,
         rbac_role=user_out.rbac_role,
         assigned_vehiculo_id=str(user_out.assigned_vehiculo_id) if user_out.assigned_vehiculo_id else None,
         cliente_id=str(user_out.cliente_id) if user_out.cliente_id else None,

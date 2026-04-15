@@ -25,6 +25,11 @@ def sign_xml_xades(
     Firma el documento XML en modo **enveloped**: el nodo ``<ds:Signature>`` (y en XAdES
     el ``Object`` con ``QualifyingProperties``) se inserta bajo el elemento raíz.
 
+    VeriFactu / SuministroLR: el XML de entrada debe tener como **raíz** el nodo
+    ``sf:RegistroAlta`` (registro de facturación de alta); la firma va conforme al XSD
+    como último hijo opcional de ``RegistroAlta``, manteniendo referencias URI coherentes
+    dentro de ese fragmento.
+
     Parameters
     ----------
     xml_bytes:

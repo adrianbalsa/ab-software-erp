@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 
 from fastapi import FastAPI, HTTPException, Request
@@ -17,8 +18,6 @@ from app.api.routes import (
     ai,
     audit_logs,
     auth,
-    bank,
-    bancos,
     clientes,
     dashboard,
     eco,
@@ -36,15 +35,16 @@ from app.api.routes import (
     reports,
     utils,
 )
+from app.api.endpoints import ai as ai_endpoints
 from app.api.v1 import advisor as advisor_v1
 from app.api.v1 import bi as bi_v1
-from app.api.v1 import bank_matching as bank_matching_v1
 from app.api.v1 import analytics as analytics_v1
-from app.api.v1 import bancos_conciliacion as bancos_conciliacion_v1
+from app.api.v1 import banking as banking_v1
 from app.api.v1 import chat as chat_v1
 from app.api.v1 import chatbot as chatbot_v1
 from app.api.v1 import clientes as clientes_v1
 from app.api.v1 import economic_dashboard as economic_dashboard_v1
+from app.api.v1 import esg as esg_v1
 from app.api.v1 import esg_auditoria as esg_auditoria_v1
 from app.api.v1 import esg_reports as esg_reports_v1
 from app.api.v1 import export as export_v1
@@ -68,7 +68,6 @@ from app.api.v1 import treasury as treasury_v1
 from app.api.v1 import verifactu as verifactu_v1
 from app.api.v1 import webhooks as webhooks_v1
 from app.api.v1 import webhooks_gocardless as webhooks_gocardless_v1
-from app.core.alerts import schedule_critical_error_alert, short_traceback_from_exc
 from app.core.config import get_settings
 from app.core.rate_limit import SkipOptionsSlowAPIMiddleware, limiter
 from app.middleware.health_bypass import HealthCheckBypassMiddleware
@@ -77,6 +76,7 @@ from app.middleware.json_access_log import JsonAccessLogMiddleware
 from app.middleware.rate_limit_middleware import AuthLoginRateLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.slow_request_log import SlowRequestLogMiddleware
+from app.middleware.tenant_rbac_context import TenantRBACContextMiddleware
 from app.openapi_config import (
     API_DESCRIPTION,
     API_TITLE,
@@ -84,6 +84,27 @@ from app.openapi_config import (
     OPENAPI_TAGS,
     attach_custom_openapi,
 )
+from app.services.alert_service import alert_service, notify_critical_error, short_traceback_from_exc
+
+SENTRY_DSN = (os.getenv("SENTRY_DSN") or "").strip()
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.starlette import StarletteIntegration
+
+    _sentry_environment = (os.getenv("ENVIRONMENT") or "development").strip().lower()
+    _sentry_sample_rate = 0.1 if _sentry_environment == "production" else 1.0
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=_sentry_environment,
+        integrations=[
+            StarletteIntegration(transaction_style="endpoint"),
+            FastApiIntegration(transaction_style="endpoint"),
+        ],
+        traces_sample_rate=_sentry_sample_rate,
+        profiles_sample_rate=_sentry_sample_rate,
+    )
 
 
 def create_app() -> FastAPI:
@@ -91,22 +112,6 @@ def create_app() -> FastAPI:
 
     configure_app_logging()
     settings = get_settings()
-
-    if settings.SENTRY_DSN:
-        import sentry_sdk
-        from sentry_sdk.integrations.fastapi import FastApiIntegration
-        from sentry_sdk.integrations.starlette import StarletteIntegration
-
-        sentry_sdk.init(
-            dsn=settings.SENTRY_DSN,
-            environment=settings.ENVIRONMENT,
-            integrations=[
-                StarletteIntegration(transaction_style="endpoint"),
-                FastApiIntegration(transaction_style="endpoint"),
-            ],
-            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE") or "0.1"),
-            profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE") or "0.0"),
-        )
 
     app = FastAPI(
         title=API_TITLE,
@@ -164,6 +169,8 @@ def create_app() -> FastAPI:
     app.add_middleware(HealthCheckBypassMiddleware)
     # Más externo aún: print stderr antes de TrustedHost / OAuth2 body (depurar 401 sin entrar en la ruta).
     app.add_middleware(LoginDebugPrintMiddleware)
+    # Contexto tenant/RBAC para reforzar RLS incluso si un endpoint olvida una dependencia.
+    app.add_middleware(TenantRBACContextMiddleware)
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_login_debug(request: Request, exc: RequestValidationError):
@@ -180,21 +187,59 @@ def create_app() -> FastAPI:
         )
 
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc: HTTPException):
+    async def http_exception_handler(_request: Request, exc: HTTPException):
         if exc.status_code == 500:
-            schedule_critical_error_alert(
-                request=request,
-                error_detail=short_traceback_from_exc(exc),
-            )
+            asyncio.create_task(notify_critical_error(short_traceback_from_exc(exc)))
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
     @app.exception_handler(Exception)
-    async def unhandled_exception_handler(request: Request, exc: Exception):
-        schedule_critical_error_alert(
-            request=request,
-            error_detail=short_traceback_from_exc(exc),
-        )
+    async def unhandled_exception_handler(_request: Request, exc: Exception):
+        asyncio.create_task(notify_critical_error(short_traceback_from_exc(exc)))
         return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
+    @app.get("/health", tags=["Salud"], include_in_schema=True)
+    async def health() -> JSONResponse:
+        """
+        Healthcheck avanzado para Docker/orquestación.
+        Verifica conectividad de Supabase (REST) y Redis.
+        """
+        from app.core.health_checks import _check_dict, check_redis_ping, check_supabase_rest
+        from app.db.supabase import get_supabase
+
+        settings = get_settings()
+        db = await get_supabase(
+            jwt_token=None,
+            allow_service_role_bypass=True,
+            log_service_bypass_warning=False,
+        )
+        _ = db  # Garantiza creación del cliente admin en el propio healthcheck.
+
+        supabase_ok, supabase_detail = await check_supabase_rest(
+            settings_url=settings.SUPABASE_URL,
+            service_key=settings.SUPABASE_SERVICE_KEY,
+        )
+        redis = await check_redis_ping()
+        if redis.get("skipped"):
+            redis = _check_dict(ok=False, detail="redis_not_configured", skipped=False)
+
+        checks = {
+            "supabase": _check_dict(ok=supabase_ok, detail=supabase_detail, skipped=False),
+            "redis": redis,
+        }
+        healthy = all(bool(check.get("ok")) and not bool(check.get("skipped")) for check in checks.values())
+        status_code = 200 if healthy else 503
+        if status_code == 503:
+            await alert_service.send_critical_alert(
+                message="Healthcheck failed: one or more critical dependencies are down.",
+                details={"endpoint": "/health", "status_code": status_code, "checks": checks},
+            )
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "status": "healthy" if healthy else "unhealthy",
+                "checks": checks,
+            },
+        )
 
     # Salud en la raíz (Railway: GET /health, GET /ready).
     app.include_router(health_router.router)
@@ -219,9 +264,8 @@ def create_app() -> FastAPI:
     app.include_router(empresa.router, prefix="/empresa", tags=["Empresa"])
     app.include_router(finance.router, prefix="/finance", tags=["Finanzas"])
     app.include_router(ai.router, prefix="/ai", tags=["IA y chat"])
+    app.include_router(ai_endpoints.router, prefix="/ai", tags=["IA y chat"])
     app.include_router(maps.router, prefix="/maps", tags=["Mapas"])
-    app.include_router(bancos.router, prefix="/bancos", tags=["Bancos y conciliación"])
-    app.include_router(bank.router, prefix="/bank", tags=["Bancos y conciliación"])
     app.include_router(reports.router, prefix="/reports", tags=["Informes"])
     app.include_router(admin.router, prefix="/admin", tags=["Administración"])
     app.include_router(presupuestos.router, prefix="/presupuestos", tags=["Presupuestos"])
@@ -250,10 +294,11 @@ def create_app() -> FastAPI:
     )
     app.include_router(payments_gocardless_v1.router, prefix="/api/v1/payments/gocardless", tags=["Pagos"])
     app.include_router(esg_reports_v1.router, prefix="/api/v1", tags=["ESG"])
+    app.include_router(esg_v1.router, prefix="/api/v1", tags=["ESG"])
     app.include_router(esg_auditoria_v1.router, prefix="/api/v1", tags=["ESG - Auditoría"])
     app.include_router(chat_v1.router, prefix="/api/v1/chat", tags=["IA y chat"])
     app.include_router(chatbot_v1.router, prefix="/api/v1/chatbot", tags=["IA y chat"])
-    app.include_router(bancos_conciliacion_v1.router, prefix="/api/v1/bancos", tags=["Bancos y conciliación"])
+    app.include_router(banking_v1.router, prefix="/api/v1/banking", tags=["Banking"])
     app.include_router(treasury_v1.router, prefix="/api/v1/treasury", tags=["Tesorería"])
     app.include_router(export_v1.router, prefix="/api/v1/export", tags=["Exportación"])
     app.include_router(portes_v1.router, prefix="/api/v1/portes", tags=["Portes"])
@@ -281,7 +326,6 @@ def create_app() -> FastAPI:
     )
     app.include_router(analytics_v1.router, prefix="/api/v1", tags=["Finanzas"])
     app.include_router(advisor_v1.router, prefix="/api/v1/advisor", tags=["LogisAdvisor"])
-    app.include_router(bank_matching_v1.router, prefix="/api/v1/bank", tags=["Bancos y conciliación"])
     app.include_router(bi_v1.router, prefix="/api/v1", tags=["Business Intelligence"])
 
     return app

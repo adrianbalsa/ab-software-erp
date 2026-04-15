@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 
 from app.api import deps
-from app.core.rbac import RoleChecker
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserOut
 from app.services.combustible_service import importar_combustible_csv
@@ -32,7 +31,7 @@ class FuelImportacionResponse(BaseModel):
 )
 async def importar_combustible(
     file: UploadFile = File(...),
-    _: dict = Depends(RoleChecker(["ADMIN", "GESTOR"])),
+    _: UserOut = Depends(deps.RoleChecker(["admin", "gestor"])),
     current_user: UserOut = Depends(deps.bind_write_context),
     gastos_service: GastosService = Depends(deps.get_gastos_service),
     db: SupabaseAsync = Depends(deps.get_db),

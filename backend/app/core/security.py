@@ -170,6 +170,7 @@ def create_access_token(
     subject: str,
     expires_minutes: int | None = None,
     empresa_id: str | None = None,
+    role: str | None = None,
     rbac_role: str | None = None,
     assigned_vehiculo_id: str | None = None,
     cliente_id: str | None = None,
@@ -192,6 +193,9 @@ def create_access_token(
     }
     if empresa_id and str(empresa_id).strip():
         payload["empresa_id"] = str(empresa_id).strip()
+    role_value = (role or "").strip().lower()
+    if role_value in ("superadmin", "admin", "gestor", "transportista", "cliente", "developer"):
+        payload["role"] = role_value
     rr = (rbac_role or "").strip().lower()
     if rr in ("owner", "admin", "traffic_manager", "driver", "cliente", "developer"):
         payload["rbac_role"] = rr

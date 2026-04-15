@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.models.auth import UserRole
 
 class UserInDB(BaseModel):
     """Fila `usuarios` (login legacy con hash)."""
@@ -28,6 +29,7 @@ class UserOut(BaseModel):
 
     username: str
     empresa_id: UUID
+    role: UserRole = Field(default=UserRole.GESTOR, description="Rol RBAC unificado")
     rol: str = Field(default="user", description="Rol legado panel admin (profiles.rol / usuarios.rol)")
     rbac_role: str = Field(
         default="owner",

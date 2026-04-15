@@ -9,7 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from starlette.responses import Response
 
 from app.api import deps
-from app.core.rbac import RoleChecker
+from app.models.auth import UserRole
 from app.core.webhook_dispatcher import dispatch_endpoint_test
 from app.schemas.user import UserOut
 from app.schemas.webhook_b2b import (
@@ -41,7 +41,7 @@ async def _owner_or_developer_write(
     current_user: UserOut = Depends(deps.bind_write_context),
 ) -> UserOut:
     """Contexto de escritura + rol owner o developer (evita doble ``get_current_user``)."""
-    if current_user.rbac_role not in ("owner", "developer"):
+    if current_user.role not in (UserRole.ADMIN, UserRole.DEVELOPER, UserRole.SUPERADMIN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permiso denegado para su rol operativo.",
@@ -55,7 +55,7 @@ async def _owner_or_developer_write(
     summary="Listar webhooks B2B activos",
 )
 async def list_webhooks(
-    _: dict[str, Any] = Depends(RoleChecker(["ADMIN"])),
+    _: UserOut = Depends(deps.RoleChecker(["admin"])),
     current_user: UserOut = Depends(deps.get_current_user),
     service: WebhooksAdminService = Depends(deps.get_webhooks_admin_service),
 ) -> list[WebhookB2BOut]:
@@ -70,7 +70,7 @@ async def list_webhooks(
 )
 async def create_webhook(
     body: WebhookB2BCreate,
-    _: dict[str, Any] = Depends(RoleChecker(["ADMIN"])),
+    _: UserOut = Depends(deps.RoleChecker(["admin"])),
     current_user: UserOut = Depends(deps.bind_write_context),
     service: WebhooksAdminService = Depends(deps.get_webhooks_admin_service),
 ) -> WebhookB2BCreated:
@@ -85,7 +85,7 @@ async def create_webhook(
 )
 async def get_webhook_secret(
     webhook_id: UUID,
-    _: dict[str, Any] = Depends(RoleChecker(["ADMIN"])),
+    _: UserOut = Depends(deps.RoleChecker(["admin"])),
     current_user: UserOut = Depends(deps.get_current_user),
     service: WebhooksAdminService = Depends(deps.get_webhooks_admin_service),
 ) -> WebhookB2BSecretOut:
@@ -101,7 +101,7 @@ async def get_webhook_secret(
 async def test_webhook(
     webhook_id: UUID,
     background_tasks: BackgroundTasks,
-    _: dict[str, Any] = Depends(RoleChecker(["ADMIN"])),
+    _: UserOut = Depends(deps.RoleChecker(["admin"])),
     current_user: UserOut = Depends(deps.bind_write_context),
 ) -> WebhookTestOut:
     """Encola un POST de prueba (ping) firmado hacia la URL configurada."""
@@ -120,7 +120,7 @@ async def test_webhook(
 )
 async def delete_webhook(
     webhook_id: UUID,
-    _: dict[str, Any] = Depends(RoleChecker(["ADMIN"])),
+    _: UserOut = Depends(deps.RoleChecker(["admin"])),
     current_user: UserOut = Depends(deps.bind_write_context),
     service: WebhooksAdminService = Depends(deps.get_webhooks_admin_service),
 ) -> Response:

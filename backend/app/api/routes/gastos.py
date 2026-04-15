@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from fastapi.responses import JSONResponse
 
 from app.api import deps
-from app.core.rbac import RoleChecker
 from app.schemas.gasto import GastoCreate, GastoOCRHint, GastoOut
 from app.schemas.user import UserOut
 from app.services.gastos_service import GastosService
@@ -34,7 +33,7 @@ def _optional_float(name: str, raw: str | None) -> float | None:
 @router.get("/", response_model=list[GastoOut])
 async def list_gastos(
     current_user: UserOut = Depends(deps.get_current_user),
-    _: None = Depends(RoleChecker(["ADMIN", "CONTABLE"])),
+    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
     service: GastosService = Depends(deps.get_gastos_service),
 ) -> list[GastoOut]:
     return await service.list_gastos(empresa_id=current_user.empresa_id)
@@ -53,7 +52,7 @@ async def create_gasto(
     total_eur: str | None = Form(None),
     evidencia: UploadFile | None = File(None),
     current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(RoleChecker(["ADMIN", "CONTABLE"])),
+    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
     service: GastosService = Depends(deps.get_gastos_service),
 ) -> GastoOut:
     try:
@@ -108,7 +107,7 @@ async def ocr_hint(
     total_eur: str | None = Form(None),
     evidencia: UploadFile | None = File(None),
     current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(RoleChecker(["ADMIN", "CONTABLE"])),
+    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
     service: GastosService = Depends(deps.get_gastos_service),
 ) -> GastoOCRHint | JSONResponse:
     """

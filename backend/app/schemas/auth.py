@@ -41,3 +41,17 @@ class TokenPayload(BaseModel):
         description="UUID de empresa (tokens firmados por esta API; Supabase Auth puede no incluirlo)",
     )
 
+
+class OnboardingSetupIn(BaseModel):
+    company_name: str = Field(min_length=2, max_length=255)
+    cif: str = Field(min_length=2, max_length=64)
+    address: str = Field(min_length=5, max_length=255)
+    initial_fleet_type: str = Field(min_length=2, max_length=120)
+    target_margin_pct: float | None = Field(default=None, ge=0, le=100)
+
+
+class OnboardingSetupOut(BaseModel):
+    empresa_id: str
+    profile_id: str
+    role: str
+

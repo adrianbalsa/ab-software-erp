@@ -5,7 +5,6 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
 from app.api import deps
-from app.core.rbac import RoleChecker
 from app.schemas.factura import FacturaCreateFromPortes, FacturaGenerateResult
 from app.schemas.porte import PorteCotizarIn, PorteCotizarOut, PorteCreate, PorteOut
 from app.schemas.user import UserOut
@@ -51,7 +50,7 @@ async def create_porte(
     porte_in: PorteCreate,
     background_tasks: BackgroundTasks,
     current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(RoleChecker(["ADMIN", "GESTOR"])),
+    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
     service: PortesService = Depends(deps.get_portes_service),
 ) -> PorteOut:
     try:
@@ -83,7 +82,7 @@ async def create_porte(
 async def cotizar_porte(
     payload: PorteCotizarIn,
     current_user: UserOut = Depends(deps.get_current_user),
-    _: None = Depends(RoleChecker(["ADMIN", "GESTOR"])),
+    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
     service: PortesService = Depends(deps.get_portes_service),
 ) -> PorteCotizarOut:
     if payload.empresa_id is not None and payload.empresa_id != current_user.empresa_id:
@@ -114,7 +113,7 @@ async def facturar_desde_portes(
     payload: FacturaCreateFromPortes,
     background_tasks: BackgroundTasks,
     current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(RoleChecker(["ADMIN", "GESTOR"])),
+    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
     facturas: FacturasService = Depends(deps.get_facturas_service),
 ) -> FacturaGenerateResult:
     """

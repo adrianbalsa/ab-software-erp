@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Fleet Efficiency Report</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 16mm 14mm 22mm 14mm;
+      @bottom-center {
+        content: "AB Logistics OS - Financial Intelligence | Pagina " counter(page) " de " counter(pages);
+        color: #475569;
+        font-size: 9px;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #0f172a;
+      font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      font-size: 12px;
+      line-height: 1.45;
+      background: #ffffff;
+    }
+    .header {
+      background: #1e293b;
+      color: #ffffff;
+      padding: 16px 18px;
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+    .header h1 {
+      margin: 0 0 6px 0;
+      font-size: 20px;
+      letter-spacing: 0.2px;
+    }
+    .meta { font-size: 11px; color: #cbd5e1; }
+    .metrics {
+      display: table;
+      width: 100%;
+      border-spacing: 8px 8px;
+      margin-bottom: 14px;
+    }
+    .metric {
+      display: table-cell;
+      width: 25%;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px;
+      vertical-align: top;
+      background: #f8fafc;
+    }
+    .metric .label { color: #64748b; font-size: 11px; margin-bottom: 4px; }
+    .metric .value { font-size: 16px; font-weight: 700; color: #0f172a; }
+    .section-title {
+      margin: 14px 0 8px 0;
+      font-size: 13px;
+      color: #1e293b;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 11px;
+    }
+    th, td {
+      padding: 8px 7px;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: top;
+    }
+    th {
+      text-align: left;
+      background: #1e293b;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.25px;
+    }
+    tr:nth-child(even) td { background: #f8fafc; }
+    tr.vampire td { background: #fee2e2 !important; color: #7f1d1d; }
+    .text-right { text-align: right; }
+    .empty {
+      padding: 14px;
+      border: 1px dashed #cbd5e1;
+      color: #64748b;
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+  </style>
+</head>
+<body>
+  <section class="header">
+    <h1>Fleet Efficiency Financial Audit</h1>
+    <div class="meta">Empresa: {{ empresa_nombre }} | Tenant: {{ empresa_id }}</div>
+    <div class="meta">Generado: {{ generated_at }}</div>
+  </section>
+
+  <section class="metrics">
+    <div class="metric">
+      <div class="label">Ingresos (sin IVA)</div>
+      <div class="value">{{ ingresos if ingresos is not none else "-" }}</div>
+    </div>
+    <div class="metric">
+      <div class="label">Gastos (sin IVA)</div>
+      <div class="value">{{ gastos if gastos is not none else "-" }}</div>
+    </div>
+    <div class="metric">
+      <div class="label">EBITDA aproximado</div>
+      <div class="value">{{ ebitda if ebitda is not none else "-" }}</div>
+    </div>
+    <div class="metric">
+      <div class="label">Huella de Carbono Total</div>
+      <div class="value">{{ total_emisiones_co2_kg }}</div>
+    </div>
+  </section>
+
+  <section class="metrics">
+    <div class="metric">
+      <div class="label">Rutas analizadas</div>
+      <div class="value">{{ routes_total }}</div>
+    </div>
+    <div class="metric">
+      <div class="label">Rutas Vampire (eta &lt; 1.0)</div>
+      <div class="value">{{ vampire_count }}</div>
+    </div>
+    <div class="metric">
+      <div class="label">Vampiros detectados (CIP)</div>
+      <div class="value">{{ cip_vampiros_count }}</div>
+    </div>
+  </section>
+
+  <div class="section-title">Route Efficiency Table</div>
+  {% if routes %}
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Ruta</th>
+        <th>Cliente</th>
+        <th class="text-right">Km</th>
+        <th class="text-right">Margen EUR</th>
+        <th class="text-right">ETA</th>
+        <th class="text-right">Emisiones CO2</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in routes %}
+      <tr class="{% if r.is_vampire %}vampire{% endif %}">
+        <td>{{ r.idx }}</td>
+        <td>{{ r.route_label }}</td>
+        <td>{{ r.cliente_nombre }}</td>
+        <td class="text-right">{{ r.km_estimados }}</td>
+        <td class="text-right">{{ r.margen_eur }}</td>
+        <td class="text-right">{{ r.efficiency_eta }}</td>
+        <td class="text-right">{{ r.emisiones_co2_kg }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">No hay rutas de eficiencia disponibles en el contexto actual.</div>
+  {% endif %}
+
+  <p style="margin-top: 12px; color: #475569; font-size: 10px;">
+    Nota de Sostenibilidad: El calculo de la huella de carbono se ha realizado mediante factores empiricos estandarizados basados en la normativa Euro VI, en alineacion con las guias de calculo para el sector transporte.
+  </p>
+</body>
+</html>
