@@ -274,10 +274,25 @@ async def reenviar_factura_aeat(
     En desarrollo solo se usa la URL de pruebas si ``AEAT_BLOQUEAR_PROD_EN_DESARROLLO`` está activo.
     """
     try:
-        return await service.reenviar_aeat_sif(
+        out = await service.reenviar_aeat_sif(
             empresa_id=current_user.empresa_id,
             factura_id=factura_id,
             usuario_id=current_user.usuario_id or current_user.username,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    est = (out.aeat_sif_estado or "").strip().lower()
+    code = (out.aeat_sif_codigo or "").strip().upper()
+    if est == "pendiente_envio" and code == "AEAT_TIMEOUT":
+        raise HTTPException(
+            status.HTTP_504_GATEWAY_TIMEOUT,
+            "La AEAT no respondió a tiempo; el registro quedó en cola para reintento.",
+        )
+    if est == "pendiente_envio" and code == "AEAT_CONNECTION":
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "No se pudo conectar con el servicio de la AEAT; el registro quedó en cola para reintento.",
+        )
+
+    return out

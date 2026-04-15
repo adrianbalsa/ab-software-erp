@@ -35,6 +35,8 @@ from typing import Any, Mapping, cast
 from xml.etree import ElementTree as ET
 
 import anyio
+import httpx
+import requests
 from lxml import etree
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs12
@@ -60,6 +62,53 @@ from app.models.webhook import WebhookEventType
 from app.services.webhook_service import run_webhook_deliveries_for_event
 
 logger = logging.getLogger(__name__)
+
+
+def _classify_transport_detail(detail: Any) -> str:
+    """
+    Clasifica el detalle envuelto en VeriFactuException(code=AEAT_TRANSPORT).
+    Cubre ``requests`` (uso actual) y ``httpx`` por si el transporte cambia.
+    """
+    if detail is None:
+        return "other"
+    if isinstance(
+        detail,
+        (
+            requests.exceptions.Timeout,
+            requests.exceptions.ReadTimeout,
+        ),
+    ):
+        return "timeout"
+    if isinstance(
+        detail,
+        (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ConnectTimeout,
+        ),
+    ):
+        return "connect"
+    # httpx (transporte alternativo / dependencias transitivas)
+    if isinstance(
+        detail,
+        (
+            httpx.TimeoutException,
+            httpx.ReadTimeout,
+            httpx.WriteTimeout,
+            httpx.PoolTimeout,
+        ),
+    ):
+        return "timeout"
+    if isinstance(
+        detail,
+        (
+            httpx.ConnectError,
+            httpx.ConnectTimeout,
+            httpx.ProxyError,
+        ),
+    ):
+        return "connect"
+    return "other"
+
 
 _NS_SOAP12 = "http://www.w3.org/2003/05/soap-envelope"
 _NS_SF_DEFAULT = (
@@ -363,7 +412,22 @@ def _parse_respuesta_reg_factu(cuerpo: str) -> dict[str, str | None]:
         return out
     try:
         root = ET.fromstring(raw.encode("utf-8"))
+    except ET.ParseError as exc:
+        logger.warning(
+            "Heurística AEAT: respuesta no es XML bien formado (ElementTree.ParseError): %s",
+            exc,
+        )
+        return out
+    except etree.XMLSyntaxError as exc:
+        logger.warning(
+            "Heurística AEAT: respuesta no es XML bien formado (lxml XMLSyntaxError): %s",
+            exc,
+        )
+        return out
     except Exception:
+        logger.exception(
+            "Heurística AEAT: fallo inesperado parseando cuerpo para RegFactu (se usará heurística texto)"
+        )
         return out
     out["estado_registro"] = _find_first_text(root, "EstadoRegistro", "Estado")
     out["csv"] = _find_first_text(
@@ -844,7 +908,91 @@ async def enviar_registro_y_persistir(
                 {"factura_id": fid},
             )
         )
+    except ValueError as exc:
+        logger.warning("AEAT: validación o firma XAdES (ValueError) antes del envío: %s", exc)
+        ins = {
+            "empresa_id": empresa_id,
+            "factura_id": fid,
+            "estado": "Error técnico",
+            "codigo_error": "XADES",
+            "descripcion_error": f"Firma XAdES-BES: {str(exc)[:2000]}",
+            "csv_aeat": None,
+            "http_status": None,
+            "response_snippet": None,
+            "soap_action": None,
+            "created_at": now_iso,
+        }
+        await db.execute(db.table("verifactu_envios").insert(ins))
+        await _patch_factura_aeat(
+            db,
+            empresa_id=empresa_id,
+            factura_id=fid,
+            estado="error_tecnico",
+            codigo="XADES",
+            descripcion=ins["descripcion_error"],
+            csv=None,
+            actualizado_en=now_iso,
+        )
+        _limpiar_temp(cleanup)
+        return {**factura_row, "aeat_sif_estado": "error_tecnico"}
+    except OSError as exc:
+        logger.warning("AEAT: lectura certificado/clave PEM (OSError): %s", exc)
+        desc = f"Lectura certificado mTLS: {str(exc)[:2000]}"
+        ins = {
+            "empresa_id": empresa_id,
+            "factura_id": fid,
+            "estado": "Error técnico",
+            "codigo_error": "CERT_READ",
+            "descripcion_error": desc,
+            "csv_aeat": None,
+            "http_status": None,
+            "response_snippet": None,
+            "soap_action": None,
+            "created_at": now_iso,
+        }
+        await db.execute(db.table("verifactu_envios").insert(ins))
+        await _patch_factura_aeat(
+            db,
+            empresa_id=empresa_id,
+            factura_id=fid,
+            estado="error_tecnico",
+            codigo="CERT_READ",
+            descripcion=ins["descripcion_error"],
+            csv=None,
+            actualizado_en=now_iso,
+        )
+        _limpiar_temp(cleanup)
+        return {**factura_row, "aeat_sif_estado": "error_tecnico"}
+    except etree.XMLSyntaxError as exc:
+        logger.warning("AEAT: XML mal formado antes del envío (lxml XMLSyntaxError): %s", exc)
+        desc = f"XML registro: {str(exc)[:2000]}"
+        ins = {
+            "empresa_id": empresa_id,
+            "factura_id": fid,
+            "estado": "Error técnico",
+            "codigo_error": "XML_SYNTAX",
+            "descripcion_error": desc,
+            "csv_aeat": None,
+            "http_status": None,
+            "response_snippet": None,
+            "soap_action": None,
+            "created_at": now_iso,
+        }
+        await db.execute(db.table("verifactu_envios").insert(ins))
+        await _patch_factura_aeat(
+            db,
+            empresa_id=empresa_id,
+            factura_id=fid,
+            estado="error_tecnico",
+            codigo="XML_SYNTAX",
+            descripcion=ins["descripcion_error"],
+            csv=None,
+            actualizado_en=now_iso,
+        )
+        _limpiar_temp(cleanup)
+        return {**factura_row, "aeat_sif_estado": "error_tecnico"}
     except Exception as exc:
+        logger.exception("AEAT: error inesperado preparando registro firmado / sobre SOAP")
         ins = {
             "empresa_id": empresa_id,
             "factura_id": fid,
@@ -908,13 +1056,54 @@ async def enviar_registro_y_persistir(
             )
             _limpiar_temp(cleanup)
             return {**factura_row, "aeat_sif_estado": "error_tecnico"}
-        logger.exception("AEAT: error VeriFactu tras reintentos")
+        code_raw = str(getattr(exc, "code", None) or "").strip()
+        detail_raw = getattr(exc, "detail", None)
+        if code_raw == "AEAT_TRANSPORT":
+            tk = _classify_transport_detail(detail_raw)
+            if tk == "timeout":
+                codigo_env = "AEAT_TIMEOUT"
+                logger.warning(
+                    "AEAT: tiempo de espera agotado tras reintentos HTTP (origen=%s)",
+                    type(detail_raw).__name__ if detail_raw is not None else None,
+                )
+            elif tk == "connect":
+                codigo_env = "AEAT_CONNECTION"
+                logger.warning(
+                    "AEAT: fallo de conexión tras reintentos HTTP (origen=%s)",
+                    type(detail_raw).__name__ if detail_raw is not None else None,
+                )
+            else:
+                codigo_env = "REINTENTO_AGOTADO"
+                logger.warning(
+                    "AEAT: error de transporte tras reintentos (code=%s origen=%s): %s",
+                    code_raw,
+                    type(detail_raw).__name__ if detail_raw is not None else None,
+                    exc,
+                )
+        elif code_raw == "SOAP_FAULT":
+            f_str = getattr(exc, "fault_string", None)
+            f_code = getattr(exc, "fault_code", None)
+            codigo_env = "SOAP_FAULT"
+            logger.warning(
+                "AEAT SOAP Fault (excepción cliente): fault_code=%r fault_string=%s",
+                f_code,
+                (str(f_str) if f_str is not None else str(exc))[:1500],
+            )
+        else:
+            codigo_env = "REINTENTO_AGOTADO"
+            logger.exception("AEAT: VeriFactuException tras reintentos (code=%r)", code_raw)
+
+        descr_vfe = str(exc)[:2000]
+        if code_raw == "SOAP_FAULT":
+            fs = getattr(exc, "fault_string", None)
+            descr_vfe = (str(fs) if fs is not None else str(exc))[:2000]
+
         ins = {
             "empresa_id": empresa_id,
             "factura_id": fid,
             "estado": "Pendiente de envío (cola)",
-            "codigo_error": "REINTENTO_AGOTADO",
-            "descripcion_error": str(exc)[:2000],
+            "codigo_error": codigo_env,
+            "descripcion_error": descr_vfe,
             "csv_aeat": None,
             "http_status": getattr(exc, "http_status", None),
             "response_snippet": None,
@@ -927,7 +1116,7 @@ async def enviar_registro_y_persistir(
             empresa_id=empresa_id,
             factura_id=fid,
             estado="pendiente_envio",
-            codigo="REINTENTO_AGOTADO",
+            codigo=codigo_env,
             descripcion=ins["descripcion_error"],
             csv=None,
             actualizado_en=now_iso,
@@ -935,7 +1124,7 @@ async def enviar_registro_y_persistir(
         _limpiar_temp(cleanup)
         return {**factura_row, "aeat_sif_estado": "pendiente_envio"}
     except Exception as exc:
-        logger.exception("AEAT: agotados reintentos HTTP/red")
+        logger.exception("AEAT: error no clasificado durante POST SOAP / red")
         ins = {
             "empresa_id": empresa_id,
             "factura_id": fid,
@@ -961,6 +1150,15 @@ async def enviar_registro_y_persistir(
         )
         _limpiar_temp(cleanup)
         return {**factura_row, "aeat_sif_estado": "pendiente_envio"}
+
+    if zres is not None and zres.soap_fault:
+        ff = zres.soap_fault
+        logger.warning(
+            "AEAT SOAP Fault (cuerpo HTTP): faultcode=%r faultstring=%s http_status=%s",
+            ff.get("faultcode"),
+            (str(ff.get("faultstring") or "")[:1500]),
+            status,
+        )
 
     if status is not None and (status >= 500 or status == 429):
         ins = {
@@ -1120,7 +1318,18 @@ async def enviar_factura_aeat(factura_id: str) -> dict[str, Any]:
                     "nif": str(cli.get("nif") or "").strip(),
                     "nombre": str(cli.get("nombre") or "").strip(),
                 }
+        except (TypeError, ValueError, KeyError, AttributeError) as exc:
+            logger.warning(
+                "AEAT enviar_factura_aeat: datos de cliente incompletos o ilegibles (cliente_id=%s): %s",
+                cid,
+                exc,
+            )
+            cliente_map = {"nif": "", "nombre": ""}
         except Exception:
+            logger.exception(
+                "AEAT enviar_factura_aeat: fallo inesperado al cargar cliente_id=%s; se continúa sin datos de cliente",
+                cid,
+            )
             cliente_map = {"nif": "", "nombre": ""}
 
     return await enviar_registro_y_persistir(

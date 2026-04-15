@@ -12,8 +12,10 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
+from xml.etree.ElementTree import ParseError as XmlStdParseError
 
 import requests
+import xmlschema
 from lxml import etree
 from zeep import Client
 from zeep.exceptions import Fault, TransportError
@@ -108,7 +110,21 @@ class AEATZeepClient:
                 reg_factu_inner_xml=signed_inner_xml_without_decl,
                 schema_location=xsd_url.strip(),
             )
+        except (
+            xmlschema.XMLSchemaException,
+            ValueError,
+            etree.XMLSyntaxError,
+            OSError,
+        ) as exc:
+            raise VeriFactuException(
+                f"Validación XSD (petición) contra SuministroLR: {exc}",
+                code="XSD_REQUEST",
+                detail=exc,
+            ) from exc
         except Exception as exc:
+            logger.exception(
+                "Validación XSD SuministroLR: error no clasificado (petición VeriFactu)"
+            )
             raise VeriFactuException(
                 f"Validación XSD (petición) contra SuministroLR: {exc}",
                 code="XSD_REQUEST",
@@ -119,7 +135,20 @@ class AEATZeepClient:
         raw = soap_body.encode("utf-8")
         try:
             assert_well_formed_xml(raw)
+        except XmlStdParseError as exc:
+            raise VeriFactuException(
+                f"SOAP no es XML bien formado: {exc}",
+                code="SOAP_MALFORMED",
+                detail=exc,
+            ) from exc
+        except etree.XMLSyntaxError as exc:
+            raise VeriFactuException(
+                f"SOAP no es XML bien formado: {exc}",
+                code="SOAP_MALFORMED",
+                detail=exc,
+            ) from exc
         except Exception as exc:
+            logger.exception("SOAP: assert_well_formed falló con error no clasificado")
             raise VeriFactuException(
                 f"SOAP no es XML bien formado: {exc}",
                 code="SOAP_MALFORMED",
@@ -196,8 +225,16 @@ class AEATZeepClient:
             if tag == "RespuestaRegFactuSistemaFacturacion":
                 try:
                     return self._respuesta_elem.parse(child, self._client.wsdl.types)
+                except (TypeError, LookupError, AttributeError, KeyError, ValueError) as exc:
+                    logger.warning(
+                        "Zeep no pudo parsear RespuestaRegFactuSistemaFacturacion (tipado): %s",
+                        exc,
+                    )
+                    return None
                 except Exception as exc:
-                    logger.warning("Zeep no pudo parsear RespuestaRegFactuSistemaFacturacion: %s", exc)
+                    logger.exception(
+                        "Zeep: fallo inesperado parseando RespuestaRegFactuSistemaFacturacion"
+                    )
                     return None
         return None
 

@@ -214,13 +214,18 @@ async def retry_pending_verifactu(
                     fid,
                     est,
                 )
-        except Exception as exc:
+        except ValueError as exc:
             failed += 1
             logger.warning(
-                "retry-pending: factura_id=%s error: %s",
+                "retry-pending: factura_id=%s argumentos o estado inválido: %s",
                 fid,
                 exc,
-                exc_info=False,
+            )
+        except Exception:
+            failed += 1
+            logger.exception(
+                "retry-pending: factura_id=%s error no clasificado al reenviar AEAT",
+                fid,
             )
 
     return RetryPendingVerifactuOut(processed=processed, success=success, failed=failed)
