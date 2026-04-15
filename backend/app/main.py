@@ -165,12 +165,12 @@ def create_app() -> FastAPI:
         TrustedHostMiddleware,
         allowed_hosts=list(settings.ALLOWED_HOSTS),
     )
-    # Más externo que TrustedHost: ejecuta primero y evita 400 en healthchecks con Host no listado.
-    app.add_middleware(HealthCheckBypassMiddleware)
     # Más externo aún: print stderr antes de TrustedHost / OAuth2 body (depurar 401 sin entrar en la ruta).
     app.add_middleware(LoginDebugPrintMiddleware)
     # Contexto tenant/RBAC para reforzar RLS incluso si un endpoint olvida una dependencia.
     app.add_middleware(TenantRBACContextMiddleware)
+    # Debe ser el más externo: responde /health antes de TrustedHost y middlewares tenant/RBAC.
+    app.add_middleware(HealthCheckBypassMiddleware)
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_login_debug(request: Request, exc: RequestValidationError):

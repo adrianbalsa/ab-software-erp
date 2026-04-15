@@ -75,12 +75,17 @@ except NameError:
         DEVELOPER = "developer"
 
 
-def normalize_user_role(role: str | None) -> str:
+def normalize_user_role(
+    role: str | None = None,
+    legacy_role: str | None = None,
+    **kwargs,
+) -> str:
     """
     Normaliza un rol de usuario contra UserRole y devuelve siempre un valor string válido.
     Si no es válido, aplica fallback a "staff".
     """
-    normalized = (role or "").strip().lower()
+    selected_role = role if role is not None else legacy_role
+    normalized = (selected_role or "staff").strip().lower()
     if not normalized:
         return "staff"
 

@@ -7,8 +7,7 @@ async def test_health_liveness_returns_plain_ok(client) -> None:
     """GET /health: fast-path middleware (sin TrustedHost estricto en prod)."""
     res = await client.get("/health")
     assert res.status_code == 200
-    assert res.text == "OK"
-    assert res.headers.get("content-type", "").startswith("text/plain")
+    assert res.json() == {"status": "ok"}
 
 
 async def test_health_deep_returns_healthy_when_checks_pass(client) -> None:

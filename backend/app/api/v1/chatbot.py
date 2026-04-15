@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from anthropic import Anthropic
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -114,6 +113,14 @@ async def ask_logis_advisor(
     Inyecta contexto financiero y ESG de la empresa del usuario actual.
     Usa Claude 3.5 Sonnet para generar respuestas contextualizadas.
     """
+    try:
+        from anthropic import Anthropic
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Proveedor AI no disponible en este entorno (falta SDK Anthropic)",
+        ) from exc
+
     api_key = (
         os.getenv("ANTHROPIC_API_KEY") or os.getenv("CLAUDE_API_KEY") or ""
     ).strip()
