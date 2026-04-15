@@ -528,19 +528,9 @@ $$;
 COMMENT ON FUNCTION public.set_empresa_context(text) IS
   'Establece app.empresa_id y app.current_empresa_id para políticas RLS.';
 
-CREATE OR REPLACE FUNCTION public.app_current_empresa_id()
-RETURNS text
-LANGUAGE sql
-STABLE
-AS $$
-  SELECT NULLIF(
-    trim(both from coalesce(
-      nullif(current_setting('app.current_empresa_id', true), ''),
-      nullif(current_setting('app.empresa_id', true), '')
-    )),
-    ''
-  );
-$$;
+CREATE OR REPLACE FUNCTION public.app_current_empresa_id() RETURNS uuid AS $$
+  SELECT NULLIF(current_setting('app.current_empresa_id', TRUE), '')::uuid;
+$$ LANGUAGE sql STABLE SET search_path = public;
 
 COMMENT ON FUNCTION public.app_current_empresa_id() IS
   'Tenant activo en la sesión (PostgREST/transacción). Vacío ⇒ políticas no devuelven filas.';
@@ -4636,34 +4626,58 @@ END $$;
 -- ============================================================================
 
 -- =============================================================================
--- Extensión del sistema RBAC: añadir roles SUPERADMIN, ADMIN y STAFF
+-- Extensión del sistema RBAC: alinear user_role con backend (roles RBAC completos)
 -- Migración segura que mantiene compatibilidad con roles existentes
 -- =============================================================================
 
 -- 1. Extender el tipo user_role con los nuevos valores
 -- Se mantienen los valores existentes: owner, traffic_manager, driver
--- Se añaden: superadmin, admin, staff
+-- Se añaden (idempotente): superadmin, admin, staff, gestor, transportista, cliente, developer
 DO $$ BEGIN
   -- Primero verificamos si el tipo existe
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
     CREATE TYPE public.user_role AS ENUM ('owner', 'traffic_manager', 'driver');
   END IF;
   
-  -- Añadir nuevos valores al enum si no existen
+  -- Añadir valores RBAC alineados con la aplicación (idempotente por duplicate_object)
   BEGIN
-    ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'superadmin';
+    ALTER TYPE public.user_role ADD VALUE 'superadmin';
   EXCEPTION
     WHEN duplicate_object THEN NULL;
   END;
-  
+
   BEGIN
-    ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'admin';
+    ALTER TYPE public.user_role ADD VALUE 'admin';
   EXCEPTION
     WHEN duplicate_object THEN NULL;
   END;
-  
+
   BEGIN
-    ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'staff';
+    ALTER TYPE public.user_role ADD VALUE 'staff';
+  EXCEPTION
+    WHEN duplicate_object THEN NULL;
+  END;
+
+  BEGIN
+    ALTER TYPE public.user_role ADD VALUE 'gestor';
+  EXCEPTION
+    WHEN duplicate_object THEN NULL;
+  END;
+
+  BEGIN
+    ALTER TYPE public.user_role ADD VALUE 'transportista';
+  EXCEPTION
+    WHEN duplicate_object THEN NULL;
+  END;
+
+  BEGIN
+    ALTER TYPE public.user_role ADD VALUE 'cliente';
+  EXCEPTION
+    WHEN duplicate_object THEN NULL;
+  END;
+
+  BEGIN
+    ALTER TYPE public.user_role ADD VALUE 'developer';
   EXCEPTION
     WHEN duplicate_object THEN NULL;
   END;
@@ -5265,10 +5279,9 @@ ORDER BY tp.grantee, tp.table_name, tp.privilege_type;
 
 -- RLS bootstrap for tenant context on Starter/Pro projects.
 
-CREATE OR REPLACE FUNCTION public.app_current_empresa_id()
-RETURNS uuid AS $$
+CREATE OR REPLACE FUNCTION public.app_current_empresa_id() RETURNS uuid AS $$
   SELECT NULLIF(current_setting('app.current_empresa_id', TRUE), '')::uuid;
-$$ LANGUAGE sql STABLE;
+$$ LANGUAGE sql STABLE SET search_path = public;
 
 DO $$
 BEGIN
@@ -5361,10 +5374,12 @@ $$;
 -- ============================================================================
 
 ALTER TABLE public.facturas DISABLE TRIGGER trg_verifactu_immutable;
-DELETE FROM public.facturas WHERE empresa_id = '9189c32e-43d4-4efb-8a65-c7c04d252ef3';
+-- [AUDIT COMPLIANCE] Destructive operation neutralized to preserve data integrity and M&A compliance.
+-- DELETE FROM public.facturas WHERE empresa_id = '9189c32e-43d4-4efb-8a65-c7c04d252ef3';
 ALTER TABLE public.facturas ENABLE TRIGGER trg_verifactu_immutable;
 
-TRUNCATE public.audit_logs CASCADE;
+-- [AUDIT COMPLIANCE] Destructive operation neutralized to preserve data integrity and M&A compliance.
+-- TRUNCATE public.audit_logs CASCADE;
 
 
 -- ============================================================================
