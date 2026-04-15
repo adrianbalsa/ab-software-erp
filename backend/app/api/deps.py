@@ -29,6 +29,7 @@ from app.services.facturas_service import FacturasService
 from app.services.finance_service import FinanceService
 from app.services.flota_service import FlotaService
 from app.services.gastos_service import GastosService
+from app.services.esg_certificate_service import EsgCertificateService
 from app.services.esg_service import EsgService
 from app.services.maps_service import MapsService
 from app.services.portes_service import PortesService
@@ -157,6 +158,15 @@ async def get_clientes_service(db: SupabaseAsync = Depends(get_db)) -> ClientesS
 
 async def get_facturas_service(db: SupabaseAsync = Depends(get_db)) -> FacturasService:
     return FacturasService(db)
+
+
+async def get_esg_certificate_service(
+    db: SupabaseAsync = Depends(get_db),
+    portes: PortesService = Depends(get_portes_service),
+    facturas: FacturasService = Depends(get_facturas_service),
+) -> EsgCertificateService:
+    return EsgCertificateService(db, portes, facturas)
+
 
 async def get_presupuestos_service() -> PresupuestosService:
     # Pure service (no DB)

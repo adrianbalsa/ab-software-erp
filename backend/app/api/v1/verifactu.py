@@ -12,6 +12,7 @@ from app.core.alerts import schedule_critical_error_alert
 from app.core.verifactu import verify_invoice_chain
 from app.core.verifactu_chain_repair import diagnose_fingerprint_hash_chain, repair_recommendations
 from app.core.verifactu_qr import generate_verifactu_qr_with_url
+from app.services.aeat_qr_service import qr_png_bytes_from_url
 from app.core.crypto import pii_crypto
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
@@ -251,7 +252,10 @@ async def audit_qr_preview(
     eid = str(current_user.empresa_id)
     res = await db.execute(
         db.table("facturas")
-        .select("id,numero_factura,num_factura,fecha_emision,nif_emisor,total_factura,fingerprint_hash")
+        .select(
+            "id,numero_factura,num_factura,fecha_emision,nif_emisor,total_factura,"
+            "fingerprint_hash,hash_registro,hash_factura,qr_code_url,qr_content"
+        )
         .eq("empresa_id", eid)
         .eq("id", int(factura_id))
         .limit(1)
@@ -263,13 +267,24 @@ async def audit_qr_preview(
     row = dict(rows[0])
     raw_nif = str(row.get("nif_emisor") or "").strip()
     nif_plain = pii_crypto.decrypt_pii(raw_nif) or raw_nif
-    invoice_payload = {
-        "nif_emisor": nif_plain,
-        "num_factura": row.get("num_factura") or row.get("numero_factura"),
-        "fecha_expedicion": row.get("fecha_emision"),
-        "importe_total": row.get("total_factura"),
-    }
-    qr_bytes, aeat_url = generate_verifactu_qr_with_url(invoice_payload)
+    stored_url = str(row.get("qr_code_url") or row.get("qr_content") or "").strip()
+    if stored_url:
+        try:
+            qr_bytes = qr_png_bytes_from_url(stored_url)
+            aeat_url = stored_url
+        except Exception:
+            stored_url = ""
+    if not stored_url:
+        invoice_payload = {
+            "nif_emisor": nif_plain,
+            "num_factura": row.get("num_factura") or row.get("numero_factura"),
+            "fecha_expedicion": row.get("fecha_emision"),
+            "importe_total": row.get("total_factura"),
+            "hash_registro": row.get("hash_registro"),
+            "hash_factura": row.get("hash_factura"),
+            "fingerprint_hash": row.get("fingerprint_hash"),
+        }
+        qr_bytes, aeat_url = generate_verifactu_qr_with_url(invoice_payload)
     return {
         "found": True,
         "factura_id": row.get("id"),

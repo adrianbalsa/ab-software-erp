@@ -12,7 +12,6 @@ from app.db.supabase import SupabaseAsync
 from app.core.crypto import pii_crypto
 from app.services.aeat_qr_service import (
     build_srei_verifactu_url,
-    build_tike_verifactu_url,
     qr_png_bytes_from_url,
 )
 
@@ -558,8 +557,7 @@ class VerifactuService:
     ) -> dict[str, str | None]:
         """
         URL SREI VeriFactu y PNG en base64; opcionalmente sube el PNG a Supabase Storage.
-        El parámetro ``fingerprint`` se mantiene por compatibilidad de firma pero la URL
-        SREI no lo incluye en la URL.
+        La URL incluye ``hc`` (8 primeros caracteres de ``huella_hash`` o ``fingerprint``).
         """
         huella = str(huella_hash or fingerprint or "").strip()
         url = build_srei_verifactu_url(

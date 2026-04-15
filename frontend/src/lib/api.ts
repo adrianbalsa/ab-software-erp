@@ -439,6 +439,20 @@ export async function parseApiError(res: Response): Promise<string> {
   return `Error HTTP ${res.status}`;
 }
 
+/** Certificado ESG emitido en servidor (GLEC v2.0 / ISO 14083, registro auditable). */
+export async function downloadEsgCertificatePdf(
+  kind: "porte" | "factura",
+  subjectId: string,
+): Promise<Blob> {
+  const qs = new URLSearchParams({ kind });
+  const res = await apiFetch(
+    `${API_BASE}/api/v1/esg/certificates/${encodeURIComponent(subjectId)}/download?${qs.toString()}`,
+    { credentials: "include" },
+  );
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return res.blob();
+}
+
 export type AiChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
 export async function streamAdvisorChat(
@@ -582,6 +596,8 @@ export type FacturaPdfData = {
   verifactu_validation_url: string | null;
   verifactu_hash_audit: string;
   fingerprint_completo: string | null;
+  /** Huella resuelta para ``hc`` (SREI); misma prioridad que el backend. */
+  fingerprint_hash?: string | null;
   hash_registro: string | null;
   aeat_csv_ultimo_envio: string | null;
   esg_portes_count?: number | null;
@@ -784,7 +800,13 @@ export type BiDashboardSummary = {
 export type BiProfitabilityPoint = {
   porte_id: string;
   km: number;
+  /** Margen P&L: precio − combustible imputado − opex no combustible/km (o proxy km×coste). */
   margin_eur: number;
+  margin_estimado_legacy_eur?: number | null;
+  /** True si no hay ticket de combustible vinculado a vehículo/fecha. */
+  estimated_margin?: boolean;
+  allocated_fuel_eur?: number | null;
+  other_opex_eur?: number | null;
   precio_pactado?: number | null;
   estado?: string | null;
   cliente?: string | null;
@@ -802,6 +824,7 @@ export type BiTreemapNode = {
   size: number;
   margen_estimado?: number | null;
   porte_id?: string | null;
+  estimated_fallback?: boolean;
 };
 
 export type BiHeatmapCell = {
@@ -1020,7 +1043,12 @@ export type AdvancedMetricsMonthRow = {
 
 export type AdvancedMetricsResponse = {
   meses: AdvancedMetricsMonthRow[];
+  generado_en?: string;
   nota_metodologia?: string | null;
+  /** % diferencia margen P&L real vs estimado (últimos 6 meses, portes completados). */
+  real_margin_index?: number | null;
+  /** Ingresos porte / € combustible real imputado. */
+  fuel_efficiency_ratio?: number | null;
 };
 
 /** Listado/creación webhooks: el backend expone campos distintos según flujo (B2B vs panel desarrolladores). */

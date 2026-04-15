@@ -1,5 +1,8 @@
 """
-Código QR VeriFactu — URL de verificación AEAT (patrón TIKE / consulta pública).
+Código QR VeriFactu — URL de consulta pública AEAT (SREI / VERIFACTU).
+
+``build_srei_verifactu_url`` es la única función que debe usarse para generar URLs
+de QR conformes (parámetro ``hc`` = 8 primeros caracteres hex de la huella de registro).
 """
 
 from __future__ import annotations
@@ -7,11 +10,13 @@ from __future__ import annotations
 import base64
 import io
 import re
+import warnings
 from urllib.parse import quote
 
 import qrcode
 
 # URL pública de cotejo (modalidad factura verificable / Veri*Factu). [AEAT TIKE-CONT]
+# Deprecada para VeriFactu: preferir ``build_srei_verifactu_url`` (SREI).
 TIKE_VALIDAR_QR_BASE = (
     "https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR"
 )
@@ -88,9 +93,17 @@ def build_tike_verifactu_url(
     huella: str | None = None,
 ) -> str:
     """
-    URL de validación TIKE con ``nif``, ``numserie``, ``fecha`` (DD-MM-AAAA), ``importe``;
-    opcional ``huella`` (SHA-256 hex huella / fingerprint registral).
+    URL de validación TIKE (ValidarQR). **Deprecada** para VeriFactu: usar
+    ``build_srei_verifactu_url`` (SREI / VERIFACTU con ``hc``).
+
+    Parámetros: ``nif``, ``numserie``, ``fecha`` (DD-MM-AAAA), ``importe``;
+    opcional ``huella`` (SHA-256 hex completo).
     """
+    warnings.warn(
+        "build_tike_verifactu_url is deprecated for VeriFactu; use build_srei_verifactu_url",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     nif = (nif_emisor or "").strip()
     num = (numserie or "").strip()
     fe = _fecha_para_qr(fecha)
@@ -130,13 +143,17 @@ def generar_qr_verifactu(
     importe_total: float,
     *,
     huella: str | None = None,
+    huella_hash: str | None = None,
     legacy_path: bool = False,
 ) -> str:
     """
     QR PNG en **base64** ASCII.
 
-    Por defecto usa TIKE ``ValidarQR``; con ``legacy_path=True`` mantiene la ruta
-    ``inwinv/es/zs/iva/verifactu`` y parámetros ``num`` (compatibilidad histórica).
+    Por defecto codifica la URL SREI ``build_srei_verifactu_url`` (``hc`` = 8 primeros
+    caracteres de ``huella_hash`` o ``huella``).
+
+    Con ``legacy_path=True`` mantiene la ruta histórica ``inwinv/es/zs/iva/verifactu``
+    (solo compatibilidad; no usar para VeriFactu nuevo).
     """
     if legacy_path:
         nif = (nif_emisor or "").strip()
@@ -151,8 +168,9 @@ def generar_qr_verifactu(
         )
         url = f"{_QR_LEGACY_BASE}?{q}"
     else:
-        url = build_tike_verifactu_url(
-            nif_emisor, num_factura, fecha, importe_total, huella=huella
+        h = (huella_hash or huella or "").strip() or None
+        url = build_srei_verifactu_url(
+            nif_emisor, num_factura, fecha, importe_total, huella_hash=h
         )
     raw = qr_png_bytes_from_url(url)
     return base64.b64encode(raw).decode("ascii")

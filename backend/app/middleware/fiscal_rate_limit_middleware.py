@@ -1,4 +1,4 @@
-"""10/min por IP en /auth/login y /auth/refresh (SlowAPI no decora OAuth2 sin romper FastAPI)."""
+"""30/min por tenant en envíos fiscales AEAT (VeriFactu, finalizar, reenviar SIF)."""
 
 from __future__ import annotations
 
@@ -11,12 +11,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from app.core.http_client_meta import get_client_ip
-from app.core.rate_limit import AUTH_RATE_LIMIT_PATHS, get_rate_limit_strategy
+from app.core.rate_limit import fiscal_aeat_submission_path, fiscal_rate_limit_key, get_rate_limit_strategy
 
 _log = logging.getLogger(__name__)
 
-_limit_auth = parse("10 per minute")
+_limit_fiscal = parse("30 per minute")
 
 
 def _retry_after_seconds(strategy, limit_item, key: str) -> int:
@@ -30,32 +29,32 @@ def _retry_after_seconds(strategy, limit_item, key: str) -> int:
     return 60
 
 
-class AuthLoginRateLimitMiddleware(BaseHTTPMiddleware):
-    """Solo rutas de autenticación; el resto lo cubre SlowAPI (200/min por clave)."""
+class FiscalVerifactuRateLimitMiddleware(BaseHTTPMiddleware):
+    """
+    Protege AEAT frente a ráfagas: clave por ``empresa_id`` (JWT) o IP.
+    """
 
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.method == "OPTIONS":
             return await call_next(request)
-
         path = request.scope.get("path") or ""
-        if path not in AUTH_RATE_LIMIT_PATHS:
+        if not fiscal_aeat_submission_path(path, request.method):
             return await call_next(request)
 
         strategy = get_rate_limit_strategy()
-        ip = get_client_ip(request) or "unknown"
-        key = f"auth:{ip}"
+        key = fiscal_rate_limit_key(request)
 
         def _hit() -> bool:
-            return strategy.hit(_limit_auth, key)
+            return strategy.hit(_limit_fiscal, key)
 
         try:
             ok = await anyio.to_thread.run_sync(_hit)
         except Exception as exc:
-            _log.warning("rate_limit auth: error comprobando límite (dejamos pasar): %s", exc)
+            _log.warning("rate_limit fiscal: error comprobando límite (dejamos pasar): %s", exc)
             return await call_next(request)
 
         if not ok:
-            ra = _retry_after_seconds(strategy, _limit_auth, key)
+            ra = _retry_after_seconds(strategy, _limit_fiscal, key)
             return JSONResponse(
                 status_code=429,
                 content={

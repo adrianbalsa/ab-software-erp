@@ -1169,12 +1169,19 @@ class FacturasService:
                     {"nombre": nombre[:120], "precio": float(line.get("precio_pactado") or 0.0)}
                 )
 
+            hr_emit = str(
+                factura_row.get("hash_registro")
+                or factura_row.get("hash_factura")
+                or hash_registro
+                or ""
+            ).strip()
             qr_vf_b64 = generar_qr_verifactu(
                 nif_emisor=str(emp_nif_plain or nif_emisor or "").strip(),
                 num_factura=str(factura_row.get("numero_factura") or factura_row.get("num_factura") or num_fact),
                 fecha=str(factura_row.get("fecha_emision") or fecha_iso),
                 importe_total=float(factura_row.get("total_factura") or total_factura),
-                legacy_path=True,
+                huella_hash=hr_emit or None,
+                legacy_path=False,
             )
             datos_empresa = {
                 "nombre": str(emp.get("nombre_comercial") or "AB Logistics"),
@@ -1593,6 +1600,7 @@ class FacturasService:
         total_f = as_float_fiat(total_dec)
 
         fp_full = str(fr.get("fingerprint") or "").strip() or None
+        fph_full = str(fr.get("fingerprint_hash") or "").strip() or None
         hr_full = str(fr.get("hash_registro") or fr.get("hash_factura") or "").strip() or None
         chain_for_audit = (fp_full or hr_full or "").strip()
         if len(chain_for_audit) <= 16:
@@ -1626,7 +1634,7 @@ class FacturasService:
                     num_s,
                     fe_str,
                     total_f,
-                    huella_hash=hr_full or fp_full,
+                    huella_hash=hr_full or fph_full or fp_full,
                 )
         if not qr_url and aeat_csv and aeat_csv.lower().startswith("http"):
             qr_url = aeat_csv
@@ -1711,6 +1719,8 @@ class FacturasService:
             except (TypeError, ValueError):
                 fecha_d = date.today()
 
+        huella_para_hc = hr_full or fph_full or fp_full
+
         return FacturaPdfDataOut(
             factura_id=fid,
             numero_factura=str(fr.get("numero_factura") or fr.get("num_factura") or str(fid)),
@@ -1735,6 +1745,7 @@ class FacturasService:
             verifactu_validation_url=qr_url,
             verifactu_hash_audit=audit,
             fingerprint_completo=fp_full,
+            fingerprint_hash=huella_para_hc,
             hash_registro=hr_full,
             aeat_csv_ultimo_envio=aeat_csv,
             esg_portes_count=esg_portes_count,

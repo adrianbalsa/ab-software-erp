@@ -16,7 +16,7 @@ class BiDashboardSummaryOut(BaseModel):
     dso_sample_size: int = Field(default=0, description="Número de facturas con movimiento bancario emparejado.")
     avg_margin_eur: float | None = Field(
         default=None,
-        description="Margen estimado medio (EUR) en portes completados: precio − km×0,62.",
+        description="Margen medio (EUR) en portes completados: P&L real (combustible imputado) o fallback km×coste.",
     )
     avg_margin_portes: int = Field(default=0, description="Portes completados usados para el margen medio.")
     total_co2_saved_kg: float | None = Field(
@@ -36,7 +36,26 @@ class ProfitabilityScatterPoint(BaseModel):
 
     porte_id: UUID
     km: float = Field(..., description="Km reales o estimados del porte.")
-    margin_eur: float = Field(..., description="Margen estimado EUR (precio − km×0,62).")
+    margin_eur: float = Field(
+        ...,
+        description="Margen P&L EUR: precio − combustible imputado − opex no combustible/km (o fallback km×0,62).",
+    )
+    margin_estimado_legacy_eur: float | None = Field(
+        default=None,
+        description="Referencia legacy: precio − km×coste operativo/km (0,62).",
+    )
+    estimated_margin: bool = Field(
+        default=True,
+        description="True si no hubo ticket de combustible asignable a vehículo/fecha (margen proxy).",
+    )
+    allocated_fuel_eur: float | None = Field(
+        default=None,
+        description="Combustible imputado desde tickets (€); 0 o null si solo estimación.",
+    )
+    other_opex_eur: float | None = Field(
+        default=None,
+        description="Opex no combustible (km × factor) cuando hay reparto real de combustible.",
+    )
     precio_pactado: float | None = None
     estado: str | None = None
     cliente: str | None = Field(default=None, description="Nombre del cliente (maestro).")
@@ -80,6 +99,10 @@ class TreemapNodeOut(BaseModel):
     size: float = Field(..., description="Área del nodo (p. ej. kg CO₂).")
     margen_estimado: float | None = None
     porte_id: UUID | None = None
+    estimated_fallback: bool = Field(
+        default=False,
+        description="True si el margen mostrado es proxy (sin ticket combustible vinculado).",
+    )
 
 
 class BiEsgImpactChartsOut(BaseModel):

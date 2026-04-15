@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -218,3 +220,291 @@ def generar_certificado_huella_carbono_pdf_from_dict(
         empresa_id=empresa_id,
         huella=h,
     )
+
+
+@dataclass(frozen=True)
+class EsgPorteCertificatePdfModel:
+    """Payload para PDF certificado operativo (GLEC / ISO 14083 alineado)."""
+
+    certificate_id: str
+    content_fingerprint_sha256: str
+    empresa_nombre: str
+    empresa_nif: str
+    porte_id: str
+    fecha: str
+    origen: str
+    destino: str
+    km_estimados: float
+    km_reales: float | None
+    real_distance_km: float | None
+    km_vacio: float | None
+    engine_class: str | None
+    fuel_type: str | None
+    vehiculo_label: str
+    normativa_euro: str
+    glec_gco2_km_full: float
+    glec_gco2_km_empty: float
+    co2_total_kg: float
+    euro_iii_baseline_kg: float
+    ahorro_kg: float
+    nox_total_kg: float
+    subcontratado: bool
+    scope_note: str
+
+
+@dataclass(frozen=True)
+class EsgFacturaCertificatePdfModel:
+    certificate_id: str
+    content_fingerprint_sha256: str
+    empresa_nombre: str
+    empresa_nif: str
+    factura_id: int
+    numero_factura: str
+    fecha_emision: str
+    cliente_nombre: str
+    esg_portes_count: int
+    esg_total_km: float
+    esg_total_co2_kg: float
+    esg_euro_iii_baseline_kg: float
+    esg_ahorro_kg: float
+
+
+def _pdf_section_title(pdf: FPDF, body: str, title: str) -> None:
+    pdf.set_font(body, "B", 11)
+    pdf.set_text_color(*ZINC_800)
+    pdf.cell(0, 7, title, ln=1)
+    pdf.ln(1)
+
+
+def _pdf_kv(pdf: FPDF, body: str, k: str, v: str) -> None:
+    pdf.set_font(body, "", 9)
+    pdf.set_text_color(*ZINC_800)
+    pdf.multi_cell(0, 5, f"{k}: {v}", align="L")
+
+
+def generar_pdf_certificado_esg_porte_glec(model: EsgPorteCertificatePdfModel) -> bytes:
+    """
+    Certificado «bank-ready»: logo, NIF, metodología GLEC v2.0 / ISO 14083, desglose y pie de auditoría.
+    """
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=18)
+    body, mono = register_brand_fonts(pdf)
+    pdf.add_page()
+    pdf.set_margin(14)
+
+    logo = _BACKEND_ROOT / "assets" / "logo.png"
+    if logo.is_file():
+        pdf.image(str(logo), x=14, y=12, w=20)
+
+    pdf.set_xy(14, 14)
+    pdf.set_font(body, "B", 15)
+    pdf.set_text_color(*EMERALD_600)
+    pdf.cell(0, 8, "AB Logistics OS", align="R", ln=1)
+    pdf.set_font(body, "", 8)
+    pdf.set_text_color(*ZINC_500)
+    pdf.cell(
+        0,
+        4,
+        "Certificado de eficiencia logística y huella de carbono (GLEC v2.0 / ISO 14083)",
+        align="R",
+        ln=1,
+    )
+
+    pdf.ln(16)
+    pdf.set_font(body, "B", 16)
+    pdf.set_text_color(*ZINC_800)
+    pdf.cell(0, 9, "Certificado ESG — Porte / servicio de transporte", ln=1)
+    pdf.set_font(body, "", 9)
+    pdf.set_text_color(*ZINC_500)
+    pdf.cell(
+        0,
+        5,
+        f"Emitido UTC: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}Z",
+        ln=1,
+    )
+    pdf.ln(4)
+
+    _pdf_section_title(pdf, body, "Emisor")
+    _pdf_kv(pdf, body, "Razón social", model.empresa_nombre)
+    _pdf_kv(pdf, body, "NIF", model.empresa_nif or "—")
+    pdf.ln(2)
+
+    _pdf_section_title(pdf, body, "Identificación del servicio")
+    _pdf_kv(pdf, body, "ID porte", model.porte_id)
+    _pdf_kv(pdf, body, "Fecha operativa", model.fecha)
+    _pdf_kv(pdf, body, "Origen → Destino", f"{model.origen} → {model.destino}")
+    dist_real = (
+        f"{_fmt_num(model.real_distance_km, 3)} km (ruta / telemetría)"
+        if model.real_distance_km is not None
+        else "—"
+    )
+    dist_est = f"{_fmt_num(model.km_estimados, 3)} km (registro / estimación operativa)"
+    dist_kmr = (
+        f"{_fmt_num(model.km_reales, 3)} km"
+        if model.km_reales is not None
+        else "—"
+    )
+    _pdf_kv(pdf, body, "Distancia real (km)", dist_real)
+    _pdf_kv(pdf, body, "Km registro (estimados)", dist_est)
+    _pdf_kv(pdf, body, "Km reales (tabla portes)", dist_kmr)
+    kv = f"{_fmt_num(model.km_vacio or 0.0, 2)} km" if model.km_vacio is not None else "—"
+    _pdf_kv(pdf, body, "Km vacío declarados", kv)
+    _pdf_kv(pdf, body, "Subcontratado", "Sí (Scope 3)" if model.subcontratado else "No (Scope 1)")
+    pdf.ln(2)
+
+    _pdf_section_title(pdf, body, "Vehículo y factores (GLEC)")
+    _pdf_kv(pdf, body, "Vehículo", model.vehiculo_label)
+    _pdf_kv(pdf, body, "Normativa EURO (reporting)", model.normativa_euro)
+    _pdf_kv(pdf, body, "Clase motor (GLEC)", model.engine_class or "—")
+    _pdf_kv(pdf, body, "Combustible (GLEC)", model.fuel_type or "—")
+    _pdf_kv(
+        pdf,
+        body,
+        "Factor g CO₂/km (cargado / vacío)",
+        f"{_fmt_num(model.glec_gco2_km_full, 1)} / {_fmt_num(model.glec_gco2_km_empty, 1)}",
+    )
+    pdf.ln(2)
+
+    _pdf_section_title(pdf, body, "Resultados")
+    _pdf_kv(pdf, body, "CO₂ total (GLEC)", f"{_fmt_num(model.co2_total_kg, 6)} kg CO₂eq")
+    _pdf_kv(pdf, body, "Línea base Euro III", f"{_fmt_num(model.euro_iii_baseline_kg, 6)} kg CO₂eq")
+    _pdf_kv(pdf, body, "Ahorro vs Euro III", f"{_fmt_num(model.ahorro_kg, 6)} kg CO₂eq")
+    _pdf_kv(pdf, body, "NOx total (normativa EURO)", f"{_fmt_num(model.nox_total_kg, 6)} kg")
+    pdf.ln(2)
+
+    pdf.set_font(body, "", 8)
+    pdf.set_text_color(*ZINC_500)
+    pdf.multi_cell(
+        0,
+        4,
+        "Metodología: calculado según marco GLEC Framework v2.0 (implementación simplificada en motor) "
+        "y referencia ISO 14083 para intensidad de transporte. Los factores g CO₂/km por tramo cargado/vacío "
+        "provienen de la tabla GLEC interna alineada con ``calculate_co2_footprint``. "
+        "NOx: km totales × factor g/km según normativa EURO declarada.",
+    )
+    pdf.ln(4)
+
+    # Pie auditoría
+    sy = pdf.get_y()
+    pdf.set_fill_color(236, 253, 245)
+    pdf.set_draw_color(*EMERALD_600)
+    pdf.set_line_width(0.3)
+    pdf.rect(14, sy, 182, 36, "DF")
+    pdf.set_xy(18, sy + 3)
+    pdf.set_font(body, "B", 9)
+    pdf.set_text_color(*EMERALD_600)
+    pdf.cell(0, 5, "Auditoría e integridad del documento", ln=1)
+    pdf.set_font(mono, "", 7)
+    pdf.set_text_color(*ZINC_800)
+    pdf.set_x(18)
+    pdf.multi_cell(170, 4, f"Certificate ID: {model.certificate_id}")
+    pdf.set_x(18)
+    pdf.multi_cell(170, 4, f"Content fingerprint (SHA-256): {model.content_fingerprint_sha256}")
+    pdf.set_font(body, "", 7)
+    pdf.set_text_color(*ZINC_500)
+    pdf.set_x(18)
+    pdf.multi_cell(
+        170,
+        4,
+        "El registro `esg_certificate_documents` conserva la huella SHA-256 del fichero PDF y este "
+        "fingerprint de contenido. "
+        + model.scope_note,
+    )
+
+    return _pdf_output_bytes(pdf)
+
+
+def generar_pdf_certificado_esg_factura_glec(model: EsgFacturaCertificatePdfModel) -> bytes:
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=18)
+    body, mono = register_brand_fonts(pdf)
+    pdf.add_page()
+    pdf.set_margin(14)
+
+    logo = _BACKEND_ROOT / "assets" / "logo.png"
+    if logo.is_file():
+        pdf.image(str(logo), x=14, y=12, w=20)
+
+    pdf.set_xy(14, 14)
+    pdf.set_font(body, "B", 15)
+    pdf.set_text_color(*EMERALD_600)
+    pdf.cell(0, 8, "AB Logistics OS", align="R", ln=1)
+    pdf.set_font(body, "", 8)
+    pdf.set_text_color(*ZINC_500)
+    pdf.cell(
+        0,
+        4,
+        "Certificado ESG agregado — GLEC v2.0 / ISO 14083",
+        align="R",
+        ln=1,
+    )
+
+    pdf.ln(16)
+    pdf.set_font(body, "B", 16)
+    pdf.set_text_color(*ZINC_800)
+    pdf.cell(0, 9, "Certificado ESG — Factura (agregado de portes)", ln=1)
+    pdf.set_font(body, "", 9)
+    pdf.set_text_color(*ZINC_500)
+    pdf.cell(
+        0,
+        5,
+        f"Emitido UTC: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}Z",
+        ln=1,
+    )
+    pdf.ln(4)
+
+    _pdf_section_title(pdf, body, "Emisor")
+    _pdf_kv(pdf, body, "Razón social", model.empresa_nombre)
+    _pdf_kv(pdf, body, "NIF", model.empresa_nif or "—")
+    pdf.ln(2)
+
+    _pdf_section_title(pdf, body, "Documento")
+    _pdf_kv(pdf, body, "ID factura", str(model.factura_id))
+    _pdf_kv(pdf, body, "Número", model.numero_factura)
+    _pdf_kv(pdf, body, "Fecha emisión", model.fecha_emision)
+    _pdf_kv(pdf, body, "Cliente", model.cliente_nombre)
+    pdf.ln(2)
+
+    _pdf_section_title(pdf, body, "Huella agregada (suma por porte facturado)")
+    _pdf_kv(pdf, body, "Portes incluidos", str(model.esg_portes_count))
+    _pdf_kv(pdf, body, "Km operativos sumados", f"{_fmt_num(model.esg_total_km, 3)} km")
+    _pdf_kv(pdf, body, "CO₂ total (GLEC)", f"{_fmt_num(model.esg_total_co2_kg, 6)} kg CO₂eq")
+    _pdf_kv(pdf, body, "Línea base Euro III", f"{_fmt_num(model.esg_euro_iii_baseline_kg, 6)} kg CO₂eq")
+    _pdf_kv(pdf, body, "Ahorro vs Euro III", f"{_fmt_num(model.esg_ahorro_kg, 6)} kg CO₂eq")
+    pdf.ln(4)
+
+    pdf.set_font(body, "", 8)
+    pdf.set_text_color(*ZINC_500)
+    pdf.multi_cell(
+        0,
+        4,
+        "Metodología: suma de los modelos GLEC por cada porte vinculado a la factura "
+        "(``esg_certificate_co2_vs_euro_iii``), con la misma estructura de distancia y combustible por porte. "
+        "Calculado según GLEC Framework v2.0 / ISO 14083 (referencia operativa).",
+    )
+    pdf.ln(4)
+
+    sy = pdf.get_y()
+    pdf.set_fill_color(236, 253, 245)
+    pdf.set_draw_color(*EMERALD_600)
+    pdf.rect(14, sy, 182, 28, "DF")
+    pdf.set_xy(18, sy + 3)
+    pdf.set_font(body, "B", 9)
+    pdf.set_text_color(*EMERALD_600)
+    pdf.cell(0, 5, "Auditoría e integridad del documento", ln=1)
+    pdf.set_font(mono, "", 7)
+    pdf.set_text_color(*ZINC_800)
+    pdf.set_x(18)
+    pdf.multi_cell(170, 4, f"Certificate ID: {model.certificate_id}")
+    pdf.set_x(18)
+    pdf.multi_cell(170, 4, f"Content fingerprint (SHA-256): {model.content_fingerprint_sha256}")
+    pdf.set_font(body, "", 7)
+    pdf.set_text_color(*ZINC_500)
+    pdf.set_x(18)
+    pdf.multi_cell(
+        170,
+        4,
+        "Registro `esg_certificate_documents`: huella SHA-256 del fichero PDF y fingerprint de contenido.",
+    )
+
+    return _pdf_output_bytes(pdf)

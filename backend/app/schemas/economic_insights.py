@@ -101,6 +101,14 @@ class AdvancedMetricsOut(BaseModel):
         default="",
         description="Criterios sin IVA; CO₂ = Scope 1 combustible + huella t·km portes",
     )
+    real_margin_index: float | None = Field(
+        default=None,
+        description="Diferencia % entre margen P&L real (combustible imputado) y margen estimado (km×constante).",
+    )
+    fuel_efficiency_ratio: float | None = Field(
+        default=None,
+        description="Ingresos por porte completado / € de combustible real asignado (mismo periodo que `meses`).",
+    )
 
 
 class EconomicInsightsOut(BaseModel):

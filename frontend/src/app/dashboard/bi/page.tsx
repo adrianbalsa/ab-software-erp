@@ -12,7 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import type { ScatterShapeProps } from "recharts/types/util/ScatterUtils";
-import { CalendarClock, CalendarDays, Gauge, Leaf, Loader2, Target } from "lucide-react";
+import { CalendarClock, CalendarDays, Gauge, Info, Leaf, Loader2, Target, TrendingUp, Zap } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
 import { RoleGuard } from "@/components/auth/RoleGuard";
@@ -21,6 +21,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useChartPerformance } from "@/hooks/useChartPerformance";
 import {
   api,
+  getAdvancedMetrics,
+  type AdvancedMetricsResponse,
   type BiDashboardSummary,
   type BiEsgImpactCharts,
   type BiProfitabilityCharts,
@@ -73,7 +75,7 @@ function formatPeriodLabel(from: Date, to: Date): string {
   return `${fmt.format(from)} – ${fmt.format(to)}`;
 }
 
-type ScatterDatum = BiProfitabilityPoint & { eta: number };
+type ScatterDatum = BiProfitabilityPoint & { eta: number; coste_operativo_eur_km: number };
 
 function efficiencyEta(p: BiProfitabilityPoint, costeKm: number): number {
   const precio = p.precio_pactado ?? 0;
@@ -102,6 +104,7 @@ function ProfitabilityScatterDot(props: ScatterShapeProps) {
   const size = Number(width ?? height ?? 10);
   const r = Number.isFinite(size) && size > 0 ? Math.max(4, Math.min(9, size / 2)) : 5.5;
   const vampire = isVampireEta(eta);
+  const estimated = datum.estimated_margin === true;
 
   return (
     <circle
@@ -109,9 +112,10 @@ function ProfitabilityScatterDot(props: ScatterShapeProps) {
       cy={cy}
       r={r}
       fill={fill}
-      fillOpacity={vampire ? 0.92 : 0.85}
+      fillOpacity={estimated ? 0.65 : vampire ? 0.92 : 0.85}
       stroke={vampire ? "rgba(244, 63, 94, 0.55)" : eta > 1.2 ? "rgba(16, 185, 129, 0.45)" : "rgba(161, 161, 170, 0.45)"}
-      strokeWidth={vampire ? 1.25 : 1}
+      strokeWidth={estimated ? 1.4 : vampire ? 1.25 : 1}
+      strokeDasharray={estimated ? "4 3" : undefined}
       className={vampire ? "bi-scatter-vampire-dot" : undefined}
     />
   );
@@ -131,7 +135,7 @@ type TreemapCellProps = {
   height?: number;
   depth?: number;
   name?: string;
-  payload?: { margen_estimado?: number; size?: number; porte_id?: string };
+  payload?: { margen_estimado?: number; size?: number; porte_id?: string; estimated_fallback?: boolean };
   minMargen: number;
   maxMargen: number;
 };
@@ -149,12 +153,24 @@ function BiTreemapCell({
   if (width < 2 || height < 2) return null;
   const m = Number(payload?.margen_estimado ?? 0);
   const fill = marginHue(m, minMargen, maxMargen);
+  const est = payload?.estimated_fallback === true;
   const label = String(name ?? "").trim();
   const short = label.length > 18 ? `${label.slice(0, 16)}…` : label;
 
   return (
     <g>
-      <rect x={x} y={y} width={width} height={height} fill={fill} fillOpacity={0.92} stroke="#18181b" strokeWidth={1} rx={2} />
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill={fill}
+        fillOpacity={est ? 0.72 : 0.92}
+        stroke="#18181b"
+        strokeWidth={est ? 1.5 : 1}
+        strokeDasharray={est ? "5 4" : undefined}
+        rx={2}
+      />
       {width > 52 && height > 20 ? (
         <text
           x={x + 4}
@@ -205,9 +221,18 @@ type ScatterTooltipProps = {
 
 function ProfitabilityTooltip({ active, payload }: ScatterTooltipProps) {
   if (!active || !payload?.length) return null;
-  const d = payload[0]?.payload;
+  const d = payload[0]?.payload as ScatterDatum | undefined;
   if (!d) return null;
   const vampire = isVampireEta(d.eta);
+  const estimated = d.estimated_margin === true;
+  const precio = d.precio_pactado ?? 0;
+  const km = d.km ?? 0;
+  const ck = d.coste_operativo_eur_km ?? 0.62;
+  const costeEstimadoKm = km * ck;
+  const fuel = d.allocated_fuel_eur;
+  const other = d.other_opex_eur;
+  const tieneReal = !estimated && other != null;
+
   return (
     <div
       className={cn(
@@ -219,11 +244,26 @@ function ProfitabilityTooltip({ active, payload }: ScatterTooltipProps) {
     >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-2">
         <p className="font-semibold text-zinc-100">Porte</p>
-        {vampire ? (
-          <span className="rounded-full border border-rose-500/80 bg-rose-950/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-200">
-            Crítico — vampiro
-          </span>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {estimated ? (
+            <span className="rounded-full border border-amber-500/70 bg-amber-950/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+              Estimado
+            </span>
+          ) : (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-500/50 bg-emerald-950/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-200"
+              title="Cálculo basado en tickets de combustible reales vinculados a este vehículo/fecha"
+            >
+              P&amp;L real
+              <Info className="size-3 shrink-0 text-emerald-400/90" aria-hidden />
+            </span>
+          )}
+          {vampire ? (
+            <span className="rounded-full border border-rose-500/80 bg-rose-950/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-200">
+              Crítico — vampiro
+            </span>
+          ) : null}
+        </div>
       </div>
       <dl className="space-y-1.5 text-zinc-300">
         <div className="flex justify-between gap-6">
@@ -242,12 +282,42 @@ function ProfitabilityTooltip({ active, payload }: ScatterTooltipProps) {
           <dt className="text-zinc-500">Distancia</dt>
           <dd>{fmtDec(d.km, 1)} km</dd>
         </div>
-        <div className="flex justify-between gap-6">
-          <dt className="text-zinc-500">Margen est.</dt>
+        <div className="border-t border-zinc-800 pt-2">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Desglose coste</p>
+          <div className="flex justify-between gap-6">
+            <dt className="text-zinc-500">Ingreso</dt>
+            <dd className="text-zinc-100">{fmtEur(precio)}</dd>
+          </div>
+          {tieneReal ? (
+            <>
+              <div className="flex justify-between gap-6">
+                <dt className="text-zinc-500">Combustible real</dt>
+                <dd className="text-amber-200">− {fmtEur(fuel ?? 0)}</dd>
+              </div>
+              <div className="flex justify-between gap-6">
+                <dt className="text-zinc-500">Otros costes</dt>
+                <dd className="text-sky-200">− {fmtEur(other)}</dd>
+              </div>
+            </>
+          ) : (
+            <div className="flex justify-between gap-6">
+              <dt className="text-zinc-500">Coste operativo est. (km×{fmtDec(ck, 2)})</dt>
+              <dd className="text-amber-200">− {fmtEur(costeEstimadoKm)}</dd>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-between gap-6 border-t border-zinc-800 pt-2">
+          <dt className="text-zinc-500">Margen P&amp;L {estimated ? "(proxy)" : "real"}</dt>
           <dd className="font-medium text-emerald-400">{fmtEur(d.margin_eur)}</dd>
         </div>
+        {d.margin_estimado_legacy_eur != null && !estimated ? (
+          <div className="flex justify-between gap-6 text-[11px] text-zinc-500">
+            <dt>Referencia legacy (km×coste)</dt>
+            <dd>{fmtEur(d.margin_estimado_legacy_eur)}</dd>
+          </div>
+        ) : null}
         <div className="flex justify-between gap-6">
-          <dt className="text-zinc-500">η (precio / km·0,62)</dt>
+          <dt className="text-zinc-500">η (precio / km·coste)</dt>
           <dd className="font-mono text-zinc-100">{fmtDec(d.eta, 2)}</dd>
         </div>
       </dl>
@@ -262,16 +332,31 @@ type TreemapTooltipProps = {
 
 function TreemapBizTooltip({ active, payload }: TreemapTooltipProps) {
   if (!active || !payload?.length) return null;
-  const p = payload[0]?.payload;
+  const p = payload[0]?.payload as {
+    name?: string;
+    size?: number;
+    margen_estimado?: number;
+    porte_id?: string;
+    estimated_fallback?: boolean;
+  };
   if (!p) return null;
+  const est = p.estimated_fallback === true;
   return (
     <div className="rounded-lg border border-zinc-700 bg-zinc-950/95 p-3 text-xs shadow-lg backdrop-blur-sm">
       <p className="font-semibold text-zinc-100">{p.name}</p>
+      {est ? (
+        <p className="mt-1 text-amber-300/90">Margen proxy (sin ticket combustible vinculado)</p>
+      ) : (
+        <p className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-emerald-400/90">
+          <Info className="size-3" aria-hidden />
+          P&amp;L con combustible real imputado
+        </p>
+      )}
       <p className="mt-1 text-zinc-400">
         CO₂: <span className="text-rose-300">{fmtDec(p.size, 2)} kg</span>
       </p>
       <p className="text-zinc-400">
-        Margen est.: <span className="text-emerald-400">{fmtEur(p.margen_estimado ?? 0)}</span>
+        Margen: <span className="text-emerald-400">{fmtEur(p.margen_estimado ?? 0)}</span>
       </p>
       {p.porte_id ? (
         <p className="mt-1 font-mono text-[10px] text-zinc-500">{p.porte_id}</p>
@@ -372,6 +457,7 @@ export default function BiDashboardPage() {
   const [summary, setSummary] = useState<BiDashboardSummary | null>(null);
   const [profit, setProfit] = useState<BiProfitabilityCharts | null>(null);
   const [esg, setEsg] = useState<BiEsgImpactCharts | null>(null);
+  const [advancedMetrics, setAdvancedMetrics] = useState<AdvancedMetricsResponse | null>(null);
   const [loadSummary, setLoadSummary] = useState(true);
   const [loadProfit, setLoadProfit] = useState(true);
   const [loadEsg, setLoadEsg] = useState(true);
@@ -389,15 +475,17 @@ export default function BiDashboardPage() {
     setLoadEsg(true);
     void (async () => {
       try {
-        const [s, p, e] = await Promise.all([
+        const [s, p, e, adv] = await Promise.all([
           api.bi.summary(from, to),
           api.bi.profitability(from, to),
           api.bi.esgImpact(from, to),
+          getAdvancedMetrics().catch(() => null),
         ]);
         if (!cancelled) {
           setSummary(s);
           setProfit(p);
           setEsg(e);
+          setAdvancedMetrics(adv);
         }
       } catch (e: unknown) {
         if (!cancelled) setErr(e instanceof Error ? e.message : "Error al cargar datos BI");
@@ -422,6 +510,7 @@ export default function BiDashboardPage() {
     return profit.points.map((p) => ({
       ...p,
       eta: efficiencyEta(p, costeKm),
+      coste_operativo_eur_km: costeKm,
     }));
   }, [profit, costeKm]);
 
@@ -435,6 +524,7 @@ export default function BiDashboardPage() {
       size: Math.max(Number(n.size) || 0, 1e-4),
       margen_estimado: n.margen_estimado ?? 0,
       porte_id: n.porte_id ?? undefined,
+      estimated_fallback: n.estimated_fallback === true,
     }));
     return {
       treemapLeaves: leaves,
@@ -471,6 +561,74 @@ export default function BiDashboardPage() {
             {err ? (
               <div className="rounded-lg border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">{err}</div>
             ) : null}
+
+            {/* Real-cost KPIs (advanced-metrics — agregado empresa, no filtrado por rango BI) */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {loadSummary ? (
+                <>
+                  <KpiSkeleton />
+                  <KpiSkeleton />
+                </>
+              ) : (
+                <>
+                  <Card className="bunker-card border-emerald-500/20 bg-gradient-to-br from-emerald-950/35 to-zinc-950">
+                    <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+                      <div>
+                        <CardTitle className="flex items-center gap-2 text-sm font-medium text-zinc-200">
+                          <TrendingUp className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
+                          Índice de Margen Real
+                        </CardTitle>
+                        <CardDescription className="text-xs text-zinc-500">
+                          Desviación agregada: margen P&amp;L con combustible imputado vs estimación km×coste.
+                        </CardDescription>
+                      </div>
+                      <span
+                        className="shrink-0 text-zinc-500"
+                        title="Cálculo basado en tickets de combustible reales vinculados a este vehículo/fecha"
+                      >
+                        <Info className="h-5 w-5" aria-hidden />
+                      </span>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold tracking-tight text-zinc-50">
+                        {advancedMetrics?.real_margin_index != null && !Number.isNaN(advancedMetrics.real_margin_index)
+                          ? `${advancedMetrics.real_margin_index >= 0 ? "+" : ""}${fmtDec(advancedMetrics.real_margin_index, 1)} %`
+                          : "—"}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-500">Últimos meses con portes completados vinculados.</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bunker-card border-amber-500/20 bg-gradient-to-br from-amber-950/25 to-zinc-950">
+                    <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+                      <div>
+                        <CardTitle className="flex items-center gap-2 text-sm font-medium text-zinc-200">
+                          <Zap className="h-5 w-5 shrink-0 text-amber-400" aria-hidden />
+                          Ratio de Eficiencia de Combustible
+                        </CardTitle>
+                        <CardDescription className="text-xs text-zinc-500">
+                          Ingresos por € de combustible real imputado (mismo universo que el índice).
+                        </CardDescription>
+                      </div>
+                      <span
+                        className="shrink-0 text-zinc-500"
+                        title="Cálculo basado en tickets de combustible reales vinculados a este vehículo/fecha"
+                      >
+                        <Info className="h-5 w-5" aria-hidden />
+                      </span>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold tracking-tight text-zinc-50">
+                        {advancedMetrics?.fuel_efficiency_ratio != null &&
+                        !Number.isNaN(advancedMetrics.fuel_efficiency_ratio)
+                          ? `${fmtDec(advancedMetrics.fuel_efficiency_ratio, 2)} € / €`
+                          : "—"}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-500">Mayor valor: más ingreso por cada euro de gasoil cargado.</p>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </div>
 
             {/* KPI row */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -524,9 +682,18 @@ export default function BiDashboardPage() {
             {/* Scatter */}
             <Card className="bunker-card overflow-hidden border-zinc-800">
               <CardHeader>
-                <CardTitle className="text-zinc-100">Rentabilidad por trayecto</CardTitle>
+                <CardTitle className="flex flex-wrap items-center gap-2 text-zinc-100">
+                  Rentabilidad por trayecto
+                  <span
+                    className="inline-flex text-zinc-500"
+                    title="Cálculo basado en tickets de combustible reales vinculados a este vehículo/fecha"
+                  >
+                    <Info className="size-4" aria-hidden />
+                  </span>
+                </CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Cada punto es un porte completado. Color: η &lt; 1 en rosa, η &gt; 1,2 en esmeralda (η = precio / (km × 0,62)).
+                  Eje Y: margen P&amp;L real (EUR) cuando hay combustible imputado; borde discontinuo = estimación (sin ticket).
+                  Color η: precio / (km × coste) — &lt; 1 rosa, &gt; 1,2 esmeralda.
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-[min(70vh,560px)] min-h-[420px] w-full p-2 sm:p-4">
@@ -561,12 +728,12 @@ export default function BiDashboardPage() {
                       <YAxis
                         type="number"
                         dataKey="margin_eur"
-                        name="Margen"
-                        width={isNarrow ? 56 : 72}
+                        name="Margen P&L real"
+                        width={isNarrow ? 56 : 80}
                         tick={{ fill: "#a1a1aa", fontSize: axisTick }}
                         tickFormatter={(v) => fmtEur(Number(v))}
                         label={{
-                          value: "Margen (EUR)",
+                          value: "Margen P&L real (EUR)",
                           angle: -90,
                           position: "insideLeft",
                           fill: "#71717a",
@@ -592,7 +759,8 @@ export default function BiDashboardPage() {
               <CardHeader>
                 <CardTitle className="text-zinc-100">Impacto de carbono vs margen</CardTitle>
                 <CardDescription className="text-zinc-400">
-                  Superficie ∝ CO₂ emitido (kg). Color ∝ rentabilidad estimada (margen EUR).
+                  Superficie ∝ CO₂ (kg). Color ∝ margen P&amp;L (real o proxy). Borde discontinuo: sin ticket de combustible
+                  vinculado.
                 </CardDescription>
               </CardHeader>
               <CardContent className="h-[min(65vh,520px)] min-h-[400px] w-full p-2 sm:p-4">

@@ -248,7 +248,7 @@ async def finalizar_factura_verifactu(
     service: FacturasService = Depends(deps.get_facturas_service),
 ) -> FacturaOut:
     """
-    Finaliza el registro VeriFactu: cadena ``fingerprint``, URL TIKE en ``qr_code_url`` y
+    Finaliza el registro VeriFactu: cadena ``fingerprint``, URL SREI en ``qr_code_url`` y
     ``is_finalized`` (inmutable para edición/borrado según trigger en BD).
     """
     try:

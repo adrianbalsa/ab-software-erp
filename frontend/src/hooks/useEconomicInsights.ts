@@ -32,6 +32,10 @@ export type EconomicInsightsData = {
     km_equilibrio_estimados: number | null;
     nota_metodologia: string;
   };
+  /** % diferencia agregada margen P&L real vs estimado (legacy km×coste). Desde `advanced-metrics`. */
+  real_margin_index?: number | null;
+  /** Ingresos porte / € combustible real imputado (periodo avanzado). */
+  fuel_efficiency_ratio?: number | null;
 };
 
 export function useEconomicInsights(options: { enabled: boolean }) {
@@ -45,14 +49,31 @@ export function useEconomicInsights(options: { enabled: boolean }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch(`${API_BASE}/api/v1/dashboard/economic-insights`, {
-        credentials: "include",
-        headers: { Accept: "application/json" },
-      });
-      if (!res.ok) {
-        throw new Error(await parseApiError(res));
+      const [resInsights, resAdv] = await Promise.all([
+        apiFetch(`${API_BASE}/api/v1/dashboard/economic-insights`, {
+          credentials: "include",
+          headers: { Accept: "application/json" },
+        }),
+        apiFetch(`${API_BASE}/api/v1/dashboard/advanced-metrics`, {
+          credentials: "include",
+          headers: { Accept: "application/json" },
+        }),
+      ]);
+      if (!resInsights.ok) {
+        throw new Error(await parseApiError(resInsights));
       }
-      const json = (await res.json()) as EconomicInsightsData;
+      const json = (await resInsights.json()) as EconomicInsightsData;
+      if (resAdv.ok) {
+        const adv = (await resAdv.json()) as {
+          real_margin_index?: number | null;
+          fuel_efficiency_ratio?: number | null;
+        };
+        json.real_margin_index = adv.real_margin_index ?? null;
+        json.fuel_efficiency_ratio = adv.fuel_efficiency_ratio ?? null;
+      } else {
+        json.real_margin_index = null;
+        json.fuel_efficiency_ratio = null;
+      }
       setData(json);
     } catch (e: unknown) {
       setData(null);

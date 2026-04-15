@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
+from app.services.finance_service import (
+    COSTE_OPERATIVO_EUR_KM,
+    FinanceService,
+    OTHER_NON_FUEL_OPEX_PER_KM,
+    PorteFuelAllocation,
+)
 from app.schemas.bi import (
     BiDashboardSummaryOut,
     BiEsgImpactChartsOut,
@@ -17,9 +23,8 @@ from app.schemas.bi import (
     TreemapNodeOut,
 )
 
-# Alineado con advisor / finance (coste operativo €/km).
-COSTE_OPERATIVO_EUR_KM: float = 0.62
-EFFICIENCY_DENOM_KM_FACTOR: float = 0.62
+# Alineado con ``FinanceService`` (fallback sin tickets de combustible).
+EFFICIENCY_DENOM_KM_FACTOR: float = COSTE_OPERATIVO_EUR_KM
 
 _COMPLETED_ESTADOS = frozenset({"entregado", "facturado"})
 
@@ -70,6 +75,24 @@ def _margen_estimado(row: dict[str, Any]) -> float:
     km = _km_aplicable_porte(row)
     precio = max(0.0, _to_float(row.get("precio_pactado")))
     return round(precio - km * COSTE_OPERATIVO_EUR_KM, 2)
+
+
+async def _porte_pnl_by_id(
+    db: SupabaseAsync,
+    *,
+    empresa_id: str,
+    date_from: date | None,
+    date_to: date | None,
+) -> dict[str, PorteFuelAllocation]:
+    fin = FinanceService(db)
+    d0 = date_from or date(1970, 1, 1)
+    d1 = date_to or date.today()
+    return await fin.link_expenses_to_portes(
+        empresa_id=empresa_id,
+        start_date=d0,
+        end_date=d1,
+        audit_trail=False,
+    )
 
 
 def _co2_kg_for_row(row: dict[str, Any]) -> float:
@@ -336,13 +359,23 @@ class BiService:
         portes = await self._fetch_portes_bi(empresa_id=eid, date_from=date_from, date_to=date_to)
         completed = [p for p in portes if _porte_estado_completed(p.get("estado"))]
 
+        dates_fecha = [_parse_date_only(p.get("fecha")) for p in completed]
+        dates_ok = [d for d in dates_fecha if d is not None]
+        d_min = min(dates_ok) if dates_ok else date.today() - timedelta(days=365)
+        d_max = max(dates_ok) if dates_ok else date.today()
+        pnl = await _porte_pnl_by_id(
+            self._db, empresa_id=eid, date_from=d_min, date_to=d_max
+        )
+
         margins: list[float] = []
         co2_saved_total = 0.0
         co2_saved_n = 0
         eff_vals: list[float] = []
 
         for p in completed:
-            m = _margen_estimado(p)
+            pid = str(p.get("id") or "").strip()
+            row_pnl = pnl.get(pid) if pid else None
+            m = row_pnl.margin_real_eur if row_pnl is not None else _margen_estimado(p)
             margins.append(m)
             ah = p.get("esg_co2_ahorro_vs_euro_iii_kg")
             if ah is not None:
@@ -350,9 +383,12 @@ class BiService:
                 co2_saved_n += 1
             km = _km_aplicable_porte(p)
             price = max(0.0, _to_float(p.get("precio_pactado")))
-            denom = km * EFFICIENCY_DENOM_KM_FACTOR
-            if denom > 1e-9:
-                eff_vals.append(price / denom)
+            if row_pnl is not None and row_pnl.allocated_fuel_eur > 1e-9:
+                eff_vals.append(price / row_pnl.allocated_fuel_eur)
+            else:
+                denom = km * EFFICIENCY_DENOM_KM_FACTOR
+                if denom > 1e-9:
+                    eff_vals.append(price / denom)
 
         fac_rows = await self._fetch_reconciled_invoice_rows(
             empresa_id=eid, date_from=date_from, date_to=date_to
@@ -381,6 +417,9 @@ class BiService:
     ) -> BiProfitabilityChartsOut:
         eid = str(empresa_id).strip()
         portes = await self._fetch_portes_for_scatter(empresa_id=eid, date_from=date_from, date_to=date_to)
+        d0 = date_from or date(1970, 1, 1)
+        d1 = date_to or date.today()
+        pnl = await _porte_pnl_by_id(self._db, empresa_id=eid, date_from=d0, date_to=d1)
         cids = _uuid_set(portes, "cliente_id")
         vids = _uuid_set(portes, "vehiculo_id")
         nombres_cli = await self._batch_cliente_nombres(empresa_id=eid, cliente_ids=cids)
@@ -395,7 +434,25 @@ class BiService:
             pid = p.get("id")
             if pid is None:
                 continue
-            margin = _margen_estimado(p)
+            pid_s = str(pid).strip()
+            row_pnl = pnl.get(pid_s)
+            fuel_alloc: float | None
+            other_opex: float | None
+            if row_pnl is not None:
+                margin = row_pnl.margin_real_eur
+                m_legacy = row_pnl.margin_estimado_legacy_eur
+                est_flag = row_pnl.estimated_fallback
+                fuel_alloc = round(float(row_pnl.allocated_fuel_eur), 4)
+                if not est_flag:
+                    other_opex = round(km * OTHER_NON_FUEL_OPEX_PER_KM, 4)
+                else:
+                    other_opex = None
+            else:
+                margin = _margen_estimado(p)
+                m_legacy = margin
+                est_flag = True
+                fuel_alloc = None
+                other_opex = None
             cid = str(p.get("cliente_id") or "").strip()
             vid = str(p.get("vehiculo_id") or "").strip()
             points.append(
@@ -403,6 +460,10 @@ class BiService:
                     porte_id=UUID(str(pid)),
                     km=round(km, 4),
                     margin_eur=margin,
+                    margin_estimado_legacy_eur=m_legacy,
+                    estimated_margin=est_flag,
+                    allocated_fuel_eur=fuel_alloc,
+                    other_opex_eur=other_opex,
                     precio_pactado=_to_float(p.get("precio_pactado")) or None,
                     estado=str(p.get("estado") or "") or None,
                     cliente=nombres_cli.get(cid) if cid else None,
@@ -421,6 +482,9 @@ class BiService:
     ) -> BiEsgImpactChartsOut:
         eid = str(empresa_id).strip()
         portes = await self._fetch_portes_bi(empresa_id=eid, date_from=date_from, date_to=date_to)
+        d0 = date_from or date(1970, 1, 1)
+        d1 = date_to or date.today()
+        pnl = await _porte_pnl_by_id(self._db, empresa_id=eid, date_from=d0, date_to=d1)
         matrix: list[EsgMatrixPoint] = []
         heat_acc: dict[tuple[str, str], dict[str, float | int]] = defaultdict(lambda: {"count": 0, "total_co2_kg": 0.0})
         treemap_nodes: list[TreemapNodeOut] = []
@@ -433,7 +497,10 @@ class BiService:
                 continue
             km = _km_aplicable_porte(p)
             co2 = _co2_kg_for_row(p)
-            margen = _margen_estimado(p)
+            pid_s = str(pid).strip()
+            row_pnl = pnl.get(pid_s)
+            margen = row_pnl.margin_real_eur if row_pnl is not None else _margen_estimado(p)
+            est_fb = row_pnl.estimated_fallback if row_pnl is not None else True
             label = _route_label(p)
             matrix.append(
                 EsgMatrixPoint(
@@ -454,6 +521,7 @@ class BiService:
                     size=round(co2, 6),
                     margen_estimado=margen,
                     porte_id=UUID(str(pid)),
+                    estimated_fallback=est_fb,
                 )
             )
 

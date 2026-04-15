@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Any
 from decimal import Decimal
+from typing import Any
 
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
@@ -24,6 +26,27 @@ from app.schemas.finance import (
     FinanceTesoreriaMensualOut,
     GastoBucketCincoOut,
 )
+from app.services.auditoria_service import AuditoriaService
+
+# Alineado con BI / advisor (fallback si no hay tickets de combustible por vehículo/día).
+COSTE_OPERATIVO_EUR_KM: float = float(os.getenv("COSTE_OPERATIVO_EUR_KM", "0.62"))
+# Opex no combustible (€/km) cuando sí hay reparto de combustible real (neumáticos, estructura, etc.).
+OTHER_NON_FUEL_OPEX_PER_KM: float = float(os.getenv("OTHER_NON_FUEL_OPEX_PER_KM", "0.35"))
+
+
+@dataclass(frozen=True, slots=True)
+class PorteFuelAllocation:
+    """Resultado de imputar ``gastos_vehiculo`` (combustible) a un porte."""
+
+    porte_id: str
+    fecha: date
+    km: float
+    precio: float
+    allocated_fuel_eur: float
+    estimated_fallback: bool
+    margin_real_eur: float
+    margin_estimado_legacy_eur: float
+    gastos_vehiculo_ids: tuple[str, ...]
 
 
 class FinanceService:
@@ -587,6 +610,302 @@ class FinanceService:
         b = FinanceService._bucket_gasto_cinco(str(row.get("categoria") or ""))
         return b in ("Combustible", "Peajes", "Mantenimiento")
 
+    _COMPLETED_PORTE_ESTADOS = frozenset({"entregado", "facturado"})
+
+    @classmethod
+    def _porte_estado_completado(cls, raw: Any) -> bool:
+        return str(raw or "").strip().lower() in cls._COMPLETED_PORTE_ESTADOS
+
+    @staticmethod
+    def _norm_matricula(val: Any) -> str:
+        return "".join(c for c in str(val or "").upper() if c.isalnum())
+
+    @staticmethod
+    def _km_aplicable_porte_row(row: dict[str, Any]) -> float:
+        kr = row.get("km_reales")
+        if kr is not None:
+            try:
+                return max(0.0, float(kr))
+            except (TypeError, ValueError):
+                pass
+        try:
+            return max(0.0, float(row.get("km_estimados") or 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+
+    @staticmethod
+    def _es_categoria_combustible_gv(cat: Any) -> bool:
+        c = str(cat or "").strip().lower()
+        return "combust" in c or c == "combustible"
+
+    async def _map_vehiculos_id_to_flota_id(self, *, empresa_id: str) -> dict[str, str]:
+        """
+        ``gastos_vehiculo.vehiculo_id`` referencia ``vehiculos``; ``portes.vehiculo_id`` referencia ``flota``.
+        Empareja por UUID común o por matrícula normalizada (misma empresa).
+        """
+        eid = str(empresa_id or "").strip()
+        out: dict[str, str] = {}
+        flota_rows: list[dict[str, Any]] = []
+        try:
+            res_f: Any = await self._db.execute(
+                filter_not_deleted(
+                    self._db.table("flota").select("id, matricula").eq("empresa_id", eid)
+                )
+            )
+            flota_rows = (res_f.data or []) if hasattr(res_f, "data") else []
+        except Exception:
+            flota_rows = []
+
+        flota_ids = {str(r.get("id")).strip() for r in flota_rows if r.get("id") is not None}
+        mat_to_flota: dict[str, str] = {}
+        for r in flota_rows:
+            fid = str(r.get("id") or "").strip()
+            if not fid:
+                continue
+            mat_to_flota[FinanceService._norm_matricula(r.get("matricula"))] = fid
+
+        veh_rows: list[dict[str, Any]] = []
+        try:
+            res_v: Any = await self._db.execute(
+                filter_not_deleted(self._db.table("vehiculos").select("id, matricula").eq("empresa_id", eid))
+            )
+            veh_rows = (res_v.data or []) if hasattr(res_v, "data") else []
+        except Exception:
+            try:
+                res_v2: Any = await self._db.execute(
+                    self._db.table("vehiculos").select("id, matricula").eq("empresa_id", eid)
+                )
+                veh_rows = (res_v2.data or []) if hasattr(res_v2, "data") else []
+            except Exception:
+                veh_rows = []
+
+        for r in veh_rows:
+            vid = str(r.get("id") or "").strip()
+            if not vid:
+                continue
+            if vid in flota_ids:
+                out[vid] = vid
+                continue
+            nm = FinanceService._norm_matricula(r.get("matricula"))
+            if nm and nm in mat_to_flota:
+                out[vid] = mat_to_flota[nm]
+        return out
+
+    async def link_expenses_to_portes(
+        self,
+        *,
+        empresa_id: str,
+        start_date: date,
+        end_date: date,
+        audit_trail: bool = True,
+    ) -> dict[str, PorteFuelAllocation]:
+        """
+        Imputa importes de ``gastos_vehiculo`` (categoría combustible) a portes del mismo ``empresa_id``,
+        mismo día y vehículo (vía mapa vehiculos→flota). Si varios portes comparten vehículo y fecha,
+        reparte el coste proporcionalmente al km.
+
+        Sin match de combustible: ``estimated_fallback=True`` y margen = precio − km×COSTE_OPERATIVO_EUR_KM.
+
+        Si ``audit_trail``, registra en ``auditoria`` (y best-effort ``audit_logs``) el lote.
+        """
+        eid = str(empresa_id or "").strip()
+        if not eid or start_date > end_date:
+            return {}
+
+        gv_to_flota = await self._map_vehiculos_id_to_flota_id(empresa_id=eid)
+        flota_ids_known = await self._flota_id_set(eid)
+
+        try:
+            q_gv = filter_not_deleted(
+                self._db.table("gastos_vehiculo")
+                .select("id, vehiculo_id, fecha, categoria, importe_total, moneda")
+                .eq("empresa_id", eid)
+                .gte("fecha", start_date.isoformat())
+                .lte("fecha", end_date.isoformat())
+            )
+            res_gv: Any = await self._db.execute(q_gv)
+            gv_rows: list[dict[str, Any]] = (res_gv.data or []) if hasattr(res_gv, "data") else []
+        except Exception:
+            gv_rows = []
+
+        fuel_by_key: dict[tuple[date, str], float] = defaultdict(float)
+        gv_ids_by_key: dict[tuple[date, str], list[str]] = defaultdict(list)
+        for gv in gv_rows:
+            if not FinanceService._es_categoria_combustible_gv(gv.get("categoria")):
+                continue
+            vid_g = str(gv.get("vehiculo_id") or "").strip()
+            flota_id = gv_to_flota.get(vid_g) or (vid_g if vid_g in flota_ids_known else "")
+            if not flota_id:
+                continue
+            fd = self._fecha_desde_campo(gv.get("fecha"))
+            if fd is None:
+                continue
+            try:
+                imp = float(gv.get("importe_total") or 0.0)
+            except (TypeError, ValueError):
+                imp = 0.0
+            if imp <= 0:
+                continue
+            key = (fd, flota_id)
+            fuel_by_key[key] += imp
+            gid = str(gv.get("id") or "").strip()
+            if gid:
+                gv_ids_by_key[key].append(gid)
+
+        try:
+            q_p = filter_not_deleted(
+                self._db.table("portes")
+                .select(
+                    "id, empresa_id, fecha, vehiculo_id, km_estimados, km_reales, precio_pactado, estado"
+                )
+                .eq("empresa_id", eid)
+                .gte("fecha", start_date.isoformat())
+                .lte("fecha", end_date.isoformat())
+            )
+            res_p: Any = await self._db.execute(q_p)
+            porte_rows: list[dict[str, Any]] = (res_p.data or []) if hasattr(res_p, "data") else []
+        except Exception:
+            porte_rows = []
+
+        by_day_veh: dict[tuple[date, str], list[dict[str, Any]]] = defaultdict(list)
+        for pr in porte_rows:
+            if not FinanceService._porte_estado_completado(pr.get("estado")):
+                continue
+            fd = self._fecha_desde_campo(pr.get("fecha"))
+            vid = str(pr.get("vehiculo_id") or "").strip()
+            if fd is None or not vid:
+                continue
+            by_day_veh[(fd, vid)].append(pr)
+
+        allocations: dict[str, PorteFuelAllocation] = {}
+        audit_payload: list[dict[str, Any]] = []
+
+        for (fd, vid), group in by_day_veh.items():
+            total_km = sum(FinanceService._km_aplicable_porte_row(x) for x in group)
+            key = (fd, vid)
+            total_fuel = float(fuel_by_key.get(key, 0.0))
+            gids = tuple(dict.fromkeys(gv_ids_by_key.get(key, [])))
+
+            for pr in group:
+                pid = str(pr.get("id") or "").strip()
+                if not pid:
+                    continue
+                km = FinanceService._km_aplicable_porte_row(pr)
+                try:
+                    precio = max(0.0, float(pr.get("precio_pactado") or 0.0))
+                except (TypeError, ValueError):
+                    precio = 0.0
+
+                est_margin = round(
+                    precio - km * COSTE_OPERATIVO_EUR_KM,
+                    2,
+                )
+
+                if total_km > 1e-9 and total_fuel > 0:
+                    share = km / total_km
+                    fuel_alloc = round(total_fuel * share, 4)
+                    estimated_fallback = False
+                    other_opex = km * OTHER_NON_FUEL_OPEX_PER_KM
+                    m_real = round(precio - fuel_alloc - other_opex, 2)
+                else:
+                    fuel_alloc = 0.0
+                    estimated_fallback = True
+                    m_real = est_margin
+
+                allocations[pid] = PorteFuelAllocation(
+                    porte_id=pid,
+                    fecha=fd,
+                    km=km,
+                    precio=precio,
+                    allocated_fuel_eur=fuel_alloc,
+                    estimated_fallback=estimated_fallback,
+                    margin_real_eur=m_real,
+                    margin_estimado_legacy_eur=est_margin,
+                    gastos_vehiculo_ids=gids,
+                )
+                if audit_trail and not estimated_fallback and fuel_alloc > 0:
+                    audit_payload.append(
+                        {
+                            "porte_id": pid,
+                            "fecha": fd.isoformat(),
+                            "vehiculo_flota_id": vid,
+                            "km": km,
+                            "allocated_fuel_eur": fuel_alloc,
+                            "gastos_vehiculo_ids": list(gids),
+                        }
+                    )
+
+        allocated_ids = set(allocations.keys())
+        for pr in porte_rows:
+            if not FinanceService._porte_estado_completado(pr.get("estado")):
+                continue
+            pid = str(pr.get("id") or "").strip()
+            if not pid or pid in allocated_ids:
+                continue
+            fd = self._fecha_desde_campo(pr.get("fecha"))
+            if fd is None:
+                continue
+            km = FinanceService._km_aplicable_porte_row(pr)
+            try:
+                precio = max(0.0, float(pr.get("precio_pactado") or 0.0))
+            except (TypeError, ValueError):
+                precio = 0.0
+            est_margin = round(precio - km * COSTE_OPERATIVO_EUR_KM, 2)
+            allocations[pid] = PorteFuelAllocation(
+                porte_id=pid,
+                fecha=fd,
+                km=km,
+                precio=precio,
+                allocated_fuel_eur=0.0,
+                estimated_fallback=True,
+                margin_real_eur=est_margin,
+                margin_estimado_legacy_eur=est_margin,
+                gastos_vehiculo_ids=(),
+            )
+
+        if audit_trail and audit_payload:
+            aud = AuditoriaService(self._db)
+            await aud.try_log(
+                empresa_id=eid,
+                accion="fuel_allocated_to_portes",
+                tabla="portes",
+                registro_id=f"{start_date.isoformat()}_{end_date.isoformat()}",
+                cambios={
+                    "n": len(audit_payload),
+                    "items": audit_payload[:200],
+                },
+            )
+            try:
+                await self._db.execute(
+                    self._db.table("audit_logs").insert(
+                        {
+                            "empresa_id": eid,
+                            "table_name": "portes",
+                            "record_id": f"fuel_alloc_{start_date.isoformat()}_{end_date.isoformat()}",
+                            "action": "INSERT",
+                            "old_data": None,
+                            "new_data": {"kind": "fuel_allocation", "items": audit_payload[:200]},
+                            "changed_by": None,
+                        }
+                    )
+                )
+            except Exception:
+                pass
+
+        return allocations
+
+    async def _flota_id_set(self, empresa_id: str) -> set[str]:
+        try:
+            res: Any = await self._db.execute(
+                filter_not_deleted(
+                    self._db.table("flota").select("id").eq("empresa_id", empresa_id)
+                )
+            )
+            rows = (res.data or []) if hasattr(res, "data") else []
+            return {str(r.get("id")).strip() for r in rows if r.get("id") is not None}
+        except Exception:
+            return set()
+
     async def advanced_metrics_last_six_months(
         self, *, empresa_id: str, hoy: date | None = None
     ) -> AdvancedMetricsOut:
@@ -690,11 +1009,37 @@ class FinanceService:
                 )
             )
 
+        oldest_pk = claves6[0]
+        y0, m0 = int(oldest_pk[:4]), int(oldest_pk[5:7])
+        range_start_pnl = date(y0, m0, 1)
+        pnl_links = await self.link_expenses_to_portes(
+            empresa_id=eid,
+            start_date=range_start_pnl,
+            end_date=hoy,
+            audit_trail=False,
+        )
+        real_margin_index: float | None = None
+        fuel_efficiency_ratio: float | None = None
+        if pnl_links:
+            sum_est = sum(v.margin_estimado_legacy_eur for v in pnl_links.values())
+            sum_real = sum(v.margin_real_eur for v in pnl_links.values())
+            sum_rev = sum(v.precio for v in pnl_links.values())
+            sum_fuel = sum(v.allocated_fuel_eur for v in pnl_links.values())
+            if abs(sum_est) > 1e-6:
+                real_margin_index = round((sum_real - sum_est) / abs(sum_est) * 100.0, 4)
+            if sum_fuel > 1e-6:
+                fuel_efficiency_ratio = round(sum_rev / sum_fuel, 4)
+
         return AdvancedMetricsOut(
             meses=meses,
             generado_en=hoy.isoformat(),
             nota_metodologia=(
                 "Ingresos y gastos sin IVA. Coste/km = (combustible + peajes + mantenimiento bucket) / km portes. "
-                "CO₂ = Scope 1 combustible (tickets) + huella t·km portes."
+                "CO₂ = Scope 1 combustible (tickets) + huella t·km portes. "
+                "KPIs real_margin_index / fuel_efficiency_ratio: margen por porte completado con combustible "
+                f"imputado desde gastos_vehiculo (mismo vehículo/día, reparto por km) + opex no combustible "
+                f"({OTHER_NON_FUEL_OPEX_PER_KM} €/km); si no hay ticket, fallback km×{COSTE_OPERATIVO_EUR_KM}."
             ),
+            real_margin_index=real_margin_index,
+            fuel_efficiency_ratio=fuel_efficiency_ratio,
         )

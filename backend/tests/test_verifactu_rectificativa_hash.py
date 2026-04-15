@@ -122,7 +122,8 @@ def test_fingerprint_desde_eslabon_enlaza_hash_previo() -> None:
 
 
 def test_build_tike_url_incluye_huella() -> None:
-    u = build_tike_verifactu_url("B1", "F-1", "2026-03-24", 10.0, huella="cc" * 32)
+    with pytest.warns(DeprecationWarning, match="build_tike_verifactu_url"):
+        u = build_tike_verifactu_url("B1", "F-1", "2026-03-24", 10.0, huella="cc" * 32)
     assert "huella=" in u
     assert "TIKE-CONT/ValidarQR" in u
 
@@ -134,6 +135,38 @@ def test_build_srei_url_verifactu_parametros() -> None:
     assert "numser=FAC-2026-000001" in u
     assert "fec=24-03-2026" in u
     assert "imp=121.00" in u
+
+
+def test_build_srei_hc_es_primeros_8_de_huella() -> None:
+    huella = "a1b2c3d4e5f678901234567890abcdef"
+    u = build_srei_verifactu_url(
+        "B12345678", "FAC-1", "2026-03-24", 10.0, huella_hash=huella
+    )
+    assert "hc=a1b2c3d4" in u
+
+
+def test_preview_pdf_y_core_usan_misma_url_srei() -> None:
+    """Misma URL que ``generate_verifactu_qr_with_url`` y ``get_factura_pdf_data`` (reconstrucción)."""
+    from app.core.verifactu_qr import generate_verifactu_qr_with_url
+
+    inv = {
+        "nif_emisor": "B87654321",
+        "num_factura": "F-99",
+        "fecha_emision": "2026-04-01",
+        "importe_total": 199.5,
+        "hash_registro": "deadbeef" * 8,
+    }
+    _, url_qr = generate_verifactu_qr_with_url(inv)
+    url_direct = build_srei_verifactu_url(
+        "B87654321",
+        "F-99",
+        "2026-04-01",
+        199.5,
+        huella_hash=inv["hash_registro"],
+    )
+    assert url_qr == url_direct
+    assert "SREI/VERIFACTU" in url_qr
+    assert "hc=deadbeef" in url_qr
 
 
 @pytest.mark.asyncio

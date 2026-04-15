@@ -12,8 +12,8 @@ import { loadSvgLogoAsPngDataUrl } from "@/lib/exportUtils";
 
 const MARGIN_MM = 14;
 const QR_SIZE_MM = 20;
-const AVAC_VERIFICAR_BASE =
-  "https://www2.agenciatributaria.gob.es/wlpl/AVAC-SIVA/VerificarFactura";
+/** Consulta pública VeriFactu (misma base que ``build_srei_verifactu_url`` en backend). */
+const SREI_VERIFACTU_BASE = "https://www2.agenciatributaria.gob.es/vlz/SREI/VERIFACTU";
 
 const fmtEur = (n: number) =>
   new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
@@ -29,19 +29,32 @@ export function fechaEmisionToDdMmYyyy(fechaEmision: string): string {
   return raw;
 }
 
-/** URL oficial de verificación (AVAC-SIVA / VerificarFactura). */
-export function buildAvacVerificarFacturaUrl(data: FacturaPdfData): string {
-  const nif = (data.emisor.nif || "").trim();
-  const numserie = (data.num_factura_verifactu || data.numero_factura || "").trim();
-  const fecha = fechaEmisionToDdMmYyyy(data.fecha_emision);
-  const importe = `${Number(data.total_factura).toFixed(2)}`;
-  const q = new URLSearchParams({
-    nif,
-    numserie,
-    fecha,
-    importe,
-  });
-  return `${AVAC_VERIFICAR_BASE}?${q.toString()}`;
+/**
+ * URL SREI / VERIFACTU alineada con el backend (`aeat_qr_service.build_srei_verifactu_url`).
+ * Preferir siempre `verifactu_validation_url` (persistido como `qr_code_url`) cuando exista.
+ */
+export function buildSreiVerifactuUrl(data: FacturaPdfData): string {
+  const nif = encodeURIComponent((data.emisor.nif || "").trim());
+  const numser = encodeURIComponent((data.num_factura_verifactu || data.numero_factura || "").trim());
+  const fec = encodeURIComponent(fechaEmisionToDdMmYyyy(data.fecha_emision));
+  const imp = encodeURIComponent(`${Number(data.total_factura).toFixed(2)}`);
+  const huellaSource =
+    (data.hash_registro || "").trim() ||
+    (data.fingerprint_hash || "").trim() ||
+    (data.fingerprint_completo || "").trim();
+  const hc = huellaSource.slice(0, 8);
+  let q = `nif=${nif}&numser=${numser}&fec=${fec}&imp=${imp}`;
+  if (hc) {
+    q += `&hc=${encodeURIComponent(hc)}`;
+  }
+  return `${SREI_VERIFACTU_BASE}?${q}`;
+}
+
+/** URL del QR: `verifactu_validation_url` (BD) o reconstrucción SREI con `hc` desde huellas del payload. */
+export function resolveVerifactuQrUrl(data: FacturaPdfData): string {
+  const persisted = (data.verifactu_validation_url || "").trim();
+  if (persisted) return persisted;
+  return buildSreiVerifactuUrl(data);
 }
 
 /** PNG data URL (alta resolución; el PDF lo escala a 20×20 mm). */
@@ -76,10 +89,10 @@ function resolveAuditHash(input: VerifactuInvoicePdfInput): string {
  */
 export async function generateVerifactuInvoicePdfBlob(input: VerifactuInvoicePdfInput): Promise<Blob> {
   const { pdfData: d } = input;
-  const avacUrl = buildAvacVerificarFacturaUrl(d);
+  const verificationUrl = resolveVerifactuQrUrl(d);
   const [logoDataUrl, qrDataUrl] = await Promise.all([
     loadSvgLogoAsPngDataUrl("/logo.svg"),
-    generateVerifactuQrDataUrl(avacUrl),
+    generateVerifactuQrDataUrl(verificationUrl),
   ]);
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });

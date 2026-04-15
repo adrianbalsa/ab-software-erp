@@ -251,7 +251,7 @@ class FacturaPdfLineaOut(BaseModel):
 class FacturaPdfDataOut(BaseModel):
     """
     Payload para ``@react-pdf/renderer``: totales redondeados con el Math Engine,
-    QR VeriFactu (TIKE) en Base64 y metadatos de auditoría.
+    QR VeriFactu (URL SREI / VERIFACTU) en Base64 y metadatos de auditoría.
     """
 
     factura_id: int
@@ -268,11 +268,11 @@ class FacturaPdfDataOut(BaseModel):
     total_factura: float
     verifactu_qr_base64: str = Field(
         default="",
-        description="PNG del QR en Base64 (ASCII); vacío si no hay URL TIKE válida.",
+        description="PNG del QR en Base64 (ASCII); vacío si no hay URL SREI válida.",
     )
     verifactu_validation_url: str | None = Field(
         default=None,
-        description="URL codificada en el QR (TIKE o reconstruida).",
+        description="URL SREI / VERIFACTU (misma cadena que ``facturas.qr_code_url`` cuando existe).",
     )
     verifactu_hash_audit: str = Field(
         default="",
@@ -281,6 +281,13 @@ class FacturaPdfDataOut(BaseModel):
     fingerprint_completo: str | None = Field(
         default=None,
         description="Huella encadenada VeriFactu si la factura está finalizada.",
+    )
+    fingerprint_hash: str | None = Field(
+        default=None,
+        description=(
+            "Huella resuelta para parámetro ``hc`` del QR SREI: "
+            "``hash_registro`` / ``hash_factura``, ``fingerprint_hash`` (columna) o ``fingerprint``."
+        ),
     )
     hash_registro: str | None = None
     aeat_csv_ultimo_envio: str | None = Field(

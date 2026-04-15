@@ -8,7 +8,6 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -69,10 +68,11 @@ from app.api.v1 import verifactu as verifactu_v1
 from app.api.v1 import webhooks as webhooks_v1
 from app.api.v1 import webhooks_gocardless as webhooks_gocardless_v1
 from app.core.config import get_settings
-from app.core.rate_limit import SkipOptionsSlowAPIMiddleware, limiter
+from app.core.rate_limit import SkipOptionsSlowAPIMiddleware, limiter, rate_limit_exceeded_handler
 from app.middleware.health_bypass import HealthCheckBypassMiddleware
 from app.middleware.login_debug_print import LoginDebugPrintMiddleware
 from app.middleware.json_access_log import JsonAccessLogMiddleware
+from app.middleware.fiscal_rate_limit_middleware import FiscalVerifactuRateLimitMiddleware
 from app.middleware.rate_limit_middleware import AuthLoginRateLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.slow_request_log import SlowRequestLogMiddleware
@@ -126,7 +126,7 @@ def create_app() -> FastAPI:
     )
     attach_custom_openapi(app)
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
     # Orden: primero añadido = más interno. El último = más externo (primero en ejecutarse en la petición).
     app.add_middleware(
@@ -160,6 +160,7 @@ def create_app() -> FastAPI:
     app.add_middleware(SlowRequestLogMiddleware)
     app.add_middleware(SkipOptionsSlowAPIMiddleware)
     app.add_middleware(AuthLoginRateLimitMiddleware)
+    app.add_middleware(FiscalVerifactuRateLimitMiddleware)
     # Lista explícita (sin "*"); GET /health se atiende antes vía HealthCheckBypassMiddleware.
     app.add_middleware(
         TrustedHostMiddleware,

@@ -32,6 +32,7 @@ export type FacturaPdfPayload = {
   verifactu_validation_url: string | null;
   verifactu_hash_audit: string;
   fingerprint_completo: string | null;
+  fingerprint_hash?: string | null;
   hash_registro: string | null;
   aeat_csv_ultimo_envio: string | null;
 };

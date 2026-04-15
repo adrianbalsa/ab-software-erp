@@ -251,6 +251,19 @@ def euro_vi_factor_kg_per_km_for_weight_class(weight_class: str) -> float:
     return float(_EURO_VI_KG_CO2_PER_KM_WEIGHT_CLASS[k])
 
 
+def glec_emission_factors_gco2_per_km(
+    *, engine_class: str | None, fuel_type: str | None
+) -> tuple[float, float]:
+    """
+    Factores GLEC (g CO₂/km) tramo cargado y vacío — mismo criterio que ``calculate_co2_footprint``.
+    Expuesto para certificados PDF y trazabilidad de metodología.
+    """
+    return (
+        _factor_gco2_per_km(engine_class=engine_class, fuel_type=fuel_type, load="FULL"),
+        _factor_gco2_per_km(engine_class=engine_class, fuel_type=fuel_type, load="EMPTY"),
+    )
+
+
 def calculate_co2_footprint(
     *,
     km_cargado: float,

@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Activity, BarChart3, Gauge, TrendingUp } from "lucide-react";
+import { Activity, BarChart3, Gauge, Info, TrendingUp, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import { useEconomicInsights } from "@/hooks/useEconomicInsights";
@@ -75,6 +75,55 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
           </div>
         ) : data ? (
           <div className="grid grid-cols-12 gap-4">
+            {/* Real-cost linker — KPIs agregados (advanced-metrics) */}
+            <div className="col-span-12 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-emerald-500/25 bg-gradient-to-br from-emerald-950/40 to-zinc-900/50 p-4 backdrop-blur-md">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-emerald-200/90">
+                    <TrendingUp className="h-4 w-4 text-emerald-400" />
+                    Índice de Margen Real
+                  </div>
+                  <span
+                    className="shrink-0 text-zinc-500"
+                    title="Cálculo basado en tickets de combustible reales vinculados a este vehículo/fecha"
+                  >
+                    <Info className="h-4 w-4" aria-hidden />
+                  </span>
+                </div>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-white">
+                  {data.real_margin_index != null && !Number.isNaN(data.real_margin_index)
+                    ? `${data.real_margin_index >= 0 ? "+" : ""}${data.real_margin_index.toFixed(1)} %`
+                    : "—"}
+                </p>
+                <p className="mt-1 text-xs leading-snug text-zinc-500">
+                  Desviación del margen P&L agregado (real vs estimación km×coste). Positivo: el real supera el
+                  proxy.
+                </p>
+              </div>
+              <div className="rounded-xl border border-amber-500/25 bg-gradient-to-br from-amber-950/30 to-zinc-900/50 p-4 backdrop-blur-md">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200/90">
+                    <Zap className="h-4 w-4 text-amber-400" />
+                    Ratio de Eficiencia de Combustible
+                  </div>
+                  <span
+                    className="shrink-0 text-zinc-500"
+                    title="Cálculo basado en tickets de combustible reales vinculados a este vehículo/fecha"
+                  >
+                    <Info className="h-4 w-4" aria-hidden />
+                  </span>
+                </div>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-white">
+                  {data.fuel_efficiency_ratio != null && !Number.isNaN(data.fuel_efficiency_ratio)
+                    ? `${data.fuel_efficiency_ratio.toFixed(2)} € / €`
+                    : "—"}
+                </p>
+                <p className="mt-1 text-xs leading-snug text-zinc-500">
+                  Ingresos por porte completados frente a cada euro de combustible imputado desde tickets.
+                </p>
+              </div>
+            </div>
+
             {/* KPI row — 1 col móvil, 2 tablet, 3 desktop (tres métricas) */}
             <div className="col-span-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
