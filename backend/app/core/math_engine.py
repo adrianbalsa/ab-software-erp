@@ -204,6 +204,7 @@ class LineaTotalCalculada:
     base_imponible: Decimal
     tipo_iva_porcentaje: Decimal
     descuento_linea: Decimal
+    retencion_irpf_porcentaje: Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,6 +213,20 @@ class DesgloseTipoIva:
     base_imponible: Decimal
     cuota_iva: Decimal
     cuota_recargo_equivalencia: Decimal
+    cuota_retencion_irpf: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class InvoiceLineInput:
+    indice: int
+    cantidad: Decimal
+    precio_unitario: Decimal
+    tipo_iva_porcentaje: Decimal
+    descuento_linea: Decimal = Decimal("0.00")
+    aplicar_recargo_equivalencia: bool = False
+    retencion_irpf_porcentaje: Decimal = Decimal("0.00")
+    tipo_no_sujecion: str | None = None
+    motivo_exencion: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,6 +236,7 @@ class InvoiceTotalsResult:
     base_imponible_total: Decimal
     cuota_iva_total: Decimal
     cuota_recargo_equivalencia_total: Decimal
+    cuota_retencion_irpf_total: Decimal
     total_factura: Decimal
     desglose_por_tipo: tuple[DesgloseTipoIva, ...]
     lineas: tuple[LineaTotalCalculada, ...]
@@ -235,11 +251,75 @@ class MathEngine:
     """
 
     @staticmethod
+    def normalize_items(raw_items: list[dict[str, Any]]) -> list[InvoiceLineInput]:
+        if not raw_items:
+            raise FinancialDomainError("Sin líneas de factura.")
+
+        out: list[InvoiceLineInput] = []
+        for idx, raw in enumerate(raw_items):
+            qty = quantize_financial(
+                raw.get("cantidad") if raw.get("cantidad") is not None else raw.get("qty") or 1
+            )
+            price = to_decimal(
+                raw.get("precio_unitario")
+                if raw.get("precio_unitario") is not None
+                else raw.get("precio_pactado")
+                if raw.get("precio_pactado") is not None
+                else raw.get("unit_price")
+                if raw.get("unit_price") is not None
+                else 0
+            )
+            descuento = quantize_financial(raw.get("descuento_linea") or 0)
+            raw_iva = raw.get("tipo_iva_porcentaje")
+            if raw_iva is None:
+                raw_iva = raw.get("iva_porcentaje")
+            if raw_iva is None:
+                raw_iva = raw.get("iva_pct")
+            iva = quantize_financial(raw_iva if raw_iva is not None else 0)
+            irpf = quantize_financial(raw.get("retencion_irpf_porcentaje") or 0)
+            aplicar_re = bool(
+                raw.get("aplicar_recargo_equivalencia")
+                if raw.get("aplicar_recargo_equivalencia") is not None
+                else raw.get("recargo_equivalencia")
+                if raw.get("recargo_equivalencia") is not None
+                else False
+            )
+            tipo_no_sujecion = str(raw.get("tipo_no_sujecion") or "").strip() or None
+            motivo_exencion = str(raw.get("motivo_exencion") or "").strip() or None
+
+            if qty < 0:
+                raise FinancialDomainError(f"Línea {idx}: cantidad no puede ser negativa.")
+            if descuento < 0:
+                raise FinancialDomainError(f"Línea {idx}: descuento_linea no puede ser negativo.")
+            if iva < Decimal("0") or iva > Decimal("100"):
+                raise FinancialDomainError(f"Línea {idx}: tipo IVA fuera de rango.")
+            if irpf < Decimal("0") or irpf > Decimal("100"):
+                raise FinancialDomainError(f"Línea {idx}: retención IRPF fuera de rango.")
+            if iva == Decimal("0.00") and not (tipo_no_sujecion or motivo_exencion):
+                raise FinancialDomainError(
+                    f"Línea {idx}: IVA 0 requiere tipo_no_sujecion o motivo_exencion."
+                )
+
+            out.append(
+                InvoiceLineInput(
+                    indice=idx,
+                    cantidad=qty,
+                    precio_unitario=price,
+                    tipo_iva_porcentaje=iva,
+                    descuento_linea=descuento,
+                    aplicar_recargo_equivalencia=aplicar_re,
+                    retencion_irpf_porcentaje=irpf,
+                    tipo_no_sujecion=tipo_no_sujecion,
+                    motivo_exencion=motivo_exencion,
+                )
+            )
+        return out
+
+    @staticmethod
     def calculate_totals(
-        items: list[dict[str, Any]],
+        items: list[InvoiceLineInput] | list[dict[str, Any]],
         global_discount: Decimal = Decimal("0"),
         *,
-        aplicar_recargo_equivalencia: bool = False,
         allow_negative_bases: bool = False,
     ) -> InvoiceTotalsResult:
         """
@@ -250,62 +330,39 @@ class MathEngine:
         - **Consistencia céntimo**: ``total = base + IVA + RE``; si hiciera falta un ajuste de
           0,01 € por artefactos de reparto de descuento global, se corrige en la línea de mayor importe.
 
-        Cada ítem admite claves flexibles:
-
-        - ``cantidad`` / ``qty`` (defecto 1),
-        - ``precio_unitario`` / ``precio_pactado`` / ``unit_price``,
-        - ``tipo_iva_porcentaje`` / ``iva_porcentaje`` / ``iva_pct``,
-        - ``descuento_linea`` (opcional, en EUR),
-        - ``recargo_equivalencia`` (opcional, ``bool`` por línea; si no, usa ``aplicar_recargo_equivalencia``).
+        ``items`` puede venir como ``InvoiceLineInput`` o diccionarios crudos;
+        en este último caso se normaliza con ``normalize_items``.
         """
         with localcontext(_MATH_CTX):
+            if items and isinstance(items[0], dict):
+                typed_items = MathEngine.normalize_items(items)  # type: ignore[arg-type]
+            else:
+                typed_items = list(items)  # type: ignore[arg-type]
+
             disc_glob = quantize_financial(global_discount)
             if disc_glob < 0:
                 raise FinancialDomainError("El descuento global no puede ser negativo.")
 
-            if not items:
+            if not typed_items:
                 raise FinancialDomainError("Sin líneas de factura.")
 
             line_nets: list[Decimal] = []
-            meta: list[tuple[Decimal, Decimal, bool]] = []
-            # (iva_pct, desc_line, rec_line_flag) por línea
-            for idx, raw in enumerate(items):
-                qty = quantize_financial(
-                    raw.get("cantidad") if raw.get("cantidad") is not None else raw.get("qty") or 1
-                )
-                if qty < 0:
-                    raise FinancialDomainError(f"Línea {idx}: cantidad no puede ser negativa.")
-                price = to_decimal(
-                    raw.get("precio_unitario")
-                    if raw.get("precio_unitario") is not None
-                    else raw.get("precio_pactado")
-                    if raw.get("precio_pactado") is not None
-                    else raw.get("unit_price")
-                    if raw.get("unit_price") is not None
-                    else 0
-                )
-                d_line = quantize_financial(raw.get("descuento_linea") or 0)
-                if d_line < 0:
-                    raise FinancialDomainError(f"Línea {idx}: descuento_linea no puede ser negativo.")
-                raw_iva = raw.get("tipo_iva_porcentaje")
-                if raw_iva is None:
-                    raw_iva = raw.get("iva_porcentaje")
-                if raw_iva is None:
-                    raw_iva = raw.get("iva_pct")
-                if raw_iva is None:
-                    raw_iva = Decimal("0")
-                iva_pct = quantize_financial(raw_iva)
-                if iva_pct < 0 or iva_pct > Decimal("100"):
-                    raise FinancialDomainError(f"Línea {idx}: tipo IVA fuera de rango.")
-
+            meta: list[tuple[Decimal, Decimal, bool, Decimal, Decimal, Decimal]] = []
+            # (iva_pct, desc_line, rec_line_flag, irpf_pct, qty, price) por línea
+            for item in typed_items:
+                idx = item.indice
+                qty = item.cantidad
+                price = item.precio_unitario
+                d_line = item.descuento_linea
+                iva_pct = item.tipo_iva_porcentaje
                 bruto = quantize_financial(qty * price)
                 net = quantize_financial(bruto - d_line)
                 if net < 0 and not allow_negative_bases:
                     raise FinancialDomainError(f"Línea {idx}: importe neto negativo tras descuentos.")
-                re_flag = bool(raw.get("recargo_equivalencia")) if raw.get("recargo_equivalencia") is not None else aplicar_recargo_equivalencia
+                re_flag = item.aplicar_recargo_equivalencia
 
                 line_nets.append(net)
-                meta.append((iva_pct, d_line, re_flag))
+                meta.append((iva_pct, d_line, re_flag, item.retencion_irpf_porcentaje, qty, price))
 
             # Importe cero (pro-bono / muestras): todo ceros coherentes
             total_net = quantize_financial(sum(line_nets, start=Decimal("0")))
@@ -313,23 +370,20 @@ class MathEngine:
                 zlines = tuple(
                     LineaTotalCalculada(
                         indice=i,
-                        cantidad=quantize_financial(items[i].get("cantidad") or items[i].get("qty") or 1),
-                        precio_unitario=quantize_financial(
-                            items[i].get("precio_unitario")
-                            or items[i].get("precio_pactado")
-                            or items[i].get("unit_price")
-                            or 0
-                        ),
+                        cantidad=quantize_financial(typed_items[i].cantidad),
+                        precio_unitario=quantize_financial(typed_items[i].precio_unitario),
                         base_imponible=Decimal("0.00"),
                         tipo_iva_porcentaje=meta[i][0],
                         descuento_linea=meta[i][1],
+                        retencion_irpf_porcentaje=meta[i][3],
                     )
-                    for i in range(len(items))
+                    for i in range(len(typed_items))
                 )
                 return InvoiceTotalsResult(
                     base_imponible_total=Decimal("0.00"),
                     cuota_iva_total=Decimal("0.00"),
                     cuota_recargo_equivalencia_total=Decimal("0.00"),
+                    cuota_retencion_irpf_total=Decimal("0.00"),
                     total_factura=Decimal("0.00"),
                     desglose_por_tipo=tuple(),
                     lineas=zlines,
@@ -362,27 +416,20 @@ class MathEngine:
             buckets: dict[str, Decimal] = {}
             cuotas_buckets: dict[str, Decimal] = {}
             re_for_bucket: dict[str, bool] = {}
+            irpf_buckets: dict[str, Decimal] = {}
             line_results: list[LineaTotalCalculada] = []
 
             for i, adj in enumerate(adjusted):
-                iva_pct, d_line, re_f = meta[i]
+                iva_pct, d_line, re_f, irpf_pct, qty_disp, p_disp = meta[i]
                 key = _iva_rate_key(iva_pct)
                 buckets[key] = buckets.get(key, Decimal("0")) + adj
                 # IVA por línea (ROUND_HALF_EVEN) y agregado por tipo.
                 line_vat = quantize_financial(adj * (iva_pct / Decimal("100")))
                 cuotas_buckets[key] = cuotas_buckets.get(key, Decimal("0")) + line_vat
+                line_irpf = quantize_financial(adj * (irpf_pct / Decimal("100")))
+                irpf_buckets[key] = irpf_buckets.get(key, Decimal("0")) + line_irpf
                 # RE por grupo: True si alguna línea del grupo lo pide
                 re_for_bucket[key] = re_for_bucket.get(key, False) or re_f
-                raw_it = items[i]
-                qty_disp = quantize_financial(
-                    raw_it.get("cantidad") if raw_it.get("cantidad") is not None else raw_it.get("qty") or 1
-                )
-                p_disp = quantize_financial(
-                    raw_it.get("precio_unitario")
-                    or raw_it.get("precio_pactado")
-                    or raw_it.get("unit_price")
-                    or 0
-                )
                 line_results.append(
                     LineaTotalCalculada(
                         indice=i,
@@ -391,6 +438,7 @@ class MathEngine:
                         base_imponible=adj,
                         tipo_iva_porcentaje=iva_pct,
                         descuento_linea=d_line,
+                        retencion_irpf_porcentaje=irpf_pct,
                     )
                 )
 
@@ -398,6 +446,7 @@ class MathEngine:
             desglose_list: list[DesgloseTipoIva] = []
             cuota_sum = Decimal("0")
             re_sum = Decimal("0")
+            irpf_sum = Decimal("0")
 
             for key, raw_base in sorted(buckets.items(), key=lambda x: x[0]):
                 b_g = quantize_financial(raw_base)
@@ -412,31 +461,36 @@ class MathEngine:
                 )
                 cuota_sum += cuota
                 re_sum += re_cuota
+                irpf_cuota = quantize_financial(irpf_buckets.get(key, Decimal("0.00")))
+                irpf_sum += irpf_cuota
                 desglose_list.append(
                     DesgloseTipoIva(
                         tipo_iva_porcentaje=iva_pct,
                         base_imponible=b_g,
                         cuota_iva=cuota,
                         cuota_recargo_equivalencia=re_cuota,
+                        cuota_retencion_irpf=irpf_cuota,
                     )
                 )
 
             base_total = quantize_financial(base_total)
             cuota_sum = quantize_financial(cuota_sum)
             re_sum = quantize_financial(re_sum)
-            merged = quantize_financial(base_total + cuota_sum + re_sum)
-            # Coherencia: total = base + IVA + RE (misma cuantía)
+            irpf_sum = quantize_financial(irpf_sum)
+            merged = quantize_financial(base_total + cuota_sum + re_sum - irpf_sum)
+            # Coherencia: total = base + IVA + RE - IRPF (misma cuantía)
             ajuste = Decimal("0.00")
-            check = abs(merged - (base_total + cuota_sum + re_sum))
+            check = abs(merged - (base_total + cuota_sum + re_sum - irpf_sum))
             if check >= Decimal("0.001"):
                 raise RoundingIntegrityError(
-                    "Rounding integrity check failed: abs(total - (base + iva + re)) >= 0.001"
+                    "Rounding integrity check failed: abs(total - (base + iva + re - irpf)) >= 0.001"
                 )
 
             return InvoiceTotalsResult(
                 base_imponible_total=decimal_to_db_numeric(base_total),
                 cuota_iva_total=decimal_to_db_numeric(cuota_sum),
                 cuota_recargo_equivalencia_total=decimal_to_db_numeric(re_sum),
+                cuota_retencion_irpf_total=decimal_to_db_numeric(irpf_sum),
                 total_factura=decimal_to_db_numeric(merged),
                 desglose_por_tipo=tuple(desglose_list),
                 lineas=tuple(line_results),
@@ -446,10 +500,9 @@ class MathEngine:
 
     @staticmethod
     def calculate_invoice_totals(
-        items: list[dict[str, Any]],
+        items: list[InvoiceLineInput] | list[dict[str, Any]],
         global_discount: Decimal = Decimal("0"),
         *,
-        aplicar_recargo_equivalencia: bool = False,
         allow_negative_bases: bool = False,
     ) -> InvoiceTotalsResult:
         """
@@ -458,6 +511,5 @@ class MathEngine:
         return MathEngine.calculate_totals(
             items,
             global_discount=global_discount,
-            aplicar_recargo_equivalencia=aplicar_recargo_equivalencia,
             allow_negative_bases=allow_negative_bases,
         )

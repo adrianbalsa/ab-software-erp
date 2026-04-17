@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from app.core.fiscal_logic import fiscal_amount_string_two_decimals
+
 GENESIS_HASH = "0" * 64
 
 
@@ -27,11 +29,9 @@ def generate_invoice_hash(invoice_data: dict[str, Any], previous_hash: str) -> s
     ).strip()
     emisor = str(invoice_data.get("emisor") or invoice_data.get("nif_emisor") or "").strip()
     receptor = str(invoice_data.get("receptor") or invoice_data.get("nif_receptor") or "").strip()
-    try:
-        total = float(invoice_data.get("importe_total") or invoice_data.get("total_factura") or 0.0)
-    except (TypeError, ValueError):
-        total = 0.0
-    total_norm = f"{total:.2f}"
+    total_norm = fiscal_amount_string_two_decimals(
+        invoice_data.get("importe_total") or invoice_data.get("total_factura")
+    )
 
     prev = str(previous_hash or "").strip() or GENESIS_HASH
     payload = f"{factura_id}|{fecha_hora}|{emisor}|{receptor}|{total_norm}|{prev}"

@@ -13,13 +13,16 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-import anyio
+import inspect
 from starlette.background import BackgroundTasks
+from supabase.client import AsyncClient
 
 from app.core.config import get_settings
+from app.core.arq_queue import enqueue_submit_to_aeat
 from app.core.verifactu import GENESIS_HASH, generate_invoice_hash
 from app.core.fiscal_logic import compute_invoice_fingerprint, totals_coherent
 from app.core.math_engine import (
+    InvoiceTotalsResult,
     MathEngine,
     as_float_fiat,
     decimal_to_db_numeric,
@@ -55,7 +58,6 @@ from app.services.aeat_xml_service import generar_xml_alta_factura
 from app.services.auditoria_service import AuditoriaService
 from app.services.eco_service import co2_emitido_desde_porte_row
 from app.services.report_service import _parse_porte_lineas_snapshot
-from app.services.aeat_client import send_to_aeat
 from app.services.verifactu_service import VerifactuService
 from app.core.crypto import pii_crypto
 from app.core.esg_engine import esg_certificate_co2_vs_euro_iii
@@ -120,6 +122,65 @@ def _factura_pk(value: Any) -> int:
     if isinstance(value, int):
         return value
     return int(value)
+
+
+def _desglose_por_tipo_to_jsonb_list(inv_tot: InvoiceTotalsResult) -> list[dict[str, str]]:
+    return [
+        {
+            "tipo_iva_porcentaje": str(decimal_to_db_numeric(d.tipo_iva_porcentaje)),
+            "base_imponible": str(decimal_to_db_numeric(d.base_imponible)),
+            "cuota_iva": str(decimal_to_db_numeric(d.cuota_iva)),
+            "cuota_recargo_equivalencia": str(decimal_to_db_numeric(d.cuota_recargo_equivalencia)),
+            "cuota_retencion_irpf": str(decimal_to_db_numeric(d.cuota_retencion_irpf)),
+        }
+        for d in inv_tot.desglose_por_tipo
+    ]
+
+
+def _invoice_totals_from_porte_snapshot(
+    fr: dict[str, Any],
+    *,
+    global_discount: Decimal = Decimal("0"),
+    aplicar_recargo_equivalencia: bool = False,
+) -> InvoiceTotalsResult:
+    lines = _parse_porte_lineas_snapshot(fr.get("porte_lineas_snapshot"))
+    if not lines:
+        raise ValueError("Factura sin líneas en porte_lineas_snapshot")
+    base_o = to_decimal(fr.get("base_imponible") or 0)
+    cuota_o = to_decimal(fr.get("cuota_iva") or 0)
+    if base_o > 0 and cuota_o >= 0:
+        iva_pct_fallback = quantize_financial(cuota_o / base_o * Decimal("100"))
+    else:
+        iva_pct_fallback = Decimal("21.00")
+    items: list[dict[str, Any]] = []
+    for ln in lines:
+        items.append(
+            {
+                "cantidad": Decimal("1"),
+                "precio_unitario": to_decimal(ln.get("precio_pactado") or 0),
+                "tipo_iva_porcentaje": quantize_financial(
+                    ln.get("tipo_iva_porcentaje")
+                    if ln.get("tipo_iva_porcentaje") is not None
+                    else iva_pct_fallback
+                ),
+                "aplicar_recargo_equivalencia": bool(
+                    ln.get("aplicar_recargo_equivalencia")
+                    if ln.get("aplicar_recargo_equivalencia") is not None
+                    else ln.get("recargo_equivalencia")
+                    if ln.get("recargo_equivalencia") is not None
+                    else aplicar_recargo_equivalencia
+                ),
+                "retencion_irpf_porcentaje": quantize_financial(
+                    ln.get("retencion_irpf_porcentaje") or 0
+                ),
+                "tipo_no_sujecion": ln.get("tipo_no_sujecion"),
+                "motivo_exencion": ln.get("motivo_exencion"),
+            }
+        )
+    return MathEngine.calculate_totals(
+        MathEngine.normalize_items(items),
+        global_discount=quantize_financial(global_discount),
+    )
 
 
 def _fecha_para_finalizar_iso(row: dict[str, Any]) -> str:
@@ -240,26 +301,37 @@ def _pg_finalizar_factura_verifactu(*, empresa_id: str, factura_id: int) -> dict
                 float(r.get("total_factura") or 0.0),
                 huella_hash=hr,
             )
+            desglose_sql = ""
+            up_params: dict[str, Any] = {
+                "fp": fp,
+                "pfp": prev_fp,
+                "url": url,
+                "fid": int(factura_id),
+                "eid": str(empresa_id),
+            }
+            try:
+                inv_tot_fin = _invoice_totals_from_porte_snapshot(
+                    r, global_discount=Decimal("0"), aplicar_recargo_equivalencia=False
+                )
+                up_params["dsp"] = json.dumps(_desglose_por_tipo_to_jsonb_list(inv_tot_fin))
+                desglose_sql = ", desglose_por_tipo = CAST(:dsp AS jsonb)"
+            except ValueError:
+                pass
             out_m = conn.execute(
                 text(
-                    """
+                    f"""
                     UPDATE public.facturas
                     SET fingerprint = CAST(:fp AS text),
                         prev_fingerprint = CAST(:pfp AS text),
                         qr_content = CAST(:url AS text),
                         qr_code_url = CAST(:url AS text),
                         is_finalized = true
+                        {desglose_sql}
                     WHERE id = :fid AND empresa_id = CAST(:eid AS uuid)
                     RETURNING *
                     """
                 ),
-                {
-                    "fp": fp,
-                    "pfp": prev_fp,
-                    "url": url,
-                    "fid": int(factura_id),
-                    "eid": str(empresa_id),
-                },
+                up_params,
             ).mappings().first()
             if out_m is None:
                 raise ValueError("No se pudo actualizar la factura (fila no encontrada tras candado)")
@@ -271,10 +343,37 @@ def _pg_finalizar_factura_verifactu(*, empresa_id: str, factura_id: int) -> dict
 
 
 class FacturasService:
-    def __init__(self, db: SupabaseAsync) -> None:
+    async def _mark_factura_pending_envio(self, *, empresa_id: str, factura_id: int) -> None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await self._db.execute(
+            self._db.table("facturas")
+            .update(
+                {
+                    "aeat_sif_estado": "pendiente_envio",
+                    "aeat_sif_actualizado_en": now_iso,
+                }
+            )
+            .eq("id", int(factura_id))
+            .eq("empresa_id", empresa_id)
+        )
+
+    def __init__(self, db: SupabaseAsync | AsyncClient) -> None:
         self._db = db
         self._audit = AuditoriaService(db)
         self._verifactu = VerifactuService(db)
+
+    async def _execute_native(self, query: Any) -> Any:
+        """
+        Ejecuta consultas para ambos backends:
+        - wrapper histórico (`SupabaseAsync`) usando `db.execute(...)`
+        - `AsyncClient` nativo usando `await query.execute()`
+        """
+        if isinstance(self._db, SupabaseAsync):
+            return await self._db.execute(query)
+        result = query.execute()
+        if inspect.isawaitable(result):
+            return await result
+        return result
 
     async def _get_last_fingerprint_hash(self, *, empresa_id: str) -> str:
         """
@@ -318,7 +417,7 @@ class FacturasService:
         )
         if estado_aeat is not None and str(estado_aeat).strip():
             q = q.eq("aeat_sif_estado", str(estado_aeat).strip())
-        res: Any = await self._db.execute(q)
+        res: Any = await self._execute_native(q)
         rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
         out: list[FacturaOut] = []
         for row in rows:
@@ -335,7 +434,7 @@ class FacturasService:
     async def get_factura(self, *, empresa_id: str | UUID, factura_id: int) -> FacturaOut:
         """Una factura por PK y empresa (misma desencriptación NIF que el listado)."""
         eid = _as_empresa_id_str(empresa_id)
-        res: Any = await self._db.execute(
+        res: Any = await self._execute_native(
             self._db.table("facturas").select("*").eq("id", factura_id).eq("empresa_id", eid).limit(1)
         )
         rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
@@ -421,18 +520,24 @@ class FacturasService:
             float(r.get("total_factura") or 0.0),
             huella_hash=hr,
         )
+        upd_fin: dict[str, Any] = {
+            "fingerprint": fp,
+            "prev_fingerprint": prev_fp,
+            "qr_content": url,
+            "qr_code_url": url,
+            "is_finalized": True,
+        }
+        try:
+            inv_tot_fin = _invoice_totals_from_porte_snapshot(
+                r, global_discount=Decimal("0"), aplicar_recargo_equivalencia=False
+            )
+            upd_fin["desglose_por_tipo"] = _desglose_por_tipo_to_jsonb_list(inv_tot_fin)
+        except ValueError:
+            pass
         try:
             await self._db.execute(
                 self._db.table("facturas")
-                .update(
-                    {
-                        "fingerprint": fp,
-                        "prev_fingerprint": prev_fp,
-                        "qr_content": url,
-                        "qr_code_url": url,
-                        "is_finalized": True,
-                    }
-                )
+                .update(upd_fin)
                 .eq("id", factura_id)
                 .eq("empresa_id", eid)
             )
@@ -466,7 +571,7 @@ class FacturasService:
         fid = int(factura_id)
         eng = get_engine()
         if eng is not None:
-            row_out = await anyio.to_thread.run_sync(
+            row_out = await asyncio.to_thread(
                 lambda: _pg_finalizar_factura_verifactu(empresa_id=eid, factura_id=fid)
             )
         else:
@@ -533,9 +638,7 @@ class FacturasService:
         if isinstance(raw_nif_emisor_merged, str) and raw_nif_emisor_merged.strip():
             row_merged["nif_emisor"] = pii_crypto.decrypt_pii(raw_nif_emisor_merged) or raw_nif_emisor_merged
         settings_vf = get_settings()
-        if background_tasks is not None and settings_vf.AEAT_VERIFACTU_ENABLED:
-            background_tasks.add_task(self._bg_enviar_aeat_tras_finalizar, eid, dict(row_merged))
-        else:
+        if settings_vf.AEAT_VERIFACTU_ENABLED:
             row_merged = await self._enviar_aeat_tras_finalizar(empresa_id=eid, factura_row=row_merged)
 
         if background_tasks is not None:
@@ -562,7 +665,7 @@ class FacturasService:
         empresa_id: str,
         factura_row: dict[str, Any],
     ) -> dict[str, Any]:
-        """Tras ``is_finalized``, remisión opcional a la AEAT si está habilitada en configuración."""
+        """Tras ``is_finalized``, encola remisión AEAT (egress controlado por worker arq)."""
         if not factura_row.get("is_finalized"):
             return factura_row
         if not str(factura_row.get("fingerprint") or "").strip():
@@ -574,17 +677,26 @@ class FacturasService:
             fid = int(factura_row.get("id") or 0)
             if fid < 1:
                 return factura_row
-            return await send_to_aeat(
-                self._db,
-                invoice_id=fid,
+            job_id = await enqueue_submit_to_aeat(
+                factura_id=fid,
                 empresa_id=empresa_id,
-                settings=settings,
             )
+            await self._mark_factura_pending_envio(empresa_id=empresa_id, factura_id=fid)
+            await self._audit.try_log(
+                empresa_id=empresa_id,
+                accion="ENQUEUE_AEAT_SUBMISSION",
+                tabla="facturas",
+                registro_id=str(fid),
+                cambios={"job_id": job_id, "source": "finalizar_factura_verifactu"},
+            )
+            factura_row["aeat_sif_estado"] = "pendiente_envio"
+            factura_row["aeat_queue_job_id"] = job_id
+            return factura_row
         except Exception:
             return factura_row
 
     async def _bg_enviar_aeat_tras_finalizar(self, eid: str, factura_row: dict[str, Any]) -> None:
-        """Ejecutado vía FastAPI BackgroundTasks: no bloquea la respuesta HTTP tras sellar la factura."""
+        """Compatibilidad legacy: encola envío AEAT desde background."""
         try:
             await self._enviar_aeat_tras_finalizar(empresa_id=eid, factura_row=dict(factura_row))
         except Exception:
@@ -598,8 +710,8 @@ class FacturasService:
         empresa_id: str | UUID,
         factura_id: int,
         usuario_id: str | None = None,
-    ) -> FacturaOut:
-        """Reintenta el envío SIF a la AEAT (errores técnicos o rechazo corregible en certificado/URL)."""
+    ) -> dict[str, Any]:
+        """Encola un reintento SIF a AEAT y devuelve metadatos de cola."""
         eid = _as_empresa_id_str(empresa_id)
         fid = int(factura_id)
         settings = get_settings()
@@ -619,43 +731,28 @@ class FacturasService:
             raise ValueError("Solo se puede enviar a la AEAT una factura finalizada.")
         if not str(fr.get("fingerprint") or "").strip():
             raise ValueError("La factura no tiene huella fingerprint de registro.")
-        cid = str(fr.get("cliente") or "").strip()
-        cli_det: ClienteOut | None = None
-        if cid:
-            try:
-                rcli: Any = await self._db.execute(
-                    filter_not_deleted(
-                        self._db.table("clientes").select("*").eq("empresa_id", eid).eq("id", cid).limit(1)
-                    )
-                )
-                crd: list[dict[str, Any]] = (rcli.data or []) if hasattr(rcli, "data") else []
-                if crd:
-                    if isinstance(crd[0].get("nif"), str) and crd[0].get("nif", "").strip():
-                        crd0_nif = str(crd[0]["nif"])
-                        crd[0]["nif"] = pii_crypto.decrypt_pii(crd0_nif) or crd0_nif
-                    cli_det = ClienteOut(**crd[0])
-            except Exception:
-                pass
-
-        merged = await send_to_aeat(
-            self._db,
-            invoice_id=fid,
+        job_id = await enqueue_submit_to_aeat(
+            factura_id=fid,
             empresa_id=eid,
-            settings=settings,
+            usuario_id=usuario_id,
         )
-        raw_nif_emisor_merged = merged.get("nif_emisor")
-        if isinstance(raw_nif_emisor_merged, str) and raw_nif_emisor_merged.strip():
-            merged["nif_emisor"] = (
-                pii_crypto.decrypt_pii(raw_nif_emisor_merged) or raw_nif_emisor_merged
-            )
+        await self._mark_factura_pending_envio(empresa_id=eid, factura_id=fid)
         await self._audit.try_log(
             empresa_id=eid,
             accion="REENVIAR_AEAT_SIF",
             tabla="facturas",
             registro_id=str(fid),
-            cambios={"aeat_sif_estado": merged.get("aeat_sif_estado")},
+            cambios={
+                "aeat_sif_estado": "pendiente_envio",
+                "job_id": job_id,
+            },
         )
-        return FacturaOut.model_validate({**merged, "cliente_detalle": cli_det})
+        return {
+            "status": "queued",
+            "job_id": job_id,
+            "factura_id": fid,
+            "aeat_sif_estado": "pendiente_envio",
+        }
 
     async def exportar_aeat_inspeccion_zip(self, *, empresa_id: str | UUID) -> tuple[bytes, str, int]:
         """
@@ -854,16 +951,18 @@ class FacturasService:
                 "cantidad": Decimal("1"),
                 "precio_unitario": to_decimal(r.get("precio_pactado") or 0),
                 "tipo_iva_porcentaje": quantize_financial(payload.iva_porcentaje),
+                "aplicar_recargo_equivalencia": False,
+                "retencion_irpf_porcentaje": Decimal("0"),
             }
             for r in portes_rows
         ]
-        inv_tot = MathEngine.calculate_totals(items_m)
+        inv_tot = MathEngine.calculate_totals(MathEngine.normalize_items(items_m))
         base_dec = inv_tot.base_imponible_total
         cuota_dec = inv_tot.cuota_iva_total
         total_dec = inv_tot.total_factura
-        base_imponible = float(decimal_to_db_numeric(base_dec))
-        cuota_iva = float(decimal_to_db_numeric(cuota_dec))
-        total_factura = float(decimal_to_db_numeric(total_dec))
+        base_imponible = decimal_to_db_numeric(base_dec)
+        cuota_iva = decimal_to_db_numeric(cuota_dec)
+        total_factura = decimal_to_db_numeric(total_dec)
         if not totals_coherent(base_imponible, cuota_iva, total_factura):
             raise ValueError(
                 "Incoherencia fiscal: base_imponible + cuota_iva no coincide con total_factura "
@@ -880,8 +979,11 @@ class FacturasService:
             porte_lineas_snapshot.append(
                 {
                     "porte_id": str(r.get("id") or ""),
-                    "precio_pactado": float(precio),
-                    "km_estimados": float(km),
+                    "precio_pactado": str(decimal_to_db_numeric(precio)),
+                    "km_estimados": str(decimal_to_db_numeric(km)),
+                    "tipo_iva_porcentaje": str(quantize_financial(payload.iva_porcentaje)),
+                    "aplicar_recargo_equivalencia": False,
+                    "retencion_irpf_porcentaje": str(Decimal("0.00")),
                     "fecha": str(r.get("fecha") or ""),
                     "origen": str(r.get("origen") or ""),
                     "destino": str(r.get("destino") or ""),
@@ -889,7 +991,7 @@ class FacturasService:
                     "bultos": r.get("bultos"),
                 }
             )
-        total_km_estimados_snapshot = float(round_fiat(km_acum))
+        total_km_estimados_snapshot = str(decimal_to_db_numeric(round_fiat(km_acum)))
         fecha_emision = date.today()
         fecha_iso = fecha_emision.isoformat()
 
@@ -982,9 +1084,9 @@ class FacturasService:
                 "num_factura": num_fact,
                 "numero_factura": num_fact,
                 "nif_emisor": pii_crypto.encrypt_pii(nif_emisor),
-                "total_factura": total_factura,
-                "base_imponible": base_imponible,
-                "cuota_iva": cuota_iva,
+                "total_factura": float(total_factura),
+                "base_imponible": float(base_imponible),
+                "cuota_iva": float(cuota_iva),
                 "fecha_emision": fecha_iso,
                 "numero_secuencial": eslabon.siguiente_secuencial,
                 "hash_anterior": eslabon.hash_anterior,
@@ -1001,7 +1103,8 @@ class FacturasService:
                 "bloqueado": True,
                 "is_finalized": False,
                 "porte_lineas_snapshot": porte_lineas_snapshot,
-                "total_km_estimados_snapshot": total_km_estimados_snapshot,
+                "total_km_estimados_snapshot": float(total_km_estimados_snapshot),
+                "desglose_por_tipo": _desglose_por_tipo_to_jsonb_list(inv_tot),
                 "estado_cobro": "emitida",
                 "payment_status": "PENDING",
             }
@@ -1762,7 +1865,7 @@ class FacturasService:
         factura_id: int,
     ) -> bytes:
         pdf_data = await self.get_factura_pdf_data(empresa_id=empresa_id, factura_id=factura_id)
-        return await anyio.to_thread.run_sync(_factura_pdf_data_to_pdf_bytes, pdf_data)
+        return await asyncio.to_thread(_factura_pdf_data_to_pdf_bytes, pdf_data)
 
     async def resolve_destinatario_email_factura(
         self,
@@ -1863,64 +1966,46 @@ class FacturasService:
                 "No se recalculan totales para preservar la cadena de inalterabilidad."
             )
 
-        lines = _parse_porte_lineas_snapshot(fr.get("porte_lineas_snapshot"))
-        if not lines:
-            raise ValueError("Factura sin líneas en porte_lineas_snapshot")
-
-        base_o = to_decimal(fr.get("base_imponible") or 0)
-        cuota_o = to_decimal(fr.get("cuota_iva") or 0)
-        if base_o > 0 and cuota_o >= 0:
-            iva_pct = quantize_financial(cuota_o / base_o * Decimal("100"))
-        else:
-            iva_pct = Decimal("21.00")
-
-        items: list[dict[str, Any]] = []
-        for ln in lines:
-            items.append(
-                {
-                    "cantidad": Decimal("1"),
-                    "precio_unitario": to_decimal(ln.get("precio_pactado") or 0),
-                    "tipo_iva_porcentaje": iva_pct,
-                }
-            )
-
-        tot = MathEngine.calculate_totals(
-            items,
-            global_discount=quantize_financial(global_discount),
+        tot = _invoice_totals_from_porte_snapshot(
+            fr,
+            global_discount=global_discount,
             aplicar_recargo_equivalencia=aplicar_recargo_equivalencia,
         )
 
         desglose = [
             {
-                "tipo_iva_porcentaje": float(decimal_to_db_numeric(d.tipo_iva_porcentaje)),
-                "base_imponible": float(decimal_to_db_numeric(d.base_imponible)),
-                "cuota_iva": float(decimal_to_db_numeric(d.cuota_iva)),
-                "cuota_recargo_equivalencia": float(decimal_to_db_numeric(d.cuota_recargo_equivalencia)),
+                "tipo_iva_porcentaje": decimal_to_db_numeric(d.tipo_iva_porcentaje),
+                "base_imponible": decimal_to_db_numeric(d.base_imponible),
+                "cuota_iva": decimal_to_db_numeric(d.cuota_iva),
+                "cuota_recargo_equivalencia": decimal_to_db_numeric(d.cuota_recargo_equivalencia),
+                "cuota_retencion_irpf": decimal_to_db_numeric(d.cuota_retencion_irpf),
             }
             for d in tot.desglose_por_tipo
         ]
         lineas_out = [
             {
                 "indice": x.indice,
-                "cantidad": float(decimal_to_db_numeric(x.cantidad)),
-                "precio_unitario": float(decimal_to_db_numeric(x.precio_unitario)),
-                "base_imponible": float(decimal_to_db_numeric(x.base_imponible)),
-                "tipo_iva_porcentaje": float(decimal_to_db_numeric(x.tipo_iva_porcentaje)),
-                "descuento_linea": float(decimal_to_db_numeric(x.descuento_linea)),
+                "cantidad": decimal_to_db_numeric(x.cantidad),
+                "precio_unitario": decimal_to_db_numeric(x.precio_unitario),
+                "base_imponible": decimal_to_db_numeric(x.base_imponible),
+                "tipo_iva_porcentaje": decimal_to_db_numeric(x.tipo_iva_porcentaje),
+                "descuento_linea": decimal_to_db_numeric(x.descuento_linea),
+                "retencion_irpf_porcentaje": decimal_to_db_numeric(x.retencion_irpf_porcentaje),
             }
             for x in tot.lineas
         ]
 
         return FacturaRecalculateOut(
             factura_id=fid,
-            base_imponible=float(decimal_to_db_numeric(tot.base_imponible_total)),
-            cuota_iva=float(decimal_to_db_numeric(tot.cuota_iva_total)),
-            cuota_recargo_equivalencia=float(decimal_to_db_numeric(tot.cuota_recargo_equivalencia_total)),
-            total_factura=float(decimal_to_db_numeric(tot.total_factura)),
+            base_imponible=decimal_to_db_numeric(tot.base_imponible_total),
+            cuota_iva=decimal_to_db_numeric(tot.cuota_iva_total),
+            cuota_recargo_equivalencia=decimal_to_db_numeric(tot.cuota_recargo_equivalencia_total),
+            cuota_retencion_irpf=decimal_to_db_numeric(tot.cuota_retencion_irpf_total),
+            total_factura=decimal_to_db_numeric(tot.total_factura),
             desglose_por_tipo=desglose,
             lineas=lineas_out,
-            ajuste_centimos=float(decimal_to_db_numeric(tot.ajuste_centimos)),
-            importe_descuento_global_aplicado=float(decimal_to_db_numeric(tot.importe_descuento_global_aplicado)),
+            ajuste_centimos=decimal_to_db_numeric(tot.ajuste_centimos),
+            importe_descuento_global_aplicado=decimal_to_db_numeric(tot.importe_descuento_global_aplicado),
         )
 
 

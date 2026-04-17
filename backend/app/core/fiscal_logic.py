@@ -3,10 +3,27 @@
 from __future__ import annotations
 
 import hashlib
-from decimal import Decimal
+from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 from typing import Any
 
 GENESIS_HASH = "0" * 64
+
+
+def fiscal_amount_string_two_decimals(value: Any) -> str:
+    """
+    Cadena de importe con exactamente dos decimales (ROUND_HALF_EVEN), sin pasar por ``float``,
+    para huellas VeriFactu y nodos ``Importe*`` / ``Cuota*`` en XML AEAT (coherencia con XAdES).
+    """
+    try:
+        if value is None:
+            d = Decimal("0.00")
+        elif isinstance(value, Decimal):
+            d = value.quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+        else:
+            d = Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+    except (InvalidOperation, ValueError, TypeError):
+        d = Decimal("0.00")
+    return f"{d:.2f}"
 
 # Tolerancia contable estándar para redondeos IVA (céntimos).
 DEFAULT_TOTAL_TOLERANCE_EUR = Decimal("0.01")
@@ -77,16 +94,9 @@ def compute_invoice_fingerprint(invoice_data: dict[str, Any], prev_hash: str) ->
         or ""
     ).strip()
     
-    try:
-        importe_total = float(
-            invoice_data.get("importe_total") 
-            or invoice_data.get("total_factura") 
-            or 0.0
-        )
-    except (TypeError, ValueError):
-        importe_total = 0.0
-    
-    importe_total_str = f"{importe_total:.2f}"
+    importe_total_str = fiscal_amount_string_two_decimals(
+        invoice_data.get("importe_total") or invoice_data.get("total_factura")
+    )
     
     prev = str(prev_hash or "").strip() or GENESIS_HASH
     
