@@ -3,8 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 from os import getenv
+from pathlib import Path
 from typing import FrozenSet, Optional
 from urllib.parse import parse_qsl, quote_plus, urlencode, urlparse, urlunparse
+
+from dotenv import load_dotenv
+
+_CURRENT_DIR = Path.cwd()
+load_dotenv(dotenv_path=_CURRENT_DIR / ".env")
+load_dotenv(dotenv_path=_CURRENT_DIR.parent / ".env")
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,7 +235,11 @@ def get_settings() -> Settings:
     supabase_key = _require_env("SUPABASE_KEY")
     supabase_anon_raw = getenv("SUPABASE_ANON_KEY")
     supabase_anon_key = (supabase_anon_raw.strip() if supabase_anon_raw and supabase_anon_raw.strip() else supabase_key)
-    supabase_service_key = getenv("SUPABASE_SERVICE_KEY") or supabase_key
+    supabase_service_key = (
+        getenv("SUPABASE_SERVICE_KEY")
+        or getenv("SUPABASE_SERVICE_ROLE_KEY")
+        or supabase_key
+    )
 
     supabase_jwks_url = (
         getenv("SUPABASE_JWKS_URL")
@@ -457,4 +468,8 @@ def get_settings() -> Settings:
         AEAT_VERIFACTU_XSD_VALIDATE_REQUEST=aeat_xsd_validate_req,
         AEAT_VERIFACTU_SUMINISTRO_LR_XSD_URL=aeat_lr_xsd,
     )
+
+
+# Backward-compatible module-level settings instance.
+settings = get_settings()
 
