@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import logging
+from enum import Enum
 from typing import Any, Callable
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status, Request
+from supabase import AsyncClient
 
 from app.api.auth_token import get_access_token
+from app.core.supabase_client import get_supabase_async_client
 from app.core.plans import (
     PLAN_ENTERPRISE,
     PLAN_PRO,
@@ -20,7 +23,7 @@ from app.db import supabase as supabase_db
 from app.db.supabase import SupabaseAsync
 from app.schemas.flota import FlotaVehiculoIn
 from app.schemas.user import UserOut
-from app.models.auth import UserRole
+from app.models.enums import UserRole, normalize_user_role
 from app.services.auth_service import AuthService
 from app.services.clientes_service import ClientesService
 from app.services.refresh_token_service import RefreshTokenService
@@ -54,24 +57,6 @@ from app.services.bi_service import BiService
 _deps_log = logging.getLogger(__name__)
 
 
-def _normalize_role(raw: str) -> UserRole:
-    v = str(raw or "").strip().lower()
-    mapping = {
-        "owner": UserRole.ADMIN,
-        "admin": UserRole.ADMIN,
-        "gestor": UserRole.GESTOR,
-        "traffic_manager": UserRole.GESTOR,
-        "transportista": UserRole.TRANSPORTISTA,
-        "driver": UserRole.TRANSPORTISTA,
-        "cliente": UserRole.CLIENTE,
-        "developer": UserRole.DEVELOPER,
-        "superadmin": UserRole.SUPERADMIN,
-    }
-    if v in mapping:
-        return mapping[v]
-    raise ValueError(f"Rol no válido: {raw!r}")
-
-
 async def get_supabase(
     token: str = Depends(get_access_token),
 ) -> SupabaseAsync:
@@ -84,6 +69,13 @@ async def get_supabase(
 
 async def get_db(supabase: SupabaseAsync = Depends(get_supabase)) -> SupabaseAsync:
     return supabase
+
+
+async def get_async_db(token: str = Depends(get_access_token)) -> AsyncClient:
+    """
+    AsyncClient nativo con JWT por request (RLS por usuario vía Authorization header).
+    """
+    return await get_supabase_async_client(access_token=token)
 
 
 async def get_db_admin() -> SupabaseAsync:
@@ -157,6 +149,10 @@ async def get_clientes_service(db: SupabaseAsync = Depends(get_db)) -> ClientesS
 
 
 async def get_facturas_service(db: SupabaseAsync = Depends(get_db)) -> FacturasService:
+    return FacturasService(db)
+
+
+async def get_facturas_service_async(db: AsyncClient = Depends(get_async_db)) -> FacturasService:
     return FacturasService(db)
 
 
@@ -300,9 +296,16 @@ async def get_current_user(
 
     jwt_role = payload.get("role")
     if jwt_role is not None and str(jwt_role).strip():
+        normalized_jwt_role = str(jwt_role).strip().lower()
+        # Supabase access tokens typically carry role=authenticated.
+        if normalized_jwt_role not in {"authenticated", "service_role"}:
+            raise credentials_exc
+
+    role_claim_for_match = payload.get("app_role") or payload.get("user_role")
+    if role_claim_for_match is not None and str(role_claim_for_match).strip():
         try:
-            expected_role = _normalize_role(str(jwt_role))
-        except ValueError:
+            expected_role = normalize_user_role(str(role_claim_for_match))
+        except Exception:
             raise credentials_exc
         if user_out.role != expected_role:
             raise credentials_exc
@@ -310,6 +313,26 @@ async def get_current_user(
     await auth_service.ensure_empresa_context(empresa_id=user_out.empresa_id)
     await auth_service.ensure_rbac_context(user=user_out)
     return user_out
+
+
+def _normalize_role(role: str | Enum) -> UserRole:
+    if isinstance(role, UserRole):
+        return role
+
+    candidate = role.value if isinstance(role, Enum) else role
+    if not isinstance(candidate, str):
+        raise TypeError("Role must be a string or Enum value")
+
+    normalized = candidate.strip()
+    if not normalized:
+        raise ValueError("Role cannot be empty")
+
+    # Accept enum member names (e.g. "ADMIN") and values (e.g. "admin").
+    upper_name = normalized.upper()
+    if upper_name in UserRole.__members__:
+        return UserRole[upper_name]
+
+    return normalize_user_role(normalized.lower())
 
 
 class RoleChecker:
@@ -326,7 +349,7 @@ class RoleChecker:
         if current_user.role not in self.allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Acceso denegado: Privilegios insuficientes.",
+                detail="Not enough privileges",
             )
         return current_user
 

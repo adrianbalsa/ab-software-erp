@@ -6,7 +6,7 @@ from uuid import UUID
 
 from app.core.config import get_settings
 from app.core.rbac import normalize_rbac_role
-from app.models.auth import normalize_user_role
+from app.models.enums import normalize_user_role
 from app.core.security import hash_password_argon2id, verify_password_against_stored
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserInDB, UserOut
