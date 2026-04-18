@@ -499,7 +499,7 @@ export default function PortesPage() {
           <p className="text-sm text-slate-500 mt-1">
             Origen y destino en texto; si dejas los km en blanco, el backend calcula la
             distancia con Google Distance Matrix (clave{" "}
-            <code className="text-xs bg-slate-100 px-1 rounded">MAPS_API_KEY</code>).
+            <code className="text-xs bg-slate-100 px-1 rounded">Maps_API_KEY</code>).
           </p>
           {formError && (
             <p

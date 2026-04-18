@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import time
 from typing import Any
 from uuid import UUID
 
-import anyio
 import httpx
 
+from app.core.config import get_settings
 from app.db.supabase import SupabaseAsync
 from app.services.geo_service import GeoBatchCache, GeoService, normalize_addr, route_cache_key
 
@@ -77,12 +76,7 @@ class MapsService:
 
     @staticmethod
     def maps_api_key() -> str | None:
-        return (
-            os.getenv("Maps_API_KEY")
-            or os.getenv("MAPS_API_KEY")
-            or os.getenv("GOOGLE_MAPS_API_KEY")
-            or ""
-        ).strip() or None
+        return get_settings().maps_api_key
 
     async def get_distance_km(
         self,
@@ -117,7 +111,7 @@ class MapsService:
         api_key = self.maps_api_key()
         if not api_key:
             raise ValueError(
-                "MAPS_API_KEY no configurada: indique km_estimados manualmente o defina la clave de Google Maps"
+                "Maps_API_KEY no configurada: indique km_estimados manualmente o defina la clave de Google Maps"
             )
 
         km, _duration_min = await self._fetch_distance_matrix(
@@ -216,7 +210,7 @@ class MapsService:
         api_key = self.maps_api_key()
         if not api_key:
             raise ValueError(
-                "MAPS_API_KEY no configurada: indique km_estimados manualmente o defina la clave de Google Maps"
+                "Maps_API_KEY no configurada: indique km_estimados manualmente o defina la clave de Google Maps"
             )
 
         km, duration_min = await self._fetch_distance_matrix(
@@ -365,12 +359,12 @@ class MapsService:
         api_key = self.maps_api_key()
         if not api_key:
             raise ValueError(
-                "Maps_API_KEY / MAPS_API_KEY no configurada: indique km manualmente o defina la clave de Google Maps"
+                "Maps_API_KEY no configurada: indique km manualmente o defina la clave de Google Maps"
             )
 
         wp = [w.strip() for w in (waypoints or []) if (w or "").strip()]
 
-        raw = await anyio.to_thread.run_sync(
+        raw = await asyncio.to_thread(
             _directions_api_sync,
             o,
             d,

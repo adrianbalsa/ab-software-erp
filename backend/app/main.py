@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette import status as starlette_status
 
 from app.api.routes import (
     admin,
@@ -67,11 +68,18 @@ from app.api.v1 import treasury as treasury_v1
 from app.api.v1 import verifactu as verifactu_v1
 from app.api.v1 import webhooks as webhooks_v1
 from app.api.v1 import webhooks_gocardless as webhooks_gocardless_v1
-from app.core.config import get_settings
-from app.core.rate_limit import SkipOptionsSlowAPIMiddleware, limiter, rate_limit_exceeded_handler
+from app.core.config import ConfigError, get_settings
+from app.core.arq_queue import close_arq_redis_pool
+from app.core.rate_limit import (
+    SkipOptionsSlowAPIMiddleware,
+    limiter,
+    rate_limit_exceeded_handler,
+    warmup_rate_limit_backend,
+)
 from app.middleware.health_bypass import HealthCheckBypassMiddleware
 from app.middleware.login_debug_print import LoginDebugPrintMiddleware
 from app.middleware.json_access_log import JsonAccessLogMiddleware
+from app.middleware.audit_log_middleware import AuditLogMiddleware
 from app.middleware.fiscal_rate_limit_middleware import FiscalVerifactuRateLimitMiddleware
 from app.middleware.rate_limit_middleware import AuthLoginRateLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -112,6 +120,12 @@ def create_app() -> FastAPI:
 
     configure_app_logging()
     settings = get_settings()
+    # Defensa en profundidad: en producción ``get_settings()`` ya exige ``DATABASE_URL`` explícita.
+    if settings.ENVIRONMENT == "production" and not (settings.DATABASE_URL or "").strip():
+        raise ConfigError(
+            "DATABASE_URL resuelta vacía en producción: se requiere Postgres directo para "
+            "candados transaccionales VeriFactu y coherencia multi-réplica."
+        )
 
     app = FastAPI(
         title=API_TITLE,
@@ -160,6 +174,8 @@ def create_app() -> FastAPI:
     app.add_middleware(SlowRequestLogMiddleware)
     app.add_middleware(SkipOptionsSlowAPIMiddleware)
     app.add_middleware(AuthLoginRateLimitMiddleware)
+    # Debe ejecutarse antes que el resto de middlewares de rate limit para envolver
+    # envíos fiscales AEAT (ruta /api/v1/verifactu y finalizaciones de factura).
     app.add_middleware(FiscalVerifactuRateLimitMiddleware)
     # Lista explícita (sin "*"); GET /health se atiende antes vía HealthCheckBypassMiddleware.
     app.add_middleware(
@@ -170,8 +186,18 @@ def create_app() -> FastAPI:
     app.add_middleware(LoginDebugPrintMiddleware)
     # Contexto tenant/RBAC para reforzar RLS incluso si un endpoint olvida una dependencia.
     app.add_middleware(TenantRBACContextMiddleware)
+    # Trazabilidad automática de escrituras API en public.audit_logs (no bloqueante).
+    app.add_middleware(AuditLogMiddleware)
     # Debe ser el más externo: responde /health antes de TrustedHost y middlewares tenant/RBAC.
     app.add_middleware(HealthCheckBypassMiddleware)
+
+    @app.on_event("startup")
+    async def warmup_rate_limit_redis_connection() -> None:
+        await warmup_rate_limit_backend()
+
+    @app.on_event("shutdown")
+    async def close_async_redis_pools() -> None:
+        await close_arq_redis_pool()
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_login_debug(request: Request, exc: RequestValidationError):
@@ -191,7 +217,17 @@ def create_app() -> FastAPI:
     async def http_exception_handler(_request: Request, exc: HTTPException):
         if exc.status_code == 500:
             asyncio.create_task(notify_critical_error(short_traceback_from_exc(exc)))
-        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        detail: object = exc.detail
+        if exc.status_code == starlette_status.HTTP_403_FORBIDDEN and (
+            detail is None
+            or detail == ""
+            or (isinstance(detail, str) and not str(detail).strip())
+        ):
+            detail = "Not enough privileges"
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": jsonable_encoder(detail)},
+        )
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(_request: Request, exc: Exception):

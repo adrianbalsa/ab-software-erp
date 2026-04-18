@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated, Any, Optional
 from uuid import UUID
 
@@ -202,25 +203,27 @@ class FacturaRecalculateOut(BaseModel):
     """Desglose MathEngine (ROUND_HALF_EVEN a céntimo, coherente con ``math_engine``)."""
 
     factura_id: int
-    base_imponible: float
-    cuota_iva: float
-    cuota_recargo_equivalencia: float
-    total_factura: float
+    base_imponible: Decimal
+    cuota_iva: Decimal
+    cuota_recargo_equivalencia: Decimal
+    cuota_retencion_irpf: Decimal
+    total_factura: Decimal
     desglose_por_tipo: list[dict[str, Any]]
     lineas: list[dict[str, Any]]
-    ajuste_centimos: float
-    importe_descuento_global_aplicado: float
+    ajuste_centimos: Decimal
+    importe_descuento_global_aplicado: Decimal
 
     @field_serializer(
         "base_imponible",
         "cuota_iva",
         "cuota_recargo_equivalencia",
+        "cuota_retencion_irpf",
         "total_factura",
         "ajuste_centimos",
         "importe_descuento_global_aplicado",
         mode="plain",
     )
-    def _ser_recalc(self, v: float) -> float:
+    def _ser_recalc(self, v: Decimal) -> float:
         return as_float_fiat(v)
 
 

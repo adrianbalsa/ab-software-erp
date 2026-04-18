@@ -14,7 +14,7 @@ from app.api import deps
 from app.core.config import get_settings
 from app.core.http_client_meta import get_client_ip
 from app.core.security import TOKEN_TYPE, create_access_token
-from app.models.auth import normalize_user_role
+from app.models.enums import normalize_user_role
 from app.schemas.auth import ActiveSessionOut, OnboardingSetupIn, OnboardingSetupOut, Token
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserOut

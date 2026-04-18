@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api import deps
 from app.db.supabase import SupabaseAsync
-from app.middleware.rbac_middleware import require_admin
 from app.schemas.user import UserOut
 from app.services.compliance import anonymize_user_data
 from app.services.refresh_token_service import RefreshTokenService
@@ -32,7 +31,7 @@ async def _target_empresa_id(db: SupabaseAsync, *, user_id: str) -> str | None:
 @router.post("/compliance/anonymize/{user_id}")
 async def post_anonymize_user(
     user_id: UUID,
-    admin_user: UserOut = Depends(require_admin),
+    admin_user: UserOut = Depends(deps.require_admin_user),
     usuario_db_id: str | None = Depends(deps.get_usuario_db_id),
     db: SupabaseAsync = Depends(deps.get_db_admin),
     refresh_service: RefreshTokenService = Depends(deps.get_refresh_token_service_admin),

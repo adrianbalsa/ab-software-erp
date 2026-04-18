@@ -9,7 +9,6 @@ from decimal import Decimal, ROUND_HALF_EVEN
 from typing import Any
 from uuid import UUID
 
-import anyio
 from rapidfuzz import fuzz
 
 from app.db.supabase import SupabaseAsync
@@ -517,7 +516,7 @@ class ReconciliationService:
         cand_json = json.dumps(cand_payload, ensure_ascii=False)
 
         try:
-            raw = await anyio.to_thread.run_sync(
+            raw = await asyncio.to_thread(
                 self._llm_bank_orchestrator_sync,
                 transaction_json=tx_json,
                 candidates_json=cand_json,
@@ -666,7 +665,7 @@ class ReconciliationService:
         fac_json = json.dumps(fac_payload, ensure_ascii=False)
         mov_json = json.dumps(mov_payload, ensure_ascii=False)
 
-        raw = await anyio.to_thread.run_sync(
+        raw = await asyncio.to_thread(
             self._llm_conciliacion_sync,
             facturas_json=fac_json,
             movimientos_json=mov_json,

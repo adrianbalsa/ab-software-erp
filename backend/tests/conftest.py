@@ -77,6 +77,8 @@ def _test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ENCRYPTION_SECRET_KEY", raising=False)
     monkeypatch.delenv("BANK_TOKEN_ENCRYPTION_KEY", raising=False)
     monkeypatch.setenv("ENVIRONMENT", "development")
+    # Alineado con CI (`.github/workflows/deploy.yml`): SlowAPI sin Redis en tests.
+    monkeypatch.setenv("DEV_MODE", "true")
     monkeypatch.delenv("SENTRY_DSN", raising=False)
 
     from app.core.config import get_settings

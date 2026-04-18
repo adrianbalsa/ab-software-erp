@@ -10,6 +10,7 @@ from typing import Any
 
 from app.db.supabase import SupabaseAsync
 from app.core.crypto import pii_crypto
+from app.core.fiscal_logic import fiscal_amount_string_two_decimals
 from app.services.aeat_qr_service import (
     build_srei_verifactu_url,
     qr_png_bytes_from_url,
@@ -111,11 +112,10 @@ class VerifactuService:
         nif_e = VerifactuService._norm_nif(
             invoice_data.get("nif_emisor") or invoice_data.get("nif_empresa")
         )
-        try:
-            total = float(invoice_data.get("total_factura") or invoice_data.get("total") or 0.0)
-        except (TypeError, ValueError):
-            total = 0.0
-        tot = "{:.2f}".format(total)
+        tot = fiscal_amount_string_two_decimals(
+            invoice_data.get("total_factura") if invoice_data.get("total_factura") is not None
+            else invoice_data.get("total")
+        )
         prev = str(previous_hash or "").strip()
         if not prev:
             prev = VERIFACTU_INVOICE_GENESIS_HASH
@@ -129,7 +129,7 @@ class VerifactuService:
         nif_cliente: str,
         num_factura: str,
         fecha: str,
-        total: float,
+        total: Any,
         hash_anterior: str | None = None,
         tipo_factura: str | None = None,
         num_factura_rectificada: str | None = None,
@@ -147,7 +147,7 @@ class VerifactuService:
         nif_c = VerifactuService._norm_nif(nif_cliente)
         num = VerifactuService._norm_str(num_factura)
         fe = VerifactuService._norm_fecha_iso(fecha)
-        tot = "{:.2f}".format(float(total))
+        tot = fiscal_amount_string_two_decimals(total)
         hprev = VerifactuService._norm_hash_anterior(hash_anterior)
         cadena = nif_e + nif_c + num + fe + tot
         t_norm = VerifactuService._norm_str(tipo_factura).upper()
@@ -167,7 +167,7 @@ class VerifactuService:
         nif_cliente: str,
         num_factura: str,
         fecha: str,
-        total: float,
+        total: Any,
         hash_anterior: str | None = None,
         tipo_factura: str | None = None,
         num_factura_rectificada: str | None = None,
@@ -416,7 +416,7 @@ class VerifactuService:
             nif_cliente=nif_cliente,
             num_factura=num_factura,
             fecha=str(fecha_emision),
-            total=float(total_factura),
+            total=total_factura,
             hash_anterior=hash_anterior,
             tipo_factura=tipo_arg,
             num_factura_rectificada=rect_arg,
@@ -667,7 +667,7 @@ class VerifactuService:
                 nif_cliente=str(datos_factura["nif_cliente"]),
                 num_factura=str(datos_factura["num_factura"]),
                 fecha=str(datos_factura["fecha"]),
-                total=float(datos_factura["total"]),
+                total=datos_factura["total"],
                 hash_anterior=hash_anterior,
                 tipo_factura=datos_factura.get("tipo_factura"),
                 num_factura_rectificada=datos_factura.get("num_factura_rectificada"),

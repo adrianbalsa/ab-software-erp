@@ -1,4 +1,4 @@
-"""30/min por tenant en envíos fiscales AEAT (VeriFactu, finalizar, reenviar SIF)."""
+"""300/min por tenant en envíos fiscales AEAT (VeriFactu, finalizar, reenviar SIF)."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from app.core.rate_limit import fiscal_aeat_submission_path, fiscal_rate_limit_k
 
 _log = logging.getLogger(__name__)
 
-_limit_fiscal = parse("30 per minute")
+_limit_fiscal = parse("300 per minute")
 
 
 def _retry_after_seconds(strategy, limit_item, key: str) -> int:

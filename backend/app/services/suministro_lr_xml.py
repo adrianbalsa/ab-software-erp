@@ -5,11 +5,16 @@ Construcción de XML **SuministroLR** (``RegFactuSistemaFacturacion``): ``Cabece
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 from typing import Any, Mapping
 
 from lxml import etree
+
+from app.core.fiscal_logic import fiscal_amount_string_two_decimals
+from app.core.math_engine import RECARGO_EQUIVALENCIA_POR_IVA_PCT, quantize_financial
 
 
 NS_LR = (
@@ -20,6 +25,8 @@ NS_SF = (
     "https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/"
     "es/aeat/tike/cont/ws/SuministroInformacion.xsd"
 )
+
+_EXENTAS_AEAT = {f"E{i}" for i in range(1, 9)}
 
 
 def q(ns: str, local: str) -> str:
@@ -50,17 +57,129 @@ def fecha_iso_u_otra_a_dd_mm_yyyy(fecha: str) -> str:
     return "01-01-1970"
 
 
-def importe_12_2(value: float) -> str:
-    return f"{float(value):.2f}"
+def importe_12_2(value: Any) -> str:
+    """Compat: importe monetario AEAT con dos decimales (sin ``float`` intermedio)."""
+    return fiscal_amount_string_two_decimals(value)
 
 
-def tipo_impositivo_str(base: float, cuota: float) -> str:
-    if base and abs(base) > 1e-9:
+def _to_decimal_money(value: Any) -> Decimal:
+    if value is None:
+        return Decimal("0.00")
+    if isinstance(value, Decimal):
+        return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+    try:
+        return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal("0.00")
+
+
+def _infer_tipo_impositivo_pct(base_d: Decimal, cuota_d: Decimal) -> Decimal | None:
+    if base_d == Decimal("0"):
+        return None
+    try:
+        return quantize_financial((cuota_d / base_d) * Decimal("100"))
+    except Exception:
+        return None
+
+
+def _factura_desglose_rows(factura: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """
+    Filas de desglose para ``DetalleDesglose`` (máx. 12 en XSD).
+
+    Usa ``desglose_por_tipo`` persistido (JSON/JSONB: lista de dicts; importes como str o número).
+    Solo si falta o no aplica, una fila sintética desde totales (legacy / sin snapshot).
+    """
+    raw: Any = factura.get("desglose_por_tipo")
+    if isinstance(raw, str) and raw.strip():
         try:
-            return f"{round((cuota / base) * 100.0, 2):.2f}".rstrip("0").rstrip(".") or "0"
-        except (ZeroDivisionError, TypeError, ValueError):
-            pass
-    return "0"
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            raw = None
+    elif isinstance(raw, dict):
+        raw = [raw]
+    if isinstance(raw, list) and len(raw) > 0:
+        fe = factura.get("motivo_exencion")
+        ft = factura.get("tipo_no_sujecion")
+        out: list[dict[str, Any]] = []
+        for x in raw[:12]:
+            d = dict(x) if isinstance(x, dict) else {}
+            if fe and not str(d.get("motivo_exencion") or "").strip():
+                d["motivo_exencion"] = fe
+            if ft and not str(d.get("tipo_no_sujecion") or "").strip():
+                d["tipo_no_sujecion"] = ft
+            out.append(d)
+        return out
+
+    base = factura.get("base_imponible")
+    cuota = factura.get("cuota_iva")
+    tipo_explicit = factura.get("tipo_iva_porcentaje")
+    if tipo_explicit is None:
+        tipo_explicit = factura.get("iva_porcentaje")
+    b_d = _to_decimal_money(base)
+    c_d = _to_decimal_money(cuota)
+    tipo_d: Decimal | None
+    if tipo_explicit is not None and str(tipo_explicit).strip() != "":
+        tipo_d = quantize_financial(tipo_explicit)
+    else:
+        inferred = _infer_tipo_impositivo_pct(b_d, c_d)
+        tipo_d = inferred if inferred is not None else Decimal("0.00")
+
+    return [
+        {
+            "tipo_iva_porcentaje": tipo_d,
+            "base_imponible": base,
+            "cuota_iva": cuota,
+            "cuota_recargo_equivalencia": factura.get("cuota_recargo_equivalencia"),
+            "cuota_retencion_irpf": factura.get("cuota_retencion_irpf"),
+            "motivo_exencion": factura.get("motivo_exencion"),
+            "tipo_no_sujecion": factura.get("tipo_no_sujecion"),
+        }
+    ]
+
+
+def _iva_catalog_key(tipo_pct: Decimal) -> str:
+    return str(quantize_financial(tipo_pct))
+
+
+def _append_detalle_desglose(desglose_el: etree._Element, row: Mapping[str, Any]) -> None:
+    det = etree.SubElement(desglose_el, q(NS_SF, "DetalleDesglose"))
+    base_d = _to_decimal_money(row.get("base_imponible"))
+    cuota_d = _to_decimal_money(row.get("cuota_iva"))
+    re_cuota_d = _to_decimal_money(row.get("cuota_recargo_equivalencia"))
+
+    raw_tipo = row.get("tipo_iva_porcentaje")
+    tipo_pct_d: Decimal | None
+    if raw_tipo is not None and str(raw_tipo).strip() != "":
+        tipo_pct_d = quantize_financial(raw_tipo)
+    else:
+        inferred = _infer_tipo_impositivo_pct(base_d, cuota_d)
+        tipo_pct_d = inferred if inferred is not None else Decimal("0.00")
+
+    motivo = str(row.get("motivo_exencion") or "").strip().upper()
+    tipo_ns = str(row.get("tipo_no_sujecion") or "").strip().upper()
+
+    _txt(det, q(NS_SF, "Impuesto"), "01")
+    _txt(det, q(NS_SF, "ClaveRegimen"), "01")
+
+    if motivo in _EXENTAS_AEAT:
+        _txt(det, q(NS_SF, "OperacionExenta"), motivo)
+    elif tipo_ns in ("N1", "N2"):
+        _txt(det, q(NS_SF, "CalificacionOperacion"), tipo_ns)
+    else:
+        _txt(det, q(NS_SF, "CalificacionOperacion"), "S1")
+        _txt(det, q(NS_SF, "TipoImpositivo"), fiscal_amount_string_two_decimals(tipo_pct_d))
+
+    _txt(det, q(NS_SF, "BaseImponibleOimporteNoSujeto"), fiscal_amount_string_two_decimals(base_d))
+    _txt(det, q(NS_SF, "CuotaRepercutida"), fiscal_amount_string_two_decimals(cuota_d))
+
+    if re_cuota_d > Decimal("0"):
+        rk = _iva_catalog_key(tipo_pct_d)
+        tre_stat = RECARGO_EQUIVALENCIA_POR_IVA_PCT.get(rk, Decimal("0.00"))
+        if tre_stat > Decimal("0"):
+            _txt(det, q(NS_SF, "TipoRecargoEquivalencia"), fiscal_amount_string_two_decimals(tre_stat))
+            _txt(det, q(NS_SF, "CuotaRecargoEquivalencia"), fiscal_amount_string_two_decimals(re_cuota_d))
+    # Nota: el XSD VeriFactu no define nodo de retención IRPF; el importe total debe reflejar
+    # base + IVA + RE − IRPF vía ``ImporteTotal`` (Math Engine).
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,18 +245,7 @@ def build_registro_alta_unsigned(
     fecha_emision_raw = str(factura.get("fecha_emision") or "").strip()
     fecha_dd_mm_yyyy = fecha_iso_u_otra_a_dd_mm_yyyy(fecha_emision_raw)
 
-    try:
-        base = float(factura.get("base_imponible") or 0.0)
-    except (TypeError, ValueError):
-        base = 0.0
-    try:
-        cuota = float(factura.get("cuota_iva") or 0.0)
-    except (TypeError, ValueError):
-        cuota = 0.0
-    try:
-        total = float(factura.get("total_factura") or 0.0)
-    except (TypeError, ValueError):
-        total = 0.0
+    total = _to_decimal_money(factura.get("total_factura"))
 
     tipo = str(factura.get("tipo_factura") or "F1").strip().upper() or "F1"
     nif_emisor = str(factura.get("nif_emisor") or empresa.get("nif") or "").strip()
@@ -185,19 +293,16 @@ def build_registro_alta_unsigned(
         _txt(idd, q(NS_SF, "NombreRazon"), nombre_dest or nif_dest)
         _txt(idd, q(NS_SF, "NIF"), nif_dest.strip())
 
+    rows = _factura_desglose_rows(factura)
     desg = etree.SubElement(reg, q(NS_SF, "Desglose"))
-    det = etree.SubElement(desg, q(NS_SF, "DetalleDesglose"))
-    _txt(det, q(NS_SF, "Impuesto"), "01")
-    _txt(det, q(NS_SF, "ClaveRegimen"), "01")
-    _txt(det, q(NS_SF, "CalificacionOperacion"), "S1")
-    ti = tipo_impositivo_str(base, cuota)
-    if ti and ti != "0":
-        _txt(det, q(NS_SF, "TipoImpositivo"), ti)
-    _txt(det, q(NS_SF, "BaseImponibleOimporteNoSujeto"), importe_12_2(base))
-    _txt(det, q(NS_SF, "CuotaRepercutida"), importe_12_2(cuota))
+    cuota_total_acc = Decimal("0.00")
+    for r in rows:
+        _append_detalle_desglose(desg, r)
+        cuota_total_acc += _to_decimal_money(r.get("cuota_iva"))
+    cuota_total_acc = quantize_financial(cuota_total_acc)
 
-    _txt(reg, q(NS_SF, "CuotaTotal"), importe_12_2(cuota))
-    _txt(reg, q(NS_SF, "ImporteTotal"), importe_12_2(total))
+    _txt(reg, q(NS_SF, "CuotaTotal"), fiscal_amount_string_two_decimals(cuota_total_acc))
+    _txt(reg, q(NS_SF, "ImporteTotal"), fiscal_amount_string_two_decimals(total))
 
     enc = etree.SubElement(reg, q(NS_SF, "Encadenamiento"))
     if registro_anterior is not None:

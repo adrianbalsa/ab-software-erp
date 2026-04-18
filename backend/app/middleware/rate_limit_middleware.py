@@ -43,7 +43,7 @@ class AuthLoginRateLimitMiddleware(BaseHTTPMiddleware):
 
         strategy = get_rate_limit_strategy()
         ip = get_client_ip(request) or "unknown"
-        key = f"auth:{ip}"
+        key = f"rl:auth:ip:{ip}"
 
         def _hit() -> bool:
             return strategy.hit(_limit_auth, key)

@@ -34,7 +34,6 @@ from datetime import datetime, timezone
 from typing import Any, Mapping, cast
 from xml.etree import ElementTree as ET
 
-import anyio
 import httpx
 import requests
 from lxml import etree
@@ -730,7 +729,7 @@ async def _post_soap_aeat_with_retries(
                     settings=settings,
                 )
 
-            code, text, zres = await anyio.to_thread.run_sync(_sync)
+            code, text, zres = await asyncio.to_thread(_sync)
             if code in (429, 500, 502, 503, 504) and attempt < AEAT_HTTP_MAX_ATTEMPTS - 1:
                 jitter = random.uniform(0.0, 0.35 * delay)
                 logger.warning(
@@ -895,7 +894,7 @@ async def enviar_registro_y_persistir(
                 pwd,
             )
 
-        xml_firmado = await anyio.to_thread.run_sync(_sign_payload)
+        xml_firmado = await asyncio.to_thread(_sign_payload)
         xml_para_soap = inner_xml_fragment_from_signed_registro_alta(
             empresa=empresa_row,
             factura=factura_row,

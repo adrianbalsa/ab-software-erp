@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
+import inspect
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
-import anyio
-from supabase import Client, ClientOptions, create_client
+from supabase import ClientOptions
+from supabase.client import AsyncClient, create_async_client
 
 from app.core.config import get_settings
 
@@ -45,12 +46,10 @@ class _SupabaseStorage(Protocol):
 
 class SupabaseAsync:
     """
-    Async wrapper around supabase-py (which is synchronous).
-
-    This keeps your FastAPI stack fully async by offloading I/O to a thread.
+    Async wrapper around native supabase-py AsyncClient.
     """
 
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: AsyncClient) -> None:
         self._client = client
 
     def table(self, name: str) -> _SupabaseTable:
@@ -61,13 +60,17 @@ class SupabaseAsync:
         return cast(_SupabaseStorage, self._client.storage)
 
     async def rpc(self, fn: str, params: dict[str, Any] | None = None) -> Any:
-        def _call() -> Any:
-            return self._client.rpc(fn, params or {}).execute()
-
-        return await anyio.to_thread.run_sync(_call)
+        query = self._client.rpc(fn, params or {})
+        result = query.execute()
+        if inspect.isawaitable(result):
+            return await result
+        return result
 
     async def execute(self, query: _SupabaseQuery) -> Any:
-        return await anyio.to_thread.run_sync(query.execute)
+        result = query.execute()
+        if inspect.isawaitable(result):
+            return await result
+        return result
 
     async def storage_upload(
         self,
@@ -77,21 +80,21 @@ class SupabaseAsync:
         content: bytes,
         content_type: str | None = None,
     ) -> Any:
-        def _call() -> Any:
-            opts = {"content-type": content_type} if content_type else None
-            return self._client.storage.from_(bucket).upload(
-                path=path,
-                file=content,
-                file_options=opts,
-            )
-
-        return await anyio.to_thread.run_sync(_call)
+        opts = {"content-type": content_type} if content_type else None
+        result = self._client.storage.from_(bucket).upload(
+            path=path,
+            file=content,
+            file_options=opts,
+        )
+        if inspect.isawaitable(result):
+            return await result
+        return result
 
     async def storage_signed_url(self, *, bucket: str, path: str, expires_in: int) -> Any:
-        def _call() -> Any:
-            return self._client.storage.from_(bucket).create_signed_url(path, expires_in)
-
-        return await anyio.to_thread.run_sync(_call)
+        result = self._client.storage.from_(bucket).create_signed_url(path, expires_in)
+        if inspect.isawaitable(result):
+            return await result
+        return result
 
     async def auth_admin_invite_user_by_email(
         self,
@@ -99,12 +102,13 @@ class SupabaseAsync:
         email: str,
         options: dict[str, Any] | None = None,
     ) -> Any:
-        def _call() -> Any:
-            if options is None:
-                return self._client.auth.admin.invite_user_by_email(email)
-            return self._client.auth.admin.invite_user_by_email(email, options)
-
-        return await anyio.to_thread.run_sync(_call)
+        if options is None:
+            result = self._client.auth.admin.invite_user_by_email(email)
+        else:
+            result = self._client.auth.admin.invite_user_by_email(email, options)
+        if inspect.isawaitable(result):
+            return await result
+        return result
 
     async def auth_admin_generate_link(
         self,
@@ -112,15 +116,15 @@ class SupabaseAsync:
         email: str,
         metadata: dict[str, Any] | None = None,
     ) -> Any:
-        def _call() -> Any:
-            payload: dict[str, Any] = {
-                "type": "invite",
-                "email": email,
-                "options": {"data": metadata or {}},
-            }
-            return self._client.auth.admin.generate_link(payload)
-
-        return await anyio.to_thread.run_sync(_call)
+        payload: dict[str, Any] = {
+            "type": "invite",
+            "email": email,
+            "options": {"data": metadata or {}},
+        }
+        result = self._client.auth.admin.generate_link(payload)
+        if inspect.isawaitable(result):
+            return await result
+        return result
 
 
 def _extract_action_link(raw: Any) -> str | None:
@@ -176,12 +180,13 @@ def _normalize_jwt_token(jwt_token: str | None) -> str | None:
     return t if t else None
 
 
-def _create_sync_client(
+async def _create_async_client(
     *,
     jwt_token: str | None,
     allow_service_role_bypass: bool,
     log_service_bypass_warning: bool,
-) -> Client:
+    use_service_role_key: bool,
+) -> AsyncClient:
     """
     - Con JWT no vacío + clave **anon**: PostgREST aplica RLS con la identidad del token.
     - Sin JWT (``not token`` tras normalizar): **solo** clave **service role** si
@@ -195,17 +200,18 @@ def _create_sync_client(
 
     token = _normalize_jwt_token(jwt_token)
     if token:
+        api_key = service_key if use_service_role_key else anon_key
         options = ClientOptions(headers={"Authorization": f"Bearer {token}"})
-        return create_client(url, anon_key, options=options)
+        return await create_async_client(url, api_key, options=options)
 
     # ``not token`` (tras normalizar) + bypass explícito → única ruta a service role.
     if allow_service_role_bypass:
         if log_service_bypass_warning:
             _log.warning("⚠️ Bypass RLS activo (cliente Supabase con service role)")
-        return create_client(url, service_key)
+        return await create_async_client(url, service_key)
 
     # Sin JWT y sin permiso explícito de service role: solo anon (RLS como rol anónimo).
-    return create_client(url, anon_key)
+    return await create_async_client(url, anon_key)
 
 
 async def get_supabase(
@@ -213,6 +219,7 @@ async def get_supabase(
     jwt_token: str | None = None,
     allow_service_role_bypass: bool = False,
     log_service_bypass_warning: bool = True,
+    use_service_role_key: bool = False,
 ) -> SupabaseAsync:
     """
     Cliente **por petición**: no reutilizar un singleton entre usuarios (identidad RLS en cabecera).
@@ -223,11 +230,10 @@ async def get_supabase(
     ``log_service_bypass_warning``: si ``False``, no se registra el aviso al usar service role
     (p. ej. health ruidoso).
     """
-    client = await anyio.to_thread.run_sync(
-        lambda: _create_sync_client(
-            jwt_token=jwt_token,
-            allow_service_role_bypass=allow_service_role_bypass,
-            log_service_bypass_warning=log_service_bypass_warning,
-        )
+    client = await _create_async_client(
+        jwt_token=jwt_token,
+        allow_service_role_bypass=allow_service_role_bypass,
+        log_service_bypass_warning=log_service_bypass_warning,
+        use_service_role_key=use_service_role_key,
     )
     return SupabaseAsync(client)

@@ -1,0 +1,86 @@
+# -----------------------------------------------------------------------------
+# Integración continua (CI) — suite unificada bajo backend/tests/
+# -----------------------------------------------------------------------------
+# Objetivo: gate de calidad en cada cambio sobre main/master y en PRs, con
+# Postgres real para rutas que dependen de transacciones (p. ej. candados
+# advisory de VeriFactu) y dependencias de sistema para WeasyPrint/PDF.
+#
+# Convención de ejecución: desde el directorio backend, ``python -m pytest tests/``.
+# -----------------------------------------------------------------------------
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  backend-tests:
+    name: Backend — pytest (Postgres 15 + WeasyPrint)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: scanner_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d scanner_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # WeasyPrint enlaza contra Pango/Cairo/GObject; sin estos paquetes los
+      # tests de exportación PDF fallan en runners mínimos de Ubuntu.
+      - name: Install WeasyPrint system dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libgobject-2.0-0 \
+            libpango-1.0-0 \
+            libpangocairo-1.0-0 \
+            libgdk-pixbuf2.0-0 \
+            shared-mime-info
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Run pytest (backend/tests; DATABASE_URL → Postgres del servicio)
+        working-directory: backend
+        env:
+          # Driver por defecto del proyecto (SQLAlchemy + psycopg v3).
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/scanner_ci
+          SUPABASE_URL: https://ci-placeholder.supabase.co
+          SUPABASE_KEY: ci-anon-key
+          SUPABASE_SERVICE_KEY: ci-service-role-key
+          SUPABASE_JWT_SECRET: ci-jwt-secret-must-be-at-least-32-chars
+          JWT_SECRET_KEY: ci-app-jwt-secret-at-least-32-characters
+          SESSION_SECRET_KEY: ci-session-secret-at-least-32-characters-long
+          ENVIRONMENT: development
+          DEV_MODE: "true"
+        run: python -m pytest tests/ -v

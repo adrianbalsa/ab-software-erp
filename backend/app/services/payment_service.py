@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
-
-import anyio
 
 from app.core.config import get_settings
 from app.core.math_engine import round_fiat, to_decimal
@@ -85,7 +84,7 @@ class PaymentService:
             params["email"] = email.strip()
 
         try:
-            customer = await anyio.to_thread.run_sync(
+            customer = await asyncio.to_thread(
                 lambda: self._gc.customers.create(params=params)
             )
         except Exception as exc:
@@ -153,7 +152,7 @@ class PaymentService:
         }
 
         try:
-            payment = await anyio.to_thread.run_sync(
+            payment = await asyncio.to_thread(
                 lambda: self._gc.payments.create(
                     params=payload,
                     headers={"Idempotency-Key": idem},
@@ -270,7 +269,7 @@ class PaymentService:
 
         idem_br = str(uuid.uuid4())
         try:
-            billing_request = await anyio.to_thread.run_sync(
+            billing_request = await asyncio.to_thread(
                 lambda: self._gc.billing_requests.create(
                     params={
                         "mandate_request": {
@@ -293,7 +292,7 @@ class PaymentService:
 
         idem_flow = str(uuid.uuid4())
         try:
-            br_flow = await anyio.to_thread.run_sync(
+            br_flow = await asyncio.to_thread(
                 lambda: self._gc.billing_request_flows.create(
                     params={
                         "redirect_uri": surl,

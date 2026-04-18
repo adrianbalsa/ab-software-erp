@@ -3,13 +3,15 @@ from __future__ import annotations
 import os
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+from app.db.session import get_session_factory
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.core.math_engine import quantize_currency, to_decimal
+from app.services import finance_transactional_kpis as ftk
 from app.schemas.economic_insights import (
     AdvancedMetricsMonthRow,
     AdvancedMetricsOut,
@@ -238,21 +240,31 @@ class FinanceService:
 
     async def financial_summary(self, *, empresa_id: str, period_month: str | None = None) -> FinanceSummaryOut:
         """
-        KPIs financieros del mes actual desde snapshot preagregado (`finance_kpi_snapshots`).
-        Fallback a 0 cuando aún no existe snapshot del periodo.
+        KPIs financieros del mes (ingresos/gastos netos sin IVA) desde datos transaccionales
+        (``facturas`` + ``gastos``), vía SQLAlchemy si hay ``DATABASE_URL``; si no, agregación en memoria.
         """
         eid = str(empresa_id or "").strip()
         if not eid:
             return FinanceSummaryOut(ingresos=0.0, gastos=0.0, ebitda=0.0)
-        period_month = self._period_month_or_current(period_month, hoy=date.today())
-        ingresos, gastos, ebitda = await self._snapshot_kpis_mes(
-            empresa_id=eid,
-            period_month=period_month,
-        )
+        hoy = date.today()
+        period_month = self._period_month_or_current(period_month, hoy=hoy)
+        factory = get_session_factory()
+        if factory is not None:
+            session = factory()
+            try:
+                ing, gas, ebitda = ftk.load_pnl_single_month(session, empresa_id=eid, period_month=period_month)
+            finally:
+                session.close()
+            return FinanceSummaryOut(
+                ingresos=float(quantize_currency(ing)),
+                gastos=float(quantize_currency(gas)),
+                ebitda=float(quantize_currency(ebitda)),
+            )
+        ing, gas, ebitda = await self._pnl_single_month_supabase(empresa_id=eid, period_month=period_month)
         return FinanceSummaryOut(
-            ingresos=float(ingresos),
-            gastos=float(gastos),
-            ebitda=float(ebitda),
+            ingresos=float(quantize_currency(ing)),
+            gastos=float(quantize_currency(gas)),
+            ebitda=float(quantize_currency(ebitda)),
         )
 
     async def financial_dashboard(
@@ -263,44 +275,133 @@ class FinanceService:
         period_month: str | None = None,
     ) -> FinanceDashboardOut:
         """
-        Dashboard financiero optimizado para O(1): consume snapshot mensual preagregado.
-        Fallback a cero si el snapshot del mes actual no existe.
+        Dashboard financiero desde datos transaccionales (facturas, gastos, ``bank_transactions``
+        conciliadas tipo GoCardless). SQL agregado vía SQLAlchemy si hay ``DATABASE_URL``;
+        si no, lecturas batch por Supabase + agregación O(n) sin N+1.
         """
         eid = str(empresa_id or "").strip()
         if not eid:
-            return FinanceDashboardOut(
-                ingresos=0.0,
-                gastos=0.0,
-                ebitda=0.0,
-                total_km_estimados_snapshot=0.0,
-                margen_km_eur=None,
-                ingresos_vs_gastos_mensual=[],
-                tesoreria_mensual=[],
-                gastos_por_bucket_cinco=[],
-                margen_neto_km_mes_actual=None,
-                margen_neto_km_mes_anterior=None,
-                variacion_margen_km_pct=None,
-                km_facturados_mes_actual=None,
-                km_facturados_mes_anterior=None,
-            )
+            return self._finance_dashboard_empty_shell(hoy=date.today())
 
         if hoy is None:
             hoy = date.today()
         period_month = self._period_month_or_current(period_month, hoy=hoy)
-        ingresos, gastos, ebitda = await self._snapshot_kpis_mes(
+
+        factory = get_session_factory()
+        if factory is not None:
+            session = factory()
+            try:
+                agg = ftk.load_transactional_dashboard(
+                    session, empresa_id=eid, hoy=hoy, period_month=period_month
+                )
+            finally:
+                session.close()
+        else:
+            agg = await self._transactional_dashboard_via_supabase(
+                empresa_id=eid, hoy=hoy, period_month=period_month
+            )
+
+        return self._finance_dashboard_from_agg(agg=agg, hoy=hoy, period_month=period_month)
+
+    async def _pnl_single_month_supabase(self, *, empresa_id: str, period_month: str) -> tuple[Decimal, Decimal, Decimal]:
+        eid = str(empresa_id or "").strip()
+        y, m = int(period_month[:4]), int(period_month[5:7])
+        ms = date(y, m, 1)
+        if m == 12:
+            me = date(y + 1, 1, 1)
+        else:
+            me = date(y, m + 1, 1)
+        res_f: Any = await self._db.execute(
+            self._db.table("facturas")
+            .select("base_imponible, total_factura, cuota_iva, fecha_emision, empresa_id")
+            .eq("empresa_id", eid)
+        )
+        fact_rows: list[dict[str, Any]] = (res_f.data or []) if hasattr(res_f, "data") else []
+        res_g: Any = await self._db.execute(
+            filter_not_deleted(self._db.table("gastos").select("*").eq("empresa_id", eid))
+        )
+        gas_rows: list[dict[str, Any]] = (res_g.data or []) if hasattr(res_g, "data") else []
+        ing = Decimal("0.00")
+        gas = Decimal("0.00")
+        for r in fact_rows:
+            fd = FinanceService._fecha_desde_campo(r.get("fecha_emision"))
+            if fd is None or not (ms <= fd < me):
+                continue
+            ing += FinanceService._ingreso_neto_sin_iva(r)
+        for r in gas_rows:
+            fd = FinanceService._fecha_desde_campo(r.get("fecha"))
+            if fd is None or not (ms <= fd < me):
+                continue
+            gas += FinanceService._gasto_neto_sin_iva(r)
+        return ing, gas, ing - gas
+
+    async def _transactional_dashboard_via_supabase(
+        self, *, empresa_id: str, hoy: date, period_month: str
+    ) -> ftk.TransactionalDashboardAgg:
+        eid = str(empresa_id or "").strip()
+        res_f: Any = await self._db.execute(
+            self._db.table("facturas")
+            .select(
+                "id, empresa_id, base_imponible, total_factura, cuota_iva, fecha_emision, "
+                "estado_cobro, matched_transaction_id, pago_id, total_km_estimados_snapshot"
+            )
+            .eq("empresa_id", eid)
+        )
+        fact_rows: list[dict[str, Any]] = (res_f.data or []) if hasattr(res_f, "data") else []
+        res_g: Any = await self._db.execute(
+            filter_not_deleted(self._db.table("gastos").select("*").eq("empresa_id", eid))
+        )
+        gas_rows: list[dict[str, Any]] = (res_g.data or []) if hasattr(res_g, "data") else []
+        res_b: Any = await self._db.execute(
+            self._db.table("bank_transactions")
+            .select("empresa_id, reconciled, amount, transaction_id, booked_date")
+            .eq("empresa_id", eid)
+        )
+        bank_rows: list[dict[str, Any]] = (res_b.data or []) if hasattr(res_b, "data") else []
+        gv_rows: list[dict[str, Any]] = []
+        try:
+            res_gv: Any = await self._db.execute(
+                self._db.table("gastos_vehiculo").select("gasto_id").eq("empresa_id", eid).is_("deleted_at", "null")
+            )
+            gv_rows = (res_gv.data or []) if hasattr(res_gv, "data") else []
+        except Exception:
+            try:
+                res_gv2: Any = await self._db.execute(
+                    self._db.table("gastos_vehiculo").select("gasto_id").eq("empresa_id", eid)
+                )
+                gv_rows = (res_gv2.data or []) if hasattr(res_gv2, "data") else []
+            except Exception:
+                gv_rows = []
+        fuel_ids = {str(r.get("gasto_id") or "").strip() for r in gv_rows if r.get("gasto_id")}
+        return ftk.aggregate_dashboard_from_rows(
             empresa_id=eid,
+            hoy=hoy,
             period_month=period_month,
+            fact_rows=fact_rows,
+            gasto_rows=gas_rows,
+            bank_rows=bank_rows,
+            fuel_gasto_ids=fuel_ids,
         )
 
+    def _finance_dashboard_empty_shell(self, *, hoy: date) -> FinanceDashboardOut:
+        year = hoy.year
+        meses = ftk.months_of_calendar_year(year)
+        bars = ftk.last_n_month_keys(hoy=hoy, n=6)
+        buckets = ["Combustible", "Personal", "Mantenimiento", "Seguros", "Peajes"]
         return FinanceDashboardOut(
-            ingresos=float(ingresos),
-            gastos=float(gastos),
-            ebitda=float(ebitda),
+            ingresos=0.0,
+            gastos=0.0,
+            ebitda=0.0,
             total_km_estimados_snapshot=0.0,
             margen_km_eur=None,
-            ingresos_vs_gastos_mensual=[],
-            tesoreria_mensual=[],
-            gastos_por_bucket_cinco=[],
+            ingresos_vs_gastos_mensual=[
+                FinanceMensualBarOut(periodo=p, ingresos=0.0, gastos=0.0) for p in bars
+            ],
+            tesoreria_mensual=[
+                FinanceTesoreriaMensualOut(periodo=p, ingresos_facturados=0.0, cobros_reales=0.0)
+                for p in meses
+            ],
+            gastos_por_bucket_cinco=[GastoBucketCincoOut(name=n, value=0.0) for n in buckets],
             margen_neto_km_mes_actual=None,
             margen_neto_km_mes_anterior=None,
             variacion_margen_km_pct=None,
@@ -308,10 +409,93 @@ class FinanceService:
             km_facturados_mes_anterior=None,
         )
 
+    def _finance_dashboard_from_agg(
+        self,
+        *,
+        agg: ftk.TransactionalDashboardAgg,
+        hoy: date,
+        period_month: str,
+    ) -> FinanceDashboardOut:
+        ing_q = quantize_currency(agg.ingresos_mes)
+        gas_q = quantize_currency(agg.gastos_mes)
+        ebitda_q = quantize_currency(agg.ebitda_mes)
+        km_snap = quantize_currency(agg.total_km_snapshot_mes)
+        margen_km: float | None = None
+        if km_snap > 0:
+            margen_km = float(quantize_currency(ebitda_q / km_snap))
+
+        bars = ftk.last_n_month_keys(hoy=hoy, n=6)
+        serie_bars = [
+            FinanceMensualBarOut(
+                periodo=p,
+                ingresos=float(quantize_currency(agg.ingresos_vs_gastos_mensual.get(p, (Decimal("0.00"), Decimal("0.00")))[0])),
+                gastos=float(quantize_currency(agg.ingresos_vs_gastos_mensual.get(p, (Decimal("0.00"), Decimal("0.00")))[1])),
+            )
+            for p in bars
+        ]
+
+        year = hoy.year
+        meses = ftk.months_of_calendar_year(year)
+        tesoreria: list[FinanceTesoreriaMensualOut] = []
+        for p in meses:
+            ing_f = quantize_currency(agg.tesoreria_ing_facturado.get(p, Decimal("0.00")))
+            if agg.has_bank_transactions:
+                cob = quantize_currency(agg.tesoreria_cobros_reales.get(p, Decimal("0.00")))
+            else:
+                cob = Decimal("0.00")
+            tesoreria.append(
+                FinanceTesoreriaMensualOut(
+                    periodo=p,
+                    ingresos_facturados=float(ing_f),
+                    cobros_reales=float(cob),
+                )
+            )
+
+        bucket_order = ("Combustible", "Personal", "Mantenimiento", "Seguros", "Peajes")
+        gastos_buckets = [
+            GastoBucketCincoOut(
+                name=name,
+                value=float(quantize_currency(agg.gastos_bucket_ytd.get(name, Decimal("0.00")))),
+            )
+            for name in bucket_order
+        ]
+
+        km_act = quantize_currency(agg.km_mes_actual)
+        km_prev = quantize_currency(agg.km_mes_anterior)
+        _, mkm_cur = self._recalculate_ebitda_and_margen_km(
+            ingresos=agg.ingresos_mes, gastos=agg.gastos_mes, km_facturados=km_act
+        )
+        _, mkm_prev = self._recalculate_ebitda_and_margen_km(
+            ingresos=agg.ingresos_prev_mes,
+            gastos=agg.gastos_prev_mes,
+            km_facturados=km_prev,
+        )
+        var_pct: float | None = None
+        if mkm_cur is not None and mkm_prev is not None and mkm_prev != 0:
+            var_pct = round(float((mkm_cur - mkm_prev) / mkm_prev * Decimal("100")), 4)
+
+        return FinanceDashboardOut(
+            ingresos=float(ing_q),
+            gastos=float(gas_q),
+            ebitda=float(ebitda_q),
+            total_km_estimados_snapshot=float(km_snap),
+            margen_km_eur=margen_km,
+            ingresos_vs_gastos_mensual=serie_bars,
+            tesoreria_mensual=tesoreria,
+            gastos_por_bucket_cinco=gastos_buckets,
+            margen_neto_km_mes_actual=float(mkm_cur) if mkm_cur is not None else None,
+            margen_neto_km_mes_anterior=float(mkm_prev) if mkm_prev is not None else None,
+            variacion_margen_km_pct=var_pct,
+            km_facturados_mes_actual=float(km_act) if km_act > 0 else None,
+            km_facturados_mes_anterior=float(km_prev) if km_prev > 0 else None,
+        )
+
     @staticmethod
     def _fecha_desde_campo(val: Any) -> date | None:
         if val is None:
             return None
+        if isinstance(val, datetime):
+            return val.date()
         if isinstance(val, date):
             return val
         s = str(val).strip()[:10]

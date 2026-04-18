@@ -47,7 +47,7 @@ Crea el archivo de entorno de producción:
 
 Bash
 nano .env.prod
-Pega todas tus variables reales (SUPABASE_URL, SUPABASE_KEY, OPENAI_API_KEY, NEXT_PUBLIC_GOOGLE_MAPS_API_KEY, etc.). Guarda y cierra (Ctrl+O, Enter, Ctrl+X).
+Pega todas tus variables reales (SUPABASE_URL, SUPABASE_KEY, OPENAI_API_KEY, Maps_API_KEY, NEXT_PUBLIC_GOOGLE_MAPS_API_KEY, etc.). Guarda y cierra (Ctrl+O, Enter, Ctrl+X).
 
 Fase 3: Certificados SSL y Proxy (Nginx)
 Vamos a poner el "candado verde" antes de levantar la aplicación.

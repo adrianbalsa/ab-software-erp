@@ -21,7 +21,7 @@ env:
   NODE_VERSION: "20"
 
 jobs:
-  # Falla el pipeline si cualquier test falla (incl. tests/test_math_engine.py).
+  # Falla el pipeline si cualquier test falla (suite unificada en backend/tests/).
   backend-pytest:
     runs-on: ubuntu-latest
     defaults:
@@ -52,6 +52,8 @@ jobs:
           JWT_SECRET_KEY: ci-app-jwt-secret-at-least-32-characters
           SESSION_SECRET_KEY: ci-session-secret-at-least-32-characters-long
           ENVIRONMENT: development
+          # SlowAPI: sin Redis en el runner, usar almacenamiento en memoria (solo tests/CI).
+          DEV_MODE: "true"
 
   frontend-build:
     runs-on: ubuntu-latest
@@ -75,8 +77,60 @@ jobs:
           npm ci
           npm run build
 
-  docker-build-push:
+  security-scan:
     needs: [backend-pytest, frontend-build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Dependency Audit (backend - pip-audit)
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt
+
+      - name: Dependency Audit (frontend - npm audit)
+        run: |
+          cd frontend
+          npm ci
+          npm audit --audit-level=critical
+
+      - name: Security Scan (Trivy filesystem, fail on CRITICAL)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Generate SBOM (Syft)
+        run: |
+          syft dir:. -o cyclonedx-json=sbom.cyclonedx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.cyclonedx.json
+
+  docker-build-push:
+    needs: [backend-pytest, frontend-build, security-scan]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     steps:
@@ -99,17 +153,33 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push (GHCR)
+      - name: Build image (GHCR, no push)
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           file: ./backend/Dockerfile
-          push: true
+          push: false
+          load: true
           tags: |
             ${{ steps.img.outputs.name }}:latest
             ${{ steps.img.outputs.name }}:sha-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Security Scan (Trivy image, fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: image
+          image-ref: ${{ steps.img.outputs.name }}:latest
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+
+      - name: Push image to GHCR
+        run: |
+          docker push "${{ steps.img.outputs.name }}:latest"
+          docker push "${{ steps.img.outputs.name }}:sha-${{ github.sha }}"
 
       - name: Notify webhook (deploy job)
         if: always()
@@ -131,7 +201,7 @@ jobs:
           curl -sS -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$HOOK" || true
 
   notify-ci:
-    needs: [backend-pytest, frontend-build]
+    needs: [backend-pytest, frontend-build, security-scan]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -140,13 +210,14 @@ jobs:
           HOOK: ${{ secrets.CI_WEBHOOK_URL }}
           B: ${{ needs.backend-pytest.result }}
           F: ${{ needs.frontend-build.result }}
+          S: ${{ needs.security-scan.result }}
         run: |
           set -e
           if [ -z "${HOOK:-}" ]; then
             echo "CI_WEBHOOK_URL no configurado; omitiendo notificación."
             exit 0
           fi
-          TEXT="AB Logistics OS CI — backend:${B} frontend:${F} — ${GITHUB_REF} @ ${GITHUB_SHA:0:7}"
+          TEXT="AB Logistics OS CI — backend:${B} frontend:${F} security:${S} — ${GITHUB_REF} @ ${GITHUB_SHA:0:7}"
           if echo "$HOOK" | grep -q 'hooks.slack.com'; then
             PAYLOAD="$(jq -n --arg t "$TEXT" '{text:$t}')"
           else

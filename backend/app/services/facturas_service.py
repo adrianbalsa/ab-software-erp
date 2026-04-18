@@ -19,7 +19,7 @@ from supabase.client import AsyncClient
 
 from app.core.config import get_settings
 from app.core.arq_queue import enqueue_submit_to_aeat
-from app.core.verifactu import GENESIS_HASH, generate_invoice_hash
+from app.core.verifactu import GENESIS_HASH
 from app.core.fiscal_logic import compute_invoice_fingerprint, totals_coherent
 from app.core.math_engine import (
     InvoiceTotalsResult,
@@ -58,20 +58,169 @@ from app.services.aeat_xml_service import generar_xml_alta_factura
 from app.services.auditoria_service import AuditoriaService
 from app.services.eco_service import co2_emitido_desde_porte_row
 from app.services.report_service import _parse_porte_lineas_snapshot
-from app.services.verifactu_service import VerifactuService
+from app.services.verifactu_service import (
+    EslabonFacturaAnterior,
+    VERIFACTU_INVOICE_GENESIS_HASH,
+    VerifactuService,
+)
 from app.core.crypto import pii_crypto
 from app.core.esg_engine import esg_certificate_co2_vs_euro_iii
 
 logger = logging.getLogger(__name__)
 
-_invoice_emit_locks: dict[str, asyncio.Lock] = {}
+# Columnas INSERT al emitir F1/R1 por SQLAlchemy (misma fila que el payload Supabase histórico).
+_PG_FACTURA_EMIT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("empresa_id", "CAST(:empresa_id AS uuid)"),
+    ("cliente", "CAST(:cliente AS uuid)"),
+    ("tipo_factura", ":tipo_factura"),
+    ("num_factura", ":num_factura"),
+    ("numero_factura", ":numero_factura"),
+    ("nif_emisor", ":nif_emisor"),
+    ("total_factura", ":total_factura"),
+    ("base_imponible", ":base_imponible"),
+    ("cuota_iva", ":cuota_iva"),
+    ("fecha_emision", "CAST(:fecha_emision AS date)"),
+    ("numero_secuencial", ":numero_secuencial"),
+    ("hash_anterior", ":hash_anterior"),
+    ("hash_registro", ":hash_registro"),
+    ("hash_factura", ":hash_factura"),
+    ("huella_anterior", ":huella_anterior"),
+    ("huella_hash", ":huella_hash"),
+    ("fecha_hitos_verifactu", ":fecha_hitos_verifactu"),
+    ("qr_content", ":qr_content"),
+    ("qr_code_url", ":qr_code_url"),
+    ("fingerprint_hash", ":fingerprint_hash"),
+    ("previous_fingerprint", ":previous_fingerprint"),
+    ("previous_invoice_hash", ":previous_invoice_hash"),
+    ("bloqueado", ":bloqueado"),
+    ("is_finalized", ":is_finalized"),
+    ("porte_lineas_snapshot", "CAST(:porte_lineas_snapshot AS jsonb)"),
+    ("total_km_estimados_snapshot", ":total_km_estimados_snapshot"),
+    ("desglose_por_tipo", "CAST(:desglose_por_tipo AS jsonb)"),
+    ("estado_cobro", ":estado_cobro"),
+    ("payment_status", ":payment_status"),
+    ("xml_verifactu", ":xml_verifactu"),
+)
+
+_PG_FACTURA_R1_EXTRA_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("factura_rectificada_id", ":factura_rectificada_id"),
+    ("motivo_rectificacion", ":motivo_rectificacion"),
+)
 
 
-def _invoice_emit_lock(eid: str) -> asyncio.Lock:
-    """Serializa emisión por empresa (un proceso; en multi-réplica usar candado PG en emisión)."""
-    if eid not in _invoice_emit_locks:
-        _invoice_emit_locks[eid] = asyncio.Lock()
-    return _invoice_emit_locks[eid]
+def _pg_advisory_xact_lock_empresa(conn: Any, empresa_id: str) -> None:
+    """Candado consultivo por empresa; se libera al COMMIT/ROLLBACK de la transacción actual."""
+    from sqlalchemy import text
+
+    conn.execute(
+        text("SELECT pg_advisory_xact_lock(abs(hashtext(CAST(:eid AS text))))"),
+        {"eid": str(empresa_id).strip()},
+    )
+
+
+def _pg_read_invoice_chain_eslabon(conn: Any, *, empresa_id: str) -> tuple[str, int]:
+    """
+    Equivalente a ``VerifactuService.obtener_ultimo_hash_y_secuencial`` en una sola lectura SQL.
+    Devuelve ``(hash_anterior_para_generate_invoice_hash, siguiente_secuencial)``.
+    """
+    from sqlalchemy import text
+
+    m = conn.execute(
+        text(
+            """
+            SELECT
+              COALESCE(
+                NULLIF(
+                  trim(
+                    COALESCE(f.huella_hash, f.hash_factura, f.hash_registro)::text
+                  ),
+                  ''
+                ),
+                NULL
+              ) AS chain_hash,
+              f.numero_secuencial AS last_seq
+            FROM public.facturas f
+            WHERE f.empresa_id = CAST(:eid AS uuid)
+              AND f.bloqueado = true
+            ORDER BY f.numero_secuencial DESC NULLS LAST,
+                     f.fecha_emision DESC NULLS LAST,
+                     f.id DESC
+            LIMIT 1
+            """
+        ),
+        {"eid": str(empresa_id).strip()},
+    ).mappings().first()
+    if m is None:
+        return VERIFACTU_INVOICE_GENESIS_HASH, 1
+    raw_h = m.get("chain_hash")
+    h = str(raw_h).strip() if raw_h is not None else ""
+    if not h:
+        chain_prev = VERIFACTU_INVOICE_GENESIS_HASH
+    else:
+        chain_prev = h
+    try:
+        last_seq = int(m.get("last_seq") or 0)
+    except (TypeError, ValueError):
+        last_seq = 0
+    siguiente = last_seq + 1 if last_seq > 0 else 1
+    return chain_prev, siguiente
+
+
+def _pg_read_last_fingerprint_hash(conn: Any, *, empresa_id: str) -> str:
+    """Misma semántica que ``FacturasService._get_last_fingerprint_hash`` (solo lectura)."""
+    from sqlalchemy import text
+
+    m = conn.execute(
+        text(
+            """
+            SELECT fingerprint_hash
+            FROM public.facturas
+            WHERE empresa_id = CAST(:eid AS uuid)
+              AND bloqueado = true
+            ORDER BY numero_secuencial DESC NULLS LAST,
+                     fecha_emision DESC NULLS LAST,
+                     id DESC
+            LIMIT 1
+            """
+        ),
+        {"eid": str(empresa_id).strip()},
+    ).mappings().first()
+    if m is None or m.get("fingerprint_hash") is None:
+        return GENESIS_HASH
+    prev = str(m.get("fingerprint_hash") or "").strip()
+    return prev or GENESIS_HASH
+
+
+def _pg_insert_factura_emit_row(
+    conn: Any,
+    row: dict[str, Any],
+    *,
+    extra_columns: tuple[tuple[str, str], ...] = (),
+) -> dict[str, Any]:
+    from sqlalchemy import text
+
+    cols_tpl = _PG_FACTURA_EMIT_COLUMNS + extra_columns
+    present: list[tuple[str, str]] = []
+    for col, sql in cols_tpl:
+        if col not in row:
+            continue
+        present.append((col, sql))
+    if not present:
+        raise ValueError("payload_factura_vacio")
+    col_names = ", ".join(c for c, _ in present)
+    val_exprs = ", ".join(sql for _, sql in present)
+    stmt = text(f"INSERT INTO public.facturas ({col_names}) VALUES ({val_exprs}) RETURNING *")
+    params: dict[str, Any] = {}
+    for col, _ in present:
+        val = row[col]
+        if col in ("porte_lineas_snapshot", "desglose_por_tipo") and val is not None:
+            params[col] = json.dumps(val, ensure_ascii=False)
+        else:
+            params[col] = val
+    out_m = conn.execute(stmt, params).mappings().first()
+    if out_m is None:
+        raise RuntimeError("INSERT en facturas no devolvió fila (RETURNING vacío)")
+    return dict(out_m)
 
 
 def _clone_snapshot_con_importes_negativos(snapshot: Any) -> list[dict[str, Any]]:
@@ -196,6 +345,259 @@ def _fecha_para_finalizar_iso(row: dict[str, Any]) -> str:
     return s[:10] if len(s) >= 10 else s
 
 
+def _pg_emit_f1_desde_portes_tx(
+    engine: Any,
+    *,
+    eid: str,
+    cid: str,
+    fecha_iso: str,
+    anio: int,
+    portes_rows: list[dict[str, Any]],
+    nif_emisor: str,
+    nif_cliente: str,
+    empresa_row: dict[str, Any],
+    cliente_row: dict[str, Any],
+    inv_tot: InvoiceTotalsResult,
+    porte_lineas_snapshot: list[dict[str, Any]],
+    total_km_estimados_snapshot: float,
+    base_imponible: float,
+    cuota_iva: float,
+    total_factura: float,
+    enterprise: bool,
+) -> tuple[dict[str, Any], EslabonFacturaAnterior, str, str]:
+    """
+    Candado ``pg_advisory_xact_lock``, lectura de cadena, SHA-256 (``hash_anterior``),
+    INSERT en ``facturas`` y actualización de ``portes`` en **una** transacción Postgres.
+    """
+    from sqlalchemy import text
+
+    serie = os.getenv("VERIFACTU_SERIE_FACTURA", "FAC").strip() or "FAC"
+    with engine.begin() as conn:
+        _pg_advisory_xact_lock_empresa(conn, eid)
+        chain_h, next_seq = _pg_read_invoice_chain_eslabon(conn, empresa_id=eid)
+        eslabon = EslabonFacturaAnterior(hash_anterior=chain_h, siguiente_secuencial=next_seq)
+        num_fact = f"{serie}-{anio}-{eslabon.siguiente_secuencial:06d}"
+        hash_registro = VerifactuService.generate_invoice_hash(
+            {
+                "num_factura": num_fact,
+                "fecha_emision": fecha_iso,
+                "nif_emisor": nif_emisor,
+                "total_factura": float(total_factura),
+            },
+            eslabon.hash_anterior,
+        )
+        previous_fingerprint = _pg_read_last_fingerprint_hash(conn, empresa_id=eid)
+        fingerprint_hash = compute_invoice_fingerprint(
+            {
+                "nif_emisor": nif_emisor,
+                "nif_receptor": nif_cliente,
+                "numero_factura": num_fact,
+                "fecha_emision": fecha_iso,
+                "total_factura": float(total_factura),
+            },
+            previous_fingerprint,
+        )
+        previous_invoice_hash = previous_fingerprint
+        qr_content = (
+            build_srei_verifactu_url(
+                nif_emisor,
+                num_fact,
+                fecha_iso,
+                float(total_factura),
+                huella_hash=hash_registro,
+            ).strip()
+            or None
+        )
+        factura_payload: dict[str, Any] = {
+            "empresa_id": eid,
+            "cliente": cid,
+            "tipo_factura": "F1",
+            "num_factura": num_fact,
+            "numero_factura": num_fact,
+            "nif_emisor": pii_crypto.encrypt_pii(nif_emisor),
+            "total_factura": float(total_factura),
+            "base_imponible": float(base_imponible),
+            "cuota_iva": float(cuota_iva),
+            "fecha_emision": fecha_iso,
+            "numero_secuencial": eslabon.siguiente_secuencial,
+            "hash_anterior": eslabon.hash_anterior,
+            "hash_registro": hash_registro,
+            "hash_factura": hash_registro,
+            "huella_anterior": eslabon.hash_anterior,
+            "huella_hash": hash_registro,
+            "fecha_hitos_verifactu": datetime.now(timezone.utc).isoformat(),
+            "qr_content": qr_content,
+            "qr_code_url": qr_content,
+            "fingerprint_hash": fingerprint_hash,
+            "previous_fingerprint": previous_fingerprint,
+            "previous_invoice_hash": previous_invoice_hash,
+            "bloqueado": True,
+            "is_finalized": False,
+            "porte_lineas_snapshot": porte_lineas_snapshot,
+            "total_km_estimados_snapshot": float(total_km_estimados_snapshot),
+            "desglose_por_tipo": _desglose_por_tipo_to_jsonb_list(inv_tot),
+            "estado_cobro": "emitida",
+            "payment_status": "PENDING",
+        }
+        factura_payload["xml_verifactu"] = generar_xml_alta_factura(
+            factura_payload,
+            {
+                "nif": nif_emisor,
+                "nombre_comercial": str(empresa_row.get("nombre_comercial") or ""),
+                "nombre_legal": str(empresa_row.get("nombre_legal") or ""),
+            },
+            {
+                "nif": nif_cliente,
+                "nombre": str(cliente_row.get("nombre") or ""),
+            },
+            hash_registro,
+        )
+        factura_row = _pg_insert_factura_emit_row(conn, factura_payload)
+        factura_id = _factura_pk(factura_row.get("id"))
+        for pr in portes_rows:
+            pid = str(pr.get("id") or "").strip()
+            if not pid:
+                continue
+            if enterprise:
+                co2v = float(co2_emitido_desde_porte_row(dict(pr)))
+                conn.execute(
+                    text(
+                        """
+                        UPDATE public.portes
+                        SET estado = 'facturado',
+                            factura_id = :fid,
+                            co2_emitido = :co2
+                        WHERE empresa_id = CAST(:eid AS uuid)
+                          AND id = CAST(:pid AS uuid)
+                          AND deleted_at IS NULL
+                        """
+                    ),
+                    {"fid": factura_id, "co2": co2v, "eid": eid, "pid": pid},
+                )
+            else:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE public.portes
+                        SET estado = 'facturado',
+                            factura_id = :fid
+                        WHERE empresa_id = CAST(:eid AS uuid)
+                          AND id = CAST(:pid AS uuid)
+                          AND deleted_at IS NULL
+                        """
+                    ),
+                    {"fid": factura_id, "eid": eid, "pid": pid},
+                )
+    return factura_row, eslabon, num_fact, hash_registro
+
+
+def _pg_emit_r1_rectificativa_tx(
+    engine: Any,
+    *,
+    eid: str,
+    fid: int,
+    motivo: str,
+    fecha_iso: str,
+    anio: int,
+    orig: dict[str, Any],
+    nif_emisor: str,
+    nif_cliente: str,
+    cliente_nombre_r1: str,
+    emp_row_r1: dict[str, Any],
+    porte_snap: list[dict[str, Any]],
+    km_val: float,
+    base_r: float,
+    cuota_r: float,
+    total_r: float,
+) -> dict[str, Any]:
+    """Candado PG + cadena + INSERT R1 en una sola transacción."""
+    serie_r = os.getenv("VERIFACTU_SERIE_RECTIFICATIVA", "R").strip() or "R"
+    with engine.begin() as conn:
+        _pg_advisory_xact_lock_empresa(conn, eid)
+        chain_h, siguiente_seq = _pg_read_invoice_chain_eslabon(conn, empresa_id=eid)
+        eslabon = EslabonFacturaAnterior(hash_anterior=chain_h, siguiente_secuencial=siguiente_seq)
+        num_fact_r = f"{serie_r}-{anio}-{siguiente_seq:06d}"
+        hash_registro = VerifactuService.generate_invoice_hash(
+            {
+                "num_factura": num_fact_r,
+                "fecha_emision": fecha_iso,
+                "nif_emisor": nif_emisor,
+                "total_factura": float(total_r),
+            },
+            eslabon.hash_anterior,
+        )
+        previous_fingerprint = _pg_read_last_fingerprint_hash(conn, empresa_id=eid)
+        fingerprint_hash = compute_invoice_fingerprint(
+            {
+                "nif_emisor": nif_emisor,
+                "nif_receptor": nif_cliente,
+                "numero_factura": num_fact_r,
+                "fecha_emision": fecha_iso,
+                "total_factura": float(total_r),
+            },
+            previous_fingerprint,
+        )
+        previous_invoice_hash = previous_fingerprint
+        qr_content = (
+            build_srei_verifactu_url(
+                nif_emisor,
+                num_fact_r,
+                fecha_iso,
+                float(total_r),
+                huella_hash=hash_registro,
+            ).strip()
+            or None
+        )
+        cliente_id = str(orig.get("cliente") or "").strip()
+        factura_payload: dict[str, Any] = {
+            "empresa_id": eid,
+            "cliente": cliente_id,
+            "tipo_factura": "R1",
+            "num_factura": num_fact_r,
+            "numero_factura": num_fact_r,
+            "nif_emisor": pii_crypto.encrypt_pii(nif_emisor),
+            "total_factura": total_r,
+            "base_imponible": base_r,
+            "cuota_iva": cuota_r,
+            "fecha_emision": fecha_iso,
+            "numero_secuencial": siguiente_seq,
+            "hash_anterior": eslabon.hash_anterior,
+            "hash_registro": hash_registro,
+            "hash_factura": hash_registro,
+            "huella_anterior": eslabon.hash_anterior,
+            "huella_hash": hash_registro,
+            "fecha_hitos_verifactu": datetime.now(timezone.utc).isoformat(),
+            "qr_content": qr_content,
+            "qr_code_url": qr_content,
+            "fingerprint_hash": fingerprint_hash,
+            "previous_fingerprint": previous_fingerprint,
+            "previous_invoice_hash": previous_invoice_hash,
+            "bloqueado": True,
+            "is_finalized": False,
+            "porte_lineas_snapshot": porte_snap,
+            "total_km_estimados_snapshot": km_val,
+            "factura_rectificada_id": fid,
+            "motivo_rectificacion": str(motivo).strip(),
+            "estado_cobro": "emitida",
+            "payment_status": "PENDING",
+        }
+        factura_payload["xml_verifactu"] = generar_xml_alta_factura(
+            factura_payload,
+            {
+                "nif": nif_emisor,
+                "nombre_comercial": str(emp_row_r1.get("nombre_comercial") or ""),
+                "nombre_legal": str(emp_row_r1.get("nombre_legal") or ""),
+            },
+            {"nif": nif_cliente, "nombre": cliente_nombre_r1},
+            hash_registro,
+        )
+        return _pg_insert_factura_emit_row(
+            conn,
+            factura_payload,
+            extra_columns=_PG_FACTURA_R1_EXTRA_COLUMNS,
+        )
+
+
 def _pg_finalizar_factura_verifactu(*, empresa_id: str, factura_id: int) -> dict[str, Any]:
     """
     Transacción única en Postgres: bloqueo consultivo por empresa, ``FOR UPDATE`` de la factura,
@@ -206,7 +608,6 @@ def _pg_finalizar_factura_verifactu(*, empresa_id: str, factura_id: int) -> dict
     from sqlalchemy.exc import IntegrityError
 
     from app.db.session import get_engine as _ge
-    from app.services.verifactu_service import VerifactuService
 
     eng = _ge()
     if eng is None:
@@ -214,10 +615,7 @@ def _pg_finalizar_factura_verifactu(*, empresa_id: str, factura_id: int) -> dict
 
     try:
         with eng.begin() as conn:
-            conn.execute(
-                text("SELECT pg_advisory_xact_lock(abs(hashtext(CAST(:gk AS text))))"),
-                {"gk": str(empresa_id)},
-            )
+            _pg_advisory_xact_lock_empresa(conn, str(empresa_id))
             row_m = conn.execute(
                 text(
                     """
@@ -1023,8 +1421,49 @@ class FacturasService:
         except Exception:
             pass
 
-        async with _invoice_emit_lock(eid):
-            # --- 3) Eslabón anterior VeriFactu: hash encadenado + siguiente secuencial ---
+        plan_f = await fetch_empresa_plan(self._db, empresa_id=eid)
+        enterprise = normalize_plan(plan_f) == PLAN_ENTERPRISE
+        eng = get_engine()
+        factura_id: int | None = None
+        factura_row: dict[str, Any] | None = None
+        eslabon: EslabonFacturaAnterior
+        num_fact: str
+        hash_registro: str
+
+        if eng is not None:
+            factura_row, eslabon, num_fact, hash_registro = await asyncio.to_thread(
+                _pg_emit_f1_desde_portes_tx,
+                eng,
+                eid=eid,
+                cid=cid,
+                fecha_iso=fecha_iso,
+                anio=fecha_emision.year,
+                portes_rows=portes_rows,
+                nif_emisor=nif_emisor,
+                nif_cliente=nif_cliente,
+                empresa_row=empresa_row,
+                cliente_row=cliente_row,
+                inv_tot=inv_tot,
+                porte_lineas_snapshot=porte_lineas_snapshot,
+                total_km_estimados_snapshot=float(total_km_estimados_snapshot),
+                base_imponible=float(base_imponible),
+                cuota_iva=float(cuota_iva),
+                total_factura=float(total_factura),
+                enterprise=enterprise,
+            )
+            factura_id = _factura_pk(factura_row.get("id"))
+            await self._verifactu.registrar_evento(
+                accion="GENERAR_FACTURA_VERIFACTU",
+                registro_id=str(factura_id),
+                detalles={
+                    "num_factura": num_fact,
+                    "hash_registro": hash_registro,
+                },
+                empresa_id=eid,
+                usuario_id=usuario_id,
+            )
+        else:
+            # Desarrollo / tests sin ``DATABASE_URL``: sin candado transaccional (no apto producción).
             try:
                 eslabon = await self._verifactu.obtener_ultimo_hash_y_secuencial(empresa_id=eid)
             except Exception as e:
@@ -1034,10 +1473,8 @@ class FacturasService:
 
             serie = os.getenv("VERIFACTU_SERIE_FACTURA", "FAC").strip() or "FAC"
             anio = fecha_emision.year
-            # Serie-Año-Secuencial (identificador de factura en cadena VeriFactu)
             num_fact = f"{serie}-{anio}-{eslabon.siguiente_secuencial:06d}"
 
-            # --- 4) Huella de inalterabilidad: hash_factura único encadenado (génesis o hash anterior)
             try:
                 hash_registro = VerifactuService.generate_invoice_hash(
                     {
@@ -1076,7 +1513,6 @@ class FacturasService:
             )
             qr_content = str(qr_verifactu.get("verification_url") or "").strip() or None
 
-            # Campos alineados con VeriFactu / SIF (tipo F1, huella y encadenamiento)
             factura_payload: dict[str, Any] = {
                 "empresa_id": eid,
                 "cliente": cid,
@@ -1128,9 +1564,6 @@ class FacturasService:
                     f"Detalle: {xml_err}"
                 ) from xml_err
 
-            factura_id: int | None = None
-            factura_row: dict[str, Any] | None = None
-
             try:
                 try:
                     res_fact: Any = await self._db.execute(
@@ -1161,9 +1594,6 @@ class FacturasService:
                     usuario_id=usuario_id,
                 )
 
-                # Portes: estado facturado + vínculo; Enterprise: persiste `co2_emitido` (huella ESG).
-                plan_f = await fetch_empresa_plan(self._db, empresa_id=eid)
-                enterprise = normalize_plan(plan_f) == PLAN_ENTERPRISE
                 for pr in portes_rows:
                     pid = str(pr.get("id") or "").strip()
                     if not pid:
@@ -1390,64 +1820,103 @@ class FacturasService:
         if (res_dup.data or []) if hasattr(res_dup, "data") else []:
             raise ValueError("Ya existe una rectificativa emitida para esta factura")
 
-        async with _invoice_emit_lock(eid):
+        fecha_emision = date.today()
+        fecha_iso = fecha_emision.isoformat()
+
+        base_r_dec = negate_fiat_for_rectificativa(orig.get("base_imponible"))
+        cuota_r_dec = negate_fiat_for_rectificativa(orig.get("cuota_iva"))
+        total_orig_dec = round_fiat(orig.get("total_factura") or 0)
+        if total_orig_dec == 0 and (base_r_dec != 0 or cuota_r_dec != 0):
+            total_r_dec = round_fiat(base_r_dec + cuota_r_dec)
+        else:
+            total_r_dec = negate_fiat_for_rectificativa(orig.get("total_factura"))
+        base_r = float(base_r_dec)
+        cuota_r = float(cuota_r_dec)
+        total_r = float(total_r_dec)
+        if not totals_coherent(base_r, cuota_r, total_r):
+            raise ValueError(
+                "Incoherencia fiscal en rectificativa: base + IVA no coincide con total (tolerancia 0,01 €)."
+            )
+
+        nif_emisor_raw = str(orig.get("nif_emisor") or "").strip()
+        nif_emisor = pii_crypto.decrypt_pii(nif_emisor_raw) or nif_emisor_raw
+        if not nif_emisor:
+            try:
+                res_ne: Any = await self._db.execute(
+                    self._db.table("empresas").select("nif").eq("id", eid).limit(1)
+                )
+                ner: list[dict[str, Any]] = (res_ne.data or []) if hasattr(res_ne, "data") else []
+                if ner:
+                    raw_nif_emp = str(ner[0].get("nif") or "").strip()
+                    nif_emisor = pii_crypto.decrypt_pii(raw_nif_emp) or raw_nif_emp
+            except Exception:
+                pass
+
+        cliente_id = str(orig.get("cliente") or "").strip()
+        nif_cliente = ""
+        cliente_nombre_r1 = ""
+        if cliente_id:
+            try:
+                res_nc: Any = await self._db.execute(
+                    self._db.table("clientes").select("nif,nombre").eq("id", cliente_id).limit(1)
+                )
+                ncr: list[dict[str, Any]] = (res_nc.data or []) if hasattr(res_nc, "data") else []
+                if ncr:
+                    raw_nif_cli = str(ncr[0].get("nif") or "").strip()
+                    nif_cliente = pii_crypto.decrypt_pii(raw_nif_cli) or raw_nif_cli
+                    cliente_nombre_r1 = str(ncr[0].get("nombre") or "").strip()
+            except Exception:
+                pass
+
+        num_orig = str(
+            orig.get("num_factura") or orig.get("numero_factura") or ""
+        ).strip()
+        if not num_orig:
+            raise ValueError("La factura original no tiene número VeriFactu (num_factura)")
+
+        porte_snap = _clone_snapshot_con_importes_negativos(orig.get("porte_lineas_snapshot"))
+        km_snap = orig.get("total_km_estimados_snapshot")
+        try:
+            km_val = float(km_snap) if km_snap is not None else 0.0
+        except (TypeError, ValueError):
+            km_val = 0.0
+
+        emp_row_r1: dict[str, Any] = {}
+        try:
+            res_emp_r1: Any = await self._db.execute(
+                self._db.table("empresas").select("nif,nombre_comercial,nombre_legal").eq("id", eid).limit(1)
+            )
+            er_emp: list[dict[str, Any]] = (res_emp_r1.data or []) if hasattr(res_emp_r1, "data") else []
+            if er_emp:
+                emp_row_r1 = dict(er_emp[0])
+        except Exception:
+            pass
+
+        eng_r1 = get_engine()
+        row_new: dict[str, Any]
+        if eng_r1 is not None:
+            row_new = await asyncio.to_thread(
+                _pg_emit_r1_rectificativa_tx,
+                eng_r1,
+                eid=eid,
+                fid=fid,
+                motivo=motivo,
+                fecha_iso=fecha_iso,
+                anio=fecha_emision.year,
+                orig=orig,
+                nif_emisor=nif_emisor,
+                nif_cliente=nif_cliente,
+                cliente_nombre_r1=cliente_nombre_r1,
+                emp_row_r1=emp_row_r1,
+                porte_snap=porte_snap,
+                km_val=km_val,
+                base_r=base_r,
+                cuota_r=cuota_r,
+                total_r=total_r,
+            )
+        else:
             eslabon = await self._verifactu.obtener_ultimo_hash_y_secuencial(empresa_id=eid)
             siguiente_seq = eslabon.siguiente_secuencial
-
-            fecha_emision = date.today()
-            fecha_iso = fecha_emision.isoformat()
-
-            base_r_dec = negate_fiat_for_rectificativa(orig.get("base_imponible"))
-            cuota_r_dec = negate_fiat_for_rectificativa(orig.get("cuota_iva"))
-            total_orig_dec = round_fiat(orig.get("total_factura") or 0)
-            if total_orig_dec == 0 and (base_r_dec != 0 or cuota_r_dec != 0):
-                total_r_dec = round_fiat(base_r_dec + cuota_r_dec)
-            else:
-                total_r_dec = negate_fiat_for_rectificativa(orig.get("total_factura"))
-            base_r = float(base_r_dec)
-            cuota_r = float(cuota_r_dec)
-            total_r = float(total_r_dec)
-            if not totals_coherent(base_r, cuota_r, total_r):
-                raise ValueError(
-                    "Incoherencia fiscal en rectificativa: base + IVA no coincide con total (tolerancia 0,01 €)."
-                )
-
-            nif_emisor_raw = str(orig.get("nif_emisor") or "").strip()
-            nif_emisor = pii_crypto.decrypt_pii(nif_emisor_raw) or nif_emisor_raw
-            if not nif_emisor:
-                try:
-                    res_ne: Any = await self._db.execute(
-                        self._db.table("empresas").select("nif").eq("id", eid).limit(1)
-                    )
-                    ner: list[dict[str, Any]] = (res_ne.data or []) if hasattr(res_ne, "data") else []
-                    if ner:
-                        raw_nif_emp = str(ner[0].get("nif") or "").strip()
-                        nif_emisor = pii_crypto.decrypt_pii(raw_nif_emp) or raw_nif_emp
-                except Exception:
-                    pass
-
-            cliente_id = str(orig.get("cliente") or "").strip()
-            nif_cliente = ""
-            cliente_nombre_r1 = ""
-            if cliente_id:
-                try:
-                    res_nc: Any = await self._db.execute(
-                        self._db.table("clientes").select("nif,nombre").eq("id", cliente_id).limit(1)
-                    )
-                    ncr: list[dict[str, Any]] = (res_nc.data or []) if hasattr(res_nc, "data") else []
-                    if ncr:
-                        raw_nif_cli = str(ncr[0].get("nif") or "").strip()
-                        nif_cliente = pii_crypto.decrypt_pii(raw_nif_cli) or raw_nif_cli
-                        cliente_nombre_r1 = str(ncr[0].get("nombre") or "").strip()
-                except Exception:
-                    pass
-
-            num_orig = str(
-                orig.get("num_factura") or orig.get("numero_factura") or ""
-            ).strip()
-            if not num_orig:
-                raise ValueError("La factura original no tiene número VeriFactu (num_factura)")
-
             serie_r = os.getenv("VERIFACTU_SERIE_RECTIFICATIVA", "R").strip() or "R"
             anio = fecha_emision.year
             num_fact_r = f"{serie_r}-{anio}-{siguiente_seq:06d}"
@@ -1485,13 +1954,6 @@ class FacturasService:
             )
             qr_content = str(qr_verifactu.get("verification_url") or "").strip() or None
 
-            porte_snap = _clone_snapshot_con_importes_negativos(orig.get("porte_lineas_snapshot"))
-            km_snap = orig.get("total_km_estimados_snapshot")
-            try:
-                km_val = float(km_snap) if km_snap is not None else 0.0
-            except (TypeError, ValueError):
-                km_val = 0.0
-
             factura_payload: dict[str, Any] = {
                 "empresa_id": eid,
                 "cliente": cliente_id,
@@ -1524,16 +1986,6 @@ class FacturasService:
                 "estado_cobro": "emitida",
                 "payment_status": "PENDING",
             }
-            emp_row_r1: dict[str, Any] = {}
-            try:
-                res_emp_r1: Any = await self._db.execute(
-                    self._db.table("empresas").select("nif,nombre_comercial,nombre_legal").eq("id", eid).limit(1)
-                )
-                er_emp: list[dict[str, Any]] = (res_emp_r1.data or []) if hasattr(res_emp_r1, "data") else []
-                if er_emp:
-                    emp_row_r1 = dict(er_emp[0])
-            except Exception:
-                pass
             try:
                 factura_payload["xml_verifactu"] = generar_xml_alta_factura(
                     factura_payload,
@@ -1556,34 +2008,37 @@ class FacturasService:
             if not ins_rows:
                 raise RuntimeError("No se pudo insertar la rectificativa R1")
             row_new = dict(ins_rows[0])
-            new_id = _factura_pk(row_new.get("id"))
 
-            await self._verifactu.registrar_evento(
-                accion="EMITIR_RECTIFICATIVA_R1",
-                registro_id=str(new_id),
-                detalles={
-                    "num_factura": num_fact_r,
-                    "hash_registro": hash_registro,
-                    "factura_rectificada_id": fid,
-                    "num_factura_rectificada": num_orig,
-                    "motivo": str(motivo).strip()[:500],
-                },
-                empresa_id=eid,
-                usuario_id=usuario_id,
-            )
+        new_id = _factura_pk(row_new.get("id"))
+        num_fact_r = str(row_new.get("num_factura") or row_new.get("numero_factura") or "")
+        hash_registro = str(row_new.get("hash_registro") or row_new.get("hash_factura") or "")
 
-            await self._audit.try_log(
-                empresa_id=eid,
-                accion="RECTIFICATIVA_R1",
-                tabla="facturas",
-                registro_id=str(new_id),
-                cambios={
-                    "factura_rectificada_id": fid,
-                    "numero_factura": num_fact_r,
-                    "total_factura": total_r,
-                    "motivo": str(motivo).strip()[:500],
-                },
-            )
+        await self._verifactu.registrar_evento(
+            accion="EMITIR_RECTIFICATIVA_R1",
+            registro_id=str(new_id),
+            detalles={
+                "num_factura": num_fact_r,
+                "hash_registro": hash_registro,
+                "factura_rectificada_id": fid,
+                "num_factura_rectificada": num_orig,
+                "motivo": str(motivo).strip()[:500],
+            },
+            empresa_id=eid,
+            usuario_id=usuario_id,
+        )
+
+        await self._audit.try_log(
+            empresa_id=eid,
+            accion="RECTIFICATIVA_R1",
+            tabla="facturas",
+            registro_id=str(new_id),
+            cambios={
+                "factura_rectificada_id": fid,
+                "numero_factura": num_fact_r,
+                "total_factura": total_r,
+                "motivo": str(motivo).strip()[:500],
+            },
+        )
 
         # Si la rectificación afecta una factura de un mes anterior, fuerza recálculo del snapshot
         # financiero de ese periodo (consistencia KPI histórica).

@@ -6,107 +6,163 @@ from pydantic import BaseModel, Field
 
 
 class FinanceMensualBarOut(BaseModel):
-    """Un mes en la serie comparativa ingresos vs gastos (snake_case)."""
+    """Punto mensual de la serie operativa ingresos vs gastos (P&L de caja operativa aproximada)."""
 
-    periodo: str = Field(..., description="YYYY-MM")
-    ingresos: float = Field(..., ge=0, description="Ingresos netos sin IVA del mes (facturas)")
-    gastos: float = Field(..., ge=0, description="Gastos operativos netos sin IVA del mes")
+    periodo: str = Field(
+        ...,
+        description="Mes calendario en formato YYYY-MM; siempre incluido aunque no haya movimiento (0,00).",
+    )
+    ingresos: float = Field(
+        ...,
+        ge=0,
+        description="Reconocimiento de ingreso neto sin IVA del mes: suma de bases imponibles o "
+        "(total_factura − cuota_iva) de facturas con fecha de emisión en el mes.",
+    )
+    gastos: float = Field(
+        ...,
+        ge=0,
+        description="Gastos operativos netos sin IVA del mes: tickets en `gastos` con fecha en el mes "
+        "(importe total menos cuota IVA cuando consta).",
+    )
 
 
 class FinanceTesoreriaMensualOut(BaseModel):
-    """Facturación vs cobros reconocidos en el mismo mes de emisión (proxy de tesorería)."""
+    """
+    Comparativa mensual **facturación** (emisión) vs **entradas bancarias** (fecha de apunte).
 
-    periodo: str = Field(..., description="YYYY-MM")
+    Útil en Due Diligence para contrastar reconocimiento contable de ingresos con liquidez efectiva.
+    """
+
+    periodo: str = Field(
+        ...,
+        description="Mes calendario YYYY-MM del año fiscal en curso (enero–diciembre); siempre presente.",
+    )
     ingresos_facturados: float = Field(
         ...,
         ge=0,
-        description="Bases facturadas (sin IVA) con fecha de emisión en el mes",
+        description="Ingreso neto sin IVA facturado en el mes (misma regla que el bar de ingresos, "
+        "agrupado por `fecha_emision`).",
     )
     cobros_reales: float = Field(
         ...,
         ge=0,
-        description="Importe de facturas cobradas (estado cobrada) con emisión en el mes",
+        description="Suma de importes de movimientos bancarios conciliados (``bank_transactions.reconciled``) "
+        "en el mes del ``booked_date``, vinculados a facturas cobradas vía ``matched_transaction_id`` / ``pago_id`` "
+        "(flujo GoCardless / Open Banking). Sin histórico bancario, el backend devuelve 0,00.",
     )
 
 
 class GastoBucketCincoOut(BaseModel):
-    """Agregado de gastos en 5 categorías operativas para desglose."""
+    """Desglose de gastos operativos en cinco buckets homogéneos para reporting ejecutivo y comparables entre tenants."""
 
-    name: str = Field(..., description="Combustible | Personal | Mantenimiento | Seguros | Peajes")
-    value: float = Field(..., ge=0, description="EUR netos sin IVA")
+    name: str = Field(
+        ...,
+        description="Bucket fijo: Combustible | Personal | Mantenimiento | Seguros | Peajes. "
+        "Combustible incluye tickets enlazados a `gastos_vehiculo` (importación tarjeta combustible) "
+        "además de categorías con palabra clave combustible.",
+    )
+    value: float = Field(
+        ...,
+        ge=0,
+        description="Acumulado YTD (año calendario del `hoy` de la petición) en EUR netos sin IVA para ese bucket.",
+    )
 
 
 class FinanceDashboardOut(BaseModel):
     """
-    KPIs financieros + margen por km (snapshot fiscal) + serie 6 meses.
+    Panel financiero consolidado por empresa (tenant): P&L mensual, tesorería, desglose de gastos y margen por km.
+
+    Los importes siguen política **sin IVA** alineada con `FinanceService`. Las series temporales están
+    densificadas (sin huecos nulos) para consumo estable en frontends y exportaciones auditoría.
     """
 
-    ingresos: float = Field(..., description="Total bases imponibles facturadas sin IVA (financial_summary)")
-    gastos: float = Field(..., description="Total gastos netos sin IVA")
-    ebitda: float = Field(..., description="ingresos − gastos")
+    ingresos: float = Field(
+        ...,
+        description="Ingresos netos sin IVA del **period_month** solicitado (o mes en curso): suma de facturas "
+        "emitidas en ese mes calendario.",
+    )
+    gastos: float = Field(
+        ...,
+        description="Gastos operativos netos sin IVA del mismo mes calendario que `ingresos` (tabla `gastos`).",
+    )
+    ebitda: float = Field(
+        ...,
+        description="Resultado operativo aproximado del mes: `ingresos − gastos` (mismas reglas netas de IVA).",
+    )
     total_km_estimados_snapshot: float = Field(
         ...,
         ge=0,
-        description="Suma de total_km_estimados_snapshot en facturas emitidas (inmutable)",
+        description="Kilómetros facturados congelados al emitir (`total_km_estimados_snapshot`) sumados en el mes "
+        "de emisión; base para margen €/km fiscal.",
     )
     margen_km_eur: float | None = Field(
         default=None,
-        description="EBITDA / total_km_estimados_snapshot si km > 0",
+        description="Margen operativo por km del mes: `ebitda / total_km_estimados_snapshot` si km > 0; "
+        "en otro caso `null` (evita división por cero).",
     )
     ingresos_vs_gastos_mensual: list[FinanceMensualBarOut] = Field(
         default_factory=list,
-        description="Últimos 6 meses calendario (ingresos desde facturas, gastos desde tickets)",
+        description="Ventana móvil de **6 meses** terminando en el mes de `hoy`: siempre 6 filas ordenadas "
+        "cronológicamente; meses sin actividad muestran 0,00 en ingresos y gastos.",
     )
     tesoreria_mensual: list[FinanceTesoreriaMensualOut] = Field(
         default_factory=list,
-        description="Últimos 6 meses: facturado vs cobrado (mismo mes de emisión)",
+        description="Serie de **12 meses** del año calendario de `hoy`: facturación neta del mes vs cobros "
+        "bancarios conciliados en ese mes (`booked_date`). Sin movimientos bancarios importados para la empresa, "
+        "`cobros_reales` es 0,00 en todos los meses.",
     )
     gastos_por_bucket_cinco: list[GastoBucketCincoOut] = Field(
         default_factory=list,
-        description="Gastos acumulados mapeados a 5 categorías (UI)",
+        description="Siempre **5 elementos** fijos (orden estable) para evitar errores de UI; importe 0,00 si "
+        "no hay gastos en el bucket en el año en curso.",
     )
     margen_neto_km_mes_actual: float | None = Field(
         default=None,
-        description="(Ingresos − Gastos) / km facturados en el mes en curso",
+        description="Margen neto operativo por km del mes del `period_month`: (ingresos − gastos) / km facturados; "
+        "`null` si no hay km.",
     )
     margen_neto_km_mes_anterior: float | None = Field(
         default=None,
-        description="Mismo KPI para el mes calendario anterior",
+        description="Mismo KPI para el mes calendario inmediatamente anterior al de `period_month`.",
     )
     variacion_margen_km_pct: float | None = Field(
         default=None,
-        description="Variación % del margen neto/km vs mes anterior (null si no comparable)",
+        description="Variación porcentual `(margen_actual − margen_anterior) / margen_anterior` cuando el "
+        "denominador es distinto de cero; `null` si no es comparable.",
     )
     km_facturados_mes_actual: float | None = Field(
         default=None,
         ge=0,
-        description="Suma km (snapshot en facturas) con emisión en el mes en curso",
+        description="Suma de `total_km_estimados_snapshot` en facturas con emisión en el mes de `period_month`.",
     )
     km_facturados_mes_anterior: float | None = Field(
         default=None,
         ge=0,
-        description="Misma métrica para el mes calendario anterior",
+        description="Igual que `km_facturados_mes_actual` para el mes calendario previo.",
     )
 
 
 class FinanceSummaryOut(BaseModel):
     """
-    KPIs financieros agregados por empresa.
+    KPIs financieros agregados por empresa y **mes calendario** (YYYY-MM).
 
-    Importes **sin IVA** (bases y gastos netos de impuesto cuando hay desglose).
+    Importes **sin IVA**: mismas reglas que el dashboard transaccional; datos en vivo desde
+    ``facturas`` y ``gastos`` (no snapshots preagregados).
     """
 
     ingresos: float = Field(
         ...,
-        description="Suma de bases imponibles de facturas emitidas (sin IVA)",
+        description="Suma de ingresos netos sin IVA del mes: ``base_imponible`` o "
+        "``total_factura − cuota_iva`` por factura con ``fecha_emision`` en el mes.",
     )
     gastos: float = Field(
         ...,
-        description="Gastos operativos netos sin IVA (total ticket menos cuota iva si consta)",
+        description="Suma de gastos operativos netos sin IVA del mes (tabla ``gastos``, fecha en el mes; "
+        "importe total menos cuota IVA cuando consta).",
     )
     ebitda: float = Field(
         ...,
-        description="Ingresos netos (sin IVA) − Gastos netos (sin IVA)",
+        description="Resultado operativo aproximado del mes: ``ingresos − gastos``.",
     )
 
 

@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 from starlette.requests import Request
 
 from app.core.config import get_settings
@@ -21,6 +22,8 @@ _PUBLIC_PREFIXES = (
     "/openapi.json",
     "/auth/",
 )
+
+_MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
 def _extract_access_token(request: Request) -> str | None:
@@ -43,23 +46,47 @@ class TenantRBACContextMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Any):  # type: ignore[override]
         path = request.url.path.rstrip("/") or "/"
+        method = (request.method or "").upper()
+        is_mutating_request = method in _MUTATING_METHODS
         if path != "/" and any(path.startswith(prefix.rstrip("/")) for prefix in _PUBLIC_PREFIXES):
             return await call_next(request)
 
         token = _extract_access_token(request)
-        if token:
-            try:
-                payload = decode_access_token_payload(token)
-                subject = str(payload.get("sub") or "").strip()
-                if subject:
-                    db = await get_supabase(jwt_token=token)
-                    auth_service = AuthService(db)
-                    user = await auth_service.get_profile_by_subject(subject=subject)
-                    if user is not None:
-                        await auth_service.ensure_empresa_context(empresa_id=user.empresa_id)
-                        await auth_service.ensure_rbac_context(user=user)
-            except Exception as exc:
-                # No romper la request: el control final sigue en dependencias auth/rbac.
-                _log.debug("TenantRBACContextMiddleware omitido: %s", exc)
+        try:
+            if not token:
+                raise PermissionError("missing access token")
+
+            payload = decode_access_token_payload(token)
+            subject = str(payload.get("sub") or "").strip()
+            if not subject:
+                raise PermissionError("missing subject in token payload")
+
+            db = await get_supabase(jwt_token=token)
+            auth_service = AuthService(db)
+            user = await auth_service.get_profile_by_subject(subject=subject)
+            if user is None:
+                raise PermissionError("subject not mapped to tenant profile")
+
+            # Contexto de tenant y RBAC obligatorio para preservar aislamiento.
+            await auth_service.ensure_empresa_context(empresa_id=user.empresa_id)
+            await auth_service.ensure_rbac_context(user=user)
+        except Exception as exc:
+            if is_mutating_request:
+                _log.error(
+                    "TenantRBACContextMiddleware hard-fail %s %s: %s",
+                    method,
+                    path,
+                    exc,
+                )
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "detail": (
+                            "Forbidden: tenant write context validation failed "
+                            "(get_current_user/bind_write_context required)."
+                        )
+                    },
+                )
+            _log.debug("TenantRBACContextMiddleware omitido (solo lectura): %s", exc)
 
         return await call_next(request)

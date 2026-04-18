@@ -37,7 +37,7 @@ POST /api/v1/routes/optimize-route
 ### 4. API Keys & Rate Limiting [DONE]
 ```env
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY (frontend)
-MAPS_API_KEY / GOOGLE_MAPS_API_KEY (backend)
+Maps_API_KEY (backend; única variable soportada)
 ```
 
 ```python

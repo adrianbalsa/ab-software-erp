@@ -3,13 +3,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
 
+from app.core.config import get_settings
 from app.db.supabase import SupabaseAsync
 
 _log = logging.getLogger(__name__)
@@ -96,12 +96,7 @@ class GeoService:
 
     @staticmethod
     def maps_api_key() -> str | None:
-        return (
-            os.getenv("Maps_API_KEY")
-            or os.getenv("MAPS_API_KEY")
-            or os.getenv("GOOGLE_MAPS_API_KEY")
-            or ""
-        ).strip() or None
+        return get_settings().maps_api_key
 
     async def get_coordinates(
         self,
@@ -306,7 +301,7 @@ class GeoService:
 
         api_key = self.maps_api_key()
         if not api_key:
-            raise ValueError("MAPS_API_KEY / GOOGLE_MAPS_API_KEY no configurada")
+            raise ValueError("Maps_API_KEY no configurada")
 
         distance_meters, duration_seconds = await self._compute_routes_v2(
             origin=o,

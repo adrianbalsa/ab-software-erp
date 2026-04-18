@@ -2,6 +2,9 @@
 Motor SQLAlchemy opcional (conexión directa a Postgres o a través de PgBouncer).
 
 Si ``DATABASE_URL`` no está configurada (p. ej. solo Supabase HTTP), ``get_engine()`` devuelve ``None``.
+En ``ENVIRONMENT=production``, ``app.core.config`` exige ``DATABASE_URL`` explícita no vacía
+(``ConfigError`` al importar/arrancar); el motor SQLAlchemy es obligatorio para candados
+transaccionales VeriFactu (``pg_advisory_xact_lock``) en multi-réplica.
 """
 
 from __future__ import annotations

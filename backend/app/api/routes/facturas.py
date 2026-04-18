@@ -20,9 +20,17 @@ from app.schemas.user import UserOut
 from app.services.auditoria_service import AuditoriaService
 from app.services.email_service import EmailService, send_invoice_email_from_base64
 from app.services.facturas_service import FacturasService
+from pydantic import BaseModel
 
 
 router = APIRouter()
+
+
+class FacturaQueueOut(BaseModel):
+    status: str
+    job_id: str
+    factura_id: int
+    aeat_sif_estado: str
 
 
 @router.post(
@@ -58,7 +66,7 @@ async def list_facturas(
         description="Filtrar por columna aeat_sif_estado (p. ej. aceptado, pendiente).",
     ),
     current_user: UserOut = Depends(deps.require_role("owner")),
-    service: FacturasService = Depends(deps.get_facturas_service),
+    service: FacturasService = Depends(deps.get_facturas_service_async),
 ) -> list[FacturaOut]:
     return await service.list_facturas(
         empresa_id=current_user.empresa_id,
@@ -73,7 +81,7 @@ async def obtener_factura(
     _tenant_guard: None = Depends(
         deps.require_tenant_resource(table_name="facturas", path_param="factura_id")
     ),
-    service: FacturasService = Depends(deps.get_facturas_service),
+    service: FacturasService = Depends(deps.get_facturas_service_async),
 ) -> FacturaOut:
     """Detalle de factura por id (misma empresa que el usuario)."""
     try:
@@ -262,13 +270,17 @@ async def finalizar_factura_verifactu(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{factura_id}/reenviar-aeat", response_model=FacturaOut)
+@router.post(
+    "/{factura_id}/reenviar-aeat",
+    response_model=FacturaQueueOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def reenviar_factura_aeat(
     factura_id: int,
     current_user: UserOut = Depends(deps.bind_write_context),
     _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
     service: FacturasService = Depends(deps.get_facturas_service),
-) -> FacturaOut:
+) -> FacturaQueueOut:
     """
     Reintenta el envío del registro a la AEAT (p. ej. tras caída de red o corrección de certificado).
     En desarrollo solo se usa la URL de pruebas si ``AEAT_BLOQUEAR_PROD_EN_DESARROLLO`` está activo.
@@ -282,17 +294,4 @@ async def reenviar_factura_aeat(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    est = (out.aeat_sif_estado or "").strip().lower()
-    code = (out.aeat_sif_codigo or "").strip().upper()
-    if est == "pendiente_envio" and code == "AEAT_TIMEOUT":
-        raise HTTPException(
-            status.HTTP_504_GATEWAY_TIMEOUT,
-            "La AEAT no respondió a tiempo; el registro quedó en cola para reintento.",
-        )
-    if est == "pendiente_envio" and code == "AEAT_CONNECTION":
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "No se pudo conectar con el servicio de la AEAT; el registro quedó en cola para reintento.",
-        )
-
-    return out
+    return FacturaQueueOut.model_validate(out)

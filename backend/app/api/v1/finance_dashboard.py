@@ -10,7 +10,6 @@ from fastapi.responses import StreamingResponse
 
 from app.api import deps
 from app.core.pdf_generator import generate_esg_certificate
-from app.middleware.rbac_middleware import require_admin
 from app.models.webhook import WebhookEventType
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
@@ -482,7 +481,7 @@ async def credit_limit_alerts(
     summary="KPIs de tesorería y riesgo de cobro (6 meses)",
 )
 async def treasury_risk_dashboard(
-    current_user: UserOut = Depends(require_admin),
+    current_user: UserOut = Depends(deps.require_admin_user),
     db: SupabaseAsync = Depends(deps.get_db),
 ) -> TreasuryRiskDashboardOut:
     empresa_id = str(current_user.empresa_id)
@@ -560,7 +559,7 @@ async def treasury_risk_dashboard(
     summary="Reporte mensual ESG de huella de carbono",
 )
 async def monthly_esg_report(
-    current_user: UserOut = Depends(require_admin),
+    current_user: UserOut = Depends(deps.require_admin_user),
     db: SupabaseAsync = Depends(deps.get_db),
 ) -> EsgMonthlyReportOut:
     report_data = await _build_esg_monthly_report_data(
@@ -643,7 +642,7 @@ async def _build_esg_monthly_report_data(*, db: SupabaseAsync, empresa_id: str) 
 )
 async def monthly_esg_report_download(
     background_tasks: BackgroundTasks,
-    current_user: UserOut = Depends(require_admin),
+    current_user: UserOut = Depends(deps.require_admin_user),
     db: SupabaseAsync = Depends(deps.get_db),
 ) -> StreamingResponse:
     report_data = await _build_esg_monthly_report_data(

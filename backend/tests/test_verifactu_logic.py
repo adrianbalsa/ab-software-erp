@@ -84,16 +84,16 @@ async def test_emitir_f1_genera_hash_registro_correcto() -> None:
         _data([porte_row]),
         _data([{"nif": "B12345678"}]),
         _data([{"nif": "a87654321"}]),
+        _data([{"plan_type": "starter"}]),  # fetch_empresa_plan (antes del encadenamiento)
         _data([]),  # cadena: última factura por empresa
         _data([]),  # huella: último fingerprint_hash (vacío → génesis)
         _data([factura_row]),  # insert facturas
         _data([{}]),
         _data([{}]),
         _data([cliente_det]),
-        _data([{}]),
+        _data([{}]),  # auditoría (try_log)
         _data([{"nombre_comercial": "Emp QA", "nif": "B12345678"}]),
         _data([{"nombre": "Cliente QA"}]),
-        _data([{}]),
     ]
 
     db = MagicMock()
@@ -104,9 +104,10 @@ async def test_emitir_f1_genera_hash_registro_correcto() -> None:
     svc = FacturasService(db)
     payload = FacturaCreateFromPortes(cliente_id=UUID(cid), iva_porcentaje=21.0)
 
-    with patch("app.services.facturas_service.date") as mock_date:
-        mock_date.today.return_value = fixed
-        result = await svc.generar_desde_portes(empresa_id=eid, payload=payload, usuario_id="qa")
+    with patch("app.services.facturas_service.get_engine", return_value=None):
+        with patch("app.services.facturas_service.date") as mock_date:
+            mock_date.today.return_value = fixed
+            result = await svc.generar_desde_portes(empresa_id=eid, payload=payload, usuario_id="qa")
 
     assert result.factura.hash_registro == expected_hash
     assert len(expected_hash) == 64
@@ -133,9 +134,9 @@ async def test_borrar_factura_dispara_trigger_y_es_ignorado_en_compensacion() ->
 
 @pytest.mark.asyncio
 async def test_no_delete_http_facturas(client) -> None:
-    """Superficie pública: no hay borrado de facturas (inmutabilidad)."""
+    """Sin JWT no hay borrado (403 middleware); con ruta inexistente / método no expuesto, 404/405."""
     res = await client.delete("/facturas/1")
-    assert res.status_code == 404
+    assert res.status_code in (403, 404, 405)
 
 
 @pytest.mark.asyncio
@@ -207,9 +208,7 @@ async def test_emitir_r1_rectificativa_vincula_f1_e_importes_negativos() -> None
     exec_responses = [
         _data([orig]),
         _data([]),
-        _data([chain_row]),
         _data([{"nif": "A87654321", "nombre": "Cliente QA"}]),
-        _data([]),  # huella: último fingerprint_hash
         _data(
             [
                 {
@@ -219,6 +218,8 @@ async def test_emitir_r1_rectificativa_vincula_f1_e_importes_negativos() -> None
                 }
             ]
         ),
+        _data([chain_row]),
+        _data([]),  # huella: último fingerprint_hash
         _data([r1_row]),
         _data([{}]),
         _data([{}]),
@@ -230,14 +231,15 @@ async def test_emitir_r1_rectificativa_vincula_f1_e_importes_negativos() -> None
 
     svc = FacturasService(db)
 
-    with patch("app.services.facturas_service.date") as mock_date:
-        mock_date.today.return_value = fixed
-        out = await svc.emitir_factura_rectificativa(
-            empresa_id=eid,
-            factura_id=fid,
-            motivo="Error en base imponible",
-            usuario_id="qa",
-        )
+    with patch("app.services.facturas_service.get_engine", return_value=None):
+        with patch("app.services.facturas_service.date") as mock_date:
+            mock_date.today.return_value = fixed
+            out = await svc.emitir_factura_rectificativa(
+                empresa_id=eid,
+                factura_id=fid,
+                motivo="Error en base imponible",
+                usuario_id="qa",
+            )
 
     assert out.factura_rectificada_id == fid
     assert out.total_factura < 0

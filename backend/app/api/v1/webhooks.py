@@ -9,7 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from starlette.responses import Response
 
 from app.api import deps
-from app.models.auth import UserRole
+from app.models.enums import UserRole
 from app.core.webhook_dispatcher import dispatch_endpoint_test
 from app.schemas.user import UserOut
 from app.schemas.webhook_b2b import (

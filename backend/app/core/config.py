@@ -14,6 +14,10 @@ load_dotenv(dotenv_path=_CURRENT_DIR / ".env")
 load_dotenv(dotenv_path=_CURRENT_DIR.parent / ".env")
 
 
+class ConfigError(ValueError):
+    """Configuración inválida o insuficiente para arrancar la aplicación."""
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     PROJECT_NAME: str
@@ -84,6 +88,8 @@ class Settings:
     GOOGLE_OAUTH_REDIRECT_URI: Optional[str]
     # Firma de cookies de sesión (OAuth state/nonce); en producción conviene rotación independiente del JWT
     SESSION_SECRET_KEY: str
+    # Google Maps Platform (servidor: Geocoding, Distance Matrix, Routes v2). Único nombre soportado: ``Maps_API_KEY``.
+    maps_api_key: Optional[str]
     # AEAT VeriFactu / SIF (opcional; sin activar no se llama a la AEAT)
     AEAT_VERIFACTU_ENABLED: bool
     AEAT_VERIFACTU_USE_PRODUCTION: bool
@@ -326,7 +332,23 @@ def get_settings() -> Settings:
     if not jwt_secret:
         jwt_secret = session_secret
 
+    maps_api_key_raw = getenv("Maps_API_KEY")
+    maps_api_key = (
+        maps_api_key_raw.strip()
+        if maps_api_key_raw and str(maps_api_key_raw).strip()
+        else None
+    )
+
     database_url = _build_database_url(environment=environment)
+    # Due diligence / multi-réplica: en producción se exige URL explícita a Postgres.
+    # No se admite despliegue solo con PostgREST (Supabase HTTP) sin conexión transaccional.
+    if environment == "production":
+        explicit_db_url = getenv("DATABASE_URL")
+        if explicit_db_url is None or not str(explicit_db_url).strip():
+            raise ConfigError(
+                "ENVIRONMENT=production requiere DATABASE_URL no vacía (conexión directa a Postgres). "
+                "El modo exclusivamente Supabase/REST sin DATABASE_URL está prohibido en producción."
+            )
     redis_url = _opt("REDIS_URL")
 
     def _env_bool(name: str, default: bool = False) -> bool:
@@ -454,6 +476,7 @@ def get_settings() -> Settings:
         GOOGLE_CLIENT_SECRET=google_sec,
         GOOGLE_OAUTH_REDIRECT_URI=google_redirect,
         SESSION_SECRET_KEY=session_secret,
+        maps_api_key=maps_api_key,
         AEAT_VERIFACTU_ENABLED=aeat_enabled,
         AEAT_VERIFACTU_USE_PRODUCTION=aeat_use_prod,
         AEAT_BLOQUEAR_PROD_EN_DESARROLLO=aeat_block_dev,

@@ -3,7 +3,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from app.api import deps
-from app.middleware.rbac_middleware import require_admin
 from app.schemas.finance import FinanceDashboardOut, FinanceSummaryOut
 from app.schemas.user import UserOut
 from app.services.finance_service import FinanceService
@@ -14,7 +13,7 @@ router = APIRouter()
 
 @router.get("/summary", response_model=FinanceSummaryOut)
 async def finance_summary(
-    current_user: UserOut = Depends(require_admin),
+    current_user: UserOut = Depends(deps.require_admin_user),
     service: FinanceService = Depends(deps.get_finance_service),
     period_month: str | None = None,
 ) -> FinanceSummaryOut:
@@ -32,7 +31,7 @@ async def finance_summary(
 
 @router.get("/dashboard", response_model=FinanceDashboardOut)
 async def finance_dashboard(
-    current_user: UserOut = Depends(require_admin),
+    current_user: UserOut = Depends(deps.require_admin_user),
     service: FinanceService = Depends(deps.get_finance_service),
     period_month: str | None = None,
 ) -> FinanceDashboardOut:

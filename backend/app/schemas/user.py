@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.models.auth import UserRole
+from app.models.enums import UserRole
 
 class UserInDB(BaseModel):
     """Fila `usuarios` (login legacy con hash)."""

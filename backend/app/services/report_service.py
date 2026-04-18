@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import asyncio
 import json
 import os
 from typing import Any
@@ -8,7 +9,6 @@ from uuid import UUID
 from datetime import datetime, timezone
 from pathlib import Path
 
-import anyio
 import qrcode
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from reportlab.lib import colors
@@ -354,7 +354,7 @@ class ReportService:
                 nif_cliente=nif_cli,
             )
 
-        return await anyio.to_thread.run_sync(_run)
+        return await asyncio.to_thread(_run)
 
     async def certificado_huella_pdf_bytes(
         self,
@@ -388,7 +388,7 @@ class ReportService:
                 litros_estimados=litros_estimados,
             )
 
-        return await anyio.to_thread.run_sync(_run)
+        return await asyncio.to_thread(_run)
 
     async def fleet_efficiency_pdf_bytes(
         self,
@@ -484,4 +484,4 @@ class ReportService:
                 raise RuntimeError("WeasyPrint no esta instalado en el entorno actual")
             return HTML(string=rendered_html).write_pdf()
 
-        return await anyio.to_thread.run_sync(_run)
+        return await asyncio.to_thread(_run)

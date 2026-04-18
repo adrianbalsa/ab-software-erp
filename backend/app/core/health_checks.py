@@ -82,17 +82,14 @@ async def check_redis_ping() -> dict[str, Any]:
     if not url:
         return _check_dict(ok=True, detail="REDIS_URL not configured", skipped=True)
 
-    def _ping() -> None:
-        import redis
-
-        r = redis.from_url(url, socket_connect_timeout=2, socket_timeout=2)
-        try:
-            r.ping()
-        finally:
-            r.close()
-
     try:
-        await asyncio.to_thread(_ping)
+        from redis import asyncio as redis_asyncio
+
+        client = redis_asyncio.from_url(url, socket_connect_timeout=2, socket_timeout=2)
+        try:
+            await client.ping()
+        finally:
+            await client.aclose()
         return _check_dict(ok=True, detail="redis_ping_ok", skipped=False)
     except Exception as exc:
         return _check_dict(ok=False, detail=f"redis_error:{exc!s}", skipped=False)

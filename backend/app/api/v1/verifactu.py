@@ -199,19 +199,19 @@ async def retry_pending_verifactu(
                 factura_id=fid,
                 usuario_id=uid,
             )
-            merged = out.model_dump()
-            est = str(merged.get("aeat_sif_estado") or "").strip().lower()
-            if est in ("pendiente_envio", "error_tecnico"):
-                failed += 1
-                logger.warning(
-                    "retry-pending: factura_id=%s sigue en estado %s tras reintento",
-                    fid,
-                    est,
-                )
-            else:
+            est = str(out.get("aeat_sif_estado") or "").strip().lower()
+            queued = str(out.get("status") or "").strip().lower() == "queued"
+            if queued and est == "pendiente_envio":
                 success += 1
                 logger.info(
-                    "retry-pending: factura_id=%s aeat_sif_estado=%s",
+                    "retry-pending: factura_id=%s encolada para AEAT (job_id=%s)",
+                    fid,
+                    out.get("job_id"),
+                )
+            else:
+                failed += 1
+                logger.warning(
+                    "retry-pending: factura_id=%s no se pudo encolar correctamente (estado=%s)",
                     fid,
                     est,
                 )

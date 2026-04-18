@@ -551,7 +551,7 @@ Core:
 - SESSION_SECRET_KEY
 
 Integrations:
-- GOOGLE_MAPS_API_KEY
+- Maps_API_KEY (backend Google Maps Platform)
 - GOCARDLESS_ACCESS_TOKEN
 - GOCARDLESS_ENVIRONMENT (sandbox|live)
 - OPENAI_API_KEY (chatbot)
