@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 from collections import defaultdict
 from datetime import date
 from typing import Any
@@ -20,6 +22,52 @@ EUROVI_VS_EUROV_EFICIENCIA_RELATIVA = 0.15
 DEFAULT_ESCENARIO_OPTIMIZACION_PCT = 25.0
 
 VALID_CERTS: frozenset[str] = frozenset({"Euro V", "Euro VI", "Electrico", "Hibrido"})
+
+# Solo certificados emitidos en flujo Enterprise ``pending_external_audit`` (QR Due Diligence).
+_PRE_EXTERNALLY_VERIFIED: frozenset[str] = frozenset({"pending_external_audit"})
+
+
+def esg_external_webhook_signature_hex(*, secret: str, raw_body: bytes) -> str:
+    """HMAC-SHA256 (hex minúsculas) del cuerpo crudo; misma semántica que webhooks de pago."""
+    key = str(secret or "").encode("utf-8")
+    return hmac.new(key, raw_body, hashlib.sha256).hexdigest()
+
+
+def verify_esg_external_webhook_signature(
+    *, secret: str, raw_body: bytes, signature_header: str | None
+) -> bool:
+    """
+    Cabecera esperada: ``X-ABL-ESG-Signature: <hex>`` o prefijo ``sha256=`` (compat).
+    Comparación en tiempo constante.
+    """
+    want = esg_external_webhook_signature_hex(secret=secret, raw_body=raw_body)
+    raw = (signature_header or "").strip()
+    if raw.lower().startswith("sha256="):
+        raw = raw.split("=", 1)[1].strip()
+    got = raw.lower()
+    if len(got) != 64:
+        return False
+    return hmac.compare_digest(want, got)
+
+# Origen canónico del enlace QR (Due Diligence); sobreescribible con ``ESG_VERIFY_API_ORIGIN``.
+_DEFAULT_ESG_VERIFY_API_ORIGIN = "https://api.ablogistics.io"
+
+
+def certificate_content_sha256_hex(pdf_bytes: bytes) -> str:
+    """
+    SHA-256 hexadecimal del binario PDF del certificado (integridad frente a manipulación).
+    Debe coincidir con ``certificate_content_sha256`` / ``sha256_pdf`` en ``esg_certificate_documents``.
+    """
+    return hashlib.sha256(pdf_bytes).hexdigest()
+
+
+def public_esg_verify_url(*, api_origin: str | None, verification_code: str) -> str:
+    """
+    URL absoluta escaneable en QR: ``{origin}/v1/public/verify-esg/{verification_code}``.
+    """
+    base = (api_origin or _DEFAULT_ESG_VERIFY_API_ORIGIN).strip().rstrip("/")
+    code = str(verification_code).strip()
+    return f"{base}/v1/public/verify-esg/{code}"
 
 
 def _norm_cert(raw: str | None) -> CertificacionEmisiones:
@@ -232,3 +280,68 @@ class EsgAuditService:
             escenario_optimizacion_pct=scen,
             co2_ahorro_escenario_kg=round(co2_ahorro, 4),
         )
+
+    async def mark_certificate_externally_verified(
+        self,
+        *,
+        verification_code: str,
+    ) -> dict[str, Any]:
+        """
+        Transición a ``externally_verified`` en ``esg_certificate_documents``.
+
+        Invocable solo tras autorización explícita (rol admin o webhook firmado).
+        Idempotente si ya estaba verificado externamente.
+        """
+        code = str(verification_code or "").strip()
+        if len(code) < 8:
+            raise ValueError("verification_code inválido")
+
+        try:
+            res: Any = await self._db.execute(
+                self._db.table("esg_certificate_documents")
+                .select("id,empresa_id,certificate_id,verification_status,verification_code")
+                .eq("verification_code", code)
+                .limit(1)
+            )
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        except Exception as exc:
+            raise ValueError("No se pudo consultar el certificado") from exc
+
+        if not rows:
+            raise ValueError("Certificado no encontrado")
+
+        row = rows[0]
+        prev = str(row.get("verification_status") or "").strip()
+        if prev == "externally_verified":
+            return {
+                "updated": False,
+                "verification_code": code,
+                "verification_status": "externally_verified",
+                "previous_status": prev,
+                "certificate_id": str(row.get("certificate_id") or "") or None,
+                "empresa_id": str(row.get("empresa_id") or "") or None,
+            }
+
+        if prev not in _PRE_EXTERNALLY_VERIFIED:
+            raise ValueError(
+                f"Estado actual ({prev!r}) no admite transición a externally_verified"
+            )
+
+        row_id = row.get("id")
+        try:
+            await self._db.execute(
+                self._db.table("esg_certificate_documents")
+                .update({"verification_status": "externally_verified"})
+                .eq("id", row_id)
+            )
+        except Exception as exc:
+            raise ValueError("No se pudo actualizar el estado del certificado") from exc
+
+        return {
+            "updated": True,
+            "verification_code": code,
+            "verification_status": "externally_verified",
+            "previous_status": prev,
+            "certificate_id": str(row.get("certificate_id") or "") or None,
+            "empresa_id": str(row.get("empresa_id") or "") or None,
+        }

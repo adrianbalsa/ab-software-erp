@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import hashlib
+import io
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import qrcode
 from fpdf import FPDF
 
+from app.core.constants import ISO_14083_DIESEL_CO2_KG_PER_LITRE
 from app.core.i18n import get_translator
 from app.schemas.esg import HuellaCarbonoMensualOut
 from app.services.pdf_fonts import register_brand_fonts
@@ -263,6 +266,7 @@ class EsgPorteCertificatePdfModel:
     nox_total_kg: float
     subcontratado: bool
     scope_note: str
+    verify_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -280,6 +284,7 @@ class EsgFacturaCertificatePdfModel:
     esg_total_co2_kg: float
     esg_euro_iii_baseline_kg: float
     esg_ahorro_kg: float
+    verify_url: str | None = None
 
 
 def _pdf_section_title(pdf: FPDF, body: str, title: str) -> None:
@@ -505,6 +510,21 @@ def generar_pdf_certificado_esg_factura_glec(
             "Methodology: sum of GLEC models for each shipment linked to the invoice (esg_certificate_co2_vs_euro_iii), with the same distance and fuel structure per shipment. Calculated per GLEC Framework v2.0 / ISO 14083 (operational reference)."
         ),
     )
+    pdf.ln(3)
+    pdf.set_font(body, "B", 9)
+    pdf.set_text_color(*ZINC_800)
+    pdf.cell(0, 6, t("Calculation methodology (ISO 14083)"), ln=1)
+    pdf.set_font(body, "", 8)
+    pdf.set_text_color(*ZINC_500)
+    pdf.multi_cell(
+        0,
+        4,
+        t(
+            "ISO 14083:2021 — diesel reference factor {fac} kg CO₂eq / L (explicit, no "
+            "substitution). GLEC v2.0 per-shipment intensities sum to the totals above for "
+            "third-party reconciliation."
+        ).format(fac=ISO_14083_DIESEL_CO2_KG_PER_LITRE),
+    )
     pdf.ln(4)
 
     sy = pdf.get_y()
@@ -531,5 +551,14 @@ def generar_pdf_certificado_esg_factura_glec(
         4,
         t("esg_certificate_documents: PDF SHA-256 and content fingerprint."),
     )
+
+    if model.verify_url:
+        qr_buf = io.BytesIO()
+        qrcode.make(model.verify_url, border=1).save(qr_buf, format="PNG")
+        qr_buf.seek(0)
+        qr_w = 22.0
+        x_qr = float(pdf.w) - 14.0 - qr_w
+        y_qr = float(pdf.h) - 14.0 - qr_w
+        pdf.image(qr_buf, x=x_qr, y=y_qr, w=qr_w, type="PNG")
 
     return _pdf_output_bytes(pdf)

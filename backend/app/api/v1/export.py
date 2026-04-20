@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from app.api import deps
 from app.schemas.user import UserOut
 from app.services.accounting_export import AccountingExportService, build_accounting_export
+from app.services.audit_package_export import build_audit_package_zip_bytes
 
 router = APIRouter()
 
@@ -51,5 +52,29 @@ async def export_accounting(
         media_type=media_type,
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
+@router.get(
+    "/audit-package",
+    summary="ZIP evidencias Due Diligence (sin PII operativo)",
+)
+async def export_audit_package(
+    _current_user: UserOut = Depends(deps.require_role("owner")),
+) -> StreamingResponse:
+    """
+    Paquete para auditores / M&A: compliance público, matriz de precios de catálogo, ``security.txt``.
+    No incluye facturas, portes ni datos personales de clientes.
+    """
+    body = build_audit_package_zip_bytes()
+    stamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d")
+    filename = f"ab_logistics_os_audit_evidence_{stamp}.zip"
+    return StreamingResponse(
+        iter([body]),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
         },
     )

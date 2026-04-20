@@ -14,13 +14,11 @@ import {
 import type { FlotaInventarioRow, PorteListRow } from "@/lib/api";
 import { geocodeAddressWithCache } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { getOperationalCostEurKmCached, publicOperationalCostEurKmDefault } from "@/lib/operationalPricing";
 
 import { BUNKER_MAP_STYLES } from "./fleetMapStyles";
 
 const DEFAULT_CENTER: google.maps.LatLngLiteral = { lat: 40.4168, lng: -3.7038 };
-
-/** Coste operativo aprox. €/km (sin peajes) para margen visual. */
-const COSTE_EUR_KM = 0.62;
 
 export type FleetMarkerKind = "star" | "vampire" | "default";
 
@@ -49,13 +47,14 @@ function isEuroIII(v: FlotaInventarioRow | undefined): boolean {
 function classifyPorte(
   p: PorteListRow,
   vehicle: FlotaInventarioRow | undefined,
+  costEurKm: number,
 ): FleetMarkerKind {
   const km = Math.max(Number(p.km_estimados) || 0, 1);
   const precio = Number(p.precio_pactado) || 0;
   const co2 = p.co2_emitido != null ? Number(p.co2_emitido) : null;
   const eurPerKm = precio / km;
   const co2PerKm = co2 != null ? co2 / km : null;
-  const margenKm = eurPerKm - COSTE_EUR_KM;
+  const margenKm = eurPerKm - costEurKm;
 
   const lowMargin = margenKm < 0.28;
   const vampire = isEuroIII(vehicle) || lowMargin;
@@ -75,20 +74,21 @@ function midpoint(
   return { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
 }
 
-function margenOperativoEst(p: PorteListRow): number | null {
+function margenOperativoEst(p: PorteListRow, costEurKm: number): number | null {
   const km = Math.max(Number(p.km_estimados) || 0, 1);
   const precio = Number(p.precio_pactado) || 0;
   if (precio <= 0) return null;
-  return precio - km * COSTE_EUR_KM;
+  return precio - km * costEurKm;
 }
 
 type MapInnerProps = {
   portes: PorteListRow[];
   vehiclesById: Record<string, FlotaInventarioRow>;
+  costEurKm: number;
   onGeocodingChange?: (busy: boolean) => void;
 };
 
-function FleetMapInner({ portes, vehiclesById, onGeocodingChange }: MapInnerProps) {
+function FleetMapInner({ portes, vehiclesById, costEurKm, onGeocodingChange }: MapInnerProps) {
   const map = useMap();
   const [markers, setMarkers] = useState<FleetPorteMarker[]>([]);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -108,14 +108,14 @@ function FleetMapInner({ portes, vehiclesById, onGeocodingChange }: MapInnerProp
         if (cancelled) break;
         const vid = p.vehiculo_id ? String(p.vehiculo_id) : "";
         const vehicle = vid ? vehiclesById[vid] : undefined;
-        const kind = classifyPorte(p, vehicle);
+        const kind = classifyPorte(p, vehicle, costEurKm);
 
         const o = await geocodeAddressWithCache(geocoder, p.origen);
         const d = await geocodeAddressWithCache(geocoder, p.destino);
         if (!o || !d) continue;
 
         const pos = midpoint(o, d);
-        const m = margenOperativoEst(p);
+        const m = margenOperativoEst(p, costEurKm);
         next.push({
           id: p.id,
           position: pos,
@@ -144,7 +144,7 @@ function FleetMapInner({ portes, vehiclesById, onGeocodingChange }: MapInnerProp
     return () => {
       cancelled = true;
     };
-  }, [map, portes, vehiclesById, onGeocodingChange]);
+  }, [map, portes, vehiclesById, costEurKm, onGeocodingChange]);
 
   useEffect(() => {
     if (!map || markers.length === 0) return;
@@ -272,6 +272,11 @@ export function FleetIntelligenceMap({
   const apiKey =
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_MAPS_API_KEY || "";
   const [geocoding, setGeocoding] = useState(false);
+  const [costEurKm, setCostEurKm] = useState(publicOperationalCostEurKmDefault());
+
+  useEffect(() => {
+    void getOperationalCostEurKmCached().then(setCostEurKm);
+  }, []);
 
   if (!apiKey) {
     return (
@@ -330,7 +335,12 @@ export function FleetIntelligenceMap({
           styles={BUNKER_MAP_STYLES}
           colorScheme="DARK"
         >
-          <FleetMapInner portes={portes} vehiclesById={vehiclesById} onGeocodingChange={setGeocoding} />
+          <FleetMapInner
+            portes={portes}
+            vehiclesById={vehiclesById}
+            costEurKm={costEurKm}
+            onGeocodingChange={setGeocoding}
+          />
         </Map>
       </APIProvider>
 

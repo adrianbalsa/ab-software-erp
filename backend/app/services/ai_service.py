@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 import litellm
 
+from app.core.constants import COSTE_OPERATIVO_EUR_KM
 from app.core.math_engine import quantize_currency, to_decimal
 from app.core.verifactu import verify_invoice_chain
 from app.services.verifactu_fingerprint_audit import (
@@ -29,8 +30,8 @@ litellm.drop_params = True
 LOGISADVISOR_CONTEXT = """You are LogisAdvisor, Senior Logistics Consultant for AB Logistics OS (Spain).
 
 Economic Rules:
-- Use CPK = 0.62 EUR/km for operational cost estimation.
-- Define route efficiency eta as Income / (Km * 0.62).
+- Use the tenant's configured operational CPK (EUR/km) from JSON context for cost estimation.
+- Define route efficiency eta as Income / (Km * CPK).
 - If eta < 1.15 classify it as a "Vampire Route".
 - If DSO > 60 days classify it as a liquidity risk.
 
@@ -168,9 +169,9 @@ class LogisAdvisorService:
         Data Dictionary blocks:
         - ``operational``:
           - ``active_routes``: sampled routes with distance/time and source (cache/google).
-          - ``cpk_eur``: operational cost per km constant (0.62 EUR/km).
-          - ``estimated_operational_cost_eur``: route_km * 0.62 (MathEngine quantized).
-          - ``efficiency_eta``: Income / (Km * 0.62). If eta < 1.15 => ``vampire_route=true``.
+          - ``cpk_eur``: operational cost per km constant (EUR/km, product default).
+          - ``estimated_operational_cost_eur``: route_km * cpk_eur (MathEngine quantized).
+          - ``efficiency_eta``: Income / (Km * cpk_eur). If eta < 1.15 => ``vampire_route=true``.
         - ``financial``:
           - ``ingresos_netos_sin_iva_eur``, ``gastos_netos_sin_iva_eur``, ``ebitda_aprox_sin_iva_eur``.
           - ``dso_days``: average open days for unpaid invoices; ``liquidity_risk`` when > 60.
@@ -219,7 +220,7 @@ class LogisAdvisorService:
             try:
                 metrics = await self._maps.get_route_data(origin, destination)
                 km = float(metrics.get("distance_km") or 0.0)
-                op_cost = float(quantize_currency(to_decimal(km * 0.62)))
+                op_cost = float(quantize_currency(to_decimal(km * COSTE_OPERATIVO_EUR_KM)))
                 eta = round((income / op_cost), 4) if op_cost > 1e-9 else None
                 emisiones_co2_kg = self._esg.calculate_route_emissions(distance_km=km)
                 total_emisiones_co2_kg += emisiones_co2_kg
@@ -273,7 +274,7 @@ class LogisAdvisorService:
 
         payload = {
             "operational": {
-                "cpk_eur": 0.62,
+                "cpk_eur": float(COSTE_OPERATIVO_EUR_KM),
                 "active_routes": active_routes,
                 "routes_count": len(active_routes),
                 "vampire_routes_count": len([r for r in active_routes if r.get("vampire_route")]),
@@ -337,7 +338,7 @@ class LogisAdvisorService:
             "current_portes": current_portes,
             "financial_summary": financial_summary,
             "maps_data": {
-                "cpk_used": operational.get("cpk_eur", 0.62),
+                "cpk_used": operational.get("cpk_eur", float(COSTE_OPERATIVO_EUR_KM)),
                 "total_emisiones_co2_kg": operational.get("total_emisiones_co2_kg"),
                 "routes_analyzed": maps_routes,
             },

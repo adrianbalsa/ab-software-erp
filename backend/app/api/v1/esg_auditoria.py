@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import date
 import io
-from typing import Any
+from datetime import date, datetime
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from app.api import deps
 from app.db.soft_delete import filter_not_deleted
@@ -21,8 +21,42 @@ from app.schemas.esg import (
 from app.schemas.user import UserOut
 from app.core.constants import ISO_14083_DIESEL_CO2_KG_PER_LITRE
 from app.core.esg_engine import calculate_co2_emissions, calculate_nox_emissions
+from app.services.esg_audit_service import EsgAuditService
+from app.services.esg_export_service import EsgExportService
 
 router = APIRouter(prefix="/esg")
+
+
+async def _empresa_id_for_verification_code_admin(
+    db: SupabaseAsync, *, verification_code: str
+) -> str | None:
+    code = str(verification_code or "").strip()
+    if len(code) < 8:
+        return None
+    try:
+        res: Any = await db.execute(
+            db.table("esg_certificate_documents")
+            .select("empresa_id")
+            .eq("verification_code", code)
+            .limit(1)
+        )
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+    except Exception:
+        return None
+    if not rows:
+        return None
+    raw = rows[0].get("empresa_id")
+    return str(raw).strip() if raw else None
+
+
+class EsgCertificateRegistryItem(BaseModel):
+    """Certificado emitido (código QR público; sin subject_id)."""
+
+    verification_code: str
+    verification_status: str
+    subject_type: str
+    certificate_id: str
+    created_at: datetime | None = None
 
 
 class EsgAuditFuelMonthlyOut(BaseModel):
@@ -355,4 +389,134 @@ async def esg_annual_memory(
         top_clientes=top_clientes,
         metodologia=metodologia,
     )
+
+
+@router.get(
+    "/certificate-registry",
+    response_model=list[EsgCertificateRegistryItem],
+    summary="Registro de certificados ESG (códigos QR / estado, sin subject_id)",
+)
+async def list_esg_certificate_registry(
+    limit: int = Query(50, ge=1, le=200),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager", "gestor")),
+    db: SupabaseAsync = Depends(deps.get_db),
+) -> list[EsgCertificateRegistryItem]:
+    eid = str(current_user.empresa_id)
+    try:
+        q = (
+            db.table("esg_certificate_documents")
+            .select("verification_code,verification_status,subject_type,certificate_id,created_at")
+            .eq("empresa_id", eid)
+            .order("created_at", desc=True)
+            .limit(limit)
+        )
+        res: Any = await db.execute(q)
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+    except Exception:
+        rows = []
+    out: list[EsgCertificateRegistryItem] = []
+    for r in rows:
+        vc = r.get("verification_code")
+        if vc is None:
+            continue
+        out.append(
+            EsgCertificateRegistryItem(
+                verification_code=str(vc),
+                verification_status=str(r.get("verification_status") or ""),
+                subject_type=str(r.get("subject_type") or ""),
+                certificate_id=str(r.get("certificate_id") or ""),
+                created_at=_parse_registry_created_at(r.get("created_at")),
+            )
+        )
+    return out
+
+
+def _parse_registry_created_at(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    s = str(value).strip()
+    if not s:
+        return None
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+@router.get(
+    "/emissions-export-iso14083",
+    summary="Export ISO 14083 agregado sin PII (CSV o JSON)",
+)
+async def esg_emissions_export_iso14083(
+    fecha_inicio: date = Query(..., description="Inicio inclusive"),
+    fecha_fin: date = Query(..., description="Fin inclusive"),
+    formato: Literal["csv", "json"] = Query("csv"),
+    for_external_auditor: bool = Query(
+        False,
+        description="Si true y formato=json, omite empresa_id en meta (entrega a terceros).",
+    ),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager", "gestor")),
+    export_svc: EsgExportService = Depends(deps.get_esg_export_service),
+) -> StreamingResponse:
+    if fecha_fin < fecha_inicio:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="fecha_fin debe ser mayor o igual que fecha_inicio.",
+        )
+    eid = str(current_user.empresa_id)
+    if formato == "json":
+        body = await export_svc.export_json_bytes(
+            empresa_id=eid,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+            redact_workspace=for_external_auditor,
+        )
+        media = "application/json"
+        ext = "json"
+    else:
+        body = await export_svc.export_csv_bytes(
+            empresa_id=eid,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+        )
+        media = "text/csv; charset=utf-8"
+        ext = "csv"
+    fn = f"esg_iso14083_export_{fecha_inicio.isoformat()}_{fecha_fin.isoformat()}.{ext}"
+    return StreamingResponse(
+        io.BytesIO(body),
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{fn}"'},
+    )
+
+
+@router.post(
+    "/certificate/externally-verify/{verification_code}",
+    summary="Marca certificado como externally_verified (solo owner del tenant)",
+)
+async def post_esg_certificate_externally_verify_owner(
+    verification_code: str = Path(..., min_length=8),
+    current_user: UserOut = Depends(deps.require_role("owner")),
+    db_admin: SupabaseAsync = Depends(deps.get_db_admin),
+    audit: EsgAuditService = Depends(deps.get_esg_audit_service_admin),
+) -> dict[str, Any]:
+    """
+    Tras validación manual o webhook de certificadora, el propietario puede cerrar el estado.
+    Requiere que el certificado esté en ``pending_external_audit`` y pertenezca al tenant.
+    """
+    cert_eid = await _empresa_id_for_verification_code_admin(db_admin, verification_code=verification_code)
+    if cert_eid is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificado no encontrado")
+    if str(current_user.empresa_id) != cert_eid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No autorizado a verificar este certificado.",
+        )
+    try:
+        return await audit.mark_certificate_externally_verified(verification_code=verification_code)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

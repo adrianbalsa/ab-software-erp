@@ -93,13 +93,17 @@ async def download_esg_certificate_pdf(
         "porte",
         description="porte: UUID del porte; factura: id entero de la factura",
     ),
+    official_audit: bool = Query(
+        False,
+        description="Enterprise: marca el certificado como pending_external_audit (validación oficial solicitada).",
+    ),
     current_user: UserOut = Depends(deps.bind_write_context),
     _quota: None = Depends(deps.check_quota_limit("esg")),
     service: EsgCertificateService = Depends(deps.get_esg_certificate_service),
 ) -> StreamingResponse:
     """
-    Genera el PDF en FastAPI (fpdf2), calcula SHA-256 del fichero y persiste fila en
-    ``esg_certificate_documents`` (huella + fingerprint de contenido).
+    Genera el PDF (porte: ReportLab; factura: FPDF), SHA-256 del binario, QR de verificación pública
+    y fila en ``esg_certificate_documents`` / vista ``esg_certificates`` (código UUID + estado).
     """
     if current_user.rbac_role not in ("owner", "traffic_manager", "gestor", "admin"):
         raise HTTPException(
@@ -115,6 +119,7 @@ async def download_esg_certificate_pdf(
             empresa_id=eid,
             porte_id=str(pid),
             usuario_id=uid,
+            official_audit=official_audit,
         )
         fname = f"Certificado_Huella_CO2_porte_{str(pid)[:8]}.pdf"
     else:
@@ -129,6 +134,7 @@ async def download_esg_certificate_pdf(
             empresa_id=eid,
             factura_id=fid,
             usuario_id=uid,
+            official_audit=official_audit,
         )
         fname = f"Certificado_Huella_CO2_factura_{fid}.pdf"
 

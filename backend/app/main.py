@@ -40,6 +40,7 @@ from app.api.routes import (
 from app.api.endpoints import ai as ai_endpoints
 from app.api.v1 import advisor as advisor_v1
 from app.api.v1 import bi as bi_v1
+from app.api.v1 import product_config as product_config_v1
 from app.api.v1 import analytics as analytics_v1
 from app.api.v1 import banking as banking_v1
 from app.api.v1 import chat as chat_v1
@@ -63,10 +64,13 @@ from app.api.v1 import portal_onboarding as portal_onboarding_v1
 from app.api.v1 import portes as portes_v1
 from app.api.v1 import routes_optimizer as routes_optimizer_v1
 from app.api.v1 import admin as admin_v1
+from app.api.v1 import admin_esg as admin_esg_v1
 from app.api.v1 import admin_compliance as admin_compliance_v1
 from app.api.v1 import public_compliance as public_compliance_v1
+from app.api.v1 import public_esg as public_esg_v1
 from app.api.v1 import stripe
 from app.api.v1.webhooks import stripe as stripe_webhook_v1
+from app.api.v1.webhooks import esg_external_verify as webhooks_esg_external_v1
 from app.api.v1 import treasury as treasury_v1
 from app.api.v1 import verifactu as verifactu_v1
 from app.api.v1.webhooks import b2b as webhooks_v1
@@ -306,6 +310,7 @@ def create_app() -> FastAPI:
     # Salud en la raíz (Railway healthcheck: GET /live; readiness: GET /health, GET /ready).
     app.include_router(health_router.router)
     app.include_router(public_compliance_v1.router)
+    app.include_router(public_esg_v1.router, tags=["ESG — verificación pública"])
     app.include_router(utils.router, tags=["Salud"])
     app.include_router(payments.router, prefix="/payments", tags=["Pagos"])
     app.include_router(auth.router, prefix="/auth", tags=["Autenticación"])
@@ -347,6 +352,11 @@ def create_app() -> FastAPI:
         tags=["Webhooks Stripe"],
     )
     app.include_router(
+        webhooks_esg_external_v1.router,
+        prefix="/api/v1/webhooks",
+        tags=["Webhooks ESG"],
+    )
+    app.include_router(
         admin_compliance_v1.router,
         prefix="/api/v1/admin",
         tags=["Administración — cumplimiento"],
@@ -355,6 +365,11 @@ def create_app() -> FastAPI:
         admin_v1.router,
         prefix="/api/v1/admin",
         tags=["Administración"],
+    )
+    app.include_router(
+        admin_esg_v1.router,
+        prefix="/api/v1/admin",
+        tags=["ESG — administración"],
     )
     app.include_router(payments_gocardless_v1.router, prefix="/api/v1/payments/gocardless", tags=["Pagos"])
     app.include_router(esg_reports_v1.router, prefix="/api/v1", tags=["ESG"])
@@ -391,6 +406,7 @@ def create_app() -> FastAPI:
     app.include_router(analytics_v1.router, prefix="/api/v1", tags=["Finanzas"])
     app.include_router(advisor_v1.router, prefix="/api/v1/advisor", tags=["LogisAdvisor"])
     app.include_router(bi_v1.router, prefix="/api/v1", tags=["Business Intelligence"])
+    app.include_router(product_config_v1.router, prefix="/api/v1")
 
     return app
 

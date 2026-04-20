@@ -856,10 +856,13 @@ class EsgService:
 import io as _io
 from xml.sax.saxutils import escape as _xml_escape
 
+import qrcode as _qrcode
+
 from reportlab.lib import colors as _rl_colors
 from reportlab.lib.pagesizes import A4 as _A4
 from reportlab.lib.styles import ParagraphStyle as _ParagraphStyle, getSampleStyleSheet as _getSampleStyleSheet
 from reportlab.lib.units import mm as _mm
+from reportlab.lib.utils import ImageReader as _ImageReader
 from reportlab.platypus import Paragraph as _Paragraph, SimpleDocTemplate as _SimpleDocTemplate, Spacer as _Spacer, Table as _Table, TableStyle as _TableStyle
 
 from app.services.pdf_esg_service import EsgPorteCertificatePdfModel
@@ -868,6 +871,21 @@ from app.services.pdf_esg_service import EsgPorteCertificatePdfModel
 def diesel_co2eq_kg_from_litres(litros: float) -> float:
     """CO₂ equivalente (kg) a partir de litros de gasóleo × factor ISO 14083."""
     return max(0.0, float(litros or 0.0)) * float(ISO_14083_DIESEL_CO2_KG_PER_LITRE)
+
+
+def _esg_draw_verify_qr_on_page(canvas: Any, doc: Any) -> None:
+    url = str(getattr(doc, "esg_verify_url", "") or "").strip()
+    if not url:
+        return
+    qr_buf = _io.BytesIO()
+    _qrcode.make(url, border=1).save(qr_buf, format="PNG")
+    qr_buf.seek(0)
+    ir = _ImageReader(qr_buf)
+    pw, _ = _A4
+    side = 22 * _mm
+    x = pw - side - 14 * _mm
+    y = 14 * _mm
+    canvas.drawImage(ir, x, y, width=side, height=side, mask="auto")
 
 
 def generate_porte_certificate_pdf_reportlab(
@@ -882,9 +900,10 @@ def generate_porte_certificate_pdf_reportlab(
         rightMargin=16 * _mm,
         leftMargin=16 * _mm,
         topMargin=14 * _mm,
-        bottomMargin=14 * _mm,
+        bottomMargin=38 * _mm,
         title=t("ESG certificate"),
     )
+    doc.esg_verify_url = str(getattr(model, "verify_url", None) or "").strip()
     styles = _getSampleStyleSheet()
     title_style = _ParagraphStyle(
         "EsgCertTitle",
@@ -960,14 +979,20 @@ def generate_porte_certificate_pdf_reportlab(
     )
     story.append(tbl)
     story.append(_Spacer(1, 5 * _mm))
-    story.append(
-        _Paragraph(
-            _xml_escape(
-                t("ISO 14083:2021 — diesel reference factor 2.67 kg CO2eq / L (audit / certificates).")
-            ),
-            body,
-        )
+    meth_h = _ParagraphStyle(
+        "EsgMethHeading",
+        parent=styles["Heading2"],
+        fontSize=11,
+        spaceAfter=6,
+        textColor=_rl_colors.HexColor("#0f172a"),
     )
+    story.append(_Paragraph(_xml_escape(t("Calculation methodology (ISO 14083)")), meth_h))
+    meth_body = t(
+        "Calculation methodology (ISO 14083): ISO 14083:2021 applies with an explicit diesel reference factor of "
+        "{fac} kg CO₂eq per litre (no substitution ambiguity). Intensities from GLEC Framework v2.0 (g CO₂/km loaded "
+        "and empty) are combined with declared distances and engine/fuel inputs to produce the totals on this certificate."
+    ).format(fac=ISO_14083_DIESEL_CO2_KG_PER_LITRE)
+    story.append(_Paragraph(_xml_escape(meth_body), body))
     story.append(_Spacer(1, 3 * _mm))
     story.append(
         _Paragraph(
@@ -982,7 +1007,7 @@ def generate_porte_certificate_pdf_reportlab(
     story.append(_Spacer(1, 4 * _mm))
     story.append(_Paragraph(_xml_escape(model.scope_note), body))
 
-    doc.build(story)
+    doc.build(story, onFirstPage=_esg_draw_verify_qr_on_page, onLaterPages=_esg_draw_verify_qr_on_page)
     return buf.getvalue()
 
 

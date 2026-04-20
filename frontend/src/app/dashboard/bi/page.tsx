@@ -37,6 +37,7 @@ import {
   type BiTreemapNode,
   type ProfitMarginAnalytics,
 } from "@/lib/api";
+import { publicOperationalCostEurKmDefault } from "@/lib/operationalPricing";
 import { cn } from "@/lib/utils";
 
 const fmtInt = (n: number | null | undefined) =>
@@ -235,7 +236,7 @@ function ProfitabilityTooltip({ active, payload }: ScatterTooltipProps) {
   const estimated = d.estimated_margin === true;
   const precio = d.precio_pactado ?? 0;
   const km = d.km ?? 0;
-  const ck = d.coste_operativo_eur_km ?? 0.62;
+  const ck = d.coste_operativo_eur_km ?? publicOperationalCostEurKmDefault();
   const costeEstimadoKm = km * ck;
   const fuel = d.allocated_fuel_eur;
   const other = d.other_opex_eur;
@@ -531,7 +532,7 @@ export default function BiDashboardPage() {
     };
   }, [pmKey]); // eslint-disable-line react-hooks/exhaustive-deps -- pmKey consolida rango y filtros
 
-  const costeKm = profit?.coste_operativo_eur_km ?? 0.62;
+  const costeKm = profit?.coste_operativo_eur_km ?? publicOperationalCostEurKmDefault();
 
   const scatterData: ScatterDatum[] = useMemo(() => {
     if (!profit?.points?.length) return [];
@@ -590,7 +591,8 @@ export default function BiDashboardPage() {
                 Inteligencia de negocio
               </h1>
               <p className="mt-0.5 text-xs text-zinc-400 sm:text-sm">
-                DSO real, eficiencia por trayecto (η = precio / km·0,62) y huella vs margen — filtrado por periodo.
+                DSO real, eficiencia por trayecto (η = precio / (km × {fmtDec(costeKm, 2)} €)) y huella vs margen —
+                filtrado por periodo.
               </p>
             </div>
             <BiDateRangePicker dateRange={dateRange} onChange={setDateRange} isSyncing={isSyncing} />
@@ -737,7 +739,7 @@ export default function BiDashboardPage() {
                     </CardHeader>
                     <CardContent>
                       <p className="text-3xl font-bold tracking-tight text-zinc-50">{fmtDec(summary?.avg_efficiency_eur_per_eur_km, 2)}</p>
-                      <p className="mt-1 text-xs text-zinc-500">ratio precio / (km × 0,62)</p>
+                      <p className="mt-1 text-xs text-zinc-500">ratio precio / (km × {fmtDec(costeKm, 2)} €)</p>
                       <p className="mt-2 text-[11px] text-zinc-600">n = {fmtInt(summary?.efficiency_sample_size)} portes</p>
                     </CardContent>
                   </Card>

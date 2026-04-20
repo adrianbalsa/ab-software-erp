@@ -15,6 +15,7 @@ import { ApiError } from "../../src/lib/api";
 import { fetchRecentGastos } from "../../src/services/gastosApi";
 import { fetchPortesPendientes } from "../../src/services/portesApi";
 import {
+  getDlqCount,
   getPendingSyncCount,
   processPendingSyncQueue,
   subscribeSyncStatus,
@@ -39,6 +40,7 @@ export default function PortesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [queueSize, setQueueSize] = useState(0);
+  const [dlqSize, setDlqSize] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [kmMes, setKmMes] = useState<number>(0);
   const [gastoSemana, setGastoSemana] = useState<number>(0);
@@ -68,11 +70,15 @@ export default function PortesScreen() {
 
   useEffect(() => {
     let active = true;
-    void getPendingSyncCount().then((count) => {
-      if (active) setQueueSize(count);
+    void Promise.all([getPendingSyncCount(), getDlqCount()]).then(([n, d]) => {
+      if (active) {
+        setQueueSize(n);
+        setDlqSize(d);
+      }
     });
-    const unsub = subscribeSyncStatus(({ size, syncing }) => {
+    const unsub = subscribeSyncStatus(({ size, dlqSize: dsz, syncing }) => {
       setQueueSize(size);
+      setDlqSize(dsz);
       setIsSyncing(syncing);
     });
     void processPendingSyncQueue();
@@ -157,11 +163,18 @@ export default function PortesScreen() {
         <Text className="text-sm text-slate-800">Total gastos registrados (semana): {gastoSemana} EUR</Text>
       </View>
 
-      {queueSize > 0 ? (
+      {queueSize > 0 || dlqSize > 0 ? (
         <View className="mx-4 mt-3 rounded-lg bg-indigo-50 px-3 py-2">
-          <Text className="text-xs text-indigo-900">
-            Sincronizando ítems pendientes... ({queueSize}) {isSyncing ? "en curso" : "en cola"}
-          </Text>
+          {queueSize > 0 ? (
+            <Text className="text-xs text-indigo-900">
+              Sincronizando ítems pendientes… ({queueSize}) {isSyncing ? "en curso" : "en cola"}
+            </Text>
+          ) : null}
+          {dlqSize > 0 ? (
+            <Text className={`text-xs text-rose-800 ${queueSize > 0 ? "mt-1" : ""}`}>
+              DLQ local: {dlqSize} {dlqSize === 1 ? "ítem" : "ítems"} atascado{dlqSize === 1 ? "" : "s"} — abre Pendientes para reencolar o descartar.
+            </Text>
+          ) : null}
         </View>
       ) : null}
 

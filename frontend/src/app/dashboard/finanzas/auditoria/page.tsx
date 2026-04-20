@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Copy, Loader2, ShieldCheck } from "lucide-react";
+import { Copy, Download, Loader2, ShieldCheck } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
 import { RoleGuard } from "@/components/auth/RoleGuard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { api, type VerifactuChainAudit, type VerifactuQrPreview } from "@/lib/api";
+import { api, downloadAuditEvidencePackZip, type VerifactuChainAudit, type VerifactuQrPreview } from "@/lib/api";
 
 export default function AuditoriaFiscalPage() {
   const [loading, setLoading] = useState(false);
@@ -17,6 +17,7 @@ export default function AuditoriaFiscalPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [preview, setPreview] = useState<VerifactuQrPreview | null>(null);
   const [urlCopied, setUrlCopied] = useState(false);
+  const [packLoading, setPackLoading] = useState(false);
 
   const onVerify = async () => {
     setLoading(true);
@@ -29,6 +30,25 @@ export default function AuditoriaFiscalPage() {
       setError(e instanceof Error ? e.message : "No se pudo verificar la cadena fiscal");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onDownloadAuditPack = async () => {
+    setPackLoading(true);
+    setError(null);
+    try {
+      const blob = await downloadAuditEvidencePackZip();
+      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ab_logistics_os_audit_evidence_${stamp}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo descargar el paquete auditor");
+    } finally {
+      setPackLoading(false);
     }
   };
 
@@ -76,6 +96,27 @@ export default function AuditoriaFiscalPage() {
               Verificación criptográfica de encadenamiento fiscal.
             </p>
           </header>
+
+          <Card className="bunker-card">
+            <CardHeader>
+              <CardTitle className="text-zinc-100">Paquete auditor (Due Diligence)</CardTitle>
+              <CardDescription className="text-zinc-400">
+                ZIP con compliance público, matriz de precios de catálogo y security.txt. Sin datos operativos ni PII
+                de clientes. Ayuda: /help/audit-evidence-pack
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <button
+                type="button"
+                onClick={() => void onDownloadAuditPack()}
+                disabled={packLoading}
+                className="inline-flex items-center gap-2 rounded-lg border border-emerald-600/50 bg-emerald-950/30 px-4 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-900/40 disabled:opacity-60"
+              >
+                {packLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                Descargar paquete auditor (ZIP)
+              </button>
+            </CardContent>
+          </Card>
 
           <Card className="bunker-card">
             <CardHeader>

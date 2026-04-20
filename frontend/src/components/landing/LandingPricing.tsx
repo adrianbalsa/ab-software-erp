@@ -5,26 +5,30 @@ import { Check, Minus, Loader2 } from "lucide-react";
 import { FadeInSection } from "./FadeInSection";
 import { apiFetch } from "@/lib/api";
 
+/** IDs de precio Stripe (`price_…`); configurar en `.env` del frontend para checkout público. */
+const stripePriceCompliance = process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER ?? "";
+const stripePriceFinance = process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO ?? "";
+const stripePriceFullStack = process.env.NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE ?? "";
+
 const tiers = [
   {
-    name: "Starter",
-    price: "19",
-    // IMPORTANTE: Sustituye esto por tus ID reales de Stripe
-    stripePriceId: "prod_U4pglni2WtQtyr", 
+    name: "Compliance",
+    price: "39",
+    stripePriceId: stripePriceCompliance,
     includes: [true, true, false, false, false, false],
     highlight: false,
   },
   {
-    name: "Pro",
-    price: "89",
-    stripePriceId: "prod_U543gvbm2didzP",
+    name: "Finance",
+    price: "149",
+    stripePriceId: stripePriceFinance,
     includes: [true, true, true, true, true, false],
     highlight: true,
   },
   {
-    name: "Enterprise",
-    price: "249",
-    stripePriceId: "prod_U544zbI5Vamosj",
+    name: "Full-Stack",
+    price: "449",
+    stripePriceId: stripePriceFullStack,
     includes: [true, true, true, true, true, true],
     highlight: false,
   },
@@ -43,20 +47,24 @@ export function LandingPricing() {
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
 
   const handleSuscripcion = async (priceId: string) => {
+    if (!priceId.trim()) {
+      alert(
+        "Falta configurar los Price IDs de Stripe en el frontend (NEXT_PUBLIC_STRIPE_PRICE_*). Consulta docs/operations/STRIPE_BILLING.md.",
+      );
+      return;
+    }
     setLoadingTier(priceId);
     try {
-      // Llamada a tu backend en Railway
       const response = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/stripe/crear-sesion-checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // En un futuro, el user_id lo sacarás del contexto de sesión de Supabase
         body: JSON.stringify({ price_id: priceId, user_id: "USUARIO_PENDIENTE_DE_REGISTRO" }),
       });
 
       const data = await response.json();
 
       if (data.url) {
-        window.location.href = data.url; // Redirige a Stripe
+        window.location.href = data.url;
       } else {
         alert("Hubo un problema al conectar con la pasarela segura.");
       }
@@ -74,6 +82,8 @@ export function LandingPricing() {
           <h2 className="text-2xl font-bold text-white sm:text-3xl">Precios claros</h2>
           <p className="mt-2 text-zinc-400 text-sm sm:text-base">
             Inversión mensual orientada a ROI operativo: cada euro debe volver en eficiencia y control de margen.
+            Cifras orientativas + IVA; add-ons (OCR, webhooks premium, IA Pro) documentados en el repositorio
+            bajo docs/operations/STRIPE_BILLING.md.
           </p>
         </div>
 
@@ -109,10 +119,10 @@ export function LandingPricing() {
                   </li>
                 ))}
               </ul>
-              
-              {/* AQUÍ ESTÁ LA MAGIA: El botón que llama a Stripe */}
+
               <button
-                onClick={() => handleSuscripcion(tier.stripePriceId)}
+                type="button"
+                onClick={() => void handleSuscripcion(tier.stripePriceId)}
                 disabled={loadingTier === tier.stripePriceId}
                 className={`mt-8 flex w-full items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold transition ${
                   tier.highlight

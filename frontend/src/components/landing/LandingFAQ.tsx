@@ -12,7 +12,7 @@ const faqs = [
   },
   {
     q: "¿Qué pasa si tengo menos de 5 camiones?",
-    a: "El plan Starter está pensado precisamente para pequeñas flotas y autónomos: hasta 5 vehículos con VeriFactu completo. Sin penalización por ser pequeño.",
+    a: "El plan Compliance (pequeña flota) está pensado para autónomos y operadores con hasta 5 vehículos y VeriFactu completo. Sin penalización por ser pequeño.",
   },
   {
     q: "¿Cómo garantiza el software la ley VeriFactu?",

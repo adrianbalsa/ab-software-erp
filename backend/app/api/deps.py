@@ -17,6 +17,7 @@ from app.core.plans import (
     fetch_empresa_plan,
     max_vehiculos,
     normalize_plan,
+    plan_marketing_name,
 )
 from app.core.security import decode_access_token_payload
 from app.db import supabase as supabase_db
@@ -52,6 +53,7 @@ from app.services.fleet_maintenance_service import FleetMaintenanceService
 from app.services.stripe_service import assert_empresa_billing_active
 from app.services.ai_service import LogisAdvisorService
 from app.services.esg_audit_service import EsgAuditService
+from app.services.esg_export_service import EsgExportService
 from app.services.audit_logs_service import AuditLogsService
 from app.services.bi_service import BiService
 from app.services.geo_activity_service import GeoActivityService
@@ -65,11 +67,16 @@ _JWT_APP_ROLE_SAAS_PLAN_SLUGS: frozenset[str] = frozenset(
         "starter",
         "start",
         "basic",
+        "compliance",
         "pro",
         "professional",
+        "finance",
         "enterprise",
         "ent",
         "unlimited",
+        "full-stack",
+        "fullstack",
+        "full_stack",
     },
 )
 
@@ -202,6 +209,21 @@ async def get_finance_service(db: SupabaseAsync = Depends(get_db)) -> FinanceSer
 
 async def get_esg_audit_service(db: SupabaseAsync = Depends(get_db)) -> EsgAuditService:
     return EsgAuditService(db)
+
+
+async def get_esg_audit_service_admin(db: SupabaseAsync = Depends(get_db_admin)) -> EsgAuditService:
+    """Service role: transiciones de certificado / flujos cross-tenant controlados en ruta."""
+    return EsgAuditService(db)
+
+
+async def get_esg_export_service_admin(db: SupabaseAsync = Depends(get_db_admin)) -> EsgExportService:
+    """Service role: export auditor-ready (sin PII) para administración."""
+    return EsgExportService(db)
+
+
+async def get_esg_export_service(db: SupabaseAsync = Depends(get_db)) -> EsgExportService:
+    """RLS tenant: mismas filas agregadas ISO 14083 que el export admin (sin PII en líneas)."""
+    return EsgExportService(db)
 
 
 async def get_audit_logs_service(db: SupabaseAsync = Depends(get_db)) -> AuditLogsService:
@@ -582,16 +604,16 @@ def check_quota_limit(resource: str):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=(
-                        "Has alcanzado el límite de 5 camiones de tu plan Starter. "
-                        "Mejora a PRO para gestionar hasta 25 y activar el cálculo de EBITDA real."
+                        f"Has alcanzado el límite de 5 camiones de tu plan {plan_marketing_name(pn)}. "
+                        "Mejora a Finance para gestionar hasta 25 y activar el cálculo de EBITDA real."
                     ),
                 )
             if pn == PLAN_PRO:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=(
-                        "Has alcanzado el límite de 25 vehículos de tu plan PRO. "
-                        "Pasa a Enterprise para flota ilimitada y el módulo ESG completo."
+                        f"Has alcanzado el límite de 25 vehículos de tu plan {plan_marketing_name(pn)}. "
+                        f"Pasa a {plan_marketing_name(PLAN_ENTERPRISE)} para flota ilimitada y el módulo ESG completo."
                     ),
                 )
             raise HTTPException(
@@ -613,7 +635,7 @@ def check_quota_limit(resource: str):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
-                    "El cálculo de huella de carbono es exclusivo para el plan Enterprise. "
+                    f"El cálculo de huella de carbono es exclusivo para el plan {plan_marketing_name(PLAN_ENTERPRISE)}. "
                     "Ayuda a tus clientes a cumplir sus objetivos de sostenibilidad haciendo el upgrade."
                 ),
             )
@@ -633,7 +655,8 @@ def check_quota_limit(resource: str):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
-                    "La exportación fiscal para inspección AEAT está disponible en planes PRO y Enterprise."
+                    f"La exportación fiscal para inspección AEAT está disponible en planes "
+                    f"{plan_marketing_name(PLAN_PRO)} y {plan_marketing_name(PLAN_ENTERPRISE)}."
                 ),
             )
 

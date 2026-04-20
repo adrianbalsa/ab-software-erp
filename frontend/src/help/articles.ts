@@ -69,7 +69,7 @@ Switch **ES / EN** from the language selector (sidebar or public headers). Prefe
   {
     slug: "billing",
     category: "billing",
-    updated: "2026-04-19",
+    updated: "2026-04-20",
     titles: { es: "Facturación SaaS con Stripe", en: "SaaS billing with Stripe" },
     excerpts: {
       es: "Checkout, Customer Portal, webhooks e idempotencia operativa.",
@@ -78,7 +78,16 @@ Switch **ES / EN** from the language selector (sidebar or public headers). Prefe
     body: {
       es: `
 ### Modelo
-Los planes **Starter**, **Pro** y **Enterprise** se cobran como **suscripción** mediante **Stripe Billing**. Los importes públicos orientativos aparecen en **Precios**; el cargo efectivo depende de tu configuración fiscal (IVA) y de Stripe Tax si lo activáis.
+Los planes **Compliance**, **Finance** y **Full-Stack** (slugs técnicos \`starter\`, \`pro\`, \`enterprise\`) se cobran como **suscripción** mediante **Stripe Billing**. Precios de catálogo orientativos: **39 €**, **149 €** y **449 €** / mes (+ IVA); el cargo efectivo depende de tu configuración fiscal y de Stripe Tax si lo activáis.
+
+### Add-ons (referencia)
+| Add-on | Orientativo |
+|--------|-------------|
+| OCR Pack | 15 € / mes |
+| Webhooks B2B Premium | 49 € / mes |
+| LogisAdvisor IA Pro | 29 € / mes |
+
+Los \`price_*\` en Stripe deben coincidir con las variables \`STRIPE_PRICE_*\` documentadas en \`docs/operations/STRIPE_BILLING.md\`.
 
 ### Checkout
 Un usuario **administrador** inicia el checkout desde **Suscripción** o desde la tarjeta de **cuota de flota**. Tras pagar, Stripe notifica al backend (\`checkout.session.completed\`) y se actualizan \`plan\`, límites de flota e IDs de cliente/suscripción.
@@ -100,7 +109,16 @@ Ver documentación interna \`docs/operations/STRIPE_BILLING.md\` para checklist 
       `.trim(),
       en: `
 ### Model
-**Starter**, **Pro** and **Enterprise** are charged as **subscriptions** via **Stripe Billing**. Public indicative prices are shown under **Pricing**; actual charges depend on your tax setup (VAT) and Stripe Tax if enabled.
+**Compliance**, **Finance** and **Full-Stack** (technical slugs \`starter\`, \`pro\`, \`enterprise\`) are charged as **subscriptions** via **Stripe Billing**. Indicative list prices: **€39**, **€149** and **€449** / month (+ VAT); actual charges depend on your tax setup and Stripe Tax if enabled.
+
+### Add-ons (reference)
+| Add-on | Indicative |
+|--------|------------|
+| OCR Pack | €15 / month |
+| Webhooks B2B Premium | €49 / month |
+| LogisAdvisor IA Pro | €29 / month |
+
+Stripe \`price_*\` IDs should match \`STRIPE_PRICE_*\` env vars documented in \`docs/operations/STRIPE_BILLING.md\`.
 
 ### Checkout
 An **admin** user starts checkout from **Subscription** or the **fleet quota** card. After payment, Stripe notifies the backend (\`checkout.session.completed\`) and \`plan\`, fleet limits and customer/subscription IDs are updated.
@@ -119,6 +137,116 @@ Duplicate deliveries of the same \`evt_*\` are handled **idempotently**.
 
 ### Runbook
 See \`docs/operations/STRIPE_BILLING.md\` for deployment checklist and \`STRIPE_* / PUBLIC_APP_URL\` variables.
+      `.trim(),
+    },
+  },
+  {
+    slug: "audit-evidence-pack",
+    category: "compliance",
+    updated: "2026-04-20",
+    titles: {
+      es: "Paquete de evidencias para auditores (ZIP)",
+      en: "Auditor evidence pack (ZIP download)",
+    },
+    excerpts: {
+      es: "Descarga ZIP Due Diligence: compliance público, catálogo de precios y security.txt (sin PII operativo).",
+      en: "DD-style ZIP: public compliance JSON, pricing catalog and security.txt (no operational PII).",
+    },
+    body: {
+      es: `
+### Qué es
+Un **ZIP** generado por la API con evidencias de **postura de plataforma** y **matriz comercial de referencia**, pensado para Due Diligence y auditores externos. **No** incluye facturas, portes ni datos personales de tus clientes.
+
+### Cómo descargarlo (rol *owner*)
+1. Inicia sesión en el panel.
+2. Abre **Finanzas → Auditoría fiscal** (\`/dashboard/finanzas/auditoria\`).
+3. Usa **Descargar paquete auditor (ZIP)**.
+
+El backend expone \`GET /api/v1/export/audit-package\` (JWT de propietario).
+
+### Contenido típico del ZIP
+- \`INDEX.md\` — índice y enlaces a documentación del repositorio.
+- \`public_compliance_snapshot.json\` — misma información que \`GET /api/v1/public/compliance\` más metadatos de generación.
+- \`pricing_catalog.json\` — planes Compliance / Finance / Full-Stack y add-ons (referencia \`app/core/plans.py\`).
+- \`security.txt\` — copia del cuerpo RFC 9116.
+
+### Límites
+No sustituye al **Data Room** legal ni a exportaciones fiscales/ESG con su propio alcance normativo; complementa la narrativa de compliance y billing.
+      `.trim(),
+      en: `
+### What it is
+A **ZIP** built by the API with **platform posture** and **commercial catalog reference** evidence for Due Diligence and external auditors. It does **not** include invoices, shipments or your customers’ personal data.
+
+### How to download (*owner* role)
+1. Sign in to the dashboard.
+2. Open **Finance → Tax audit** (\`/dashboard/finanzas/auditoria\`).
+3. Click **Download auditor pack (ZIP)**.
+
+The backend route is \`GET /api/v1/export/audit-package\` (owner JWT).
+
+### Typical ZIP contents
+- \`INDEX.md\` — index and pointers to repository documentation.
+- \`public_compliance_snapshot.json\` — same payload as \`GET /api/v1/public/compliance\` plus generation metadata.
+- \`pricing_catalog.json\` — Compliance / Finance / Full-Stack plans and add-ons (see \`app/core/plans.py\`).
+- \`security.txt\` — RFC 9116 body snapshot.
+
+### Limits
+This does not replace a legal **Data Room** or tax/ESG exports with their own regulatory scope; it complements compliance and billing narrative.
+      `.trim(),
+    },
+  },
+  {
+    slug: "esg-external-verification",
+    category: "compliance",
+    updated: "2026-04-20",
+    titles: {
+      es: "Verificación externa de certificados ESG",
+      en: "External verification of ESG certificates",
+    },
+    excerpts: {
+      es: "pending_external_audit → externally_verified; export ISO sin PII; webhook HMAC; rate limit público.",
+      en: "pending_external_audit → externally_verified; ISO export without PII; HMAC webhook; public rate limit.",
+    },
+    body: {
+      es: `
+### Flujo
+1. **Full-Stack (Enterprise):** al descargar un certificado PDF con la opción de **validación oficial**, el estado pasa a \`pending_external_audit\` y se genera un **código QR** hacia \`GET /v1/public/verify-esg/{code}\`.
+2. La verificación pública devuelve huellas y agregados de emisiones **sin** exponer IDs de porte/factura en el JSON.
+3. La certificadora (o operación interna) confirma: **webhook** \`POST /api/v1/webhooks/esg-external-verify\` con cuerpo JSON \`{"verification_code":"…"}\` y cabecera \`X-ABL-ESG-Signature\` (HMAC-SHA256 del body con \`ESG_EXTERNAL_WEBHOOK_SECRET\`), o el **propietario** cierra manualmente con \`POST /api/v1/esg/certificate/externally-verify/{code}\`.
+4. Estado final: \`externally_verified\`.
+
+### Export agregado sin PII (ISO 14083)
+- \`GET /api/v1/esg/emissions-export-iso14083?fecha_inicio=&fecha_fin=&formato=csv|json\` (JWT owner / traffic_manager / gestor).
+- Con \`formato=json\` y \`for_external_auditor=true\`, el bloque \`meta\` **no** incluye \`empresa_id\` (entrega a terceros).
+
+### Registro de certificados
+- \`GET /api/v1/esg/certificate-registry\` — lista reciente de códigos y estados (sin \`subject_id\`).
+
+### Rate limit público
+- \`GET /v1/public/verify-esg/…\` está limitado por **IP** (SlowAPI). Variable \`ESG_PUBLIC_VERIFY_RATELIMIT\` (por defecto \`60/minute\`); reiniciar workers al cambiar.
+
+### UI
+- **Sostenibilidad → Auditoría de huella** — sección *Verificación externa y export ISO* (registro, descargas, cierre por owner).
+      `.trim(),
+      en: `
+### Flow
+1. **Full-Stack (Enterprise):** when downloading a certificate PDF with **official validation**, status becomes \`pending_external_audit\` and a **QR** points to \`GET /v1/public/verify-esg/{code}\`.
+2. The public response includes hashes and emission aggregates **without** shipment/invoice IDs in the JSON.
+3. The auditor (or internal ops) confirms via **webhook** \`POST /api/v1/webhooks/esg-external-verify\` with JSON \`{"verification_code":"…"}\` and header \`X-ABL-ESG-Signature\` (HMAC-SHA256 of the raw body with \`ESG_EXTERNAL_WEBHOOK_SECRET\`), or the **owner** closes manually with \`POST /api/v1/esg/certificate/externally-verify/{code}\`.
+4. Final state: \`externally_verified\`.
+
+### Aggregated export without PII (ISO 14083)
+- \`GET /api/v1/esg/emissions-export-iso14083?fecha_inicio=&fecha_fin=&formato=csv|json\` (JWT owner / traffic_manager / gestor).
+- With \`formato=json\` and \`for_external_auditor=true\`, the \`meta\` block **omits** \`empresa_id\` for third-party handoff.
+
+### Certificate registry
+- \`GET /api/v1/esg/certificate-registry\` — recent codes and statuses (no \`subject_id\`).
+
+### Public rate limit
+- \`GET /v1/public/verify-esg/…\` is limited **per IP** (SlowAPI). Set \`ESG_PUBLIC_VERIFY_RATELIMIT\` (default \`60/minute\`); restart workers after changes.
+
+### UI
+- **Sustainability → Carbon footprint audit** — *External verification & ISO export* section (registry, downloads, owner close).
       `.trim(),
     },
   },

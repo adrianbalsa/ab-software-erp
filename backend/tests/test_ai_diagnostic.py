@@ -15,6 +15,7 @@ sys.modules.setdefault("litellm", MagicMock(name="litellm_test_double"))
 sys.modules.setdefault("anthropic", MagicMock(name="anthropic_test_double"))
 
 from app.api import deps
+from app.core.constants import COSTE_OPERATIVO_EUR_KM
 from app.schemas.user import UserOut
 from app.services.ai_service import LogisAdvisorService
 
@@ -109,8 +110,9 @@ async def test_prepare_ai_context_eta_and_vampire_flag(monkeypatch: pytest.Monke
     payload = json.loads(await service.prepare_ai_context(empresa_id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
     route = payload["operational"]["active_routes"][0]
 
-    # 100 / (200 * 0.62) = 0.806451..., rounded in service to 4 decimals.
-    assert round(float(route["efficiency_eta"]), 3) == 0.806
+    op_cost = 200.0 * float(COSTE_OPERATIVO_EUR_KM)
+    eta_expected = round(100.0 / op_cost, 4)
+    assert round(float(route["efficiency_eta"]), 3) == round(eta_expected, 3)
     assert route["vampire_route"] is True
 
 

@@ -12,6 +12,7 @@ from uuid import UUID
 
 from rapidfuzz import fuzz
 
+from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.schemas.banking import ConciliationCandidate, Transaccion
 from app.services.ai_service import LogisAdvisorService
@@ -20,6 +21,24 @@ from app.schemas.conciliacion import ConciliacionSugerenciaLLM, ConciliarAiOut
 from app.services.secret_manager_service import get_secret_manager
 
 _log = logging.getLogger(__name__)
+
+
+def _auto_reconcile_empresa_page_size() -> int:
+    raw = (os.getenv("AUTO_RECONCILE_EMPRESA_PAGE_SIZE") or "200").strip()
+    try:
+        n = int(raw)
+        return max(1, min(n, 1000))
+    except ValueError:
+        return 200
+
+
+def _auto_reconcile_skip_inactive_tenants() -> bool:
+    return (os.getenv("AUTO_RECONCILE_SKIP_INACTIVE_TENANTS") or "true").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
 _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
@@ -266,30 +285,63 @@ class ReconciliationService:
 
         return len(pairs), detalle
 
-    async def auto_reconcile_all(self) -> tuple[int, dict[str, int]]:
+    async def auto_reconcile_all(
+        self,
+        *,
+        empresa_id: str | None = None,
+    ) -> tuple[int, dict[str, int]]:
         """
-        Ejecuta conciliación automática para todas las empresas con facturas o movimientos bancarios.
+        Conciliación automática masiva **sin** ``SELECT`` global sobre ``facturas`` /
+        ``bank_transactions`` solo para descubrir ``empresa_id`` (riesgo memoria y ancho de banda
+        multi-tenant).
+
+        Recorre ``empresas`` paginada (no archivadas; por defecto solo ``is_active``) y delega en
+        ``auto_reconcile_invoices`` por tenant.
+
+        Args:
+            empresa_id: Si se informa, solo procesa ese tenant (cron/worker por empresa).
         """
-        empresas: set[str] = set()
+        one = str(empresa_id or "").strip()
+        if one:
+            n, _ = await self.auto_reconcile_invoices(one)
+            return n, {one: n}
 
-        res_f: Any = await self._db.execute(self._db.table("facturas").select("empresa_id"))
-        for row in (res_f.data or []) if hasattr(res_f, "data") else []:
-            eid = str(row.get("empresa_id") or "").strip()
-            if eid:
-                empresas.add(eid)
-
-        res_b: Any = await self._db.execute(self._db.table("bank_transactions").select("empresa_id"))
-        for row in (res_b.data or []) if hasattr(res_b, "data") else []:
-            eid = str(row.get("empresa_id") or "").strip()
-            if eid:
-                empresas.add(eid)
-
+        page_size = _auto_reconcile_empresa_page_size()
+        skip_inactive = _auto_reconcile_skip_inactive_tenants()
         total = 0
         per_empresa: dict[str, int] = {}
-        for eid in sorted(empresas):
-            n, _ = await self.auto_reconcile_invoices(eid)
-            per_empresa[eid] = n
-            total += n
+        offset = 0
+
+        while True:
+            q = filter_not_deleted(
+                self._db.table("empresas").select("id").order("id", desc=False)
+            )
+            if skip_inactive:
+                q = q.eq("is_active", True)
+            res: Any = await self._db.execute(q.range(offset, offset + page_size - 1))
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+            if not rows:
+                break
+
+            for row in rows:
+                eid = str(row.get("id") or "").strip()
+                if not eid:
+                    continue
+                n, _ = await self.auto_reconcile_invoices(eid)
+                per_empresa[eid] = n
+                total += n
+
+            if len(rows) < page_size:
+                break
+            offset += page_size
+
+        _log.info(
+            "auto_reconcile_all: tenants=%s coincidencias=%s page_size=%s skip_inactive=%s",
+            len(per_empresa),
+            total,
+            page_size,
+            skip_inactive,
+        )
         return total, per_empresa
 
     # ── Conciliación asistida por IA (movimientos_bancarios) ─────────────────

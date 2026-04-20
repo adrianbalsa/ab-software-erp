@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { SYNC_QUEUE_KEY, type SyncQueueItem } from "../services/sync_service";
+import { SYNC_DLQ_KEY, SYNC_QUEUE_KEY, type SyncQueueItem } from "../services/sync_service";
 
 function fakePodItem(idx: number): SyncQueueItem {
   return {
@@ -63,5 +63,5 @@ export async function injectOfflineStressQueue(): Promise<{ total: number; pod: 
 }
 
 export async function clearOfflineStressQueue(): Promise<void> {
-  await AsyncStorage.removeItem(SYNC_QUEUE_KEY);
+  await AsyncStorage.multiRemove([SYNC_QUEUE_KEY, SYNC_DLQ_KEY]);
 }

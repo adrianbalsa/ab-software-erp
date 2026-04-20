@@ -80,27 +80,27 @@ const pricingEs = {
     "Elige el plan que encaja con tu flota. Los cobros se gestionan de forma segura con Stripe Billing.",
   loginCta: "Iniciar sesión para contratar",
   perMonth: "/mes + IVA",
-  starterName: "Starter",
-  starterPrice: "19 €",
-  starterDesc: "Hasta 5 vehículos, VeriFactu y operativa central.",
+  starterName: "Compliance",
+  starterPrice: "39 €",
+  starterDesc: "Hasta 5 vehículos, VeriFactu y operativa central (catálogo 2026).",
   starterBullets: [
     "VeriFactu y facturación electrónica",
     "Cuadro de mando operativo",
     "Límite de 5 vehículos en flota",
   ],
-  proName: "Pro",
-  proPrice: "89 €",
+  proName: "Finance",
+  proPrice: "149 €",
   proDesc: "Hasta 25 vehículos y motor financiero avanzado.",
   proBullets: [
-    "Todo lo de Starter",
+    "Todo lo de Compliance",
     "Hasta 25 vehículos",
     "Inteligencia financiera y BI ampliado",
   ],
-  entName: "Enterprise",
-  entPrice: "249 €",
+  entName: "Full-Stack",
+  entPrice: "449 €",
   entDesc: "Flota ilimitada, ESG comercial y certificación.",
   entBullets: [
-    "Todo lo de Pro",
+    "Todo lo de Finance",
     "Flota sin límite",
     "Módulo ESG y certificados auditables",
   ],
@@ -115,22 +115,22 @@ const pricingEn = {
   subtitle: "Pick the plan that matches your fleet. Billing is handled securely with Stripe Billing.",
   loginCta: "Sign in to subscribe",
   perMonth: "/month + VAT",
-  starterName: "Starter",
-  starterPrice: "€19",
-  starterDesc: "Up to 5 vehicles, VeriFactu and core operations.",
+  starterName: "Compliance",
+  starterPrice: "€39",
+  starterDesc: "Up to 5 vehicles, VeriFactu and core operations (2026 catalog).",
   starterBullets: [
     "VeriFactu & e-invoicing",
     "Operational dashboard",
     "Fleet cap of 5 vehicles",
   ],
-  proName: "Pro",
-  proPrice: "€89",
+  proName: "Finance",
+  proPrice: "€149",
   proDesc: "Up to 25 vehicles and advanced financial intelligence.",
-  proBullets: ["Everything in Starter", "Up to 25 vehicles", "Extended BI & finance engine"],
-  entName: "Enterprise",
-  entPrice: "€249",
+  proBullets: ["Everything in Compliance", "Up to 25 vehicles", "Extended BI & finance engine"],
+  entName: "Full-Stack",
+  entPrice: "€449",
   entDesc: "Unlimited fleet, commercial ESG and certification.",
-  entBullets: ["Everything in Pro", "Unlimited fleet", "ESG module & auditable certificates"],
+  entBullets: ["Everything in Finance", "Unlimited fleet", "ESG module & auditable certificates"],
   choose: "Subscribe",
   currentNote:
     "If you already have an account, sign in and use “Upgrade plan” in the sidebar or the Subscription page.",
@@ -138,7 +138,16 @@ const pricingEn = {
 } as const;
 
 const helpBillingMdEs = `
-Los pagos del **plan SaaS** (Starter, Pro, Enterprise) se procesan con **Stripe** en modo suscripción recurrente.
+Los pagos del **plan SaaS** (**Compliance**, **Finance**, **Full-Stack**; slugs \`starter\` / \`pro\` / \`enterprise\`) se procesan con **Stripe** en modo suscripción recurrente. Precios de catálogo orientativos: **39 €**, **149 €** y **449 €** / mes (+ IVA según caso).
+
+### Add-ons (referencia comercial)
+| Add-on | Precio orientativo |
+|--------|-------------------|
+| OCR Pack (documentos extra) | 15 € / mes |
+| Webhooks B2B Premium | 49 € / mes |
+| LogisAdvisor IA Pro | 29 € / mes |
+
+Los \`price_*\` reales se configuran en Stripe Dashboard y variables \`STRIPE_PRICE_*\` (ver \`docs/operations/STRIPE_BILLING.md\`).
 
 ### Contratar o cambiar de plan
 1. Inicia sesión con un usuario administrador de tu empresa.
@@ -156,7 +165,16 @@ Para incidencias de acceso o datos de transporte, contacta con el administrador 
 `.trim();
 
 const helpBillingMdEn = `
-**SaaS plan** charges (Starter, Pro, Enterprise) are processed by **Stripe** as recurring subscriptions.
+**SaaS plan** charges (**Compliance**, **Finance**, **Full-Stack**; slugs \`starter\` / \`pro\` / \`enterprise\`) are processed by **Stripe** as recurring subscriptions. Indicative list prices: **€39**, **€149** and **€449** / month (+ VAT as applicable).
+
+### Add-ons (commercial reference)
+| Add-on | Indicative price |
+|--------|------------------|
+| OCR Pack (extra documents) | €15 / month |
+| Webhooks B2B Premium | €49 / month |
+| LogisAdvisor IA Pro | €29 / month |
+
+Real \`price_*\` IDs are configured in Stripe Dashboard and \`STRIPE_PRICE_*\` env vars (see \`docs/operations/STRIPE_BILLING.md\`).
 
 ### Subscribe or change plan
 1. Sign in with an **admin** user for your company.
@@ -206,8 +224,8 @@ const es: Catalog = {
     portalCta: "Abrir portal de facturación (Stripe)",
     portalHint:
       "Te redirigimos a Stripe para tarjeta, facturas PDF y cancelación de renovación. Volverás al panel al cerrar.",
-    upgradePro: "Contratar o pasar a Pro",
-    upgradeEnt: "Contratar Enterprise",
+    upgradePro: "Contratar o pasar a Finance",
+    upgradeEnt: "Contratar Full-Stack",
     loadingPortal: "Abriendo portal…",
     portalDisabled: "Completa antes un checkout para asociar un cliente Stripe a tu empresa.",
     errorPrefix: "No se pudo abrir el portal",
@@ -249,8 +267,8 @@ const en = {
     portalCta: "Open billing portal (Stripe)",
     portalHint:
       "You will be redirected to Stripe for card, PDF invoices and renewal cancellation. You return to the app when finished.",
-    upgradePro: "Subscribe or upgrade to Pro",
-    upgradeEnt: "Subscribe to Enterprise",
+    upgradePro: "Subscribe or upgrade to Finance",
+    upgradeEnt: "Subscribe to Full-Stack",
     loadingPortal: "Opening portal…",
     portalDisabled: "Complete checkout once so a Stripe customer is linked to your company.",
     errorPrefix: "Could not open portal",

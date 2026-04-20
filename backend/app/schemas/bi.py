@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.core.constants import COSTE_OPERATIVO_EUR_KM
+
 
 class BiDashboardSummaryOut(BaseModel):
     """KPIs compactos para tarjetas / dashboard BI."""
@@ -67,7 +69,10 @@ class BiProfitabilityChartsOut(BaseModel):
     """Serie lista para <ScatterChart data={points} />."""
 
     points: list[ProfitabilityScatterPoint]
-    coste_operativo_eur_km: float = Field(default=0.62, description="Constante usada en el margen estimado.")
+    coste_operativo_eur_km: float = Field(
+        default=COSTE_OPERATIVO_EUR_KM,
+        description="Constante usada en el margen estimado.",
+    )
 
 
 class EsgMatrixPoint(BaseModel):

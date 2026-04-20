@@ -117,6 +117,10 @@ class SecretManagerService(ABC):
     def get_azure_document_intelligence_key(self) -> Optional[str]:
         """Clave Azure Document Intelligence (``AZURE_KEY``)."""
 
+    @abstractmethod
+    def get_esg_external_webhook_secret(self) -> Optional[str]:
+        """HMAC para ``POST /api/v1/webhooks/esg-external-verify`` (certificadora externa simulada)."""
+
 
 def _strip(name: str) -> Optional[str]:
     raw = os.getenv(name)
@@ -291,6 +295,9 @@ class EnvSecretManager(SecretManagerService):
     def get_azure_document_intelligence_key(self) -> Optional[str]:
         return _strip("AZURE_KEY")
 
+    def get_esg_external_webhook_secret(self) -> Optional[str]:
+        return _strip("ESG_EXTERNAL_WEBHOOK_SECRET")
+
 
 class JsonMapSecretManager(SecretManagerService, ABC):
     """Lecturas desde un mapa JSON (Vault ``data`` o AWS ``SecretString`` JSON)."""
@@ -415,6 +422,9 @@ class JsonMapSecretManager(SecretManagerService, ABC):
 
     def get_azure_document_intelligence_key(self) -> Optional[str]:
         return self._get("AZURE_KEY")
+
+    def get_esg_external_webhook_secret(self) -> Optional[str]:
+        return self._get("ESG_EXTERNAL_WEBHOOK_SECRET")
 
 
 class VaultKvSecretManager(JsonMapSecretManager):

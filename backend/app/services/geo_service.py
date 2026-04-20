@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 
 from app.core.config import get_settings
+from app.core.constants import COSTE_OPERATIVO_EUR_KM
 from app.db.supabase import SupabaseAsync
 
 _log = logging.getLogger(__name__)
@@ -344,7 +345,7 @@ class GeoService:
             "duration_seconds": ds,
             "distance_km": distance_km,
             "duration_mins": duration_mins,
-            "estimated_cost": round(max(0.0, distance_km) * 0.62, 2),
+            "estimated_cost": round(max(0.0, distance_km) * float(COSTE_OPERATIVO_EUR_KM), 2),
             "source": source,
         }
 

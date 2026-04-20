@@ -128,12 +128,10 @@ def _security_contact_mailto() -> str:
     return _DEFAULT_SECURITY_CONTACT
 
 
-@router.get("/api/v1/public/compliance", include_in_schema=True)
-async def get_public_compliance_pack() -> dict[str, Any]:
+def build_public_compliance_pack() -> dict[str, Any]:
     """
-    Paquete de transparencia sin autenticación: subencargados, resumen SLA/RGPD y postura de seguridad.
-    Las URLs legales canónicas para usuarios finales dependen del despliegue (landing/app); aquí se
-    citan rutas de documentación en el repositorio como referencia estable para integradores y DD.
+    Misma carga útil que ``GET /api/v1/public/compliance`` (sin PII operativo de clientes).
+    Reutilizable para export ZIP de evidencias Due Diligence / auditores.
     """
     settings = get_settings()
     return {
@@ -149,16 +147,31 @@ async def get_public_compliance_pack() -> dict[str, Any]:
     }
 
 
-@router.get("/.well-known/security.txt", include_in_schema=False)
-async def get_security_txt() -> PlainTextResponse:
-    """Divulgación coordinada de vulnerabilidades (RFC 9116)."""
+def build_security_txt_body() -> str:
+    """Cuerpo RFC 9116 alineado con ``GET /.well-known/security.txt``."""
     contact = _security_contact_mailto()
     expires_dt = datetime.now(timezone.utc) + timedelta(days=365)
     expires = expires_dt.strftime("%Y-%m-%dT%H:%M:%S") + "Z"
-    body = (
+    return (
         f"Contact: mailto:{contact}\n"
         "Preferred-Languages: es, en\n"
         f"Expires: {expires}\n"
         "# Policy: see repository docs/legal/ and GET /api/v1/public/compliance\n"
     )
+
+
+@router.get("/api/v1/public/compliance", include_in_schema=True)
+async def get_public_compliance_pack() -> dict[str, Any]:
+    """
+    Paquete de transparencia sin autenticación: subencargados, resumen SLA/RGPD y postura de seguridad.
+    Las URLs legales canónicas para usuarios finales dependen del despliegue (landing/app); aquí se
+    citan rutas de documentación en el repositorio como referencia estable para integradores y DD.
+    """
+    return build_public_compliance_pack()
+
+
+@router.get("/.well-known/security.txt", include_in_schema=False)
+async def get_security_txt() -> PlainTextResponse:
+    """Divulgación coordinada de vulnerabilidades (RFC 9116)."""
+    body = build_security_txt_body()
     return PlainTextResponse(content=body, media_type="text/plain; charset=utf-8")

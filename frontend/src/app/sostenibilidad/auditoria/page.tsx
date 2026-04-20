@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Cell,
@@ -11,7 +12,17 @@ import {
 } from "recharts";
 
 import { RoleGuard } from "@/components/auth/RoleGuard";
-import { API_BASE, apiFetch, parseApiError, type AppRbacRole } from "@/lib/api";
+import {
+  API_BASE,
+  apiFetch,
+  downloadEsgIso14083Export,
+  fetchEsgCertificateRegistry,
+  jwtRbacRole,
+  parseApiError,
+  postEsgCertificateExternallyVerify,
+  type AppRbacRole,
+  type EsgCertificateRegistryRow,
+} from "@/lib/api";
 
 type ESGAuditClienteItem = {
   cliente_id: string;
@@ -64,6 +75,14 @@ export default function EsgAuditoriaPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [certOpen, setCertOpen] = useState(false);
+  const [registry, setRegistry] = useState<EsgCertificateRegistryRow[]>([]);
+  const [registryLoading, setRegistryLoading] = useState(false);
+  const [registryErr, setRegistryErr] = useState<string | null>(null);
+  const [flowErr, setFlowErr] = useState<string | null>(null);
+  const [verifyCode, setVerifyCode] = useState("");
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyMsg, setVerifyMsg] = useState<string | null>(null);
+  const [exportBusy, setExportBusy] = useState<"csv" | "json" | "json_auditor" | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -93,6 +112,74 @@ export default function EsgAuditoriaPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadRegistry = useCallback(async () => {
+    setRegistryLoading(true);
+    setRegistryErr(null);
+    try {
+      const rows = await fetchEsgCertificateRegistry(80);
+      setRegistry(rows);
+    } catch (e: unknown) {
+      setRegistry([]);
+      setRegistryErr(e instanceof Error ? e.message : "No se pudo cargar el registro de certificados");
+    } finally {
+      setRegistryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadRegistry();
+  }, [loadRegistry]);
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const onExportIso = async (formato: "csv" | "json", forExternalAuditor: boolean) => {
+    const key = formato === "json" && forExternalAuditor ? "json_auditor" : formato;
+    setExportBusy(key);
+    setFlowErr(null);
+    try {
+      const blob = await downloadEsgIso14083Export({
+        fechaInicio: fechaInicio,
+        fechaFin: fechaFin,
+        formato,
+        forExternalAuditor,
+      });
+      const ext = formato === "json" ? "json" : "csv";
+      const tag = forExternalAuditor ? "_auditor_safe" : "";
+      downloadBlob(blob, `esg_iso14083_export_${fechaInicio}_${fechaFin}${tag}.${ext}`);
+    } catch (e: unknown) {
+      setFlowErr(e instanceof Error ? e.message : "Error al exportar");
+    } finally {
+      setExportBusy(null);
+    }
+  };
+
+  const onVerifyExternal = async () => {
+    const code = verifyCode.trim();
+    if (code.length < 8) {
+      setVerifyMsg("Introduce el código UUID completo del certificado.");
+      return;
+    }
+    setVerifyLoading(true);
+    setVerifyMsg(null);
+    try {
+      await postEsgCertificateExternallyVerify(code);
+      setVerifyMsg("Estado actualizado a externally_verified.");
+      setVerifyCode("");
+      await loadRegistry();
+    } catch (e: unknown) {
+      setVerifyMsg(e instanceof Error ? e.message : "No se pudo actualizar el certificado");
+    } finally {
+      setVerifyLoading(false);
+    }
+  };
 
   const pieData = useMemo(() => {
     if (!data?.desglose_certificacion?.length) return [];
@@ -298,6 +385,122 @@ export default function EsgAuditoriaPage() {
             <p className="text-slate-300 leading-relaxed text-sm md:text-base">
               {data?.insight_optimizacion ?? "Carga el informe para ver el insight."}
             </p>
+          </section>
+
+          <section className="rounded-2xl border border-slate-800 bg-[#0f1623] p-6 space-y-4 esg-no-print">
+            <h2 className="text-lg font-semibold text-white">Verificación externa y export ISO (sin PII)</h2>
+            <p className="text-sm text-slate-500">
+              Registro de certificados con QR público, export agregado ISO 14083 para terceros y cierre manual{" "}
+              <span className="text-emerald-400 font-mono text-xs">externally_verified</span> (solo propietario).
+              Documentación en{" "}
+              <Link href="/help/esg-external-verification" className="text-emerald-400 underline">
+                /help/esg-external-verification
+              </Link>
+              . Webhook para certificadora:{" "}
+              <code className="text-xs text-slate-400">POST /api/v1/webhooks/esg-external-verify</code> con firma{" "}
+              <code className="text-xs text-slate-400">X-ABL-ESG-Signature</code>.
+            </p>
+
+            {flowErr ? <p className="text-xs text-rose-400">{flowErr}</p> : null}
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={exportBusy !== null}
+                onClick={() => void onExportIso("csv", false)}
+                className="px-4 py-2 rounded-lg bg-slate-800 text-slate-100 text-sm font-medium border border-slate-600 hover:bg-slate-700 disabled:opacity-50"
+              >
+                {exportBusy === "csv" ? "Generando…" : "Descargar CSV ISO (periodo)"}
+              </button>
+              <button
+                type="button"
+                disabled={exportBusy !== null}
+                onClick={() => void onExportIso("json", false)}
+                className="px-4 py-2 rounded-lg bg-slate-800 text-slate-100 text-sm font-medium border border-slate-600 hover:bg-slate-700 disabled:opacity-50"
+              >
+                {exportBusy === "json" ? "Generando…" : "Descargar JSON ISO (periodo)"}
+              </button>
+              <button
+                type="button"
+                disabled={exportBusy !== null}
+                onClick={() => void onExportIso("json", true)}
+                className="px-4 py-2 rounded-lg bg-emerald-950/50 text-emerald-200 text-sm font-medium border border-emerald-800 hover:bg-emerald-900/40 disabled:opacity-50"
+              >
+                {exportBusy === "json_auditor" ? "Generando…" : "JSON para auditor (sin empresa_id en meta)"}
+              </button>
+            </div>
+
+            {jwtRbacRole() === "owner" ? (
+              <div className="rounded-xl border border-slate-800 bg-[#0a0e17] p-4 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cerrar verificación (owner)</p>
+                <div className="flex flex-wrap gap-2 items-center">
+                  <input
+                    type="text"
+                    value={verifyCode}
+                    onChange={(e) => setVerifyCode(e.target.value)}
+                    placeholder="verification_code (UUID)"
+                    className="min-w-[240px] flex-1 bg-[#0f1623] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-600"
+                  />
+                  <button
+                    type="button"
+                    disabled={verifyLoading}
+                    onClick={() => void onVerifyExternal()}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50"
+                  >
+                    {verifyLoading ? "Actualizando…" : "Marcar externally_verified"}
+                  </button>
+                </div>
+                {verifyMsg ? <p className="text-xs text-slate-400">{verifyMsg}</p> : null}
+              </div>
+            ) : null}
+
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h3 className="text-sm font-semibold text-slate-200">Certificados recientes</h3>
+                <button
+                  type="button"
+                  onClick={() => void loadRegistry()}
+                  disabled={registryLoading}
+                  className="text-xs text-emerald-400 hover:underline disabled:opacity-50"
+                >
+                  {registryLoading ? "Cargando…" : "Actualizar lista"}
+                </button>
+              </div>
+              {registryErr ? (
+                <p className="text-xs text-rose-400 mb-2">{registryErr}</p>
+              ) : null}
+              <div className="overflow-x-auto rounded-lg border border-slate-800">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-900/80 text-slate-500 uppercase tracking-wide">
+                    <tr>
+                      <th className="px-3 py-2">Código (QR)</th>
+                      <th className="px-3 py-2">Estado</th>
+                      <th className="px-3 py-2">Tipo</th>
+                      <th className="px-3 py-2">Emitido</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {registry.map((r) => (
+                      <tr key={r.verification_code} className="border-t border-slate-800/80">
+                        <td className="px-3 py-2 font-mono text-[11px] break-all">{r.verification_code}</td>
+                        <td className="px-3 py-2">{r.verification_status}</td>
+                        <td className="px-3 py-2">{r.subject_type}</td>
+                        <td className="px-3 py-2 text-slate-500">
+                          {r.created_at ? r.created_at.slice(0, 19).replace("T", " ") : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                    {!registryLoading && registry.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-3 py-4 text-slate-500 text-center">
+                          Sin certificados registrados.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </section>
 
           <div className="flex justify-end">

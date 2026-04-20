@@ -5,6 +5,9 @@ from __future__ import annotations
 from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 from typing import Any
 
+# Re-export del Math Engine: importes agregados (dashboard, tesorería, etc.) alineados con ROUND_HALF_EVEN / céntimos.
+from app.core.math_engine import round_fiat, to_decimal
+
 def fiscal_amount_string_two_decimals(value: Any) -> str:
     """
     Cadena de importe con exactamente dos decimales (ROUND_HALF_EVEN), sin pasar por ``float``,

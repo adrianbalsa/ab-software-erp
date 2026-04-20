@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 from app.core.constants import ISO_14083_DIESEL_CO2_KG_PER_LITRE, ISO_14083_REFERENCE_LABEL
 from app.core.esg_engine import esg_certificate_co2_vs_euro_iii
 from app.services.bi_service import _co2_kg_for_row
@@ -10,7 +12,19 @@ from app.services.esg_service import (
     generate_porte_certificate_pdf_reportlab,
     sum_portal_esg_co2_ahorro_kg,
 )
+from app.services.esg_audit_service import certificate_content_sha256_hex, public_esg_verify_url
 from app.services.pdf_esg_service import EsgPorteCertificatePdfModel
+
+
+def test_public_esg_verify_url_default_origin() -> None:
+    u = public_esg_verify_url(api_origin=None, verification_code="00000000-0000-4000-8000-000000000001")
+    assert u.startswith("https://api.ablogistics.io/v1/public/verify-esg/")
+    assert u.endswith("00000000-0000-4000-8000-000000000001")
+
+
+def test_certificate_content_sha256_hex_matches_hashlib() -> None:
+    b = b"%PDF-1.4 test"
+    assert certificate_content_sha256_hex(b) == hashlib.sha256(b).hexdigest()
 
 
 def test_iso14083_constant_is_267() -> None:

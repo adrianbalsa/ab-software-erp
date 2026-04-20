@@ -7,7 +7,12 @@ import type { PodRegisterInput, PodRegisterResult } from "../types/porte";
 import { createGastoOnline } from "./gastosApi";
 import { registerPODOnline } from "./portesApi";
 
+/** Máximo de reintentos automáticos por ítem; al superarlo pasa a la DLQ local (no se pierde el payload). */
+export const MAX_TRIES = 3;
+
 export const SYNC_QUEUE_KEY = "abl_sync_queue_v2";
+/** Cola muerta local: ítems que agotaron reintentos o se movieron explícitamente desde «Limpiar errores». */
+export const SYNC_DLQ_KEY = "abl_sync_dlq_v1";
 
 export type SyncItemType = "POD" | "GASTO";
 
@@ -29,10 +34,23 @@ export type SyncQueueItem =
       payload: GastoCreateInput;
     };
 
-type QueueListener = (state: { size: number; syncing: boolean; items: SyncQueueItem[] }) => void;
+export type DeadLetterSyncItem = SyncQueueItem & {
+  deadletteredAt: string;
+};
+
+export type SyncQueueState = {
+  size: number;
+  dlqSize: number;
+  syncing: boolean;
+  items: SyncQueueItem[];
+  dlqItems: DeadLetterSyncItem[];
+};
+
+type QueueListener = (state: SyncQueueState) => void;
 
 const listeners = new Set<QueueListener>();
 let queueCache: SyncQueueItem[] | null = null;
+let dlqCache: DeadLetterSyncItem[] | null = null;
 let isSyncing = false;
 let netInfoSubscribed = false;
 let queueMutex: Promise<void> = Promise.resolve();
@@ -52,8 +70,16 @@ async function withQueueLock<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 function notify() {
-  const snapshot = queueCache ?? [];
-  for (const cb of listeners) cb({ size: snapshot.length, syncing: isSyncing, items: snapshot });
+  const items = queueCache ?? [];
+  const dlqItems = dlqCache ?? [];
+  const snapshot: SyncQueueState = {
+    size: items.length,
+    dlqSize: dlqItems.length,
+    syncing: isSyncing,
+    items,
+    dlqItems,
+  };
+  for (const cb of listeners) cb(snapshot);
 }
 
 function describeError(error: unknown): string {
@@ -83,6 +109,18 @@ function isAuthError(error: unknown): boolean {
   return error instanceof ApiError && [401, 403].includes(error.status);
 }
 
+function stampDeadLetter(item: SyncQueueItem): DeadLetterSyncItem {
+  return {
+    ...item,
+    deadletteredAt: new Date().toISOString(),
+  };
+}
+
+function stripDeadLetterMeta(item: DeadLetterSyncItem): SyncQueueItem {
+  const { deadletteredAt: _d, ...rest } = item;
+  return rest as SyncQueueItem;
+}
+
 async function executeOnline(item: SyncQueueItem): Promise<void> {
   if (item.type === "POD") {
     await registerPODOnline(item.payload);
@@ -91,20 +129,41 @@ async function executeOnline(item: SyncQueueItem): Promise<void> {
   await createGastoOnline(item.payload);
 }
 
-async function loadQueue(): Promise<SyncQueueItem[]> {
-  if (queueCache) return queueCache;
+async function readQueueFromStorage(): Promise<SyncQueueItem[]> {
   const raw = await AsyncStorage.getItem(SYNC_QUEUE_KEY);
-  if (!raw) {
-    queueCache = [];
-    return queueCache;
-  }
+  if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as SyncQueueItem[];
-    queueCache = Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    queueCache = [];
+    return [];
   }
+}
+
+async function readDlqFromStorage(): Promise<DeadLetterSyncItem[]> {
+  const raw = await AsyncStorage.getItem(SYNC_DLQ_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as DeadLetterSyncItem[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((row) => row && typeof row.id === "string" && typeof row.deadletteredAt === "string");
+  } catch {
+    return [];
+  }
+}
+
+async function loadQueue(): Promise<SyncQueueItem[]> {
+  if (queueCache) return queueCache;
+  const q = await readQueueFromStorage();
+  queueCache = q;
   return queueCache;
+}
+
+async function loadDlq(): Promise<DeadLetterSyncItem[]> {
+  if (dlqCache) return dlqCache;
+  const q = await readDlqFromStorage();
+  dlqCache = q;
+  return dlqCache;
 }
 
 async function saveQueue(queue: SyncQueueItem[]) {
@@ -113,9 +172,16 @@ async function saveQueue(queue: SyncQueueItem[]) {
   notify();
 }
 
+async function saveDlq(queue: DeadLetterSyncItem[]) {
+  dlqCache = queue;
+  await AsyncStorage.setItem(SYNC_DLQ_KEY, JSON.stringify(queue));
+  notify();
+}
+
 async function enqueue(item: SyncQueueItem): Promise<void> {
   await withQueueLock(async () => {
-    const q = await loadQueue();
+    const q = await readQueueFromStorage();
+    queueCache = q;
     q.push(item);
     await saveQueue(q);
   });
@@ -123,7 +189,13 @@ async function enqueue(item: SyncQueueItem): Promise<void> {
 
 export function subscribeSyncStatus(listener: QueueListener): () => void {
   listeners.add(listener);
-  listener({ size: queueCache?.length ?? 0, syncing: isSyncing, items: queueCache ?? [] });
+  listener({
+    size: queueCache?.length ?? 0,
+    dlqSize: dlqCache?.length ?? 0,
+    syncing: isSyncing,
+    items: queueCache ?? [],
+    dlqItems: dlqCache ?? [],
+  });
   return () => listeners.delete(listener);
 }
 
@@ -132,15 +204,64 @@ export async function getPendingSyncCount(): Promise<number> {
   return q.length;
 }
 
+export async function getDlqCount(): Promise<number> {
+  const d = await loadDlq();
+  return d.length;
+}
+
 export async function getPendingSyncItems(): Promise<SyncQueueItem[]> {
   return [...(await loadQueue())];
 }
 
+export async function getDlqItems(): Promise<DeadLetterSyncItem[]> {
+  return [...(await loadDlq())];
+}
+
+/**
+ * Mueve a la DLQ los ítems con intentos agotados (no los borra).
+ * Los ítems recuperables permanecen en la cola activa.
+ */
 export async function clearSyncErrors(): Promise<void> {
   await withQueueLock(async () => {
-    const q = await loadQueue();
-    const cleaned = q.filter((i) => i.tries < 3);
-    await saveQueue(cleaned);
+    const q = await readQueueFromStorage();
+    queueCache = q;
+    const exhausted = q.filter((i) => i.tries >= MAX_TRIES);
+    const alive = q.filter((i) => i.tries < MAX_TRIES);
+    if (exhausted.length) {
+      await appendToDlqInner(exhausted.map(stampDeadLetter));
+    }
+    await saveQueue(alive);
+  });
+}
+
+async function appendToDlqInner(items: DeadLetterSyncItem[]): Promise<void> {
+  if (!items.length) return;
+  const cur = await readDlqFromStorage();
+  const seen = new Set(cur.map((i) => i.id));
+  const merged = [...cur];
+  for (const it of items) {
+    if (!seen.has(it.id)) {
+      merged.push(it);
+      seen.add(it.id);
+    }
+  }
+  dlqCache = merged;
+  await AsyncStorage.setItem(SYNC_DLQ_KEY, JSON.stringify(merged));
+}
+
+/** Migra en caliente ítems ya agotados que siguieran en la cola legacy. */
+export async function migrateExhaustedToDlq(): Promise<void> {
+  await withQueueLock(async () => {
+    const q = await readQueueFromStorage();
+    queueCache = q;
+    const exhausted = q.filter((i) => i.tries >= MAX_TRIES);
+    const alive = q.filter((i) => i.tries < MAX_TRIES);
+    if (!exhausted.length) {
+      queueCache = alive;
+      return;
+    }
+    await appendToDlqInner(exhausted.map(stampDeadLetter));
+    await saveQueue(alive);
   });
 }
 
@@ -152,7 +273,8 @@ export async function retrySyncItem(itemId: string): Promise<void> {
   try {
     await executeOnline(item);
     await withQueueLock(async () => {
-      const latest = await loadQueue();
+      const latest = await readQueueFromStorage();
+      queueCache = latest;
       const j = latest.findIndex((x) => x.id === itemId);
       if (j >= 0) {
         latest.splice(j, 1);
@@ -161,18 +283,59 @@ export async function retrySyncItem(itemId: string): Promise<void> {
     });
   } catch (error) {
     await withQueueLock(async () => {
-      const latest = await loadQueue();
+      const latest = await readQueueFromStorage();
+      queueCache = latest;
       const j = latest.findIndex((x) => x.id === itemId);
-      if (j >= 0) {
-        latest[j] = {
-          ...latest[j],
-          tries: latest[j].tries + 1,
-          lastError: describeError(error),
-        } as SyncQueueItem;
+      if (j < 0) return;
+      const tries = latest[j].tries + 1;
+      const lastError = describeError(error);
+      if (tries >= MAX_TRIES) {
+        const [removed] = latest.splice(j, 1);
         await saveQueue(latest);
+        await appendToDlqInner([stampDeadLetter({ ...removed, tries, lastError } as SyncQueueItem)]);
+        notify();
+        return;
       }
+      latest[j] = {
+        ...latest[j],
+        tries,
+        lastError,
+      } as SyncQueueItem;
+      await saveQueue(latest);
     });
   }
+}
+
+/** Vuelve a poner un ítem de la DLQ al final de la cola activa (intentos a cero). */
+export async function reenqueueFromDlq(itemId: string): Promise<void> {
+  await withQueueLock(async () => {
+    const dlq = await readDlqFromStorage();
+    dlqCache = dlq;
+    const di = dlq.findIndex((x) => x.id === itemId);
+    if (di < 0) return;
+    const [raw] = dlq.splice(di, 1);
+    const base = stripDeadLetterMeta(raw);
+    const revived: SyncQueueItem = {
+      ...base,
+      tries: 0,
+      lastError: undefined,
+    } as SyncQueueItem;
+    const q = await readQueueFromStorage();
+    queueCache = q;
+    q.push(revived);
+    dlqCache = dlq;
+    await AsyncStorage.setItem(SYNC_DLQ_KEY, JSON.stringify(dlq));
+    await saveQueue(q);
+  });
+}
+
+/** Elimina un registro de la DLQ (p. ej. duplicado irrecuperable). */
+export async function removeDeadLetter(itemId: string): Promise<void> {
+  await withQueueLock(async () => {
+    const dlq = await readDlqFromStorage();
+    const next = dlq.filter((x) => x.id !== itemId);
+    await saveDlq(next);
+  });
 }
 
 export async function processPendingSyncQueue(): Promise<void> {
@@ -188,8 +351,23 @@ export async function processPendingSyncQueue(): Promise<void> {
     const snapshotIds = new Set(queue.map((q) => q.id));
 
     const remaining: SyncQueueItem[] = [];
+    const dlqBatch: DeadLetterSyncItem[] = [];
     for (let i = 0; i < queue.length; i += 1) {
       const item = queue[i];
+      if (item.tries >= MAX_TRIES) {
+        console.warn(
+          "[sync_service] Ítem movido a DLQ por exceder reintentos",
+          JSON.stringify({
+            id: item.id,
+            type: item.type,
+            tries: item.tries,
+            maxTries: MAX_TRIES,
+            lastError: item.lastError,
+          }),
+        );
+        dlqBatch.push(stampDeadLetter(item));
+        continue;
+      }
       try {
         await executeOnline(item);
       } catch (error) {
@@ -209,11 +387,14 @@ export async function processPendingSyncQueue(): Promise<void> {
           );
           break;
         }
-        // Error funcional: se descarta el item para no bloquear la cola.
       }
     }
     await withQueueLock(async () => {
-      const latest = await loadQueue();
+      if (dlqBatch.length) {
+        await appendToDlqInner(dlqBatch);
+      }
+      const latest = await readQueueFromStorage();
+      queueCache = latest;
       const newlyAdded = latest.filter((q) => !snapshotIds.has(q.id));
       await saveQueue([...remaining, ...newlyAdded]);
     });
@@ -260,9 +441,20 @@ export async function saveGasto(input: GastoCreateInput): Promise<GastoRecent | 
 export function initSyncBackgroundWorker(): void {
   if (netInfoSubscribed) return;
   netInfoSubscribed = true;
-  void loadQueue().then(() => notify());
+  void (async () => {
+    await migrateExhaustedToDlq();
+    await loadQueue();
+    await loadDlq();
+    notify();
+  })();
   void processPendingSyncQueue();
   NetInfo.addEventListener((state) => {
-    if (state.isConnected) void processPendingSyncQueue();
+    void (async () => {
+      await migrateExhaustedToDlq();
+      await loadQueue();
+      await loadDlq();
+      notify();
+      if (state.isConnected) void processPendingSyncQueue();
+    })();
   });
 }

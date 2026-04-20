@@ -6,7 +6,7 @@ from typing import Any
 import stripe
 from fastapi import HTTPException, status
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.services.secret_manager_service import get_secret_manager
 from app.services.webhook_idempotency import (
     claim_webhook_event,
@@ -41,20 +41,70 @@ def _price_id_to_plan(price_id: str | None) -> str | None:
     return None
 
 
-def _first_subscription_price_id(sub_obj: dict[str, Any]) -> str | None:
-    items = sub_obj.get("items")
-    if not isinstance(items, dict):
-        return None
-    data = items.get("data") or []
-    if not data or not isinstance(data[0], dict):
-        return None
-    price = data[0].get("price")
+def _addon_price_ids_normalized(settings: Settings) -> frozenset[str]:
+    """Price IDs configurados para add-ons (no determinan el plan base)."""
+    raw: list[str | None] = [
+        settings.STRIPE_PRICE_OCR_PACK,
+        settings.STRIPE_PRICE_WEBHOOKS_B2B_PREMIUM,
+        settings.STRIPE_PRICE_LOGISADVISOR_IA_PRO,
+    ]
+    out: set[str] = set()
+    for x in raw:
+        if x and str(x).strip():
+            out.add(str(x).strip())
+    return frozenset(out)
+
+
+def _item_price_id(item: dict[str, Any]) -> str | None:
+    price = item.get("price")
     if isinstance(price, str):
         return price.strip() or None
     if isinstance(price, dict):
         raw = price.get("id")
         return str(raw).strip() if raw else None
     return None
+
+
+def _all_subscription_price_ids(sub_obj: dict[str, Any]) -> list[str]:
+    """Todos los price id activos en la suscripción (base + add-ons)."""
+    items = sub_obj.get("items")
+    if not isinstance(items, dict):
+        return []
+    data = items.get("data") or []
+    out: list[str] = []
+    if not isinstance(data, list):
+        return out
+    for row in data:
+        if not isinstance(row, dict):
+            continue
+        pid = _item_price_id(row)
+        if pid:
+            out.append(pid)
+    return out
+
+
+def _infer_base_plan_from_subscription_line_items(sub_obj: dict[str, Any]) -> str | None:
+    """
+    Determina el plan SaaS cuando hay varias líneas (plan base + add-ons Stripe).
+    Prioridad: Enterprise > Pro > Starter si varios price de plan coinciden (caso anómalo).
+    """
+    settings = get_settings()
+    price_ids = {p.strip() for p in _all_subscription_price_ids(sub_obj) if p and str(p).strip()}
+    if not price_ids:
+        return None
+    candidates: list[tuple[int, str]] = []
+    tier: list[tuple[int, str, str | None]] = [
+        (3, PLAN_ENTERPRISE, settings.STRIPE_PRICE_ENTERPRISE),
+        (2, PLAN_PRO, settings.STRIPE_PRICE_PRO),
+        (1, PLAN_STARTER, settings.STRIPE_PRICE_STARTER),
+    ]
+    for prio, plan, env_pid in tier:
+        if env_pid and str(env_pid).strip() in price_ids:
+            candidates.append((prio, plan))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: -x[0])
+    return candidates[0][1]
 
 
 def _plan_to_price_id(plan_type: str) -> str:
@@ -68,7 +118,10 @@ def _plan_to_price_id(plan_type: str) -> str:
         pid = settings.STRIPE_PRICE_STARTER
     if not pid:
         raise RuntimeError(
-            "Falta variable de entorno STRIPE_PRICE_STARTER / STRIPE_PRICE_PRO / STRIPE_PRICE_ENTERPRISE"
+            "Falta variable de entorno para el price del plan: "
+            "STRIPE_PRICE_STARTER (o STRIPE_PRICE_COMPLIANCE), "
+            "STRIPE_PRICE_PRO (o STRIPE_PRICE_FINANCE), "
+            "STRIPE_PRICE_ENTERPRISE (o STRIPE_PRICE_FULL_STACK)"
         )
     return pid
 
@@ -131,7 +184,7 @@ async def assert_empresa_billing_active(db: SupabaseAsync, *, empresa_id: str) -
     que el estado en Stripe permita el uso del producto.
 
     Sin ``STRIPE_SECRET_KEY`` no se llama a la API de Stripe (desarrollo / despliegues sin billing).
-    Sin ``stripe_subscription_id`` en la fila (p. ej. plan Starter sin tarjeta) se considera activo.
+    Sin ``stripe_subscription_id`` en la fila (p. ej. plan Compliance sin tarjeta) se considera activo.
     """
     eid = str(empresa_id or "").strip()
     if not eid:
@@ -301,7 +354,7 @@ async def _downgrade_empresa_to_starter(
     stripe_customer_id: str | None = None,
     stripe_subscription_id: str | None = None,
 ) -> None:
-    """Busca empresa por ids Stripe y la deja en plan Starter (equivalente a 'free' de producto)."""
+    """Busca empresa por ids Stripe y la deja en plan Compliance (slug `starter`)."""
     if stripe_subscription_id:
         res: Any = await db.execute(
             db.table("empresas")
@@ -340,7 +393,7 @@ async def _downgrade_empresa_to_starter(
         "is_active": True,
     }
     await db.execute(db.table("empresas").update(payload).eq("id", eid))
-    logger.warning("empresa %s downgrade a Starter tras cancelación de suscripción", eid[:8])
+    logger.warning("empresa %s downgrade a Compliance (starter) tras cancelación de suscripción", eid[:8])
 
 
 def _stripe_external_event_id(event: Any) -> str:
@@ -376,7 +429,7 @@ async def _dispatch_stripe_webhook_event(db: SupabaseAsync, event: Any) -> dict[
         meta = sess.get("metadata") or {}
         if not empresa_id:
             empresa_id = (meta.get("empresa_id") or "").strip() or None
-        plan_type = (meta.get("plan_type") or PLAN_STARTER).strip()
+        plan_type = normalize_plan(str(meta.get("plan_type") or PLAN_STARTER))
 
         if not empresa_id:
             logger.error("checkout.session.completed sin empresa_id")
@@ -429,11 +482,15 @@ async def _dispatch_stripe_webhook_event(db: SupabaseAsync, event: Any) -> dict[
                 if sub:
                     fields["stripe_subscription_id"] = str(sub).strip()
                 await _merge_empresa_billing_fields(db, empresa_id=eid, fields=fields)
+        settings = get_settings()
+        addons = _addon_price_ids_normalized(settings)
         logger.info(
-            "invoice.paid customer=%s subscription=%s amount_paid=%s",
+            "invoice.paid customer=%s subscription=%s amount_paid=%s currency=%s addon_prices_configured=%s",
             cust,
             sub,
             inv.get("amount_paid"),
+            inv.get("currency"),
+            bool(addons),
         )
         return {"received": True, "event": etype}
 
@@ -494,8 +551,12 @@ async def _dispatch_stripe_webhook_event(db: SupabaseAsync, event: Any) -> dict[
             logger.warning("customer.subscription.updated sin empresa_id (sub=%s)", sub_id)
             return {"received": True, "ignored": "missing_empresa_id"}
 
-        price_id = _first_subscription_price_id(sub)
-        mapped = _price_id_to_plan(price_id)
+        mapped = _infer_base_plan_from_subscription_line_items(sub)
+        if not mapped:
+            for pid in _all_subscription_price_ids(sub):
+                mapped = _price_id_to_plan(pid)
+                if mapped:
+                    break
         meta_plan = str(meta.get("plan_type") or "").strip()
         if mapped:
             plan_type = normalize_plan(mapped)

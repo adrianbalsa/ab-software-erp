@@ -29,11 +29,9 @@ from app.schemas.finance import (
     GastoBucketCincoOut,
     GastoBucketMensualOut,
 )
+from app.core.constants import COSTE_OPERATIVO_EUR_KM
 from app.services.auditoria_service import AuditoriaService
 from app.services.eco_service import EUR_POR_LITRO_DIESEL_REF, KG_CO2_POR_LITRO_DIESEL
-
-# Alineado con BI / advisor (fallback si no hay tickets de combustible por vehículo/día).
-COSTE_OPERATIVO_EUR_KM: float = float(os.getenv("COSTE_OPERATIVO_EUR_KM", "0.62"))
 # Opex no combustible (€/km) cuando sí hay reparto de combustible real (neumáticos, estructura, etc.).
 OTHER_NON_FUEL_OPEX_PER_KM: float = float(os.getenv("OTHER_NON_FUEL_OPEX_PER_KM", "0.35"))
 

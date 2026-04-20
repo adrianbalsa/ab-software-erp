@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from app.core.constants import COSTE_OPERATIVO_EUR_KM
 from app.core.i18n import normalize_lang
 from app.core.math_engine import as_float_fiat, round_fiat, safe_divide, to_decimal
 from app.core.esg_engine import (
@@ -385,14 +386,15 @@ class PortesService:
 
         return float(margen_km), float(coste_km)
 
-    async def operational_cost_per_km_eur(self, *, empresa_id: str, default: float = 1.10) -> float:
+    async def operational_cost_per_km_eur(self, *, empresa_id: str, default: float | None = None) -> float:
         """
         Coste operativo €/km de la empresa (histórico facturas/gastos vía ``_current_margin_and_cost_per_km``).
-        Si el coste es nulo o ≤ 0, devuelve ``default`` (p. ej. 1.10 €/km).
+        Si el coste es nulo o ≤ 0, devuelve ``default`` (por defecto ``COSTE_OPERATIVO_EUR_KM``).
         """
+        eff_default = float(default) if default is not None else float(COSTE_OPERATIVO_EUR_KM)
         _, coste_km = await self._current_margin_and_cost_per_km(empresa_id=str(empresa_id))
         if coste_km is None or float(coste_km) <= 0.0:
-            return float(default)
+            return eff_default
         return float(coste_km)
 
     async def cotizar_porte(

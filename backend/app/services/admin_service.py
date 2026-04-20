@@ -24,6 +24,35 @@ def _normalize_iban(value: str | None) -> str | None:
     return s if s else None
 
 
+def _encrypt_nif_for_storage(value: str | None) -> str | None:
+    """Cifra NIF antes de persistir; no re-aplica cifrado si ya es token Fernet (p. ej. tras validador Pydantic)."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    plain = s if s.startswith("gAAAA") else s.upper()
+    return pii_crypto.encrypt_pii(plain)
+
+
+def _encrypt_iban_for_storage(value: str | None) -> str | None:
+    """
+    Cifra IBAN antes de persistir, coherente con ``_empresa_out_from_row``.
+    No normaliza en mayúsculas un valor ya cifrado (evitar corrupción del token).
+    """
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    if s.startswith("gAAAA"):
+        return pii_crypto.encrypt_pii(s)
+    iban_n = _normalize_iban(s)
+    if not iban_n:
+        return None
+    return pii_crypto.encrypt_pii(iban_n)
+
+
 def _empresa_out_from_row(row: dict[str, Any]) -> EmpresaOut:
     """Descifra campos sensibles persistidos con Fernet antes del contrato API."""
     r = dict(row)
@@ -69,8 +98,11 @@ class AdminService:
         return out
 
     async def create_empresa(self, *, empresa_in: EmpresaCreate) -> EmpresaOut:
+        nif_db = _encrypt_nif_for_storage(empresa_in.nif)
+        if not nif_db:
+            raise ValueError("NIF requerido")
         payload: dict[str, Any] = {
-            "nif": empresa_in.nif,
+            "nif": nif_db,
             "nombre_legal": empresa_in.nombre_legal.strip(),
             "nombre_comercial": (empresa_in.nombre_comercial or empresa_in.nombre_legal).strip(),
             "plan": empresa_in.plan,
@@ -79,9 +111,10 @@ class AdminService:
             "direccion": empresa_in.direccion,
             "activa": bool(empresa_in.activa),
         }
-        iban_n = _normalize_iban(empresa_in.iban)
-        if iban_n:
-            payload["iban"] = empresa_in.iban
+        if empresa_in.iban is not None:
+            iban_db = _encrypt_iban_for_storage(empresa_in.iban)
+            if iban_db:
+                payload["iban"] = iban_db
         res: Any = await self._db.execute(self._db.table("empresas").insert(payload))
         rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
         if not rows:
@@ -103,9 +136,10 @@ class AdminService:
         if patch.direccion is not None:
             changes["direccion"] = patch.direccion
         if patch.iban is not None:
-            changes["iban"] = patch.iban
+            enc_iban = _encrypt_iban_for_storage(patch.iban)
+            changes["iban"] = enc_iban if enc_iban is not None else ""
 
-        # Nota: EmpresaUpdate no incluye `nif`; se cifra solo en create.
+        # Nota: EmpresaUpdate no incluye `nif`; el alta cifra NIF vía ``create_empresa``.
 
         if not changes:
             # Fetch current

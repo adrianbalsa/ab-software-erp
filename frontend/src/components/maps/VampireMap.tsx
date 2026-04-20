@@ -4,8 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { APIProvider, Map, useMap } from "@vis.gl/react-google-maps";
 
 import { geocodeAddressWithCache, type PorteListRow } from "@/lib/api";
-
-const COST_EUR_PER_KM = 0.62;
+import { getOperationalCostEurKmCached, publicOperationalCostEurKmDefault } from "@/lib/operationalPricing";
 
 export type VampireMapPorte = PorteListRow & {
   lat_origin?: number | null;
@@ -23,9 +22,12 @@ function kmForEconomics(p: VampireMapPorte): number {
 }
 
 /** Rentabilidad operativa estimada: ingreso / coste × 100. */
-export function routeEfficiencyPercent(p: VampireMapPorte): number | null {
+export function routeEfficiencyPercent(
+  p: VampireMapPorte,
+  costEurPerKm: number = publicOperationalCostEurKmDefault(),
+): number | null {
   const income = Number(p.precio_pactado ?? 0);
-  const cost = kmForEconomics(p) * COST_EUR_PER_KM;
+  const cost = kmForEconomics(p) * costEurPerKm;
   if (cost <= 0) return null;
   return (income / cost) * 100;
 }
@@ -34,9 +36,9 @@ function formatEur(n: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 }
 
-function routeEbitdaEstimated(p: VampireMapPorte): number {
+function routeEbitdaEstimated(p: VampireMapPorte, costEurPerKm: number): number {
   const income = Number(p.precio_pactado ?? 0);
-  return income - kmForEconomics(p) * COST_EUR_PER_KM;
+  return income - kmForEconomics(p) * costEurPerKm;
 }
 
 export type ResolvedRoute = {
@@ -149,12 +151,23 @@ export type VampireMapProps = {
   portes: VampireMapPorte[];
   /** Altura CSS del contenedor del mapa */
   className?: string;
+  /** €/km operativo; si no se pasa, se resuelve vía API una vez por sesión. */
+  costEurPerKm?: number;
 };
 
-function VampireMapInner({ portes, className }: VampireMapProps) {
+function VampireMapInner({ portes, className, costEurPerKm }: VampireMapProps) {
   const [resolved, setResolved] = useState<ResolvedRoute[]>([]);
   const [resolving, setResolving] = useState(false);
   const [geoErr, setGeoErr] = useState<string | null>(null);
+  const [cpk, setCpk] = useState(() => costEurPerKm ?? publicOperationalCostEurKmDefault());
+
+  useEffect(() => {
+    if (costEurPerKm != null && costEurPerKm > 0) {
+      setCpk(costEurPerKm);
+      return;
+    }
+    void getOperationalCostEurKmCached().then(setCpk);
+  }, [costEurPerKm]);
 
   const runGeocode = useCallback(async () => {
     if (portes.length === 0) {
@@ -193,8 +206,8 @@ function VampireMapInner({ portes, className }: VampireMapProps) {
           id: p.id,
           o: { lat: oLat, lng: oLng },
           d: { lat: dLat, lng: dLng },
-          efficiencyPct: routeEfficiencyPercent(p),
-          ebitda: routeEbitdaEstimated(p),
+          efficiencyPct: routeEfficiencyPercent(p, cpk),
+          ebitda: routeEbitdaEstimated(p, cpk),
           label: `${p.origen} → ${p.destino}`,
         });
       }
@@ -205,7 +218,7 @@ function VampireMapInner({ portes, className }: VampireMapProps) {
     } finally {
       setResolving(false);
     }
-  }, [portes]);
+  }, [portes, cpk]);
 
   useEffect(() => {
     if (typeof google !== "undefined" && google.maps?.Geocoder) {
@@ -257,9 +270,9 @@ function VampireMapInner({ portes, className }: VampireMapProps) {
 
 /**
  * Mapa de rutas activas: verde (eficiencia &gt; 90%), rojo (&lt; 70%), ámbar intermedio.
- * Tooltip: EBITDA estimado (ingreso − coste a 0,62 €/km sobre km real o estimado).
+ * Tooltip: EBITDA estimado (ingreso − coste operativo €/km sobre km real o estimado).
  */
-export function VampireMap({ portes, className }: VampireMapProps) {
+export function VampireMap({ portes, className, costEurPerKm }: VampireMapProps) {
   const apiKey =
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_MAPS_API_KEY || "";
 
@@ -279,7 +292,7 @@ export function VampireMap({ portes, className }: VampireMapProps) {
 
   return (
     <APIProvider apiKey={apiKey} libraries={["geocoding", "routes"]}>
-      <VampireMapInner portes={portes} className={className} />
+      <VampireMapInner portes={portes} className={className} costEurPerKm={costEurPerKm} />
     </APIProvider>
   );
 }

@@ -52,6 +52,15 @@ class Settings:
     STRIPE_PRICE_STARTER: Optional[str]
     STRIPE_PRICE_PRO: Optional[str]
     STRIPE_PRICE_ENTERPRISE: Optional[str]
+    STRIPE_PRICE_OCR_PACK: Optional[str]
+    STRIPE_PRICE_WEBHOOKS_B2B_PREMIUM: Optional[str]
+    STRIPE_PRICE_LOGISADVISOR_IA_PRO: Optional[str]
+    STRIPE_PRODUCT_STARTER: Optional[str]
+    STRIPE_PRODUCT_PRO: Optional[str]
+    STRIPE_PRODUCT_ENTERPRISE: Optional[str]
+    STRIPE_PRODUCT_OCR_PACK: Optional[str]
+    STRIPE_PRODUCT_WEBHOOKS_B2B_PREMIUM: Optional[str]
+    STRIPE_PRODUCT_LOGISADVISOR_IA_PRO: Optional[str]
     PUBLIC_APP_URL: Optional[str]
     # Resend (Email Engine); opcional — sin clave no se envían correos
     RESEND_API_KEY: Optional[str]
@@ -111,6 +120,8 @@ class Settings:
     # Numeración VeriFactu (config centralizada; env histórico VERIFACTU_SERIE_*).
     VERIFACTU_SERIE_FACTURA: str
     VERIFACTU_SERIE_RECTIFICATIVA: str
+    # Origen absoluto para enlaces QR de verificación ESG (``/v1/public/verify-esg/...``). Default Due Diligence.
+    ESG_VERIFY_API_ORIGIN: Optional[str]
     # Contacto en ``/.well-known/security.txt`` (RFC 9116); si vacío, fallback ``security@ablogistics-os.com``.
     SECURITY_CONTACT_EMAIL: Optional[str]
 
@@ -299,9 +310,19 @@ def get_settings() -> Settings:
 
     stripe_secret = _opt("STRIPE_SECRET_KEY")
     stripe_wh = _opt("STRIPE_WEBHOOK_SECRET")
-    stripe_ps = _opt("STRIPE_PRICE_STARTER")
-    stripe_pp = _opt("STRIPE_PRICE_PRO")
-    stripe_pe = _opt("STRIPE_PRICE_ENTERPRISE")
+    # Precios base: nombres históricos + alias Due Diligence (Compliance / Finance / Full-Stack)
+    stripe_ps = _opt("STRIPE_PRICE_STARTER") or _opt("STRIPE_PRICE_COMPLIANCE")
+    stripe_pp = _opt("STRIPE_PRICE_PRO") or _opt("STRIPE_PRICE_FINANCE")
+    stripe_pe = _opt("STRIPE_PRICE_ENTERPRISE") or _opt("STRIPE_PRICE_FULL_STACK")
+    stripe_p_ocr = _opt("STRIPE_PRICE_OCR_PACK")
+    stripe_p_wh = _opt("STRIPE_PRICE_WEBHOOKS_B2B_PREMIUM")
+    stripe_p_ia = _opt("STRIPE_PRICE_LOGISADVISOR_IA_PRO")
+    stripe_prod_s = _opt("STRIPE_PRODUCT_STARTER") or _opt("STRIPE_PRODUCT_COMPLIANCE")
+    stripe_prod_p = _opt("STRIPE_PRODUCT_PRO") or _opt("STRIPE_PRODUCT_FINANCE")
+    stripe_prod_e = _opt("STRIPE_PRODUCT_ENTERPRISE") or _opt("STRIPE_PRODUCT_FULL_STACK")
+    stripe_prod_ocr = _opt("STRIPE_PRODUCT_OCR_PACK")
+    stripe_prod_wh = _opt("STRIPE_PRODUCT_WEBHOOKS_B2B_PREMIUM")
+    stripe_prod_ia = _opt("STRIPE_PRODUCT_LOGISADVISOR_IA_PRO")
     public_app = _opt("PUBLIC_APP_URL") or _opt("OFFICIAL_FRONTEND_ORIGIN")
     resend_api_key = _opt("RESEND_API_KEY")
     email_from = _opt("EMAIL_FROM_ADDRESS")
@@ -462,6 +483,15 @@ def get_settings() -> Settings:
         STRIPE_PRICE_STARTER=stripe_ps,
         STRIPE_PRICE_PRO=stripe_pp,
         STRIPE_PRICE_ENTERPRISE=stripe_pe,
+        STRIPE_PRICE_OCR_PACK=stripe_p_ocr,
+        STRIPE_PRICE_WEBHOOKS_B2B_PREMIUM=stripe_p_wh,
+        STRIPE_PRICE_LOGISADVISOR_IA_PRO=stripe_p_ia,
+        STRIPE_PRODUCT_STARTER=stripe_prod_s,
+        STRIPE_PRODUCT_PRO=stripe_prod_p,
+        STRIPE_PRODUCT_ENTERPRISE=stripe_prod_e,
+        STRIPE_PRODUCT_OCR_PACK=stripe_prod_ocr,
+        STRIPE_PRODUCT_WEBHOOKS_B2B_PREMIUM=stripe_prod_wh,
+        STRIPE_PRODUCT_LOGISADVISOR_IA_PRO=stripe_prod_ia,
         PUBLIC_APP_URL=public_app,
         RESEND_API_KEY=resend_api_key,
         EMAIL_FROM_ADDRESS=email_from,
@@ -500,6 +530,7 @@ def get_settings() -> Settings:
         AEAT_VERIFACTU_SUMINISTRO_LR_XSD_URL=aeat_lr_xsd,
         VERIFACTU_SERIE_FACTURA=vf_serie_f,
         VERIFACTU_SERIE_RECTIFICATIVA=vf_serie_r,
+        ESG_VERIFY_API_ORIGIN=_opt("ESG_VERIFY_API_ORIGIN"),
         SECURITY_CONTACT_EMAIL=_opt("SECURITY_CONTACT_EMAIL"),
     )
 

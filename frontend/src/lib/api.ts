@@ -453,6 +453,58 @@ export async function downloadEsgCertificatePdf(
   return res.blob();
 }
 
+/** ZIP Due Diligence: compliance público, catálogo de precios, security.txt (sin PII operativo). Requiere rol owner. */
+export async function downloadAuditEvidencePackZip(): Promise<Blob> {
+  const res = await apiFetch(`${API_BASE}/api/v1/export/audit-package`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return res.blob();
+}
+
+export type EsgCertificateRegistryRow = {
+  verification_code: string;
+  verification_status: string;
+  subject_type: string;
+  certificate_id: string;
+  created_at: string | null;
+};
+
+export async function fetchEsgCertificateRegistry(limit = 50): Promise<EsgCertificateRegistryRow[]> {
+  const qs = new URLSearchParams({ limit: String(limit) });
+  const res = await apiFetch(`${API_BASE}/api/v1/esg/certificate-registry?${qs}`, { credentials: "include" });
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as EsgCertificateRegistryRow[];
+}
+
+export async function downloadEsgIso14083Export(params: {
+  fechaInicio: string;
+  fechaFin: string;
+  formato: "csv" | "json";
+  forExternalAuditor?: boolean;
+}): Promise<Blob> {
+  const qs = new URLSearchParams({
+    fecha_inicio: params.fechaInicio,
+    fecha_fin: params.fechaFin,
+    formato: params.formato,
+  });
+  if (params.formato === "json" && params.forExternalAuditor) {
+    qs.set("for_external_auditor", "true");
+  }
+  const res = await apiFetch(`${API_BASE}/api/v1/esg/emissions-export-iso14083?${qs}`, { credentials: "include" });
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return res.blob();
+}
+
+export async function postEsgCertificateExternallyVerify(verificationCode: string): Promise<unknown> {
+  const res = await apiFetch(
+    `${API_BASE}/api/v1/esg/certificate/externally-verify/${encodeURIComponent(verificationCode)}`,
+    { method: "POST", credentials: "include" },
+  );
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return res.json();
+}
+
 export type AiChatMessage = { role: "user" | "assistant" | "system"; content: string };
 
 export async function streamAdvisorChat(

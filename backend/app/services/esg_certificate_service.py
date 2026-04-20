@@ -7,14 +7,17 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 
+from app.core.config import get_settings
+from app.core.constants import ISO_14083_DIESEL_CO2_KG_PER_LITRE, ISO_14083_REFERENCE_LABEL
 from app.core.crypto import pii_crypto
 from app.core.i18n import normalize_lang
+from app.core.plans import PLAN_ENTERPRISE, fetch_empresa_plan, normalize_plan
 from app.core.esg_engine import (
     calculate_nox_emissions,
     esg_certificate_co2_vs_euro_iii,
@@ -30,6 +33,11 @@ from app.services.pdf_esg_service import (
     generar_pdf_certificado_esg_factura_glec,
 )
 from app.services.portes_service import PortesService
+from app.schemas.esg_verify import EsgPublicVerifyEmissions, EsgPublicVerifyOut
+from app.services.esg_audit_service import (
+    certificate_content_sha256_hex,
+    public_esg_verify_url,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -108,6 +116,9 @@ class EsgCertificateService:
         subject_id: str,
         sha256_pdf: str,
         content_fingerprint_sha256: str,
+        certificate_content_sha256: str,
+        verification_code: str,
+        verification_status: str,
         metadata: dict[str, Any],
         created_by: str | None,
     ) -> None:
@@ -118,6 +129,9 @@ class EsgCertificateService:
             "subject_id": subject_id,
             "sha256_pdf": sha256_pdf,
             "content_fingerprint_sha256": content_fingerprint_sha256,
+            "certificate_content_sha256": certificate_content_sha256,
+            "verification_code": verification_code,
+            "verification_status": verification_status,
             "metadata": metadata,
             "created_by": created_by,
         }
@@ -129,9 +143,26 @@ class EsgCertificateService:
         empresa_id: str,
         porte_id: str,
         usuario_id: str | None,
+        official_audit: bool = False,
     ) -> bytes:
         eid = str(empresa_id).strip()
         pid = str(porte_id).strip()
+        if official_audit:
+            plan = await fetch_empresa_plan(self._db, empresa_id=eid)
+            if normalize_plan(plan) != PLAN_ENTERPRISE:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="La validación oficial requiere plan Enterprise (Tier Full-Stack).",
+                )
+        verification_status = (
+            "pending_external_audit" if official_audit else "self_certified"
+        )
+        verification_code = str(uuid4())
+        verify_url = public_esg_verify_url(
+            api_origin=get_settings().ESG_VERIFY_API_ORIGIN,
+            verification_code=verification_code,
+        )
+
         porte = await self._portes.get_porte(empresa_id=eid, porte_id=pid)
         if porte is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Porte no encontrado")
@@ -237,10 +268,11 @@ class EsgCertificateService:
             nox_total_kg=nox_kg,
             subcontratado=bool(porte.subcontratado),
             scope_note=scope_note,
+            verify_url=verify_url,
         )
 
         pdf_bytes = generate_porte_certificate_pdf_reportlab(model, lang=pdf_lang)
-        sha_pdf = hashlib.sha256(pdf_bytes).hexdigest()
+        sha_pdf = certificate_content_sha256_hex(pdf_bytes)
 
         try:
             await self._persist_audit_row(
@@ -250,10 +282,21 @@ class EsgCertificateService:
                 subject_id=pid,
                 sha256_pdf=sha_pdf,
                 content_fingerprint_sha256=fp,
+                certificate_content_sha256=sha_pdf,
+                verification_code=verification_code,
+                verification_status=verification_status,
                 metadata={
                     "porte_id": pid,
                     "sha256_pdf": sha_pdf,
+                    "verification_code": verification_code,
+                    "verification_status": verification_status,
                     "methodology": "GLEC v2.0 + ISO 14083 diesel 2,67 kg/L (ReportLab certificate)",
+                    "emissions": {
+                        "subject": "porte",
+                        "co2_total_kg": round(co2_total, 6),
+                        "euro_iii_baseline_kg": round(euro_iii, 6),
+                        "ahorro_vs_euro_iii_kg": round(ahorro, 6),
+                    },
                 },
                 created_by=usuario_id,
             )
@@ -272,8 +315,25 @@ class EsgCertificateService:
         empresa_id: str,
         factura_id: int,
         usuario_id: str | None,
+        official_audit: bool = False,
     ) -> bytes:
         eid = str(empresa_id).strip()
+        if official_audit:
+            plan = await fetch_empresa_plan(self._db, empresa_id=eid)
+            if normalize_plan(plan) != PLAN_ENTERPRISE:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="La validación oficial requiere plan Enterprise (Tier Full-Stack).",
+                )
+        verification_status = (
+            "pending_external_audit" if official_audit else "self_certified"
+        )
+        verification_code = str(uuid4())
+        verify_url = public_esg_verify_url(
+            api_origin=get_settings().ESG_VERIFY_API_ORIGIN,
+            verification_code=verification_code,
+        )
+
         try:
             pdf_data = await self._facturas.get_factura_pdf_data(empresa_id=eid, factura_id=factura_id)
         except ValueError as exc:
@@ -328,10 +388,11 @@ class EsgCertificateService:
             esg_total_co2_kg=co2,
             esg_euro_iii_baseline_kg=base,
             esg_ahorro_kg=ahorro,
+            verify_url=verify_url,
         )
 
         pdf_bytes = generar_pdf_certificado_esg_factura_glec(model, lang=pdf_lang)
-        sha_pdf = hashlib.sha256(pdf_bytes).hexdigest()
+        sha_pdf = certificate_content_sha256_hex(pdf_bytes)
 
         try:
             await self._persist_audit_row(
@@ -341,10 +402,23 @@ class EsgCertificateService:
                 subject_id=str(factura_id),
                 sha256_pdf=sha_pdf,
                 content_fingerprint_sha256=fp,
+                certificate_content_sha256=sha_pdf,
+                verification_code=verification_code,
+                verification_status=verification_status,
                 metadata={
                     "factura_id": factura_id,
                     "sha256_pdf": sha_pdf,
+                    "verification_code": verification_code,
+                    "verification_status": verification_status,
                     "methodology": "GLEC v2.0 / ISO 14083 (aggregated per porte)",
+                    "emissions": {
+                        "subject": "factura",
+                        "co2_total_kg": round(co2, 6),
+                        "euro_iii_baseline_kg": round(base, 6),
+                        "ahorro_vs_euro_iii_kg": round(ahorro, 6),
+                        "esg_total_km": float(pdf_data.esg_total_km),
+                        "esg_portes_count": int(pdf_data.esg_portes_count),
+                    },
                 },
                 created_by=usuario_id,
             )
@@ -366,3 +440,108 @@ def parse_subject_uuid(subject_id: str) -> UUID:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Identificador de porte inválido (se espera UUID).",
         ) from exc
+
+
+def _float_or_none(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_created_at(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    s = str(value).strip()
+    if not s:
+        return None
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+async def fetch_esg_verification_public(
+    db: SupabaseAsync,
+    *,
+    verification_code: str,
+    pdf_sha256: str | None,
+) -> EsgPublicVerifyOut:
+    """Lectura por ``verification_code`` (cliente service role / bypass RLS)."""
+    raw = str(verification_code or "").strip()
+    if len(raw) < 8:
+        return EsgPublicVerifyOut(
+            valid=False,
+            found=False,
+            methodology_note=ISO_14083_REFERENCE_LABEL,
+        )
+
+    try:
+        res: Any = await db.execute(
+            db.table("esg_certificate_documents")
+            .select(
+                "certificate_id,verification_status,subject_type,subject_id,"
+                "certificate_content_sha256,content_fingerprint_sha256,metadata,created_at"
+            )
+            .eq("verification_code", raw)
+            .limit(1)
+        )
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+    except Exception:
+        rows = []
+
+    if not rows:
+        return EsgPublicVerifyOut(
+            valid=False,
+            found=False,
+            methodology_note=ISO_14083_REFERENCE_LABEL,
+        )
+
+    row = rows[0]
+    meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    em_raw = meta.get("emissions") if isinstance(meta.get("emissions"), dict) else {}
+
+    emissions = EsgPublicVerifyEmissions(
+        co2_total_kg=_float_or_none(em_raw.get("co2_total_kg")),
+        euro_iii_baseline_kg=_float_or_none(em_raw.get("euro_iii_baseline_kg")),
+        ahorro_vs_euro_iii_kg=_float_or_none(em_raw.get("ahorro_vs_euro_iii_kg")),
+        esg_total_km=_float_or_none(em_raw.get("esg_total_km")),
+        esg_portes_count=(
+            int(em_raw["esg_portes_count"])
+            if em_raw.get("esg_portes_count") is not None
+            and str(em_raw.get("esg_portes_count")).strip() != ""
+            else None
+        ),
+        iso_14083_diesel_kg_co2eq_per_litre=ISO_14083_DIESEL_CO2_KG_PER_LITRE,
+    )
+
+    reg_hash = str(row.get("certificate_content_sha256") or "").strip().lower()
+    want = (pdf_sha256 or "").strip().lower() if pdf_sha256 else ""
+    pdf_match: bool | None = None
+    if pdf_sha256 is not None and str(pdf_sha256).strip():
+        pdf_match = bool(reg_hash) and reg_hash == want
+
+    valid = True
+    if pdf_match is False:
+        valid = False
+
+    return EsgPublicVerifyOut(
+        valid=valid,
+        found=True,
+        certificate_id=str(row.get("certificate_id") or "") or None,
+        verification_status=str(row.get("verification_status") or "") or None,
+        subject_type=str(row.get("subject_type") or "") or None,
+        subject_id=None,
+        certificate_content_sha256=str(row.get("certificate_content_sha256") or "") or None,
+        content_fingerprint_sha256=str(row.get("content_fingerprint_sha256") or "") or None,
+        pdf_sha256_matches=pdf_match,
+        issued_at=_parse_created_at(row.get("created_at")),
+        emissions=emissions,
+        methodology_note=ISO_14083_REFERENCE_LABEL,
+    )

@@ -93,6 +93,55 @@ def as_float_fiat(value: float | str | Decimal | None) -> float:
     return float(round_fiat(value))
 
 
+# Kilómetros operativos (dashboard, agregados de portes): no usar ``FIAT_QUANT`` (€).
+KM_OPERATIONAL_QUANT = Decimal("0.001")
+
+
+def quantize_operational_km(value: float | str | Decimal | None) -> Decimal:
+    """
+    Kilómetros de explotación o suma de los mismos: ``ROUND_HALF_EVEN`` a **milésimas de km**.
+
+    Distinto de ``round_fiat``: los km no son importes en EUR.
+    """
+    try:
+        d = to_decimal(value)
+    except FinancialDomainError:
+        raise
+    except Exception as e:
+        raise FinancialDomainError(f"Valor km no numérico: {value!r}") from e
+    with localcontext(_MATH_CTX):
+        return d.quantize(KM_OPERATIONAL_QUANT, rounding=ROUND_HALF_EVEN)
+
+
+def aggregate_portes_km_bultos(rows: list[dict[str, Any]]) -> tuple[Decimal, int]:
+    """
+    Suma ``km_estimados`` y ``bultos`` desde filas de portes (ventana mensual típica del dashboard).
+
+    Evita ``float(sum(...))`` en la capa de servicio: acumulación en ``Decimal`` y una sola cuantía de km.
+    """
+    km_acc = Decimal("0")
+    b_acc = Decimal("0")
+    for r in rows:
+        try:
+            km_acc += to_decimal(r.get("km_estimados") or 0)
+        except FinancialDomainError:
+            pass
+        raw_b = r.get("bultos")
+        try:
+            bi = 0 if raw_b is None else int(raw_b)
+        except (TypeError, ValueError):
+            continue
+        if bi < 0:
+            continue
+        b_acc += Decimal(bi)
+    km_out = quantize_operational_km(km_acc)
+    try:
+        b_int = int(b_acc.to_integral_value(rounding=ROUND_HALF_EVEN))
+    except (InvalidOperation, ValueError, TypeError, ArithmeticError):
+        b_int = 0
+    return km_out, max(0, b_int)
+
+
 def safe_divide(
     numerator: float | str | Decimal | None,
     denominator: float | str | Decimal | None,

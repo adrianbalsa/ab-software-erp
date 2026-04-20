@@ -23,6 +23,7 @@ from app.schemas.finance import (
     TreasuryRiskTrendPointOut,
     CIPMatrixPoint,
 )
+from app.core.esg_engine import calculate_co2_emissions
 from app.services.portes_service import PortesService
 from app.schemas.user import UserOut
 from app.services.webhook_service import dispatch_webhook
@@ -285,7 +286,7 @@ async def analytics_cip_matrix(
     Solo incluye rutas con >= 2 portes para limpieza del gráfico.
     """
     empresa_id = str(current_user.empresa_id)
-    coste_km = await portes_service.operational_cost_per_km_eur(empresa_id=empresa_id, default=1.10)
+    coste_km = await portes_service.operational_cost_per_km_eur(empresa_id=empresa_id)
 
     rows = await _fetch_portes_para_cip_matrix(db=db, empresa_id=empresa_id)
 
@@ -311,7 +312,7 @@ async def analytics_cip_matrix(
         if raw is None:
             raw = row.get("co2_emitido")
         if raw is None:
-            emisiones = km * 0.62
+            emisiones = calculate_co2_emissions(km, "Euro VI")
         else:
             emisiones = max(0.0, _to_float(raw))
 
@@ -369,7 +370,7 @@ async def margin_ranking_by_route(
     Solo rutas con ≥ 2 portes; orden por ``margen_neto`` descendente.
     """
     empresa_id = str(current_user.empresa_id)
-    coste_km = await portes_service.operational_cost_per_km_eur(empresa_id=empresa_id, default=1.10)
+    coste_km = await portes_service.operational_cost_per_km_eur(empresa_id=empresa_id)
 
     rows = await _fetch_portes_para_margen_ruta(db=db, empresa_id=empresa_id)
 
@@ -601,7 +602,7 @@ async def _build_esg_monthly_report_data(*, db: SupabaseAsync, empresa_id: str) 
         if raw is None:
             raw = row.get("co2_emitido")
         if raw is None:
-            total += max(0.0, _to_float(row.get("km_estimados"))) * 0.62
+            total += calculate_co2_emissions(max(0.0, _to_float(row.get("km_estimados"))), "Euro VI")
         else:
             total += max(0.0, _to_float(raw))
         total_km += max(0.0, _to_float(row.get("km_estimados")))

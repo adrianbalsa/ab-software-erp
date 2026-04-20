@@ -9,6 +9,7 @@ from uuid import UUID
 import httpx
 
 from app.core.config import get_settings
+from app.core.constants import COSTE_OPERATIVO_EUR_KM
 from app.db.supabase import SupabaseAsync
 from app.services.geo_service import GeoBatchCache, GeoService, normalize_addr, route_cache_key
 
@@ -44,7 +45,7 @@ class MapsService:
 
     @staticmethod
     def calculate_operational_cost(distance_km: float) -> float:
-        return round(max(0.0, float(distance_km)) * 0.62, 2)
+        return round(max(0.0, float(distance_km)) * float(COSTE_OPERATIVO_EUR_KM), 2)
 
     async def get_route_data(
         self,

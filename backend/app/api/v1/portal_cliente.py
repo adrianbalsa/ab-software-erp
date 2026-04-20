@@ -256,6 +256,10 @@ async def download_albaran_pod_pdf(
 @router.get("/portes/{porte_id}/certificado-esg")
 async def download_certificado_esg_porte(
     porte_id: UUID,
+    official_audit: bool = Query(
+        False,
+        description="Solo plan Enterprise del transportista: solicita estado pending_external_audit.",
+    ),
     portal_user: UserOut = Depends(deps.require_portal_cliente),
     portes: PortesService = Depends(deps.get_portes_service),
     esg: EsgCertificateService = Depends(deps.get_esg_certificate_service),
@@ -270,6 +274,7 @@ async def download_certificado_esg_porte(
         empresa_id=str(portal_user.empresa_id),
         porte_id=str(porte_id),
         usuario_id=uid,
+        official_audit=official_audit,
     )
     safe = str(porte_id)[:12]
     return Response(

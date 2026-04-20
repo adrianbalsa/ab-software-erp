@@ -12,8 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api, streamAdvisorAsk, type PorteListRow } from "@/lib/api";
-
-const COST_EUR_PER_KM = 0.62;
+import { getOperationalCostEurKmCached, publicOperationalCostEurKmDefault } from "@/lib/operationalPricing";
 
 type RadarPorte = PorteListRow & {
   efficiency_eta: number | null;
@@ -69,8 +68,8 @@ function statusMeta(eta: number | null): { label: string; variant: "destructive"
   };
 }
 
-function estimateCost(km: number) {
-  return km * COST_EUR_PER_KM;
+function estimateCost(km: number, costEurPerKm: number) {
+  return km * costEurPerKm;
 }
 
 const ACTIVE_STATES = new Set(["pendiente", "asignado", "en_ruta", "cargando", "en_transito", "activo"]);
@@ -84,6 +83,11 @@ export default function VampireRadarPage() {
   const [chatInput, setChatInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [cpk, setCpk] = useState(publicOperationalCostEurKmDefault());
+
+  useEffect(() => {
+    void getOperationalCostEurKmCached().then(setCpk);
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -116,11 +120,11 @@ export default function VampireRadarPage() {
   const leak = useMemo(() => {
     return rows.reduce((acc, row) => {
       const ingreso = Number(row.precio_pactado ?? 0);
-      const coste = estimateCost(Number(row.km_estimados ?? 0));
+      const coste = estimateCost(Number(row.km_estimados ?? 0), cpk);
       const margin = ingreso - coste;
       return margin < 0 ? acc + Math.abs(margin) : acc;
     }, 0);
-  }, [rows]);
+  }, [rows, cpk]);
 
   const pieData = useMemo(() => {
     let rentable = 0;
@@ -154,7 +158,7 @@ export default function VampireRadarPage() {
       `Ruta: ${selectedRoute.origen} -> ${selectedRoute.destino}`,
       `Ingresos: ${formatEUR(Number(selectedRoute.precio_pactado ?? 0))}`,
       `Km: ${formatNum(Number(selectedRoute.km_estimados ?? 0), 1)}`,
-      `Coste estimado: ${formatEUR(estimateCost(Number(selectedRoute.km_estimados ?? 0)))}`,
+      `Coste estimado: ${formatEUR(estimateCost(Number(selectedRoute.km_estimados ?? 0), cpk))}`,
       `Eficiencia eta: ${selectedRoute.efficiency_eta == null ? "N/D" : formatNum(selectedRoute.efficiency_eta, 2)}`,
       `Estado: ${selectedRoute.estado}`,
     ].join("\n");
@@ -228,7 +232,11 @@ export default function VampireRadarPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0 sm:px-6">
-                <VampireMap portes={rows} className="relative h-[min(420px,55vh)] w-full min-h-[300px] overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 sm:rounded-lg" />
+                <VampireMap
+                  portes={rows}
+                  costEurPerKm={cpk}
+                  className="relative h-[min(420px,55vh)] w-full min-h-[300px] overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 sm:rounded-lg"
+                />
               </CardContent>
             </Card>
 
@@ -291,7 +299,7 @@ export default function VampireRadarPage() {
                     <TableBody>
                       {rows.map((row) => {
                         const ingreso = Number(row.precio_pactado ?? 0);
-                        const coste = estimateCost(Number(row.km_estimados ?? 0));
+                        const coste = estimateCost(Number(row.km_estimados ?? 0), cpk);
                         const meta = statusMeta(row.efficiency_eta);
                         return (
                           <TableRow key={row.id}>

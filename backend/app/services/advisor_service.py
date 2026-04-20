@@ -20,6 +20,8 @@ from uuid import UUID
 
 import litellm
 
+from app.core.constants import COSTE_OPERATIVO_EUR_KM
+from app.core.esg_engine import calculate_co2_emissions
 from app.core.verifactu import verify_invoice_chain
 from app.services.verifactu_fingerprint_audit import (
     load_cliente_nif_map_for_facturas,
@@ -48,7 +50,7 @@ Tu objetivo es minimizar el "Kilometraje en Vacío" (Deadhead miles) y maximizar
 **REGLAS TÁCTICAS Y ZBE:**
 - **Alerta ZBE**: Si un vehículo 'Vampiro' (Euro III o sin etiqueta) se dirige a una Zona de Bajas Emisiones (ej. Madrid 360, ZBE Barcelona), debes sugerir un trasbordo o cambio de ruta inmediatamente.
 - **Optimización de Retorno**: Identifica si un vehículo termina un porte cerca de otro origen pendiente (<50km) y recomienda la asignación para optimizar el flujo.
-- **Riesgo de Margen**: Si la ruta detectada tiene una desviación de rentabilidad basada en el coste real de 0.62€/km, avisa al usuario.
+- **Riesgo de Margen**: Si la ruta detectada tiene una desviación de rentabilidad basada en el coste operativo de referencia €/km (parametrizado), avisa al usuario.
 
 **Índice de Desviación Rentable (I_dr):**
 Cada porte en `geo_intel.fleet_geo_rows` incluye `indice_desviacion_rentable` (campos `i_dr`, `sugerir_proactivo`, etc.).
@@ -307,7 +309,7 @@ async def _build_cip_matrix_snapshot(
     )
 
     eid = str(empresa_id).strip()
-    coste_km = await portes.operational_cost_per_km_eur(empresa_id=eid, default=1.10)
+    coste_km = await portes.operational_cost_per_km_eur(empresa_id=eid)
     rows = await _fetch_portes_para_cip_matrix(db=db, empresa_id=eid)
     rows = [r for r in rows if str(r.get("estado") or "").strip().lower() != "cancelado"]
 
@@ -323,7 +325,7 @@ async def _build_cip_matrix_snapshot(
         if raw is None:
             raw = row.get("co2_emitido")
         if raw is None:
-            emisiones = km * 0.62
+            emisiones = calculate_co2_emissions(km, "Euro VI")
         else:
             emisiones = max(0.0, _to_float(raw))
         if key not in buckets:
@@ -374,8 +376,6 @@ async def _build_cip_matrix_snapshot(
     return points, vampiros
 
 
-# Coste operativo €/km (alineado con front Fleet map / reglas tácticas).
-COSTE_OPERATIVO_EUR_KM: float = 0.62
 GEO_PORTE_LIMIT: int = 25
 
 
@@ -655,7 +655,10 @@ async def _geo_aware_fleet_context(
                 {
                     "tipo": "desviacion_km",
                     "porte_id": pid,
-                    "detalle": "Gran desviación entre km declarados y km ruta Google; revisar coste a 0.62€/km.",
+                    "detalle": (
+                        "Gran desviación entre km declarados y km ruta Google; revisar coste a "
+                        f"{COSTE_OPERATIVO_EUR_KM:.2f}€/km."
+                    ),
                 }
             )
 
@@ -885,7 +888,7 @@ async def _build_bi_intelligence(*, db: SupabaseAsync, empresa_id: str, bi: BiSe
     try:
         summary = await bi.dashboard_summary(empresa_id=eid)
         prof = await bi.profitability_scatter(empresa_id=eid)
-        coste = float(prof.coste_operativo_eur_km or 0.62)
+        coste = float(prof.coste_operativo_eur_km or COSTE_OPERATIVO_EUR_KM)
         routes: list[dict[str, Any]] = []
         for pt in prof.points:
             precio = float(pt.precio_pactado or 0)

@@ -8,14 +8,13 @@ from decimal import ROUND_HALF_EVEN, Context, Decimal, localcontext
 from typing import Any, Literal
 from uuid import UUID
 
-from app.core.constants import ISO_14083_DIESEL_CO2_KG_PER_LITRE
+from app.core.constants import COSTE_OPERATIVO_EUR_KM, ISO_14083_DIESEL_CO2_KG_PER_LITRE
 from app.core.math_engine import quantize_currency
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.services.eco_service import EUR_POR_LITRO_DIESEL_REF
 from app.services.webhook_service import EVENT_ANALYTICS_PROFIT_MARGIN_SNAPSHOT
 from app.services.finance_service import (
-    COSTE_OPERATIVO_EUR_KM,
     FinanceService,
     OTHER_NON_FUEL_OPEX_PER_KM,
     PorteFuelAllocation,
