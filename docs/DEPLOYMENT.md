@@ -1,5 +1,7 @@
 # Despliegue SaaS: Railway (API) + Vercel (frontend) + Supabase
 
+Contratos de API, cola y portabilidad de datos: `docs/PLATFORM_CONTRACTS.md`.
+
 ## 1. Backend (Railway)
 
 ### Directorio raíz del servicio

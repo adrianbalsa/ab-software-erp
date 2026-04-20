@@ -777,6 +777,29 @@ export type SimulationResult = {
   periodo_meses: number;
 };
 
+export type GeoActivityTipoEvento = "entrega" | "recogida";
+
+export type GeoActivityPunto = {
+  id_porte: string;
+  latitud: number;
+  longitud: number;
+  tipo_evento: GeoActivityTipoEvento;
+  margen_operativo: number | null;
+};
+
+export type GeoHeatCell = {
+  latitud: number;
+  longitud: number;
+  intensidad: number;
+  portes_en_celda: number;
+  ticket_gasto_medio: number;
+};
+
+export type GeoActivityResponse = {
+  puntos: GeoActivityPunto[];
+  heatmap: GeoHeatCell[] | null;
+};
+
 export type CIPMatrixPoint = {
   ruta: string;
   margen_neto: number;
@@ -839,6 +862,46 @@ export type BiEsgImpactCharts = {
   heatmap_cells: BiHeatmapCell[];
   treemap_nodes: BiTreemapNode[];
   meta?: Record<string, unknown>;
+};
+
+/** `GET /api/v1/analytics/profit-margin` — agregados con redondeo HALF_EVEN en backend. */
+export type ProfitMarginPeriodRow = {
+  period_key: string;
+  period_label: string;
+  ingresos_totales: number;
+  gastos_combustible: number;
+  gastos_peajes: number;
+  gastos_otros: number;
+  gastos_totales: number;
+  margen_neto: number;
+};
+
+export type ProfitMarginTotals = {
+  ingresos_totales: number;
+  gastos_combustible: number;
+  gastos_peajes: number;
+  gastos_otros: number;
+  gastos_totales: number;
+  margen_neto: number;
+};
+
+export type ProfitMarginEsgMoM = {
+  anchor_month: string;
+  previous_month: string;
+  iso_14083_kg_co2_per_litre: number;
+  litros_implied_current: number;
+  litros_implied_previous: number;
+  co2_kg_current: number;
+  co2_kg_previous: number;
+  co2_saved_vs_previous_kg: number;
+};
+
+export type ProfitMarginAnalytics = {
+  granularity: string;
+  series: ProfitMarginPeriodRow[];
+  totals_rango: ProfitMarginTotals;
+  esg_month_over_month: ProfitMarginEsgMoM | null;
+  meta: Record<string, unknown>;
 };
 
 export type VerifactuChainAudit = {
@@ -933,6 +996,8 @@ export type PortalFacturaRow = {
   fecha_emision?: string | null;
   total_factura: number;
   estado_pago: string;
+  /** Indica si el backend expone XML VeriFactu descargable. */
+  xml_verifactu_disponible?: boolean;
 };
 
 export type PortalPorteRow = {
@@ -940,6 +1005,18 @@ export type PortalPorteRow = {
   origen: string;
   destino: string;
   fecha_entrega: string | null;
+};
+
+export type PortalPorteActivoRow = {
+  id: string | number;
+  origen: string;
+  destino: string;
+  fecha?: string | null;
+  estado: string;
+};
+
+export type PortalEsgResumen = {
+  co2_savings_ytd: number;
 };
 
 export type FuelImportacionResponse = {
@@ -1074,6 +1151,7 @@ export const WEBHOOK_EVENT_TYPES: WebhookEventType[] = [
   "invoice.created",
   "invoice.paid",
   "invoice.overdue",
+  "analytics.profit_margin.snapshot",
 ];
 
 async function getJson<T = unknown>(url: string, init: RequestInit = {}): Promise<T> {
@@ -1086,6 +1164,25 @@ export const refreshAccessToken = async () =>
   getJson<{ access_token?: string }>(`${API_BASE}/auth/refresh`, { method: "POST", credentials: "include" });
 export const fetchPortalFacturas = async () => getJson<PortalFacturaRow[]>(`${API_BASE}/api/v1/portal/facturas`);
 export const fetchPortalPortes = async () => getJson<PortalPorteRow[]>(`${API_BASE}/api/v1/portal/portes`);
+export const fetchPortalPortesActivos = async () =>
+  getJson<PortalPorteActivoRow[]>(`${API_BASE}/api/v1/portal/portes/activos`);
+export const fetchPortalEsgResumen = async () =>
+  getJson<PortalEsgResumen>(`${API_BASE}/api/v1/portal/esg/resumen`);
+
+export const fetchPortalProfitMarginAnalytics = async (params: {
+  from: string;
+  to: string;
+  granularity?: "month" | "week";
+  vehiculo_id?: string;
+}) => {
+  const sp = new URLSearchParams({
+    from: params.from,
+    to: params.to,
+    granularity: params.granularity ?? "month",
+  });
+  if (params.vehiculo_id?.trim()) sp.set("vehiculo_id", params.vehiculo_id.trim());
+  return getJson<ProfitMarginAnalytics>(`${API_BASE}/api/v1/portal/analytics/profit-margin?${sp.toString()}`);
+};
 
 /** Respuesta onboarding portal (riesgo / límite); alineado con `RiskAssessmentCard` / onboarding. */
 export type PortalOnboardingMyRisk = {
@@ -1093,6 +1190,8 @@ export type PortalOnboardingMyRisk = {
   creditLimitEur: number;
   collectionTerms: string;
   reasons: string[];
+  riesgo_aceptado: boolean;
+  mandato_activo: boolean;
 };
 
 export type OnboardingSetupInput = {
@@ -1133,8 +1232,37 @@ export type PortalMandateSetupResponse = {
 
 export const postPortalSetupMandate = async () =>
   getJson<PortalMandateSetupResponse>(`${API_BASE}/api/v1/payments/gocardless/mandates/setup`, { method: "POST" });
+
+/** Stripe Customer Portal (tarjeta, facturas, cancelar renovación). Requiere admin + checkout previo. */
+export async function createStripeBillingPortalUrl(): Promise<string> {
+  const res = await apiFetch(`${API_BASE}/payments/create-portal`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const detail = (err as { detail?: unknown }).detail;
+    const msg =
+      typeof detail === "string"
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map((x) => (typeof x === "object" && x && "msg" in x ? String((x as { msg: unknown }).msg) : String(x))).join(" ")
+          : `HTTP ${res.status}`;
+    throw new Error(msg || `HTTP ${res.status}`);
+  }
+  const data = (await res.json()) as { url?: string };
+  if (!data.url) throw new Error("Respuesta sin URL del portal");
+  return data.url;
+}
 export const portalFacturaPdfUrl = (id: string | number) => `${API_BASE}/api/v1/portal/facturas/${id}/pdf`;
+export const portalFacturaXmlUrl = (id: string | number) => `${API_BASE}/api/v1/portal/facturas/${id}/xml`;
 export const portalAlbaranPdfUrl = (id: string | number) => `${API_BASE}/api/v1/portal/portes/${id}/albaran-pdf`;
+export const portalPorteCertificadoEsgUrl = (id: string | number) =>
+  `${API_BASE}/api/v1/portal/portes/${id}/certificado-esg`;
+
+export const portalEsgExportCsvUrl = () => `${API_BASE}/api/v1/portal/esg/export-csv`;
 export const getFacturaPdfData = async (id: string | number) =>
   getJson<FacturaPdfData>(`${API_BASE}/api/v1/facturas/${id}/pdf-data`);
 export const getPorteCmrData = async (id: string | number) => getJson<CmrDataOut>(`${API_BASE}/api/v1/portes/${id}/cmr`);
@@ -1157,6 +1285,16 @@ export const getSugerenciasPendientes = async () =>
   getJson<MovimientoSugeridoConciliacion[]>(`${API_BASE}/api/v1/banking/reconciliation/suggestions`);
 export type ConciliarAiResponse = {
   sugerencias_guardadas: number;
+};
+
+export type BankPendingReconciliationRow = {
+  transaction_id: string;
+  amount: number;
+  currency: string;
+  booking_date: string;
+  description: string | null;
+  ia_confidence: number;
+  best_invoice_id: number | null;
 };
 
 export const postConciliarAi = async (payload: Record<string, unknown> = {}) =>
@@ -1245,6 +1383,17 @@ export type FacturaEmailSendResponse = {
 };
 
 export const api = Object.assign(apiClient, {
+  banking: {
+    getConnectLink: (institutionId: string, redirectUrl?: string) => {
+      const sp = new URLSearchParams({ institution_id: institutionId });
+      if (redirectUrl) sp.set("redirect_url", redirectUrl);
+      return getJson<{ link: string; requisition_id: string }>(
+        `${API_BASE}/api/v1/banking/connect?${sp.toString()}`,
+      );
+    },
+    listPendingReconciliation: () =>
+      getJson<BankPendingReconciliationRow[]>(`${API_BASE}/api/v1/banking/pending-reconciliation`),
+  },
   portes: {
     /** Portes pendientes (activos en pipeline). */
     list: () => getJson<PorteListRow[]>(`${API_BASE}/api/v1/portes/`),
@@ -1266,12 +1415,29 @@ export const api = Object.assign(apiClient, {
   },
   analytics: {
     getCIPMatrix: () => getJson<CIPMatrixPoint[]>(`${API_BASE}/api/v1/analytics/cip-matrix`),
+    getGeoActivity: () => getJson<GeoActivityResponse>(`${API_BASE}/api/v1/analytics/geo-activity`),
     simulateImpact: (input: SimulationInput) =>
       getJson<SimulationResult>(`${API_BASE}/api/v1/analytics/simulate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       }),
+    profitMargin: (params: {
+      from: string;
+      to: string;
+      granularity?: "month" | "week";
+      vehiculo_id?: string;
+      cliente_id?: string;
+    }) => {
+      const sp = new URLSearchParams({
+        from: params.from,
+        to: params.to,
+        granularity: params.granularity ?? "month",
+      });
+      if (params.vehiculo_id?.trim()) sp.set("vehiculo_id", params.vehiculo_id.trim());
+      if (params.cliente_id?.trim()) sp.set("cliente_id", params.cliente_id.trim());
+      return getJson<ProfitMarginAnalytics>(`${API_BASE}/api/v1/analytics/profit-margin?${sp.toString()}`);
+    },
   },
   bi: {
     /** ``from`` / ``to``: YYYY-MM-DD (inclusive). Query params ``from`` y ``to`` en la API. */

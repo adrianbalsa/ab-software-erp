@@ -36,7 +36,7 @@ AB Logistics OS puede emplear subencargados para la provisión de infraestructur
 - Proveedores de mapas y geocodificación/estimación de rutas (p. ej., Google Cloud).
 - Servicios de APIs de inteligencia artificial y procesamiento de texto (p. ej., OpenAI), cuando el Cliente active funciones que requieran dichos servicios.
 
-Cuando resulte aplicable conforme al RGPD y el contrato entre las partes, la lista completa o las categorías de subencargados se facilitarán al Cliente bajo solicitud y/o mediante el mecanismo previsto contractualmente.
+Cuando resulte aplicable conforme al RGPD y el contrato entre las partes, la lista completa o las categorías de subencargados se facilitarán al Cliente bajo solicitud y/o mediante el mecanismo previsto contractualmente. Además, se publica un inventario técnico actualizable en **`GET /api/v1/public/compliance`** (campo `subprocessors`, sin autenticación), descrito en `docs/legal/COMPLIANCE_AND_SECURITY_POSTURE.md`.
 
 ## 6. Seguridad del tratamiento
 AB Logistics OS aplica medidas técnicas y organizativas adecuadas para mitigar riesgos, incluyendo (a modo informativo):

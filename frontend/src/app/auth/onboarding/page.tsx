@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import RiskAssessmentCard from "@/components/auth/RiskAssessmentCard";
 import { Loader2 } from "lucide-react";
-import { fetchPortalMyRisk, postPortalAcceptRisk } from "@/lib/api";
+import { fetchPortalMyRisk, postPortalAcceptRisk, type PortalOnboardingMyRisk } from "@/lib/api";
 
 function OnboardingContent() {
   const searchParams = useSearchParams();
@@ -14,12 +14,7 @@ function OnboardingContent() {
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; message: string } | null>(null);
-  const [riskData, setRiskData] = useState<{
-    score: number;
-    creditLimitEur: number;
-    collectionTerms: string;
-    reasons: string[];
-  } | null>(null);
+  const [riskData, setRiskData] = useState<PortalOnboardingMyRisk | null>(null);
 
   useEffect(() => {
     async function fetchOnboardingData() {

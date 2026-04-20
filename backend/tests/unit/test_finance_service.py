@@ -82,8 +82,8 @@ def _mk_session_for_sql_dashboard() -> MagicMock:
                 mk_scalar(4),
                 mk_iter(
                     [
-                        {"bucket": "Combustible", "total": Decimal("120")},
-                        {"bucket": "Peajes", "total": Decimal("30")},
+                        {"ym": "2026-01", "bucket": "Combustible", "total": Decimal("120")},
+                        {"ym": "2026-01", "bucket": "Peajes", "total": Decimal("30")},
                     ]
                 ),
             ]
@@ -122,6 +122,7 @@ def test_aggregate_tesoreria_single_bank_tx_two_invoices_same_match_no_double_co
             "matched_transaction_id": "TX-UNICO",
             "pago_id": "TX-UNICO",
             "total_km_estimados_snapshot": 0,
+            "is_finalized": True,
         },
         {
             "id": "2",
@@ -134,6 +135,7 @@ def test_aggregate_tesoreria_single_bank_tx_two_invoices_same_match_no_double_co
             "matched_transaction_id": "TX-UNICO",
             "pago_id": "TX-UNICO",
             "total_km_estimados_snapshot": 0,
+            "is_finalized": True,
         },
     ]
     bank_rows = [
@@ -173,6 +175,7 @@ def test_aggregate_tesoreria_sums_multiple_reconciled_tx_same_month() -> None:
             "matched_transaction_id": "A",
             "pago_id": "",
             "total_km_estimados_snapshot": 0,
+            "is_finalized": True,
         },
         {
             "id": "11",
@@ -185,6 +188,7 @@ def test_aggregate_tesoreria_sums_multiple_reconciled_tx_same_month() -> None:
             "matched_transaction_id": "B",
             "pago_id": "",
             "total_km_estimados_snapshot": 0,
+            "is_finalized": True,
         },
     ]
     banks = [
@@ -331,7 +335,8 @@ def test_finance_dashboard_empty_shell_json_contract() -> None:
     out = svc._finance_dashboard_empty_shell(hoy=hoy)
     validated = FinanceDashboardOut.model_validate(out.model_dump())
     assert len(validated.ingresos_vs_gastos_mensual) == 6
-    assert len(validated.tesoreria_mensual) == 12
+    assert len(validated.tesoreria_mensual) == 6
+    assert len(validated.gastos_bucket_mensual) == 6
     assert len(validated.gastos_por_bucket_cinco) == 5
     names = [b.name for b in validated.gastos_por_bucket_cinco]
     assert names == ["Combustible", "Personal", "Mantenimiento", "Seguros", "Peajes"]
@@ -348,12 +353,24 @@ def test_finance_dashboard_empty_shell_json_contract() -> None:
 async def test_financial_dashboard_empty_empresa_returns_shell() -> None:
     svc = FinanceService(db=MagicMock())
     dash = await svc.financial_dashboard(empresa_id="  ", hoy=date(2026, 1, 10))
-    assert len(dash.tesoreria_mensual) == 12
+    assert len(dash.tesoreria_mensual) == 6
 
 
 @pytest.mark.asyncio
 async def test_financial_dashboard_supabase_path_builds_series(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.services.finance_service.get_session_factory", lambda: None)
+    monkeypatch.setattr(
+        FinanceService,
+        "_co2_savings_ytd_kg",
+        AsyncMock(return_value=(0.0, 2.67)),
+    )
+    from app.services.bi_service import BiService
+
+    monkeypatch.setattr(
+        BiService,
+        "logisadvisor_rutas_margen_negativo",
+        AsyncMock(return_value=[]),
+    )
     hoy = date(2026, 4, 18)
     period = "2026-04"
     fact_rows = [
@@ -368,6 +385,7 @@ async def test_financial_dashboard_supabase_path_builds_series(monkeypatch: pyte
             "matched_transaction_id": "T1",
             "pago_id": "T1",
             "total_km_estimados_snapshot": 100,
+            "is_finalized": True,
         }
     ]
     gasto_rows = [
@@ -541,6 +559,7 @@ def test_aggregate_skips_bank_rows_bad_amount_or_date() -> None:
             "matched_transaction_id": "T1",
             "pago_id": "T1",
             "total_km_estimados_snapshot": 0,
+            "is_finalized": True,
         }
     ]
     banks = [
@@ -745,6 +764,8 @@ async def test_financial_summary_sql_session_path(monkeypatch: pytest.MonkeyPatc
 
 def test_finance_dashboard_from_agg_variacion_pct() -> None:
     svc = FinanceService(db=MagicMock())
+    bars = ftk.last_n_month_keys(hoy=date(2026, 5, 10), n=6)
+    gbpm = {k: {b: Decimal("0") for b in ("Combustible", "Personal", "Mantenimiento", "Seguros", "Peajes")} for k in bars}
     agg = ftk.TransactionalDashboardAgg(
         ingresos_mes=Decimal("200"),
         gastos_mes=Decimal("100"),
@@ -756,6 +777,7 @@ def test_finance_dashboard_from_agg_variacion_pct() -> None:
         tesoreria_ing_facturado={},
         tesoreria_cobros_reales={},
         gastos_bucket_ytd={k: Decimal("0") for k in ("Combustible", "Personal", "Mantenimiento", "Seguros", "Peajes")},
+        gastos_bucket_por_mes=gbpm,
         has_bank_transactions=False,
         ingresos_prev_mes=Decimal("100"),
         gastos_prev_mes=Decimal("50"),

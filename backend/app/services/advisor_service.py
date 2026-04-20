@@ -1,7 +1,7 @@
 """
 LogisAdvisor: contexto agregado (finanzas, CIP, tesorería, cumplimiento) + LLM.
 
-Usa **LiteLLM** (`litellm.acompletion`) para soportar varios proveedores vía variables de entorno.
+Usa **LiteLLM** (`litellm.acompletion`) para varios proveedores; las claves se resuelven vía ``get_secret_manager()``.
 """
 
 from __future__ import annotations
@@ -15,12 +15,16 @@ import os
 import re
 from collections.abc import AsyncIterator
 from datetime import date
-from typing import Any
+from typing import Any, Optional
 from uuid import UUID
 
 import litellm
 
 from app.core.verifactu import verify_invoice_chain
+from app.services.verifactu_fingerprint_audit import (
+    load_cliente_nif_map_for_facturas,
+    materialize_factura_rows_for_fingerprint_verify,
+)
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.schemas.porte import PorteOut
@@ -30,6 +34,7 @@ from app.services.finance_service import FinanceService
 from app.services.maps_service import MapsService
 from app.services.matching_service import MatchingService
 from app.services.portes_service import PortesService
+from app.services.secret_manager_service import get_secret_manager
 
 litellm.drop_params = True
 
@@ -131,15 +136,28 @@ def advisor_llm_configured() -> bool:
     True si existen credenciales típicas para los proveedores por defecto (OpenAI y/o Anthropic).
     Ajusta las claves según el prefijo de ``ADVISOR_MODEL`` en despliegues avanzados.
     """
-    if (os.getenv("OPENAI_API_KEY") or "").strip():
-        return True
-    if (os.getenv("ANTHROPIC_API_KEY") or "").strip():
-        return True
-    if (os.getenv("AZURE_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY") or "").strip():
-        return True
-    if (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip():
-        return True
-    return False
+    mgr = get_secret_manager()
+    return bool(
+        mgr.get_openai_api_key()
+        or mgr.get_anthropic_api_key()
+        or mgr.get_azure_openai_api_key()
+        or mgr.get_google_gemini_api_key()
+    )
+
+
+def _litellm_api_key_for_model(model: str) -> Optional[str]:
+    """Resuelve la clave adecuada para ``litellm.acompletion`` según el prefijo del modelo."""
+    ml = model.strip().lower()
+    mgr = get_secret_manager()
+    if ml.startswith("openai/") or ml.startswith("gpt-"):
+        return mgr.get_openai_api_key()
+    if ml.startswith("anthropic/"):
+        return mgr.get_anthropic_api_key()
+    if ml.startswith("azure") or ml.startswith("azure/"):
+        return mgr.get_azure_openai_api_key()
+    if "gemini" in ml:
+        return mgr.get_google_gemini_api_key()
+    return mgr.get_openai_api_key()
 
 
 def openai_configured() -> bool:
@@ -216,7 +234,7 @@ async def _verifactu_snapshot(*, db: SupabaseAsync, empresa_id: str) -> dict[str
         q = filter_not_deleted(
             db.table("facturas")
             .select(
-                "id,numero_factura,num_factura,fecha_emision,nif_emisor,total_factura,"
+                "id,cliente,numero_factura,num_factura,fecha_emision,nif_emisor,total_factura,"
                 "fingerprint_hash,previous_fingerprint"
             )
             .eq("empresa_id", eid)
@@ -230,7 +248,9 @@ async def _verifactu_snapshot(*, db: SupabaseAsync, empresa_id: str) -> dict[str
         logger.info("advisor verifactu snapshot: %s", exc)
         return {"error": str(exc), "facturas_considered": 0}
 
-    report = verify_invoice_chain(list(rows))
+    nif_map = await load_cliente_nif_map_for_facturas(db, empresa_id=eid, rows=rows)
+    rows_m = materialize_factura_rows_for_fingerprint_verify(rows, cliente_nif_map=nif_map)
+    report = verify_invoice_chain(list(rows_m))
     return {
         "verifactu_chain_audit": report,
         "facturas_in_chain": len(rows),
@@ -1001,11 +1021,17 @@ async def get_advisor_response(
 
     last_exc: Exception | None = None
     for model in _model_chain():
+        api_key = _litellm_api_key_for_model(model)
+        if not api_key:
+            logger.warning("advisor: sin api_key para model=%s; se prueba el siguiente", model)
+            last_exc = RuntimeError(f"Sin credenciales LLM para model={model!r}")
+            continue
         try:
             response = await litellm.acompletion(
                 model=model,
                 messages=messages,
                 temperature=0.25,
+                api_key=api_key,
             )
             text = _completion_text(response)
             resolved = _response_model_id(response, model)
@@ -1041,6 +1067,11 @@ async def stream_advisor_response(
 
     last_exc: Exception | None = None
     for model in _model_chain():
+        api_key = _litellm_api_key_for_model(model)
+        if not api_key:
+            logger.warning("advisor stream: sin api_key para model=%s; se prueba el siguiente", model)
+            last_exc = RuntimeError(f"Sin credenciales LLM para model={model!r}")
+            continue
         usage_accum: dict[str, Any] | None = None
         try:
             stream_kwargs: dict[str, Any] = {
@@ -1048,6 +1079,7 @@ async def stream_advisor_response(
                 "messages": messages,
                 "stream": True,
                 "temperature": 0.25,
+                "api_key": api_key,
             }
             # OpenAI admite usage en el último chunk; otros proveedores ignoran vía ``drop_params``.
             ml = model.lower()

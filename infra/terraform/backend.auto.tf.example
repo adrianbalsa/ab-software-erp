@@ -1,0 +1,12 @@
+# Renombrar a backend.auto.tf (no commitear) o inyectar el contenido vía secret TF_BACKEND_HCL en CI.
+# Ejemplo: backend remoto S3 (reemplazar bucket, región y tabla DynamoDB).
+
+# terraform {
+#   backend "s3" {
+#     bucket         = "mi-org-terraform-state"
+#     key            = "ab-logistics-os/railway/terraform.tfstate"
+#     region         = "eu-west-1"
+#     encrypt        = true
+#     dynamodb_table = "terraform-locks"
+#   }
+# }

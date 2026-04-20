@@ -1,0 +1,715 @@
+# Spanish translations — AB Logistics OS backend.
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "AB Logistics OS"
+msgstr "AB Logistics OS"
+
+msgid "Invoice"
+msgstr "Factura"
+
+msgid "Page {n}"
+msgstr "Página {n}"
+
+msgid "Document no."
+msgstr "Documento n.º"
+
+msgid "Issue date"
+msgstr "Fecha emisión"
+
+msgid "Issuer"
+msgstr "Emisor"
+
+msgid "Recipient"
+msgstr "Receptor"
+
+msgid "Tax ID"
+msgstr "NIF/CIF"
+
+msgid "Customer ref."
+msgstr "Ref. cliente"
+
+msgid "Service / line item"
+msgstr "Concepto / servicio"
+
+msgid "Amount (EUR)"
+msgstr "Importe (EUR)"
+
+msgid "Taxable base: {amt}"
+msgstr "Base imponible: {amt}"
+
+msgid "VAT ({pct}%): {amt}"
+msgstr "IVA ({pct}%): {amt}"
+
+msgid "Base: {amt}"
+msgstr "Base: {amt}"
+
+msgid "VAT amount: {amt}"
+msgstr "Cuota IVA: {amt}"
+
+msgid "Total {amt}"
+msgstr "Total {amt}"
+
+msgid "VeriFactu evidence"
+msgstr "Evidencia VeriFactu"
+
+msgid ""
+"Record ID: {num}\n"
+"SHA-256 fingerprint (SIF chain):"
+msgstr ""
+"Identificador registro: {num}\n"
+"Huella SHA-256 (encadenamiento SIF):"
+
+msgid ""
+"VeriFactu QR\n"
+"(unavailable)"
+msgstr ""
+"QR VeriFactu\n"
+"(no disponible)"
+
+msgid "Sustainability diploma"
+msgstr "DIPLOMA DE SOSTENIBILIDAD"
+
+msgid "CO2 emissions — methodology reference and recorded data"
+msgstr "Emisiones de CO2 - referencia metodológica y datos registrados"
+
+msgid "Emissions certificate (Scope 1 | fuel)"
+msgstr "Certificado de emisiones (Scope 1 | combustible)"
+
+msgid "Company"
+msgstr "Empresa"
+
+msgid "Audit ID"
+msgstr "ID auditoría"
+
+msgid "Transport footprint model (t km)"
+msgstr "Modelo de huella de transporte (t km)"
+
+msgid ""
+"km × tonnes × factor = kg CO2eq  =>  reference factor = {f} kg CO2 / (t km)"
+msgstr ""
+"km x toneladas x factor = kg CO2eq  =>  factor de referencia = {f} kg CO2 / "
+"(t km)"
+
+msgid ""
+"This expression describes the ESG port model on the platform. Totals below "
+"come from expenses classified as FUEL (diesel)."
+msgstr ""
+"Esta expresión describe el modelo ESG de portes en la plataforma. Los "
+"totales inferiores se obtienen a partir de gastos clasificados como "
+"COMBUSTIBLE (diesel)."
+
+msgid "Fuel methodology (Scope 1)"
+msgstr "Metodología combustible (Scope 1)"
+
+msgid ""
+"Estimated litres = net amount (EUR) / {eur} EUR/L. Emissions = litres × {kg} "
+"kg CO2eq/L."
+msgstr ""
+"Litros estimados = importe neto (EUR) / {eur} EUR/L. Emisiones = litros x "
+"{kg} kg CO2eq/L."
+
+msgid "Running totals"
+msgstr "Totales acumulados"
+
+msgid "Estimated diesel litres: {v} L"
+msgstr "Litros diesel estimados: {v} L"
+
+msgid "Scope 1 CO2 emissions: {v} kg CO2eq"
+msgstr "Emisiones CO2 Scope 1: {v} kg CO2eq"
+
+msgid "Monthly breakdown"
+msgstr "Desglose mensual"
+
+msgid "Period"
+msgstr "Periodo"
+
+msgid "CO2 (kg)"
+msgstr "CO2 (kg)"
+
+msgid "Est. litres"
+msgstr "Litros est."
+
+msgid "Unit"
+msgstr "Unidad"
+
+msgid "kg / L"
+msgstr "kg / L"
+
+msgid "No fuel records in the period."
+msgstr "Sin registros de combustible en el periodo."
+
+msgid ""
+"Informational document based on platform data. Does not replace audited "
+"reports or regulatory filings."
+msgstr ""
+"Documento informativo basado en datos de la plataforma. No sustituye "
+"informes auditados ni declaraciones regulatorias."
+
+msgid "Commitment to logistics efficiency and climate"
+msgstr "Compromiso con la eficiencia logística y el clima"
+
+msgid "Generated {ts} | AB Logistics OS"
+msgstr "Generado {ts} | AB Logistics OS"
+
+msgid "AB Logistics OS | Route footprint certificate"
+msgstr "AB Logistics OS | Certificado de huella de ruta"
+
+msgid "Footprint calculation (t km model)"
+msgstr "Cálculo de huella (modelo t km)"
+
+msgid "Powertrain: {motor} | Ref. consumption: {l} L/100km"
+msgstr "Motorización: {motor} | Consumo ref.: {l} L/100km"
+
+msgid "Reference results (simulation)"
+msgstr "Resultados de referencia (simulación)"
+
+msgid "Estimated emissions (route engine): {v} kg CO2"
+msgstr "Emisiones estimadas (motor de ruta): {v} kg CO2"
+
+msgid "Savings vs traditional reference: {v} kg CO2"
+msgstr "Ahorro vs. referencia tradicional: {v} kg CO2"
+
+msgid ""
+"The route engine may combine consumption and fuel factors; equality with the "
+"t km model is not guaranteed in all scenarios."
+msgstr ""
+"El motor de ruta puede combinar consumo y factores de combustible; la "
+"igualdad con el modelo t km no está garantizada en todos los escenarios."
+
+msgid "Sustainability | Responsible logistics"
+msgstr "Sostenibilidad | Logística responsable"
+
+msgid "Issued {ts} | AB Logistics OS"
+msgstr "Emitido {ts} | AB Logistics OS"
+
+msgid "Bill of lading / Proof of delivery (POD)"
+msgstr "Carta de porte / Albarán de entrega (POD)"
+
+msgid "Shipment {pid} | AB Logistics OS"
+msgstr "Porte {pid} | AB Logistics OS"
+
+msgid "Carrier"
+msgstr "Transportista"
+
+msgid "Delivery"
+msgstr "Entrega"
+
+msgid ""
+"Origin: {o}\n"
+"Destination: {d}\n"
+"Goods: {g}\n"
+"Packages: {b}"
+msgstr ""
+"Origen: {o}\n"
+"Destino: {d}\n"
+"Mercancía: {g}\n"
+"Bultos: {b}"
+
+msgid "Consignee signature"
+msgstr "Firma del consignatario"
+
+msgid "(Could not embed signature image.)"
+msgstr "(No se pudo incrustar la imagen de firma.)"
+
+msgid "Signed by: {name}{dni} on {when}"
+msgstr "Firmado por: {name}{dni} el {when}"
+
+msgid " (ID {dni})"
+msgstr " (DNI/NIE {dni})"
+
+msgid ""
+"Electronically generated document. The signature reproduces the stroke "
+"captured on the recipient device. Keep this POD as proof of delivery."
+msgstr ""
+"Documento generado electrónicamente. La firma reproduce el trazo recogido en "
+"dispositivo del destinatario. Conserve este albarán como acuse de entrega."
+
+msgid "AB Logistics OS — Digital delivery"
+msgstr "AB Logistics OS — Entrega digital"
+
+msgid "Invalid signature Base64"
+msgstr "Firma Base64 inválida"
+
+msgid "VeriFactu chain: invoice has no fingerprint_hash"
+msgstr "Factura sin fingerprint_hash"
+
+msgid "VeriFactu chain: previous_fingerprint does not match prior link"
+msgstr "previous_fingerprint no coincide con eslabón anterior"
+
+msgid ""
+"VeriFactu chain: recalculated fingerprint_hash does not match stored value"
+msgstr "fingerprint_hash recalculado no coincide"
+
+msgid ""
+"Audit: {n} discrepancy(ies) in hash_factura / hash_anterior vs "
+"recalculation. Review listed invoices and open an incident with a DB backup "
+"before any manual fix."
+msgstr ""
+"Se detectaron {n} discrepancia(s) en hash_factura / hash_anterior respecto "
+"al recálculo. Revisar facturas listadas y, si procede, abrir incidencia con "
+"copia de seguridad de la BD antes de cualquier corrección manual."
+
+msgid ""
+"Audit: previous_fingerprint chain — possible out-of-order insert or partial "
+"rollback. Review numero_secuencial sequence and locks (bloqueado = true) per "
+"company."
+msgstr ""
+"Cadena de `previous_fingerprint`: posible factura insertada fuera de orden o "
+"rollback parcial. Revisar secuencia `numero_secuencial` y bloqueos "
+"(`bloqueado = true`) por empresa."
+
+msgid "Audit: no anomalies detected in the supplied reports."
+msgstr "Sin anomalías detectadas en los informes recibidos."
+
+msgid "CSV column: invoice number"
+msgstr "numero"
+
+msgid "CSV column: date"
+msgstr "fecha"
+
+msgid "CSV column: customer tax ID"
+msgstr "cliente_nif"
+
+msgid "CSV column: taxable base"
+msgstr "base_imponible"
+
+msgid "CSV column: VAT amount"
+msgstr "cuota_iva"
+
+msgid "CSV column: total"
+msgstr "total"
+
+msgid "CSV column: VeriFactu hash"
+msgstr "hash_verifactu"
+
+msgid "ZIP: invoice ledger CSV"
+msgstr "libro_facturas_aeat.csv"
+
+msgid "ZIP: VeriFactu hash chain JSON"
+msgstr "cadena_hashes_verifactu.json"
+
+msgid "AEAT inspection export {company} {date}.zip"
+msgstr "Inspeccion_AEAT_{company}_{date}.zip"
+
+msgid "JSON key: company ID"
+msgstr "empresa_id"
+
+msgid "JSON key: generated UTC"
+msgstr "generado_utc"
+
+msgid "JSON key: records chronological order"
+msgstr "registros_orden_cronologico"
+
+msgid "JSON key: hash chain"
+msgstr "cadena_hashes"
+
+msgid "New invoice issued"
+msgstr "Nueva factura emitida"
+
+msgid "Hello {name},"
+msgstr "Hola {name},"
+
+msgid "We attach your invoice PDF with VeriFactu fingerprint."
+msgstr "Adjuntamos el PDF de tu factura con huella VeriFactu."
+
+msgid "Number"
+msgstr "Número"
+
+msgid "Date"
+msgstr "Fecha"
+
+msgid "Taxable base"
+msgstr "Base imponible"
+
+msgid "VAT"
+msgstr "IVA"
+
+msgid "Total"
+msgstr "Total"
+
+msgid "Automatically generated message. Do not reply to this email."
+msgstr "Mensaje generado automáticamente. No respondas a este correo."
+
+msgid "Fleet quota alert"
+msgstr "Alerta de cuota de flota"
+
+msgid "You have reached {current} of {limit} vehicles allowed on your plan."
+msgstr "Has alcanzado {current} de {limit} vehículos permitidos por tu plan."
+
+msgid "Upgrade your plan to keep operating without interruptions."
+msgstr "Mejora de plan para seguir operando sin interrupciones."
+
+msgid "Onboarding invitation"
+msgstr "Invitación al onboarding"
+
+msgid "We have resent your invitation to complete onboarding."
+msgstr "Hemos reenviado tu invitación para completar el onboarding."
+
+msgid "Continue onboarding"
+msgstr "Continuar onboarding"
+
+msgid "If the button does not work, copy this link into your browser: {link}"
+msgstr "Si el botón no funciona, copia este enlace en tu navegador: {link}"
+
+msgid "Invoice {num} · AB Logistics OS"
+msgstr "Factura {num} · AB Logistics OS"
+
+msgid "Invitation to onboarding · AB Logistics OS"
+msgstr "Invitación de onboarding · AB Logistics OS"
+
+msgid "Alert: {current}/{limit} vehicles · AB Logistics OS"
+msgstr "Alerta: {current}/{limit} vehículos · AB Logistics OS"
+
+msgid "Fiscal document"
+msgstr "Documento fiscal"
+
+msgid "Your invoice is ready"
+msgstr "Su factura está lista"
+
+msgid "Dear customer,"
+msgstr "Estimado cliente,"
+
+msgid ""
+"We attach the PDF invoice {num}, issued under applicable e-invoicing rules "
+"(VeriFactu / SIF)."
+msgstr ""
+"Adjuntamos en PDF la factura {num}, emitida conforme a la normativa de "
+"facturación electrónica aplicable (VeriFactu / SIF)."
+
+msgid "Attachment filename: Factura_{name}.pdf"
+msgstr "Nombre del adjunto: Factura_{name}.pdf"
+
+msgid ""
+"Automatically generated message. Contact your account manager for questions "
+"about the document."
+msgstr ""
+"Mensaje generado automáticamente. Consulte con su contacto comercial para "
+"dudas sobre el documento."
+
+msgid ""
+"We attach your invoice in PDF. If you do not see formatting, use an HTML-"
+"capable mail client."
+msgstr ""
+"Adjuntamos su factura en PDF. Si no ve el mensaje con formato, utilice un "
+"cliente de correo compatible con HTML."
+
+msgid "Technical environmental compliance certificate"
+msgstr "Certificado técnico de cumplimiento medioambiental"
+
+msgid ""
+"I, [LEGAL REPRESENTATIVE], as administrator, certify that the data recorded "
+"matches the digitally audited records, in line with digitisation standards "
+"required for grants and subsidies."
+msgstr ""
+"D. [REPRESENTANTE LEGAL], en calidad de administrador, certifica que los "
+"datos consignados corresponden a los registros digitales auditados por el "
+"sistema, con arreglo a los estándares de digitalización exigidos para ayudas "
+"y subvenciones."
+
+msgid "Audited indicators"
+msgstr "Indicadores auditados"
+
+msgid "Indicator"
+msgstr "Indicador"
+
+msgid "Value"
+msgstr "Valor"
+
+msgid "Document digitisation"
+msgstr "Digitalización documental"
+
+msgid "Units"
+msgstr "Uds"
+
+msgid "Raw material savings (paper)"
+msgstr "Ahorro materia prima (papel)"
+
+msgid "Carbon footprint reduction (CO2)"
+msgstr "Reducción huella carbono (CO2)"
+
+msgid "Digital signature and seal (internal representation)"
+msgstr "Firma y sello digital (representación interna)"
+
+msgid "Ecological commitment · AB Logistics OS"
+msgstr "Compromiso ecológico · AB Logistics OS"
+
+msgid "Doc. ID {id}-ESG · Administrative use"
+msgstr "Doc. ID {id}-ESG · Uso administrativo"
+
+msgid "ESG certification · Operational footprint"
+msgstr "Certificación ESG · Huella operativa"
+
+msgid "Carbon footprint certificate"
+msgstr "Certificado de Huella de Carbono"
+
+msgid "Period: {month}/{year} · Company: {name}"
+msgstr "Periodo: {month}/{year} · Empresa: {name}"
+
+msgid "Period summary"
+msgstr "Resumen del periodo"
+
+msgid "Total CO2 equivalent emitted: {v} kg"
+msgstr "Total CO₂ equivalente emitido: {v} kg"
+
+msgid "Actual road km (routes): {v} km"
+msgstr "Km reales acumulados (rutas carretera): {v} km"
+
+msgid "Invoiced shipments: {n} · Avg CO2/shipment: {v} kg"
+msgstr "Portes facturados: {n} · Media CO₂/porte: {v} kg"
+
+msgid ""
+"Estimated savings (optimised routes vs +15% km unoptimised): {v} kg CO2eq"
+msgstr ""
+"Ahorro estimado (rutas optimizadas vs +15% km sin optimizar): {v} kg CO₂eq"
+
+msgid "Comparison by vehicle (kg CO2 in the period)"
+msgstr "Comparativa por vehículo (kg CO₂ en el periodo)"
+
+msgid ""
+"Bars sorted from highest to lowest impact. Includes shipments without an "
+"assigned vehicle (global factor)."
+msgstr ""
+"Barras ordenadas de mayor a menor impacto. Incluye portes sin vehículo "
+"asignado (factor global)."
+
+msgid "No per-vehicle breakdown in the period."
+msgstr "Sin desglose por vehículo en el periodo."
+
+msgid "AB Logistics OS digital seal"
+msgstr "Sello digital AB Logistics OS"
+
+msgid ""
+"Document generated from the AB Logistics OS platform. Integrity verifiable "
+"via SHA-256 fingerprint of the period and declared totals.\n"
+"Identifier: {fp}…"
+msgstr ""
+"Documento generado desde la plataforma AB Logistics OS. Integridad "
+"verificable mediante huella SHA-256 del periodo y totales declarados.\n"
+"Identificador: {fp}…"
+
+msgid "GLEC / ISO 14083 logistics and carbon certificate (v2.0 framework)"
+msgstr ""
+"Certificado de eficiencia logística y huella de carbono (GLEC v2.0 / ISO "
+"14083)"
+
+msgid "ESG certificate — Transport / service"
+msgstr "Certificado ESG — Porte / servicio de transporte"
+
+msgid "Issued UTC: {ts}Z"
+msgstr "Emitido UTC: {ts}Z"
+
+msgid "Legal name"
+msgstr "Razón social"
+
+msgid "Service identification"
+msgstr "Identificación del servicio"
+
+msgid "Shipment ID"
+msgstr "ID porte"
+
+msgid "Operational date"
+msgstr "Fecha operativa"
+
+msgid "Origin → Destination"
+msgstr "Origen → Destino"
+
+msgid "Real distance (km)"
+msgstr "Distancia real (km)"
+
+msgid "{v} km (route / telemetry)"
+msgstr "{v} km (ruta / telemetría)"
+
+msgid "Recorded km (operational estimate)"
+msgstr "Km registro (estimados operativa)"
+
+msgid "{v} km (record / operational estimate)"
+msgstr "{v} km (registro / estimación operativa)"
+
+msgid "Actual km (portes table)"
+msgstr "Km reales (tabla portes)"
+
+msgid "{v} km"
+msgstr "{v} km"
+
+msgid "Declared empty km"
+msgstr "Km vacío declarados"
+
+msgid "Subcontracted"
+msgstr "Subcontratado"
+
+msgid "Yes (Scope 3)"
+msgstr "Sí (Scope 3)"
+
+msgid "No (Scope 1)"
+msgstr "No (Scope 1)"
+
+msgid "Vehicle and factors (GLEC)"
+msgstr "Vehículo y factores (GLEC)"
+
+msgid "Vehicle"
+msgstr "Vehículo"
+
+msgid "EURO standard (reporting)"
+msgstr "Normativa EURO (reporting)"
+
+msgid "Engine class (GLEC)"
+msgstr "Clase motor (GLEC)"
+
+msgid "Fuel (GLEC)"
+msgstr "Combustible (GLEC)"
+
+msgid "g CO₂/km factor (loaded / empty)"
+msgstr "Factor g CO₂/km (cargado / vacío)"
+
+msgid "Results"
+msgstr "Resultados"
+
+msgid "Total CO2 (GLEC)"
+msgstr "CO₂ total (GLEC)"
+
+msgid "Euro III baseline"
+msgstr "Línea base Euro III"
+
+msgid "Savings vs Euro III"
+msgstr "Ahorro vs Euro III"
+
+msgid "Total NOx (EURO standard)"
+msgstr "NOx total (normativa EURO)"
+
+msgid ""
+"Methodology: calculated per GLEC Framework v2.0 (simplified engine "
+"implementation) and ISO 14083 transport intensity reference. g CO₂/km "
+"factors per loaded/empty leg come from the internal GLEC table aligned with "
+"calculate_co2_footprint. NOx: total km × g/km per declared EURO standard."
+msgstr ""
+"Metodología: calculado según marco GLEC Framework v2.0 (implementación "
+"simplificada en motor) y referencia ISO 14083 para intensidad de transporte. "
+"Los factores g CO₂/km por tramo cargado/vacío provienen de la tabla GLEC "
+"interna alineada con ``calculate_co2_footprint``. NOx: km totales × factor g/"
+"km según normativa EURO declarada."
+
+msgid "Document audit and integrity"
+msgstr "Auditoría e integridad del documento"
+
+msgid "Certificate ID: {id}"
+msgstr "Certificate ID: {id}"
+
+msgid "Content fingerprint (SHA-256): {fp}"
+msgstr "Content fingerprint (SHA-256): {fp}"
+
+msgid ""
+"The esg_certificate_documents table stores the PDF file SHA-256 and this "
+"content fingerprint."
+msgstr ""
+"El registro `esg_certificate_documents` conserva la huella SHA-256 del "
+"fichero PDF y este fingerprint de contenido."
+
+msgid "Aggregated ESG certificate — GLEC v2.0 / ISO 14083"
+msgstr "Certificado ESG agregado — GLEC v2.0 / ISO 14083"
+
+msgid "ESG certificate — Invoice (aggregated shipments)"
+msgstr "Certificado ESG — Factura (agregado de portes)"
+
+msgid "Document"
+msgstr "Documento"
+
+msgid "Invoice ID"
+msgstr "ID factura"
+
+msgid "Customer"
+msgstr "Cliente"
+
+msgid "Aggregated footprint (sum per invoiced shipment)"
+msgstr "Huella agregada (suma por porte facturado)"
+
+msgid "Shipments included"
+msgstr "Portes incluidos"
+
+msgid "Operational km summed"
+msgstr "Km operativos sumados"
+
+msgid ""
+"Methodology: sum of GLEC models for each shipment linked to the invoice "
+"(esg_certificate_co2_vs_euro_iii), with the same distance and fuel structure "
+"per shipment. Calculated per GLEC Framework v2.0 / ISO 14083 (operational "
+"reference)."
+msgstr ""
+"Metodología: suma de los modelos GLEC por cada porte vinculado a la factura "
+"(``esg_certificate_co2_vs_euro_iii``), con la misma estructura de distancia "
+"y combustible por porte. Calculado según GLEC Framework v2.0 / ISO 14083 "
+"(referencia operativa)."
+
+msgid "esg_certificate_documents: PDF SHA-256 and content fingerprint."
+msgstr ""
+"Registro `esg_certificate_documents`: huella SHA-256 del fichero PDF y "
+"fingerprint de contenido."
+
+msgid "Carbon footprint certificate — shipment"
+msgstr "Certificado de huella de carbono — Porte"
+
+msgid ""
+"AB Logistics OS · commercial audit document (GLEC v2.0; diesel factor ISO "
+"14083)."
+msgstr ""
+"AB Logistics OS · documento para auditoría comercial (GLEC v2.0; factor "
+"diésel ISO 14083)."
+
+msgid "Certificate ID"
+msgstr "ID certificado"
+
+msgid "Content fingerprint (SHA-256)"
+msgstr "Huella digital contenido (SHA-256)"
+
+msgid "Vehicle plate"
+msgstr "Matrícula (vehículo)"
+
+msgid "CO2 service (GLEC, kg CO2eq)"
+msgstr "CO₂ servicio (GLEC, kg CO₂eq)"
+
+msgid "Euro III baseline (kg CO2eq)"
+msgstr "Línea base Euro III (kg CO₂eq)"
+
+msgid "Savings vs Euro III (kg CO2eq)"
+msgstr "Ahorro vs Euro III (kg CO₂eq)"
+
+msgid "Diesel reference factor (ISO 14083)"
+msgstr "Factor diésel referencia (ISO 14083)"
+
+msgid "Declared engine standard"
+msgstr "Normativa motor declarada"
+
+msgid ""
+"GLEC CO2 figures match the BI dashboard and portal YTD CSV export for the "
+"same shipment and time window."
+msgstr ""
+"Las cifras CO₂ GLEC coinciden con el dashboard BI y la exportación CSV YTD "
+"del portal para el mismo porte y ventana temporal."
+
+msgid "Emissions accounted as Scope 3 (subcontracted transport)."
+msgstr "Emisiones contabilizadas como Scope 3 (transporte subcontratado)."
+
+msgid "Scope 1 operational emissions when own-fleet fuel applies."
+msgstr ""
+"Emisiones operativas Scope 1 cuando aplica combustible de flota propia."
+
+msgid ""
+"ISO 14083:2021 — diesel reference factor 2.67 kg CO2eq / L (audit / "
+"certificates)."
+msgstr ""
+"ISO 14083:2021 — factor de referencia diésel 2,67 kg CO₂eq / L (auditoría / "
+"certificados)."
+
+msgid "ESG certificate"
+msgstr "Certificado ESG"
+
+msgid ""
+"Methodology: kg CO2eq ≈ real km (Distance Matrix / cache) × tonnes × kg/"
+"(t·km) factor for the vehicle or global factor. Savings compare against a "
+"scenario with +15% km from lack of route optimisation. Indicative values for "
+"tenders and reporting do not replace external audits."
+msgstr ""
+"Metodología: kg CO₂eq ≈ km reales (Distance Matrix / caché) × toneladas × "
+"factor kg/(t·km) del vehículo o factor global. El ahorro compara frente a un "
+"escenario con +15% km por falta de optimización de ruta. Valores "
+"orientativos para licitaciones y reporting no sustituyen auditorías externas."

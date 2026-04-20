@@ -6,9 +6,11 @@ from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
-from typing import Any
+from typing import Any, Iterable
 from uuid import UUID
 
+from app.core.constants import ISO_14083_DIESEL_CO2_KG_PER_LITRE
+from app.core.i18n import get_translator
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.schemas.esg import (
@@ -26,6 +28,7 @@ from app.core.esg_engine import (
     calculate_co2_emissions,
     calculate_co2_footprint,
     calculate_nox_emissions,
+    esg_certificate_co2_vs_euro_iii,
     get_co2_factor_kg_per_km,
 )
 from app.services.eco_service import (
@@ -593,10 +596,8 @@ class EsgService:
         except (TypeError, ValueError):
             l = 0.0
 
-        t = (tipo_combustible or "").strip().lower()
-        # Hoy solo se usa Diesel A; mantenemos un fallback razonable.
-        factor_kg_co2_por_litro = 2.67 if "diesel" in t else 2.67
-
+        # Hoy solo Diesel A; factor diésel ISO 14083 (kg CO₂eq/L).
+        factor_kg_co2_por_litro = float(ISO_14083_DIESEL_CO2_KG_PER_LITRE)
         co2_kg = l * factor_kg_co2_por_litro
 
         cert = (certificacion_emisiones or "").strip()
@@ -846,3 +847,343 @@ class EsgService:
             chart_comparison=chart_comparison,
             chart_by_vehicle=chart_by_vehicle,
         )
+
+
+# ---------------------------------------------------------------------------
+# Certificación comercial ISO 14083 + export CSV portal (misma lógica GLEC
+# que ``esg_certificate_co2_vs_euro_iii`` / certificado PDF).
+# ---------------------------------------------------------------------------
+import io as _io
+from xml.sax.saxutils import escape as _xml_escape
+
+from reportlab.lib import colors as _rl_colors
+from reportlab.lib.pagesizes import A4 as _A4
+from reportlab.lib.styles import ParagraphStyle as _ParagraphStyle, getSampleStyleSheet as _getSampleStyleSheet
+from reportlab.lib.units import mm as _mm
+from reportlab.platypus import Paragraph as _Paragraph, SimpleDocTemplate as _SimpleDocTemplate, Spacer as _Spacer, Table as _Table, TableStyle as _TableStyle
+
+from app.services.pdf_esg_service import EsgPorteCertificatePdfModel
+
+
+def diesel_co2eq_kg_from_litres(litros: float) -> float:
+    """CO₂ equivalente (kg) a partir de litros de gasóleo × factor ISO 14083."""
+    return max(0.0, float(litros or 0.0)) * float(ISO_14083_DIESEL_CO2_KG_PER_LITRE)
+
+
+def generate_porte_certificate_pdf_reportlab(
+    model: EsgPorteCertificatePdfModel, *, lang: str | None = None
+) -> bytes:
+    """PDF profesional (ReportLab) con ID porte, matrícula y referencia ISO 14083 (2,67 kg/L)."""
+    t = get_translator(lang)
+    buf = _io.BytesIO()
+    doc = _SimpleDocTemplate(
+        buf,
+        pagesize=_A4,
+        rightMargin=16 * _mm,
+        leftMargin=16 * _mm,
+        topMargin=14 * _mm,
+        bottomMargin=14 * _mm,
+        title=t("ESG certificate"),
+    )
+    styles = _getSampleStyleSheet()
+    title_style = _ParagraphStyle(
+        "EsgCertTitle",
+        parent=styles["Title"],
+        fontSize=16,
+        spaceAfter=8,
+        textColor=_rl_colors.HexColor("#0f172a"),
+    )
+    body = _ParagraphStyle(
+        "EsgCertBody",
+        parent=styles["Normal"],
+        fontSize=10,
+        leading=13,
+        textColor=_rl_colors.HexColor("#334155"),
+    )
+    small = _ParagraphStyle(
+        "EsgCertSmall",
+        parent=styles["Normal"],
+        fontSize=8,
+        leading=11,
+        textColor=_rl_colors.HexColor("#64748b"),
+    )
+
+    matricula_guess = (model.vehiculo_label or "—").split("·")[0].strip() if model.vehiculo_label else "—"
+
+    story: list[Any] = []
+    story.append(_Paragraph(_xml_escape(t("Carbon footprint certificate — shipment")), title_style))
+    story.append(
+        _Paragraph(
+            _xml_escape(t("AB Logistics OS · commercial audit document (GLEC v2.0; diesel factor ISO 14083).")),
+            small,
+        )
+    )
+    story.append(_Spacer(1, 6 * _mm))
+
+    data_rows = [
+        (t("Certificate ID"), model.certificate_id),
+        (t("Content fingerprint (SHA-256)"), model.content_fingerprint_sha256[:48] + "…"),
+        (t("Shipment ID"), model.porte_id),
+        (t("Vehicle plate"), matricula_guess),
+        (t("Vehicle"), model.vehiculo_label or "—"),
+        (t("Operational date"), model.fecha),
+        (t("Origin → Destination"), f"{model.origen} → {model.destino}"),
+        (t("CO2 service (GLEC, kg CO2eq)"), f"{model.co2_total_kg:.6f}"),
+        (t("Euro III baseline (kg CO2eq)"), f"{model.euro_iii_baseline_kg:.6f}"),
+        (t("Savings vs Euro III (kg CO2eq)"), f"{model.ahorro_kg:.6f}"),
+        (
+            t("Diesel reference factor (ISO 14083)"),
+            f"{ISO_14083_DIESEL_CO2_KG_PER_LITRE} kg CO₂eq / L",
+        ),
+        (t("Declared engine standard"), model.normativa_euro),
+    ]
+    tbl = _Table(
+        [[_xml_escape(str(a)), _xml_escape(str(b))] for a, b in data_rows],
+        colWidths=[52 * _mm, 118 * _mm],
+    )
+    tbl.setStyle(
+        _TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), _rl_colors.HexColor("#f8fafc")),
+                ("BOX", (0, 0), (-1, -1), 0.5, _rl_colors.HexColor("#cbd5e1")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.25, _rl_colors.HexColor("#e2e8f0")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    story.append(tbl)
+    story.append(_Spacer(1, 5 * _mm))
+    story.append(
+        _Paragraph(
+            _xml_escape(
+                t("ISO 14083:2021 — diesel reference factor 2.67 kg CO2eq / L (audit / certificates).")
+            ),
+            body,
+        )
+    )
+    story.append(_Spacer(1, 3 * _mm))
+    story.append(
+        _Paragraph(
+            _xml_escape(
+                t(
+                    "GLEC CO2 figures match the BI dashboard and portal YTD CSV export for the same shipment and time window."
+                )
+            ),
+            small,
+        )
+    )
+    story.append(_Spacer(1, 4 * _mm))
+    story.append(_Paragraph(_xml_escape(model.scope_note), body))
+
+    doc.build(story)
+    return buf.getvalue()
+
+
+def _csv_escape_row(values: Iterable[str]) -> list[str]:
+    return [str(v).replace("\r\n", " ").replace("\n", " ") for v in values]
+
+
+ESG_CSV_COLUMNS = (
+    "porte_id",
+    "fecha",
+    "estado",
+    "matricula",
+    "origen",
+    "destino",
+    "km_estimados",
+    "km_vacio",
+    "co2_total_kg_glec",
+    "co2_euro_iii_baseline_kg",
+    "co2_ahorro_vs_euro_iii_kg",
+    "factor_diesel_iso14083_kg_per_l",
+)
+
+_PORTAL_ESG_YTD_STATES = frozenset({"entregado", "facturado"})
+
+
+def _portal_esg_ytd_row_included(row: dict[str, Any]) -> bool:
+    return str(row.get("estado") or "").strip().lower() in _PORTAL_ESG_YTD_STATES
+
+
+def sum_portal_esg_co2_ahorro_kg(
+    rows: list[dict[str, Any]], flota_by_id: dict[str, dict[str, Any]]
+) -> float:
+    """Suma ahorro CO₂ (GLEC vs Euro III) con la misma tripleta que CSV/certificado."""
+    total = 0.0
+    for r in rows:
+        total += max(0.0, _esg_cert_kg_triplet(r, flota_by_id)[2])
+    return round(total, 4)
+
+
+async def _load_portal_cliente_esg_ytd_rows_flota(
+    db: SupabaseAsync,
+    *,
+    empresa_id: str,
+    cliente_id: str,
+    hoy: date | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], date]:
+    eid = str(empresa_id or "").strip()
+    cid = str(cliente_id or "").strip()
+    if not eid or not cid:
+        return ([], {}, date.today() if hoy is None else hoy)
+    if hoy is None:
+        hoy = date.today()
+    d0 = date(hoy.year, 1, 1)
+
+    query = filter_not_deleted(
+        db.table("portes")
+        .select("*")
+        .eq("empresa_id", eid)
+        .eq("cliente_id", cid)
+        .gte("fecha", d0.isoformat())
+        .lte("fecha", hoy.isoformat())
+    )
+    try:
+        res: Any = await db.execute(query)
+    except Exception:
+        res = await db.execute(
+            db.table("portes")
+            .select("*")
+            .eq("empresa_id", eid)
+            .eq("cliente_id", cid)
+            .gte("fecha", d0.isoformat())
+            .lte("fecha", hoy.isoformat())
+        )
+    rows: list[dict[str, Any]] = [dict(r) for r in ((res.data or []) if hasattr(res, "data") else [])]
+    rows = [r for r in rows if _portal_esg_ytd_row_included(r)]
+
+    vids = {str(r.get("vehiculo_id") or "").strip() for r in rows}
+    vids.discard("")
+    flota = await _batch_flota_for_esg_export(db, empresa_id=eid, vehiculo_ids=vids)
+    return rows, flota, hoy
+
+
+async def portal_cliente_esg_ytd_co2_ahorro_kg(
+    db: SupabaseAsync,
+    *,
+    empresa_id: str,
+    cliente_id: str,
+    hoy: date | None = None,
+) -> float:
+    """Ahorro CO₂ YTD portal = suma columna ``co2_ahorro_vs_euro_iii_kg`` del CSV (misma ventana y estados)."""
+    rows, flota, _ = await _load_portal_cliente_esg_ytd_rows_flota(
+        db, empresa_id=empresa_id, cliente_id=cliente_id, hoy=hoy
+    )
+    if not rows:
+        return 0.0
+    return sum_portal_esg_co2_ahorro_kg(rows, flota)
+
+
+async def _batch_flota_for_esg_export(
+    db: SupabaseAsync,
+    *,
+    empresa_id: str,
+    vehiculo_ids: set[str],
+) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    ids = sorted(x for x in vehiculo_ids if x)
+    if not ids:
+        return out
+    chunk_size = 60
+    for i in range(0, len(ids), chunk_size):
+        chunk = ids[i : i + chunk_size]
+        try:
+            res: Any = await db.execute(
+                filter_not_deleted(
+                    db.table("flota")
+                    .select(
+                        "id, matricula, vehiculo, normativa_euro, certificacion_emisiones, engine_class, fuel_type"
+                    )
+                    .eq("empresa_id", empresa_id)
+                    .in_("id", chunk)
+                )
+            )
+        except Exception:
+            res = await db.execute(
+                db.table("flota")
+                .select(
+                    "id, matricula, vehiculo, normativa_euro, certificacion_emisiones, engine_class, fuel_type"
+                )
+                .eq("empresa_id", empresa_id)
+                .in_("id", chunk)
+            )
+        for r in (res.data or []) if hasattr(res, "data") else []:
+            rid = str(r.get("id") or "").strip()
+            if rid:
+                out[rid] = dict(r)
+    return out
+
+
+def _esg_cert_kg_triplet(porte: dict[str, Any], flota_by_id: dict[str, dict[str, Any]]) -> tuple[float, float, float]:
+    vid = str(porte.get("vehiculo_id") or "").strip()
+    fr = flota_by_id.get(vid) or {}
+    ec_raw = fr.get("engine_class")
+    ft_raw = fr.get("fuel_type")
+    ec = str(ec_raw).strip() if ec_raw not in (None, "") else None
+    ft = str(ft_raw).strip() if ft_raw not in (None, "") else None
+    cert = esg_certificate_co2_vs_euro_iii(
+        km_estimados=float(porte.get("km_estimados") or 0.0),
+        km_vacio=porte.get("km_vacio"),
+        engine_class=ec,
+        fuel_type=ft,
+        subcontratado=bool(porte.get("subcontratado")),
+    )
+    return (
+        float(cert["actual_total_kg"]),
+        float(cert["euro_iii_baseline_kg"]),
+        float(cert["ahorro_kg"]),
+    )
+
+
+async def portal_cliente_esg_ytd_csv(
+    db: SupabaseAsync,
+    *,
+    empresa_id: str,
+    cliente_id: str,
+    hoy: date | None = None,
+) -> tuple[str, str]:
+    """CSV YTD con CO₂ GLEC = certificado PDF (misma fórmula)."""
+    eid = str(empresa_id or "").strip()
+    cid = str(cliente_id or "").strip()
+    if not eid or not cid:
+        return ("esg_export_empty.csv", "")
+    rows, flota, hoy = await _load_portal_cliente_esg_ytd_rows_flota(
+        db, empresa_id=eid, cliente_id=cid, hoy=hoy
+    )
+
+    out_io = _io.StringIO()
+    w = csv.writer(out_io)
+    w.writerow(list(ESG_CSV_COLUMNS))
+    fac_num = f"{ISO_14083_DIESEL_CO2_KG_PER_LITRE:.2f}"
+    for r in sorted(rows, key=lambda x: str(x.get("fecha") or "")):
+        vid = str(r.get("vehiculo_id") or "").strip()
+        fr = flota.get(vid) or {}
+        mat = str(fr.get("matricula") or "").strip() or "—"
+        co2_t, co2_b, co2_a = _esg_cert_kg_triplet(r, flota)
+        w.writerow(
+            _csv_escape_row(
+                [
+                    str(r.get("id") or ""),
+                    str(r.get("fecha") or "")[:10],
+                    str(r.get("estado") or ""),
+                    mat,
+                    str(r.get("origen") or ""),
+                    str(r.get("destino") or ""),
+                    str(float(r.get("km_estimados") or 0.0)),
+                    str(float(r.get("km_vacio") or 0.0) if r.get("km_vacio") is not None else ""),
+                    f"{co2_t:.6f}",
+                    f"{co2_b:.6f}",
+                    f"{co2_a:.6f}",
+                    fac_num,
+                ]
+            )
+        )
+    fname = f"esg_portal_ytd_{hoy.year}_{cid[:8]}.csv"
+    return fname, out_io.getvalue()

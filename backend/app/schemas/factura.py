@@ -317,6 +317,11 @@ class FacturaPdfDataOut(BaseModel):
         default=None,
         description="Ahorro total kg CO₂ vs Euro III (agregado factura).",
     )
+    content_language: str = Field(
+        default="es",
+        description="Idioma PDF (empresas.preferred_language): es | en.",
+        max_length=5,
+    )
 
     @field_serializer(
         "base_imponible",

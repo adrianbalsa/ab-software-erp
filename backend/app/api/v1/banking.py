@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from app.api import deps
 from app.schemas.banking import (
+    BankPendingReconciliationOut,
     BankReconcileIn,
     BankReconcileOut,
     BankingConnectOut,
@@ -25,7 +26,8 @@ from app.schemas.conciliacion import (
     MovimientoSugeridoOut,
 )
 from app.schemas.user import UserOut
-from app.services.bank_service import BankService, _gocardless_configured
+from app.services.bank_service import _gocardless_configured
+from app.services.banking_service import BankingService
 from app.services.matching_service import MatchingService
 from app.services.reconciliation_service import ReconciliationService
 
@@ -41,6 +43,41 @@ def _parse_opt_date(raw: str | None) -> date | None:
         raise HTTPException(status_code=400, detail="Fecha inválida (use YYYY-MM-DD)") from None
 
 
+@router.get(
+    "/pending-reconciliation",
+    response_model=list[BankPendingReconciliationOut],
+    summary="Movimientos bancarios pendientes de conciliar (con confianza IA/fuzzy)",
+)
+async def banking_pending_reconciliation(
+    current_user: UserOut = Depends(deps.require_admin_active_write_user),
+    matching: MatchingService = Depends(deps.get_matching_service),
+) -> list[BankPendingReconciliationOut]:
+    """
+    Lista ``bank_transactions`` no conciliados con el mejor score de emparejamiento actual (motor fuzzy).
+    La confirmación híbrida (LogisAdvisor + LLM) se hace vía ``POST /banking/reconcile``.
+    """
+    eid = str(current_user.empresa_id)
+    txs = await matching.load_unreconciled_transactions(empresa_id=eid)
+    out: list[BankPendingReconciliationOut] = []
+    for tx in txs:
+        cands = await matching.get_candidates(empresa_id=eid, transaction_id=tx.transaction_id)
+        top = float(cands[0].score) if cands else 0.0
+        inv_id = int(cands[0].factura_id) if cands else None
+        bd = tx.booked_date_iso() or ""
+        out.append(
+            BankPendingReconciliationOut(
+                transaction_id=tx.transaction_id,
+                amount=float(tx.amount),
+                currency=str(tx.currency or "EUR")[:8],
+                booking_date=str(bd)[:10] if bd else "",
+                description=tx.description,
+                ia_confidence=round(top, 4),
+                best_invoice_id=inv_id,
+            )
+        )
+    return out
+
+
 @router.get("/connect", response_model=BankingConnectOut)
 async def banking_connect(
     institution_id: str = Query(
@@ -53,7 +90,7 @@ async def banking_connect(
         description="URL de retorno OAuth (por defecto PUBLIC_APP_URL/bancos/callback)",
     ),
     current_user: UserOut = Depends(deps.require_admin_active_write_user),
-    service: BankService = Depends(deps.get_bank_service),
+    service: BankingService = Depends(deps.get_banking_service),
 ) -> BankingConnectOut:
     """
     Genera el enlace de autorización bancaria (GoCardless Bank Account Data).
@@ -65,7 +102,7 @@ async def banking_connect(
             detail="Integración bancaria no configurada (GOCARDLESS_SECRET_ID / GOCARDLESS_SECRET_KEY)",
         )
     try:
-        out = await service.create_requisition_link(
+        out = await service.create_requisition(
             empresa_id=str(current_user.empresa_id),
             institution_id=institution_id,
             redirect_url=redirect_url,
@@ -78,7 +115,7 @@ async def banking_connect(
 @router.get("/accounts", response_model=list[CuentaBancaria])
 async def banking_list_accounts(
     current_user: UserOut = Depends(deps.require_admin_active_write_user),
-    service: BankService = Depends(deps.get_bank_service),
+    service: BankingService = Depends(deps.get_banking_service),
 ) -> list[CuentaBancaria]:
     """Cuentas sincronizadas / enlazadas (GoCardless Bank Account Data)."""
     if not _gocardless_configured():
@@ -99,7 +136,7 @@ async def banking_list_accounts(
 async def banking_fetch_transactions(
     days: int = Query(default=90, ge=1, le=365, description="Días hacia atrás desde hoy"),
     current_user: UserOut = Depends(deps.require_admin_active_write_user),
-    service: BankService = Depends(deps.get_bank_service),
+    service: BankingService = Depends(deps.get_banking_service),
 ) -> list[BankingMovimientoOut]:
     """Descarga y persiste movimientos recientes; devuelve el lote importado (metadatos)."""
     if not _gocardless_configured():
@@ -121,7 +158,7 @@ async def banking_oauth_complete(
     ref: str = Query(..., min_length=8, description="requisition_id devuelto por GoCardless en el redirect (?ref=)"),
     days: int = Query(default=90, ge=1, le=365),
     current_user: UserOut = Depends(deps.require_admin_active_write_user),
-    service: BankService = Depends(deps.get_bank_service),
+    service: BankingService = Depends(deps.get_banking_service),
 ) -> BankingOAuthCompleteOut:
     """Completa el flujo tras el redirect: valida ``ref``, sincroniza cuentas y movimientos."""
     if not _gocardless_configured():
@@ -152,7 +189,7 @@ async def banking_sync(
     date_from: str | None = Query(default=None, description="YYYY-MM-DD inicio ventana movimientos"),
     date_to: str | None = Query(default=None, description="YYYY-MM-DD fin ventana movimientos"),
     current_user: UserOut = Depends(deps.require_admin_active_write_user),
-    service: BankService = Depends(deps.get_bank_service),
+    service: BankingService = Depends(deps.get_banking_service),
 ) -> BankingSyncOut:
     """
     Descarga movimientos, los persiste y ejecuta conciliación automática (importe exacto + número en concepto).

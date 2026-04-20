@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { loginAction } from "@/app/login/actions";
+import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { notifyJwtUpdated } from "@/lib/api";
 import { getAuthToken, setAuthToken } from "@/lib/auth";
 
@@ -17,6 +18,8 @@ type LoginFormProps = {
 };
 
 export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
+  const { catalog } = useOptionalLocaleCatalog();
+  const L = catalog.login;
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/dashboard";
@@ -55,14 +58,14 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
           />
           <div>
             <h1 className="text-xl font-bold tracking-tight">AB Logistics OS</h1>
-            <p className="text-sm text-slate-500">Inicia sesión en tu empresa</p>
+            <p className="text-sm text-slate-500">{L.tagline}</p>
           </div>
         </div>
 
         <form action={action} className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="login-username">
-              Usuario
+              {L.username}
             </label>
             <input
               id="login-username"
@@ -74,7 +77,7 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="login-password">
-              Contraseña
+              {L.password}
             </label>
             <input
               id="login-password"
@@ -95,11 +98,11 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
             disabled={isPending}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-zinc-700 via-zinc-800 to-emerald-600 py-3 font-bold text-white shadow-lg shadow-zinc-900/25 transition-all hover:brightness-105 disabled:opacity-60"
           >
-            {isPending ? "Entrando…" : "Iniciar sesión"}
+            {isPending ? L.pending : L.submit}
           </button>
 
           <div className="relative py-2 text-center text-xs text-zinc-400">
-            <span className="relative z-10 bg-white px-2">o continúa con</span>
+            <span className="relative z-10 bg-white px-2">{L.oauthDivider}</span>
             <span className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-zinc-200" aria-hidden />
           </div>
 
@@ -125,7 +128,7 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            Google
+            {L.google}
           </Link>
         </form>
 
@@ -136,7 +139,7 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
               className="font-medium text-blue-600 hover:text-blue-500"
               rel="noopener noreferrer"
             >
-              Volver al sitio público
+              {L.backToMarketing}
             </a>
           </p>
         )}

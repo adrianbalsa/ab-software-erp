@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.core.verifactu import GENESIS_HASH, generate_invoice_hash
-from app.core.fiscal_logic import compute_invoice_fingerprint
+from app.core.i18n import get_translator
+from app.core.verifactu import GENESIS_HASH
+from app.core.verifactu_hashing import VerifactuCadena, generar_hash_factura_oficial
 
 
 def diagnose_fingerprint_hash_chain(
@@ -47,7 +48,7 @@ def diagnose_fingerprint_hash_chain(
             "fecha_emision": row.get("fecha_emision"),
             "total_factura": row.get("total_factura"),
         }
-        expected_fp = compute_invoice_fingerprint(inv, prev_fp)
+        expected_fp = generar_hash_factura_oficial(VerifactuCadena.HUELLA_FINGERPRINT, inv, prev_fp)
         stored_hash = str(row.get("fingerprint_hash") or "").strip()
         if stored_hash.lower() != expected_fp.lower():
             issues.append(
@@ -72,28 +73,30 @@ def repair_recommendations(
     *,
     db_discrepancies: list[dict[str, Any]] | None,
     fingerprint_hash_report: dict[str, Any] | None,
+    lang: str | None = None,
 ) -> list[str]:
     """
     Mensajes de alto nivel para auditoría (sin SQL automático).
     """
+    t = get_translator(lang)
     out: list[str] = []
     d = db_discrepancies or []
     if d:
         out.append(
-            f"Se detectaron {len(d)} discrepancia(s) en hash_factura / hash_anterior "
-            "respecto al recálculo. Revisar facturas listadas y, si procede, "
-            "abrir incidencia con copia de seguridad de la BD antes de cualquier corrección manual."
+            t("Audit: {n} discrepancy(ies) in hash_factura / hash_anterior vs recalculation. Review listed invoices and open an incident with a DB backup before any manual fix.").format(
+                n=len(d)
+            )
         )
     fh = fingerprint_hash_report or {}
     if not fh.get("ok"):
         for issue in fh.get("issues") or []:
             if issue.get("tipo") == "previous_fingerprint":
                 out.append(
-                    "Cadena de `previous_fingerprint`: posible factura insertada fuera de orden "
-                    "o rollback parcial. Revisar secuencia `numero_secuencial` y bloqueos "
-                    "(`bloqueado = true`) por empresa."
+                    t(
+                        "Audit: previous_fingerprint chain — possible out-of-order insert or partial rollback. Review numero_secuencial sequence and locks (bloqueado = true) per company."
+                    )
                 )
                 break
     if not out:
-        out.append("Sin anomalías detectadas en los informes recibidos.")
+        out.append(t("Audit: no anomalies detected in the supplied reports."))
     return out

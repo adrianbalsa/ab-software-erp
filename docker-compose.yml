@@ -45,6 +45,7 @@ services:
       Maps_API_KEY: ${Maps_API_KEY:-}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      SECURITY_CONTACT_EMAIL: ${SECURITY_CONTACT_EMAIL:-security@ablogistics-os.com}
     volumes:
       - backend_logs:/app/logs
       - reports_tmp:/tmp/reports

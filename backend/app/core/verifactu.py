@@ -1,47 +1,34 @@
 from __future__ import annotations
 
-import hashlib
 from typing import Any
 
-from app.core.fiscal_logic import fiscal_amount_string_two_decimals
+from app.core.i18n import get_translator
+from app.core.verifactu_hashing import (
+    VERIFACTU_INVOICE_GENESIS_HASH,
+    VerifactuCadena,
+    generar_hash_factura_oficial,
+)
 
-GENESIS_HASH = "0" * 64
+GENESIS_HASH = VERIFACTU_INVOICE_GENESIS_HASH
 
-
-def generate_invoice_hash(invoice_data: dict[str, Any], previous_hash: str) -> str:
-    """
-    Encadenamiento de integridad para factura (SHA-256).
-
-    Cadena base:
-    ID Factura + Fecha/Hora + Emisor + Receptor + Importe Total + Hash previo
-    """
-    factura_id = str(
-        invoice_data.get("factura_id")
-        or invoice_data.get("num_factura")
-        or invoice_data.get("numero_factura")
-        or ""
-    ).strip()
-    fecha_hora = str(
-        invoice_data.get("fecha_hora")
-        or invoice_data.get("fecha_emision")
-        or invoice_data.get("fecha")
-        or ""
-    ).strip()
-    emisor = str(invoice_data.get("emisor") or invoice_data.get("nif_emisor") or "").strip()
-    receptor = str(invoice_data.get("receptor") or invoice_data.get("nif_receptor") or "").strip()
-    total_norm = fiscal_amount_string_two_decimals(
-        invoice_data.get("importe_total") or invoice_data.get("total_factura")
-    )
-
-    prev = str(previous_hash or "").strip() or GENESIS_HASH
-    payload = f"{factura_id}|{fecha_hora}|{emisor}|{receptor}|{total_norm}|{prev}"
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+ERR_MISSING_FINGERPRINT = "VF_MISSING_FINGERPRINT_HASH"
+ERR_PREV_MISMATCH = "VF_PREVIOUS_FINGERPRINT_MISMATCH"
+ERR_HASH_MISMATCH = "VF_FINGERPRINT_HASH_MISMATCH"
 
 
-def verify_invoice_chain(invoices: list[dict[str, Any]]) -> dict[str, Any]:
+def verify_invoice_chain(
+    invoices: list[dict[str, Any]],
+    *,
+    lang: str | None = None,
+) -> dict[str, Any]:
     """
     Verifica integridad de cadena ``fingerprint_hash`` en orden cronológico.
+
+    Recalcula con ``generar_hash_factura_oficial`` (``HUELLA_FINGERPRINT``), misma lógica que al emitir.
+
+    ``error`` / ``error_message`` dependen de ``lang`` (``es`` | ``en``). ``error_code`` es estable para automatismos.
     """
+    t = get_translator(lang)
     previous = GENESIS_HASH
     total_verified = 0
 
@@ -50,36 +37,46 @@ def verify_invoice_chain(invoices: list[dict[str, Any]]) -> dict[str, Any]:
         stored_hash = str(invoice.get("fingerprint_hash") or "").strip()
         stored_prev = str(invoice.get("previous_fingerprint") or "").strip() or GENESIS_HASH
         if not stored_hash:
+            msg = t("VeriFactu chain: invoice has no fingerprint_hash")
             return {
                 "is_valid": False,
                 "total_verified": total_verified,
                 "factura_id": factura_id,
-                "error": "Factura sin fingerprint_hash",
+                "error": msg,
+                "error_message": msg,
+                "error_code": ERR_MISSING_FINGERPRINT,
             }
         if stored_prev != previous:
+            msg = t("VeriFactu chain: previous_fingerprint does not match prior link")
             return {
                 "is_valid": False,
                 "total_verified": total_verified,
                 "factura_id": factura_id,
-                "error": "previous_fingerprint no coincide con eslabón anterior",
+                "error": msg,
+                "error_message": msg,
+                "error_code": ERR_PREV_MISMATCH,
             }
 
-        recalculated = generate_invoice_hash(
+        recalculated = generar_hash_factura_oficial(
+            VerifactuCadena.HUELLA_FINGERPRINT,
             {
-                "factura_id": invoice.get("numero_factura") or invoice.get("num_factura") or factura_id,
-                "fecha_hora": invoice.get("fecha_emision"),
-                "emisor": invoice.get("nif_emisor"),
-                "receptor": invoice.get("nif_receptor") or invoice.get("nif_cliente"),
-                "importe_total": invoice.get("total_factura"),
+                "nif_emisor": invoice.get("nif_emisor"),
+                "nif_receptor": invoice.get("nif_receptor") or invoice.get("nif_cliente"),
+                "numero_factura": invoice.get("numero_factura") or invoice.get("num_factura") or factura_id,
+                "fecha_emision": invoice.get("fecha_emision"),
+                "total_factura": invoice.get("total_factura"),
             },
             previous,
         )
         if recalculated != stored_hash:
+            msg = t("VeriFactu chain: recalculated fingerprint_hash does not match stored value")
             return {
                 "is_valid": False,
                 "total_verified": total_verified,
                 "factura_id": factura_id,
-                "error": "fingerprint_hash recalculado no coincide",
+                "error": msg,
+                "error_message": msg,
+                "error_code": ERR_HASH_MISMATCH,
             }
 
         previous = stored_hash
@@ -90,4 +87,6 @@ def verify_invoice_chain(invoices: list[dict[str, Any]]) -> dict[str, Any]:
         "total_verified": total_verified,
         "factura_id": None,
         "error": None,
+        "error_message": None,
+        "error_code": None,
     }

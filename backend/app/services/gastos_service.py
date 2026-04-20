@@ -15,7 +15,7 @@ class GastosService:
     Migrado desde `views/gastos_view.py`.
 
     - Persiste gastos en `gastos` con `empresa_id` siempre inyectado por la capa API (JWT).
-    - Subida de evidencia al bucket `tickets`.
+    - Subida de evidencia al bucket `tickets-gastos`.
     - OCR: Azure Document Intelligence (`prebuilt-invoice`) vía `OCRService`.
     """
 
@@ -77,7 +77,7 @@ class GastosService:
         if evidencia_bytes is not None and evidencia_filename:
             path = f"{eid}/{int(time.time())}_{evidencia_filename}"
             await self._db.storage_upload(
-                bucket="tickets",
+                bucket="tickets-gastos",
                 path=path,
                 content=evidencia_bytes,
                 content_type=evidencia_content_type,
@@ -97,6 +97,8 @@ class GastosService:
             "moneda": gasto_in.moneda,
             "evidencia_url": evidencia_url,
         }
+        if gasto_in.porte_id is not None:
+            payload["porte_id"] = str(gasto_in.porte_id)
         if gasto_in.nif_proveedor is not None:
             payload["nif_proveedor"] = gasto_in.nif_proveedor
         if gasto_in.iva is not None:
@@ -104,7 +106,15 @@ class GastosService:
         if total_eur is not None:
             payload["total_eur"] = float(total_eur)
 
-        res: Any = await self._db.execute(self._db.table("gastos").insert(payload))
+        try:
+            res: Any = await self._db.execute(self._db.table("gastos").insert(payload))
+        except Exception as exc:
+            # Compatibilidad con entornos donde la migración `gastos.porte_id` aún no se aplicó.
+            if "porte_id" in payload and "porte_id" in str(exc).lower():
+                payload.pop("porte_id", None)
+                res = await self._db.execute(self._db.table("gastos").insert(payload))
+            else:
+                raise
         rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
         if not rows:
             raise RuntimeError("Supabase insert gasto returned no rows")

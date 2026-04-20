@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
+from typing import AsyncIterator
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -62,14 +64,15 @@ from app.api.v1 import portes as portes_v1
 from app.api.v1 import routes_optimizer as routes_optimizer_v1
 from app.api.v1 import admin as admin_v1
 from app.api.v1 import admin_compliance as admin_compliance_v1
+from app.api.v1 import public_compliance as public_compliance_v1
 from app.api.v1 import stripe
-from app.api.v1 import stripe_webhook as stripe_webhook_v1
+from app.api.v1.webhooks import stripe as stripe_webhook_v1
 from app.api.v1 import treasury as treasury_v1
 from app.api.v1 import verifactu as verifactu_v1
-from app.api.v1 import webhooks as webhooks_v1
+from app.api.v1.webhooks import b2b as webhooks_v1
 from app.api.v1 import webhooks_gocardless as webhooks_gocardless_v1
-from app.core.config import ConfigError, get_settings
-from app.core.arq_queue import close_arq_redis_pool
+from app.core.config import ConfigError, Settings, get_settings
+from app.core.job_queue import close_arq_redis_pool
 from app.core.rate_limit import (
     SkipOptionsSlowAPIMiddleware,
     limiter,
@@ -77,6 +80,7 @@ from app.core.rate_limit import (
     warmup_rate_limit_backend,
 )
 from app.middleware.health_bypass import HealthCheckBypassMiddleware
+from app.middleware.request_id import RequestIdMiddleware
 from app.middleware.login_debug_print import LoginDebugPrintMiddleware
 from app.middleware.json_access_log import JsonAccessLogMiddleware
 from app.middleware.audit_log_middleware import AuditLogMiddleware
@@ -94,25 +98,50 @@ from app.openapi_config import (
 )
 from app.services.alert_service import alert_service, notify_critical_error, short_traceback_from_exc
 
-SENTRY_DSN = (os.getenv("SENTRY_DSN") or "").strip()
-if SENTRY_DSN:
+
+def _init_sentry(settings: Settings) -> None:
+    """Inicializa Sentry tras ``get_settings()`` (única fuente del DSN)."""
+    dsn = (settings.SENTRY_DSN or "").strip()
+    if not dsn:
+        return
     import sentry_sdk
     from sentry_sdk.integrations.fastapi import FastApiIntegration
     from sentry_sdk.integrations.starlette import StarletteIntegration
 
-    _sentry_environment = (os.getenv("ENVIRONMENT") or "development").strip().lower()
-    _sentry_sample_rate = 0.1 if _sentry_environment == "production" else 1.0
+    env = str(getattr(settings, "ENVIRONMENT", "development")).strip().lower()
+    sample = 0.1 if env == "production" else 1.0
+    traces_raw = (os.getenv("SENTRY_TRACES_SAMPLE_RATE") or "").strip()
+    if traces_raw:
+        try:
+            sample = float(traces_raw)
+        except ValueError:
+            pass
+    release = (
+        (os.getenv("APP_RELEASE") or "").strip()
+        or (os.getenv("RAILWAY_GIT_COMMIT_SHA") or "").strip()
+        or (os.getenv("VERCEL_GIT_COMMIT_SHA") or "").strip()
+        or None
+    )
 
     sentry_sdk.init(
-        dsn=SENTRY_DSN,
-        environment=_sentry_environment,
+        dsn=dsn,
+        environment=env,
+        release=release,
         integrations=[
             StarletteIntegration(transaction_style="endpoint"),
             FastApiIntegration(transaction_style="endpoint"),
         ],
-        traces_sample_rate=_sentry_sample_rate,
-        profiles_sample_rate=_sentry_sample_rate,
+        traces_sample_rate=sample,
+        profiles_sample_rate=min(sample, 1.0),
+        send_default_pii=False,
     )
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    await warmup_rate_limit_backend()
+    yield
+    await close_arq_redis_pool()
 
 
 def create_app() -> FastAPI:
@@ -120,6 +149,7 @@ def create_app() -> FastAPI:
 
     configure_app_logging()
     settings = get_settings()
+    _init_sentry(settings)
     # Defensa en profundidad: en producción ``get_settings()`` ya exige ``DATABASE_URL`` explícita.
     if settings.ENVIRONMENT == "production" and not (settings.DATABASE_URL or "").strip():
         raise ConfigError(
@@ -137,6 +167,7 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
         swagger_ui_parameters={"displayRequestDuration": True, "syntaxHighlight.theme": "monokai"},
         debug=settings.DEBUG,
+        lifespan=_lifespan,
     )
     attach_custom_openapi(app)
     app.state.limiter = limiter
@@ -151,6 +182,7 @@ def create_app() -> FastAPI:
         https_only=settings.COOKIE_SECURE,
     )
     app.add_middleware(JsonAccessLogMiddleware)
+    app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         SecurityHeadersMiddleware,
         enable_hsts=settings.ENVIRONMENT == "production",
@@ -177,7 +209,7 @@ def create_app() -> FastAPI:
     # Debe ejecutarse antes que el resto de middlewares de rate limit para envolver
     # envíos fiscales AEAT (ruta /api/v1/verifactu y finalizaciones de factura).
     app.add_middleware(FiscalVerifactuRateLimitMiddleware)
-    # Lista explícita (sin "*"); GET /health se atiende antes vía HealthCheckBypassMiddleware.
+    # Lista explícita (sin "*"); GET /live (liveness) antes vía HealthCheckBypassMiddleware.
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=list(settings.ALLOWED_HOSTS),
@@ -190,14 +222,6 @@ def create_app() -> FastAPI:
     app.add_middleware(AuditLogMiddleware)
     # Debe ser el más externo: responde /health antes de TrustedHost y middlewares tenant/RBAC.
     app.add_middleware(HealthCheckBypassMiddleware)
-
-    @app.on_event("startup")
-    async def warmup_rate_limit_redis_connection() -> None:
-        await warmup_rate_limit_backend()
-
-    @app.on_event("shutdown")
-    async def close_async_redis_pools() -> None:
-        await close_arq_redis_pool()
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_login_debug(request: Request, exc: RequestValidationError):
@@ -235,10 +259,10 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
     @app.get("/health", tags=["Salud"], include_in_schema=True)
-    async def health() -> JSONResponse:
+    async def health(request: Request) -> JSONResponse:
         """
-        Healthcheck avanzado para Docker/orquestación.
-        Verifica conectividad de Supabase (REST) y Redis.
+        Readiness con dependencias críticas (Supabase REST + Redis obligatorio).
+        Liveness barato sin TrustedHost: ``GET /live``.
         """
         from app.core.health_checks import _check_dict, check_redis_ping, check_supabase_rest
         from app.db.supabase import get_supabase
@@ -270,16 +294,18 @@ def create_app() -> FastAPI:
                 message="Healthcheck failed: one or more critical dependencies are down.",
                 details={"endpoint": "/health", "status_code": status_code, "checks": checks},
             )
-        return JSONResponse(
-            status_code=status_code,
-            content={
-                "status": "healthy" if healthy else "unhealthy",
-                "checks": checks,
-            },
-        )
+        payload: dict[str, object] = {
+            "status": "healthy" if healthy else "unhealthy",
+            "checks": checks,
+        }
+        rid = getattr(request.state, "request_id", None)
+        if rid:
+            payload["request_id"] = rid
+        return JSONResponse(status_code=status_code, content=payload)
 
-    # Salud en la raíz (Railway: GET /health, GET /ready).
+    # Salud en la raíz (Railway healthcheck: GET /live; readiness: GET /health, GET /ready).
     app.include_router(health_router.router)
+    app.include_router(public_compliance_v1.router)
     app.include_router(utils.router, tags=["Salud"])
     app.include_router(payments.router, prefix="/payments", tags=["Pagos"])
     app.include_router(auth.router, prefix="/auth", tags=["Autenticación"])
@@ -297,6 +323,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(facturacion.router, prefix="/facturacion", tags=["Facturación"])
     app.include_router(gastos.router, prefix="/gastos", tags=["Gastos"])
+    app.include_router(gastos.router, prefix="/api/v1/gastos", tags=["Gastos"])
     app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
     app.include_router(empresa.router, prefix="/empresa", tags=["Empresa"])
     app.include_router(finance.router, prefix="/finance", tags=["Finanzas"])

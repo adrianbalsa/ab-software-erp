@@ -46,7 +46,8 @@ if _ENV_FILE.exists():
             os.environ[_k] = _v
 
 from app.core.math_engine import negate_fiat_for_rectificativa
-from app.core.verifactu import GENESIS_HASH, generate_invoice_hash
+from app.core.verifactu import GENESIS_HASH
+from app.core.verifactu_hashing import VerifactuCadena, generar_hash_factura_oficial
 from app.db.session import get_engine, get_session_factory
 from app.models.vehiculo import EngineClass, FuelType, NormativaEuro
 _NORM_TO_ENGINE: dict[str, str] = {
@@ -398,12 +399,12 @@ def _invoice_hash_chain(
         total = _q2(base + iva)
         fecha = spec["fecha_emision"]
         num = spec["num_factura"]
-        h = generate_invoice_hash(
+        h = generar_hash_factura_oficial(
+            VerifactuCadena.HUELLA_EMISION,
             {
-                "numero_factura": num,
+                "num_factura": num,
                 "fecha_emision": fecha,
                 "nif_emisor": nif_emisor,
-                "nif_receptor": spec["nif_receptor"],
                 "total_factura": float(total),
             },
             chain_prev,
@@ -511,13 +512,13 @@ def _insert_r1_pair(
     if not str(orig_row.get("hash_registro") or orig_row.get("hash_factura") or "").strip():
         raise RuntimeError("F1 original sin hash_registro; no se puede generar R1 demo")
 
-    # Cadena: mismo `generate_invoice_hash` que F1 (app.core.verifactu), encadenado al último registro.
-    h_chain = generate_invoice_hash(
+    # Cadena: misma huella oficial que emisión F1/R1 (``generar_hash_factura_oficial`` HUELLA_EMISION).
+    h_chain = generar_hash_factura_oficial(
+        VerifactuCadena.HUELLA_EMISION,
         {
-            "numero_factura": num_r,
+            "num_factura": num_r,
             "fecha_emision": fecha_iso,
             "nif_emisor": nif_emisor,
-            "nif_receptor": nif_cliente,
             "total_factura": float(total_r),
         },
         hash_prev_chain,

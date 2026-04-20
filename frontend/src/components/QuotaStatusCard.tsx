@@ -1,14 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
+import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
+import { useRole } from "@/hooks/useRole";
 import { useEmpresaQuota } from "@/hooks/useEmpresaQuota";
+import { createStripeBillingPortalUrl, isOwnerLike, type AppRbacRole } from "@/lib/api";
+
+function canOpenStripePortal(role: AppRbacRole): boolean {
+  return isOwnerLike(role) || role === "developer";
+}
 
 function normalizePlan(raw: string): "starter" | "pro" | "enterprise" {
   const s = (raw || "").trim().toLowerCase();
   if (s === "pro" || s === "professional") return "pro";
-  if (s === "enterprise" || s === "ent" || s === "unlimited")
-    return "enterprise";
+  if (s === "enterprise" || s === "ent" || s === "unlimited") return "enterprise";
   return "starter";
 }
 
@@ -19,7 +26,27 @@ function barToneClasses(pct: number): string {
 }
 
 export function QuotaStatusCard() {
+  const { catalog } = useOptionalLocaleCatalog();
+  const q = catalog.quota;
+  const { role } = useRole();
   const { data, loading, error } = useEmpresaQuota();
+  const [portalBusy, setPortalBusy] = useState(false);
+  const [portalErr, setPortalErr] = useState<string | null>(null);
+
+  const showBillingPortal = canOpenStripePortal(role);
+
+  async function openStripePortal() {
+    setPortalErr(null);
+    setPortalBusy(true);
+    try {
+      const url = await createStripeBillingPortalUrl();
+      window.location.assign(url);
+    } catch (e) {
+      setPortalErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPortalBusy(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -33,7 +60,7 @@ export function QuotaStatusCard() {
   if (error || !data) {
     return (
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-[11px] text-zinc-500">
-        {error ? `Cuota: ${error}` : "Sin datos de cuota"}
+        {error ? `${q.quotaPrefix} ${error}` : q.noData}
       </div>
     );
   }
@@ -42,25 +69,18 @@ export function QuotaStatusCard() {
   const used = data.portes_actuales ?? 0;
   const limit = data.limite_portes;
 
-  const pctFinite =
-    limit != null && limit > 0
-      ? Math.min(100, (used / limit) * 100)
-      : null;
+  const pctFinite = limit != null && limit > 0 ? Math.min(100, (used / limit) * 100) : null;
 
   const barWidth = pctFinite != null ? pctFinite : 100;
-  const barClasses =
-    pctFinite != null
-      ? barToneClasses(pctFinite)
-      : "bg-emerald-500/90";
+  const barClasses = pctFinite != null ? barToneClasses(pctFinite) : "bg-emerald-500/90";
 
   let message: string;
   if (plan === "starter") {
-    message = `Estás usando ${used} de 5 vehículos. Pásate a PRO para gestionar hasta 25.`;
+    message = q.starterMsg.replace("{used}", String(used));
   } else if (plan === "pro") {
-    message =
-      "Módulo ESG bloqueado. Sube a ENTERPRISE para certificar tu huella de carbono.";
+    message = q.proMsg;
   } else {
-    message = `Plan Enterprise · ${used} vehículo${used === 1 ? "" : "s"} registrados (sin límite).`;
+    message = q.enterpriseMsg.replace("{used}", String(used));
   }
 
   const upgradeHref =
@@ -73,9 +93,7 @@ export function QuotaStatusCard() {
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-3 shadow-inner">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-          Cuota flota
-        </span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{q.fleetQuota}</span>
         {limit != null ? (
           <span className="text-[11px] tabular-nums text-zinc-400">
             {used}/{limit}
@@ -96,9 +114,28 @@ export function QuotaStatusCard() {
           href={upgradeHref}
           className="block w-full rounded-lg border border-emerald-500/40 bg-emerald-600 py-2 text-center text-xs font-semibold text-zinc-950 transition-colors hover:bg-emerald-500"
         >
-          Mejorar Plan
+          {q.upgrade}
         </Link>
       ) : null}
+      {showBillingPortal ? (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => void openStripePortal()}
+            disabled={portalBusy}
+            className="block w-full rounded-lg border border-zinc-600 bg-zinc-800/80 py-2 text-center text-xs font-semibold text-zinc-100 transition-colors hover:border-zinc-500 hover:bg-zinc-800 disabled:opacity-50"
+          >
+            {portalBusy ? q.manageSubscriptionBusy : q.manageSubscription}
+          </button>
+          {portalErr ? <p className="mt-1 text-center text-[10px] text-rose-400/90">{portalErr}</p> : null}
+        </div>
+      ) : null}
+      <Link
+        href="/help/billing"
+        className="mt-2 block text-center text-[11px] font-medium text-emerald-500/90 underline-offset-2 hover:text-emerald-400 hover:underline"
+      >
+        {q.helpQuotaBilling}
+      </Link>
     </div>
   );
 }

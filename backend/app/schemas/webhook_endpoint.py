@@ -93,5 +93,9 @@ class WebhookEventCatalogOut(BaseModel):
                 "value": WebhookEventType.ESG_CERTIFICATE_GENERATED.value,
                 "description": "Certificado / informe ESG mensual generado.",
             },
+            {
+                "value": WebhookEventType.ANALYTICS_PROFIT_MARGIN_SNAPSHOT.value,
+                "description": "Serie agregada de margen / gastos (CSV o JSON) para cuadros de mando externos.",
+            },
         ]
     )

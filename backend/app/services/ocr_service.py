@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import datetime
 import logging
-import os
 import re
 from typing import Any
 
 from azure.ai.formrecognizer.aio import DocumentAnalysisClient
 from azure.core.credentials import AzureKeyCredential
 from fastapi import HTTPException
+
+from app.services.secret_manager_service import get_secret_manager
 
 logger = logging.getLogger(__name__)
 
@@ -84,8 +85,9 @@ class OCRService:
     """
 
     def __init__(self) -> None:
-        self.endpoint = os.getenv("AZURE_ENDPOINT")
-        self.key = os.getenv("AZURE_KEY")
+        mgr = get_secret_manager()
+        self.endpoint = mgr.get_azure_document_intelligence_endpoint()
+        self.key = mgr.get_azure_document_intelligence_key()
 
     def _get_client(self) -> DocumentAnalysisClient:
         if not self.endpoint or not self.key:
@@ -170,6 +172,8 @@ class OCRService:
         # InvoiceTotal (fallback AmountDue) → total + moneda — Azure: InvoiceTotal
         total_field = fields.get("InvoiceTotal") or fields.get("AmountDue")
         total_val, moneda = _parse_currency_field(total_field)
+        subtotal_field = fields.get("SubTotal")
+        subtotal_val, _ = _parse_currency_field(subtotal_field)
 
         if total_val <= 0.0 and total_field is not None:
             try:
@@ -199,6 +203,14 @@ class OCRService:
         if not moneda or moneda == "":
             moneda = "EUR"
 
+        base_imponible: float | None = None
+        if subtotal_val > 0.0:
+            base_imponible = round(float(subtotal_val), 2)
+        elif total_val > 0.0:
+            base_candidate = float(total_val) - float(iva_val or 0.0)
+            if base_candidate > 0.0:
+                base_imponible = round(base_candidate, 2)
+
         concepto = "GASTO LOGÍSTICA"
         items_for_desc = fields.get("Items")
         if items_for_desc and items_for_desc.value:
@@ -226,6 +238,7 @@ class OCRService:
                 fields.get("InvoiceDate"),
                 total_tax_field,
                 total_field,
+                subtotal_field,
             ]
         )
         needs_review = conf is not None and conf < 0.90
@@ -236,6 +249,7 @@ class OCRService:
             "nif_proveedor": nif_out,
             "total": round(float(total_val), 2) if total_val and total_val > 0 else None,
             "iva": round(float(iva_val), 2) if iva_val and iva_val > 0 else None,
+            "base_imponible": base_imponible,
             "moneda": moneda,
             "concepto": concepto.upper().strip()[:200] if concepto else None,
             "ocr_confidence": conf,

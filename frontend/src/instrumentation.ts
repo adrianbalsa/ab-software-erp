@@ -13,6 +13,11 @@ export async function register() {
   Sentry.init({
     dsn,
     environment: process.env.VERCEL_ENV || process.env.NODE_ENV,
+    release:
+      process.env.APP_RELEASE ||
+      process.env.VERCEL_GIT_COMMIT_SHA ||
+      process.env.RAILWAY_GIT_COMMIT_SHA ||
+      undefined,
     tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? 0.1),
   });
 }

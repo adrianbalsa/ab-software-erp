@@ -25,7 +25,8 @@ if ENV_FILE.exists():
         if k and v is not None and not os.getenv(k):
             os.environ[k] = v
 
-from app.core.verifactu import GENESIS_HASH, generate_invoice_hash
+from app.core.verifactu import GENESIS_HASH
+from app.core.verifactu_hashing import VerifactuCadena, generar_hash_factura_oficial
 from app.db.supabase import SupabaseAsync, get_supabase
 from app.services.finance_service import FinanceService
 from app.services.maps_service import MapsService
@@ -271,12 +272,12 @@ def _build_invoice_rows(
         total = _q2(base + iva)
         fecha = (date.today() - timedelta(days=rng.randint(0, 180))).isoformat()
         num = f"{DEMO_EMPRESA_CODE}-{date.today().year}-{seq:06d}"
-        h = generate_invoice_hash(
+        h = generar_hash_factura_oficial(
+            VerifactuCadena.HUELLA_EMISION,
             {
-                "numero_factura": num,
+                "num_factura": num,
                 "fecha_emision": fecha,
                 "nif_emisor": nif_emisor,
-                "nif_receptor": "B12345678",
                 "total_factura": float(total),
             },
             chain_prev,

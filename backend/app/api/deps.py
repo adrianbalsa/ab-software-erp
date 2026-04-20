@@ -39,6 +39,7 @@ from app.services.portes_service import PortesService
 from app.services.presupuestos_service import PresupuestosService
 from app.services.report_service import ReportService
 from app.services.bank_service import BankService
+from app.services.banking_service import BankingService
 from app.services.banking_orchestrator import BankingOrchestratorService
 from app.services.matching_service import MatchingService
 from app.services.payment_service import PaymentService
@@ -53,8 +54,24 @@ from app.services.ai_service import LogisAdvisorService
 from app.services.esg_audit_service import EsgAuditService
 from app.services.audit_logs_service import AuditLogsService
 from app.services.bi_service import BiService
+from app.services.geo_activity_service import GeoActivityService
 
 _deps_log = logging.getLogger(__name__)
+
+# Slugs de plan SaaS emitidos a veces en ``app_role`` / ``user_role`` del JWT; no deben
+# forzar igualdad con ``profiles.role`` (el rol operativo viene del perfil en BD).
+_JWT_APP_ROLE_SAAS_PLAN_SLUGS: frozenset[str] = frozenset(
+    {
+        "starter",
+        "start",
+        "basic",
+        "pro",
+        "professional",
+        "enterprise",
+        "ent",
+        "unlimited",
+    },
+)
 
 
 async def get_supabase(
@@ -195,6 +212,10 @@ async def get_bi_service(db: SupabaseAsync = Depends(get_db)) -> BiService:
     return BiService(db)
 
 
+async def get_geo_activity_service(db: SupabaseAsync = Depends(get_db)) -> GeoActivityService:
+    return GeoActivityService(db)
+
+
 async def get_logis_advisor_service(
     finance: FinanceService = Depends(get_finance_service),
     facturas: FacturasService = Depends(get_facturas_service),
@@ -213,12 +234,19 @@ async def get_bank_service(db: SupabaseAsync = Depends(get_db)) -> BankService:
     return BankService(db)
 
 
+async def get_banking_service(db: SupabaseAsync = Depends(get_db)) -> BankingService:
+    return BankingService(db)
+
+
 async def get_matching_service(db: SupabaseAsync = Depends(get_db)) -> MatchingService:
     return MatchingService(db)
 
 
-async def get_reconciliation_service(db: SupabaseAsync = Depends(get_db)) -> ReconciliationService:
-    return ReconciliationService(db)
+async def get_reconciliation_service(
+    db: SupabaseAsync = Depends(get_db),
+    advisor: LogisAdvisorService = Depends(get_logis_advisor_service),
+) -> ReconciliationService:
+    return ReconciliationService(db, logis_advisor=advisor)
 
 
 async def get_banking_orchestrator(
@@ -303,12 +331,14 @@ async def get_current_user(
 
     role_claim_for_match = payload.get("app_role") or payload.get("user_role")
     if role_claim_for_match is not None and str(role_claim_for_match).strip():
-        try:
-            expected_role = normalize_user_role(str(role_claim_for_match))
-        except Exception:
-            raise credentials_exc
-        if user_out.role != expected_role:
-            raise credentials_exc
+        raw_claim = str(role_claim_for_match).strip().lower()
+        if raw_claim not in _JWT_APP_ROLE_SAAS_PLAN_SLUGS:
+            try:
+                expected_role = normalize_user_role(str(role_claim_for_match))
+            except Exception:
+                raise credentials_exc
+            if user_out.role != expected_role:
+                raise credentials_exc
 
     await auth_service.ensure_empresa_context(empresa_id=user_out.empresa_id)
     await auth_service.ensure_rbac_context(user=user_out)

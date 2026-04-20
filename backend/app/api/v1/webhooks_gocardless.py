@@ -12,9 +12,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, 
 from starlette.responses import Response
 
 from app.api import deps
-from app.core.config import get_settings
 from app.db.supabase import SupabaseAsync
 from app.services.reconciliation_service import ReconciliationEngine
+from app.services.webhook_idempotency import claim_webhook_event
 
 router = APIRouter()
 _log = logging.getLogger(__name__)
@@ -225,23 +225,35 @@ async def _process_gocardless_webhook(*, db: SupabaseAsync, payload: dict[str, A
     for raw in events:
         if not isinstance(raw, dict):
             continue
+        event_type = _extract_event_type(raw)
+        ext_id = str(raw.get("id") or "").strip()
         try:
-            event_type = _extract_event_type(raw)
-            await db.execute(
-                db.table("webhook_events").insert(
-                    {
-                        "provider": "gocardless",
-                        "event_type": event_type or "unknown",
-                        "payload": raw,
-                        "status": "PENDING",
-                        "error_log": None,
-                    }
+            if ext_id:
+                first_delivery = await claim_webhook_event(
+                    db,
+                    provider="gocardless",
+                    external_event_id=ext_id,
+                    event_type=event_type or "unknown",
+                    payload=raw,
+                    status="PENDING",
                 )
-            )
+                if not first_delivery:
+                    continue
+            else:
+                await db.execute(
+                    db.table("webhook_events").insert(
+                        {
+                            "provider": "gocardless",
+                            "event_type": event_type or "unknown",
+                            "payload": raw,
+                            "status": "PENDING",
+                            "error_log": None,
+                        }
+                    )
+                )
         except Exception:
             _log.exception("gocardless webhook: no se pudo encolar webhook_events")
         try:
-            event_type = _extract_event_type(raw)
             if event_type == "payments.confirmed":
                 await _mark_factura_as_paid_and_audit(db=db, event=raw, body_digest=body_digest)
                 continue
@@ -266,7 +278,9 @@ async def receive_gocardless_webhook(
     db: SupabaseAsync = Depends(deps.get_db_admin),
     webhook_signature: str | None = Header(default=None, alias="Webhook-Signature"),
 ) -> Response:
-    secret = get_settings().GOCARDLESS_WEBHOOK_SECRET
+    from app.services.secret_manager_service import get_secret_manager
+
+    secret = get_secret_manager().get_gocardless_webhook_secret()
     if not secret:
         raise HTTPException(status_code=503, detail="GoCardless webhook no configurado en servidor")
 

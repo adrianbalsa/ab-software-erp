@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Bar,
   CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
   ResponsiveContainer,
   Scatter,
   ScatterChart,
@@ -15,9 +19,12 @@ import type { ScatterShapeProps } from "recharts/types/util/ScatterUtils";
 import { CalendarClock, CalendarDays, Gauge, Info, Leaf, Loader2, Target, TrendingUp, Zap } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
+import { ESGImpactCard } from "@/components/bi/ESGImpactCard";
+import { MarginWaterfallChart } from "@/components/bi/MarginWaterfallChart";
 import { RoleGuard } from "@/components/auth/RoleGuard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { useChartPerformance } from "@/hooks/useChartPerformance";
 import {
   api,
@@ -28,6 +35,7 @@ import {
   type BiProfitabilityCharts,
   type BiProfitabilityPoint,
   type BiTreemapNode,
+  type ProfitMarginAnalytics,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -454,15 +462,23 @@ export default function BiDashboardPage() {
   const [dateRange, setDateRange] = useState(defaultBiDateRange);
   const rangeKey = `${toDateOnlyLocal(dateRange.from)}|${toDateOnlyLocal(dateRange.to)}`;
 
+  const [granularity, setGranularity] = useState<"month" | "week">("month");
+  const [vehiculoFilter, setVehiculoFilter] = useState("");
+  const [clienteFilter, setClienteFilter] = useState("");
+
   const [summary, setSummary] = useState<BiDashboardSummary | null>(null);
   const [profit, setProfit] = useState<BiProfitabilityCharts | null>(null);
   const [esg, setEsg] = useState<BiEsgImpactCharts | null>(null);
   const [advancedMetrics, setAdvancedMetrics] = useState<AdvancedMetricsResponse | null>(null);
+  const [profitMargin, setProfitMargin] = useState<ProfitMarginAnalytics | null>(null);
   const [loadSummary, setLoadSummary] = useState(true);
   const [loadProfit, setLoadProfit] = useState(true);
   const [loadEsg, setLoadEsg] = useState(true);
+  const [loadPm, setLoadPm] = useState(true);
   const [isSyncing, setIsSyncing] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  const pmKey = `${rangeKey}|${granularity}|${vehiculoFilter.trim()}|${clienteFilter.trim()}`;
 
   useEffect(() => {
     let cancelled = false;
@@ -473,19 +489,30 @@ export default function BiDashboardPage() {
     setLoadSummary(true);
     setLoadProfit(true);
     setLoadEsg(true);
+    setLoadPm(true);
     void (async () => {
       try {
-        const [s, p, e, adv] = await Promise.all([
+        const [s, p, e, adv, pm] = await Promise.all([
           api.bi.summary(from, to),
           api.bi.profitability(from, to),
           api.bi.esgImpact(from, to),
           getAdvancedMetrics().catch(() => null),
+          api.analytics
+            .profitMargin({
+              from,
+              to,
+              granularity,
+              vehiculo_id: vehiculoFilter.trim() || undefined,
+              cliente_id: clienteFilter.trim() || undefined,
+            })
+            .catch(() => null),
         ]);
         if (!cancelled) {
           setSummary(s);
           setProfit(p);
           setEsg(e);
           setAdvancedMetrics(adv);
+          setProfitMargin(pm);
         }
       } catch (e: unknown) {
         if (!cancelled) setErr(e instanceof Error ? e.message : "Error al cargar datos BI");
@@ -494,6 +521,7 @@ export default function BiDashboardPage() {
           setLoadSummary(false);
           setLoadProfit(false);
           setLoadEsg(false);
+          setLoadPm(false);
           setIsSyncing(false);
         }
       }
@@ -501,7 +529,7 @@ export default function BiDashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [rangeKey]);
+  }, [pmKey]); // eslint-disable-line react-hooks/exhaustive-deps -- pmKey consolida rango y filtros
 
   const costeKm = profit?.coste_operativo_eur_km ?? 0.62;
 
@@ -513,6 +541,17 @@ export default function BiDashboardPage() {
       coste_operativo_eur_km: costeKm,
     }));
   }, [profit, costeKm]);
+
+  const marginTrendData = useMemo(() => {
+    if (!profitMargin?.series?.length) return [];
+    return profitMargin.series.map((r) => ({
+      label: r.period_label,
+      Ingresos: r.ingresos_totales,
+      Combustible: r.gastos_combustible,
+      Peajes: r.gastos_peajes,
+      Otros: r.gastos_otros,
+    }));
+  }, [profitMargin]);
 
   const { treemapLeaves, margenMin, margenMax } = useMemo(() => {
     const nodes = esg?.treemap_nodes ?? [];
@@ -556,6 +595,46 @@ export default function BiDashboardPage() {
             </div>
             <BiDateRangePicker dateRange={dateRange} onChange={setDateRange} isSyncing={isSyncing} />
           </header>
+
+          <div className="border-b border-zinc-800 bg-zinc-950/80 px-4 py-3 sm:px-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Filtros BI (portes / gastos)</p>
+            <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
+              <label className="flex min-w-[10rem] flex-col gap-1 text-xs text-zinc-400">
+                Agrupación temporal
+                <select
+                  className="h-9 rounded-lg border border-zinc-700 bg-zinc-950 px-2 text-sm text-zinc-100 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                  value={granularity}
+                  onChange={(e) => setGranularity(e.target.value === "week" ? "week" : "month")}
+                  aria-label="Agrupación temporal del margen"
+                >
+                  <option value="month">Mes</option>
+                  <option value="week">Semana (ISO)</option>
+                </select>
+              </label>
+              <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-xs text-zinc-400">
+                Vehículo (UUID flota)
+                <Input
+                  value={vehiculoFilter}
+                  onChange={(e) => setVehiculoFilter(e.target.value)}
+                  placeholder="Opcional"
+                  className="h-9 border-zinc-700 bg-zinc-950 text-zinc-100"
+                  aria-label="Filtrar por vehículo_id"
+                  autoComplete="off"
+                />
+              </label>
+              <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-xs text-zinc-400">
+                Cliente (UUID)
+                <Input
+                  value={clienteFilter}
+                  onChange={(e) => setClienteFilter(e.target.value)}
+                  placeholder="Opcional"
+                  className="h-9 border-zinc-700 bg-zinc-950 text-zinc-100"
+                  aria-label="Filtrar por cliente_id"
+                  autoComplete="off"
+                />
+              </label>
+            </div>
+          </div>
 
           <div className="mx-auto grid w-full max-w-[1600px] flex-1 gap-6 p-4 sm:p-6">
             {err ? (
@@ -678,6 +757,67 @@ export default function BiDashboardPage() {
                 </>
               )}
             </div>
+
+            {/* Margen + ESG (analytics API) */}
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              {loadPm ? (
+                <>
+                  <ChartSkeleton className="min-h-[280px]" />
+                  <ChartSkeleton className="min-h-[280px]" />
+                </>
+              ) : profitMargin ? (
+                <>
+                  <MarginWaterfallChart
+                    analytics={profitMargin}
+                    csvFilename={`profit-margin_${toDateOnlyLocal(dateRange.from)}_${toDateOnlyLocal(dateRange.to)}.csv`}
+                  />
+                  <ESGImpactCard esg={profitMargin.esg_month_over_month} />
+                </>
+              ) : (
+                <div className="col-span-full rounded-lg border border-dashed border-zinc-800 bg-zinc-900/30 px-4 py-6 text-sm text-zinc-500">
+                  No se pudieron cargar los agregados de margen (compruebe permisos o inténtelo de nuevo).
+                </div>
+              )}
+            </div>
+
+            {loadPm || !profitMargin?.series?.length ? null : (
+              <Card className="bunker-card overflow-hidden border-zinc-800">
+                <CardHeader>
+                  <CardTitle className="text-zinc-100">Serie temporal — ingresos vs gastos</CardTitle>
+                  <CardDescription className="text-zinc-400">
+                    Barras apiladas: combustible, peajes y otros. Línea: ingresos de portes (mismo rango y filtros).
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="h-[min(50vh,380px)] min-h-[280px] w-full p-2 sm:p-4">
+                  <div
+                    role="img"
+                    aria-label="Gráfico combinado de ingresos y gastos apilados por periodo"
+                    className="h-full w-full"
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={marginTrendData} margin={{ top: 8, right: 8, left: 4, bottom: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" vertical={false} />
+                        <XAxis dataKey="label" tick={{ fill: "#a1a1aa", fontSize: 10 }} interval={0} angle={-16} height={56} />
+                        <YAxis tick={{ fill: "#a1a1aa", fontSize: 11 }} tickFormatter={(v) => fmtEur(Number(v))} width={76} />
+                        <Tooltip formatter={(v) => fmtEur(Number(v ?? 0))} />
+                        <Legend wrapperStyle={{ color: "#d4d4d8", fontSize: 12 }} />
+                        <Bar dataKey="Combustible" stackId="g" fill="#f59e0b" isAnimationActive={!staticCharts} />
+                        <Bar dataKey="Peajes" stackId="g" fill="#38bdf8" isAnimationActive={!staticCharts} />
+                        <Bar dataKey="Otros" stackId="g" fill="#a78bfa" isAnimationActive={!staticCharts} />
+                        <Line
+                          type="monotone"
+                          dataKey="Ingresos"
+                          stroke="#10b981"
+                          strokeWidth={2}
+                          dot={false}
+                          isAnimationActive={!staticCharts}
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Scatter */}
             <Card className="bunker-card overflow-hidden border-zinc-800">

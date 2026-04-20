@@ -4,7 +4,8 @@ from datetime import date, datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from starlette.requests import Request
 from pydantic import EmailStr, TypeAdapter, ValidationError
 
 from app.api import deps
@@ -450,13 +451,21 @@ async def cliente_operational_detail(
     summary="Reenviar invitación de onboarding a cliente pendiente",
 )
 async def resend_onboarding_invite(
+    request: Request,
+    background_tasks: BackgroundTasks,
     cliente_id: UUID,
     _: UserOut = Depends(deps.require_role("owner")),
     current_user: UserOut = Depends(deps.bind_write_context),
     clientes_service: ClientesService = Depends(deps.get_clientes_service),
 ) -> dict[str, str]:
+    request.state.audit_payload_supplement = {
+        "delegado_segundo_plano": True,
+        "operacion": "onboarding_invite_resend",
+        "mensaje": "Email encolado para envío en segundo plano",
+    }
     return await clientes_service.resend_onboarding_invite(
         cliente_id=str(cliente_id),
         empresa_id=str(current_user.empresa_id),
+        background_tasks=background_tasks,
     )
 

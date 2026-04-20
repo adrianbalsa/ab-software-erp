@@ -144,7 +144,8 @@ class _MockPaymentService:
     async def create_mandate_setup_flow(self, cliente_id: str, success_url: str) -> dict[str, str]:
         assert cliente_id
         assert success_url
-        return {"redirect_url": "https://gocardless.example/redirect/setup-flow"}
+        assert "portal-cliente/facturas" in success_url
+        return {"redirect_url": "https://gocardless.example/redirect/setup-flow", "has_active_mandate": False}
 
 
 def _user(role: str, *, empresa_id: str, cliente_id: str | None = None) -> UserOut:
@@ -225,6 +226,8 @@ async def test_e2e_onboarding_and_credit_lock(client) -> None:
         body_risk = res_risk.json()
         assert "score" in body_risk
         assert "creditLimitEur" in body_risk
+        assert body_risk.get("riesgo_aceptado") is False
+        assert "mandato_activo" in body_risk
 
         # Paso 4: Cliente acepta riesgo.
         res_accept = await client.post("/api/v1/portal/onboarding/accept-risk")

@@ -4,26 +4,37 @@
 docker compose ps
 docker compose logs --tail 20
 docker compose restart backend redis
-curl -i http://localhost/api/health
+curl -fsS http://127.0.0.1:8000/live
+curl -fsS http://127.0.0.1:8000/health
 ```
 
 # Health Recovery Runbook (5 min)
 
-Concise guide to restore `AB Logistics OS` quickly when healthchecks fail.
+Guía breve para restaurar `AB Logistics OS` cuando fallan comprobaciones de salud. Marco DRP de alto nivel: `docs/operations/DISASTER_RECOVERY.md`.
 
 ## Scope
 
 - Stack: Docker Compose (`docker-compose.yml` / `docker-compose.prod.yml`)
-- Main health endpoint: `GET /health` (backend)
-- Target: recover service in under 5 minutes
+- **Liveness** (proceso vivo, sin TrustedHost): `GET /live` → `{"status":"ok","request_id":"..."}` y cabecera `X-Request-ID`
+- **Readiness** (dependencias críticas): `GET /health` → Supabase REST + Redis **obligatorio**
+- **Readiness profundo**: `GET /health/deep` → capa de negocio, Postgres opcional, Redis, PgBouncer TCP opcional
+- Objetivo: recuperar servicio en pocos minutos
 
-## Endpoint Specs (`/health`)
+## Endpoint Specs
 
-Expected response shape:
+### `GET /live`
+
+- Uso: balanceadores (Railway `healthcheckPath`, Docker si se prefiere liveness barato).
+- No comprueba Supabase ni Redis.
+
+### `GET /health`
+
+Respuesta esperada:
 
 ```json
 {
   "status": "healthy|unhealthy",
+  "request_id": "uuid-opaque",
   "checks": {
     "supabase": {
       "ok": true,
@@ -32,22 +43,26 @@ Expected response shape:
     },
     "redis": {
       "ok": true,
-      "detail": "redis_ping_ok|redis_error:...|redis_not_configured",
+      "detail": "redis_ping_ok|redis_error:...",
       "skipped": false
     }
   }
 }
 ```
 
+**Nota:** Redis no configurado se marca como **fallo** en este endpoint (readiness estricto para orquestación que exija colas/rate-limit compartidos).
+
 Fast check:
 
 ```bash
+curl -fsS http://127.0.0.1:8000/live
 curl -fsS http://127.0.0.1:8000/health
 ```
 
-Container-native check:
+Container-native:
 
 ```bash
+docker compose exec backend curl -fsS http://127.0.0.1:8000/live
 docker compose exec backend curl -fsS http://127.0.0.1:8000/health
 ```
 
@@ -55,15 +70,15 @@ docker compose exec backend curl -fsS http://127.0.0.1:8000/health
 
 ### P1 - Supabase Down (Critical)
 
-- Signal: `checks.supabase.ok=false`
-- Impact: core data/auth unavailable, AB Logistics OS effectively offline
-- Action: treat as full outage, recover immediately
+- Signal: `checks.supabase.ok=false` en `/health` o fallo equivalente en `/health/deep`
+- Impact: datos/auth no disponibles
+- Action: incidente mayor; ver `DISASTER_RECOVERY.md` §4.2
 
 ### P2 - Redis Down (High)
 
 - Signal: `checks.redis.ok=false`
-- Impact: session/cache/rate-limit degradation; API may remain partially functional
-- Action: restore Redis quickly to avoid cascading failures
+- Impact: colas, rate limit distribuido; API puede degradar
+- Action: restaurar Redis; ver §2–3 abajo
 
 ## 5-Minute Recovery Procedures
 
@@ -72,6 +87,7 @@ docker compose exec backend curl -fsS http://127.0.0.1:8000/health
 ```bash
 docker compose ps
 docker compose logs --since=10m backend
+docker compose exec backend curl -sS http://127.0.0.1:8000/live
 docker compose exec backend curl -sS http://127.0.0.1:8000/health
 ```
 
@@ -80,6 +96,7 @@ For production file:
 ```bash
 docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs --since=10m backend
+docker compose -f docker-compose.prod.yml exec backend curl -sS http://127.0.0.1:8000/live
 docker compose -f docker-compose.prod.yml exec backend curl -sS http://127.0.0.1:8000/health
 ```
 
@@ -126,6 +143,7 @@ docker compose exec backend curl -sS http://127.0.0.1:8000/health
 ```bash
 docker compose up -d redis backend frontend nginx
 docker compose ps
+docker compose exec backend curl -sS http://127.0.0.1:8000/live
 docker compose exec backend curl -sS http://127.0.0.1:8000/health
 ```
 
@@ -134,12 +152,14 @@ Production variant:
 ```bash
 docker compose -f docker-compose.prod.yml up -d redis backend frontend caddy
 docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml exec backend curl -sS http://127.0.0.1:8000/live
 docker compose -f docker-compose.prod.yml exec backend curl -sS http://127.0.0.1:8000/health
 ```
 
 ## Verification Checklist (Post-Restart)
 
 - `docker compose ps` shows `healthy` for `redis`, `backend`, and `frontend`
+- `GET /live` returns `200` and `status=ok`
 - `GET /health` returns:
   - `"status":"healthy"`
   - `checks.supabase.ok=true`
@@ -176,6 +196,6 @@ Common failure hints:
 
 Escalate immediately if:
 
-- Supabase remains down > 5 minutes after credential/network validation
+- Supabase remains down more than 5 minutes after credential/network validation
 - Redis fails to become healthy after restart + backend recycle
 - `/health` stays `unhealthy` while containers are `up` (possible external dependency outage)

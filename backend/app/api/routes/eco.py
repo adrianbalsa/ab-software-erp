@@ -53,9 +53,10 @@ class RutaLogistica(BaseModel):
 @router.post("/certificado-pdf", summary="Genera y descarga un certificado ESG en PDF (ruta logística)")
 async def generar_certificado_pdf(
     ruta: RutaLogistica,
+    current_user: UserOut = Depends(deps.get_current_user),
     _esg: None = Depends(deps.check_quota_limit("esg")),
 ) -> StreamingResponse:
-    FACTOR_CO2_DIESEL = 2.64
+    factor_co2 = KG_CO2_POR_LITRO_DIESEL
 
     if ruta.tipo_combustible.lower() == "electrico":
         emisiones = 0.0
@@ -63,14 +64,15 @@ async def generar_certificado_pdf(
         emisiones = (
             (ruta.distancia_km / 100)
             * (ruta.consumo_litros_100km * 0.6)
-            * FACTOR_CO2_DIESEL
+            * factor_co2
         )
     else:
-        emisiones = (ruta.distancia_km / 100) * ruta.consumo_litros_100km * FACTOR_CO2_DIESEL
+        emisiones = (ruta.distancia_km / 100) * ruta.consumo_litros_100km * factor_co2
 
-    emisiones_base_antigua = (ruta.distancia_km / 100) * 40.0 * FACTOR_CO2_DIESEL
+    emisiones_base_antigua = (ruta.distancia_km / 100) * 40.0 * factor_co2
     co2_ahorrado = max(0.0, emisiones_base_antigua - emisiones)
 
+    pdf_lang = getattr(current_user, "preferred_language", None) or "es"
     pdf_bytes = generar_pdf_certificado_ruta_esg(
         distancia_km=ruta.distancia_km,
         toneladas_carga=ruta.toneladas_carga,
@@ -78,6 +80,7 @@ async def generar_certificado_pdf(
         consumo_litros_100km=ruta.consumo_litros_100km,
         emisiones_kg=emisiones,
         ahorro_kg=co2_ahorrado,
+        lang=pdf_lang,
     )
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
@@ -164,6 +167,7 @@ async def certificate_emisiones_mensuales(
     nombre = await service.nombre_empresa_publico(empresa_id=eid)
 
     meses_dicts: list[dict[str, Any]] = [m.model_dump() for m in meses]
+    pdf_lang = getattr(current_user, "preferred_language", None) or "es"
     pdf_bytes = generar_pdf_certificado_emisiones_esg(
         empresa_nombre=nombre,
         empresa_id=eid,
@@ -172,6 +176,7 @@ async def certificate_emisiones_mensuales(
         litros_estimados_total=lit_tot,
         kg_co2_por_litro=KG_CO2_POR_LITRO_DIESEL,
         eur_por_litro_ref=EUR_POR_LITRO_DIESEL_REF,
+        lang=pdf_lang,
     )
     safe_name = f"Certificado_Emisiones_ESG_{eid[:8]}.pdf"
     return StreamingResponse(
@@ -187,7 +192,8 @@ async def certificado_oficial(
     current_user: UserOut = Depends(deps.get_current_user),
     _esg: None = Depends(deps.check_quota_limit("esg")),
 ) -> StreamingResponse:
-    pdf_bytes = generar_pdf_oficial(payload.model_dump())
+    pdf_lang = getattr(current_user, "preferred_language", None) or "es"
+    pdf_bytes = generar_pdf_oficial(payload.model_dump(), lang=pdf_lang)
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",

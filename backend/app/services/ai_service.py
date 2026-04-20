@@ -11,11 +11,17 @@ import litellm
 
 from app.core.math_engine import quantize_currency, to_decimal
 from app.core.verifactu import verify_invoice_chain
+from app.services.verifactu_fingerprint_audit import (
+    load_cliente_nif_map_for_facturas,
+    materialize_factura_rows_for_fingerprint_verify,
+)
 from app.services.esg_service import EsgService
 from app.services.facturas_service import FacturasService
 from app.services.finance_service import FinanceService
 from app.services.flota_service import FlotaService
 from app.services.maps_service import MapsService
+from app.services.secret_manager_service import get_secret_manager
+from app.schemas.banking import ConciliationCandidate, Transaccion
 
 logger = logging.getLogger(__name__)
 litellm.drop_params = True
@@ -137,10 +143,10 @@ class LogisAdvisorService:
 
     @staticmethod
     def openai_configured() -> bool:
+        mgr = get_secret_manager()
         return bool(
-            (os.getenv("OPENAI_API_KEY") or "").strip()
-            or (os.getenv("GEMINI_API_KEY") or "").strip()
-            or (os.getenv("GOOGLE_API_KEY") or "").strip()
+            mgr.get_openai_api_key()
+            or mgr.get_google_gemini_api_key()
         )
 
     @staticmethod
@@ -148,9 +154,10 @@ class LogisAdvisorService:
         configured = (os.getenv("LOGISADVISOR_MODEL") or "").strip()
         if configured:
             return configured
-        if (os.getenv("OPENAI_API_KEY") or "").strip():
+        mgr = get_secret_manager()
+        if mgr.get_openai_api_key():
             return "openai/gpt-4o-mini"
-        if (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip():
+        if mgr.get_google_gemini_api_key():
             return "gemini/gemini-1.5-flash"
         return "openai/gpt-4o-mini"
 
@@ -249,13 +256,20 @@ class LogisAdvisorService:
         # VerifactuModule mapping: chain audit over tenant invoices.
         vf_res = await db.execute(
             db.table("facturas")
-            .select("id,numero_factura,num_factura,fecha_emision,nif_emisor,total_factura,fingerprint_hash,previous_fingerprint")
+            .select(
+                "id,cliente,numero_factura,num_factura,fecha_emision,nif_emisor,total_factura,"
+                "fingerprint_hash,previous_fingerprint"
+            )
             .eq("empresa_id", eid)
             .order("fecha_emision", desc=False)
             .limit(200)
         )
         vf_rows: list[dict[str, Any]] = (vf_res.data or []) if hasattr(vf_res, "data") else []
-        vf_report = verify_invoice_chain(vf_rows)
+        vf_nif_map = await load_cliente_nif_map_for_facturas(db, empresa_id=eid, rows=vf_rows)
+        vf_rows_m = materialize_factura_rows_for_fingerprint_verify(
+            vf_rows, cliente_nif_map=vf_nif_map
+        )
+        vf_report = verify_invoice_chain(vf_rows_m)
 
         payload = {
             "operational": {
@@ -273,9 +287,11 @@ class LogisAdvisorService:
                 "liquidity_risk": bool(dso_days > 60),
             },
             "fiscal": {
-                "verifactu_chain_ok": bool(vf_report.get("ok", False)),
-                "verifactu_total_invoices": int(vf_report.get("total", len(vf_rows)) or len(vf_rows)),
-                "verifactu_issues": int(len(vf_report.get("issues") or [])),
+                "verifactu_chain_ok": bool(vf_report.get("is_valid", False)),
+                "verifactu_total_invoices": len(vf_rows_m),
+                "verifactu_issues": 0
+                if vf_report.get("is_valid")
+                else 1,
             },
         }
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
@@ -327,6 +343,115 @@ class LogisAdvisorService:
             },
             "fiscal_data": ai_snapshot.get("fiscal") or {},
         }
+
+    @staticmethod
+    def _token_overlap_score(blob: str, sample: str) -> float:
+        """Similitud léxica conservadora entre conceptos bancarios (sin PII estructurada)."""
+        btoks = {
+            t
+            for t in re.findall(r"[a-záéíóúñ0-9]{3,}", (blob or "").casefold())
+            if len(t) >= 3
+        }
+        stoks = {
+            t
+            for t in re.findall(r"[a-záéíóúñ0-9]{3,}", (sample or "").casefold())
+            if len(t) >= 3
+        }
+        if not btoks or not stoks:
+            return 0.0
+        inter = len(btoks & stoks)
+        return min(1.0, float(inter) / float(max(len(btoks), 1)))
+
+    async def score_bank_invoice_match_from_client_history(
+        self,
+        *,
+        empresa_id: str,
+        transaction: Transaccion,
+        candidates: list[ConciliationCandidate],
+    ) -> tuple[int | None, float, str]:
+        """
+        Puntuación de confianza usando **historial de cobros** del cliente (facturas cobradas con
+        ``matched_transaction_id`` y textos de ``bank_transactions`` asociados).
+
+        Devuelve ``(factura_id, score 0–1, nota)``; ``(None, …)`` si no hay señal suficientemente clara.
+        """
+        eid = str(empresa_id or "").strip()
+        if not eid or not candidates:
+            return None, 0.0, "sin contexto"
+        db = self._flota._db  # type: ignore[attr-defined]
+
+        blob = transaction.reference_blob()
+        ranked: list[tuple[int, float, str]] = []
+
+        for c in candidates[:5]:
+            res_f: Any = await db.execute(
+                db.table("facturas")
+                .select("id, cliente, numero_factura, num_factura")
+                .eq("empresa_id", eid)
+                .eq("id", int(c.factura_id))
+                .limit(1)
+            )
+            fr = (res_f.data or []) if hasattr(res_f, "data") else []
+            if not fr:
+                continue
+            row = dict(fr[0])
+            cliente_id = str(row.get("cliente") or "").strip()
+            inv_no = str(row.get("numero_factura") or row.get("num_factura") or "").strip()
+            inv_cf = inv_no.casefold()
+            blob_cf = blob.casefold()
+
+            hist_overlap = 0.0
+            if cliente_id:
+                try:
+                    res_hist: Any = await db.execute(
+                        db.table("facturas")
+                        .select("matched_transaction_id")
+                        .eq("empresa_id", eid)
+                        .eq("cliente", cliente_id)
+                        .eq("estado_cobro", "cobrada")
+                        .not_.is_("matched_transaction_id", "null")
+                        .order("id", desc=True)
+                        .limit(40)
+                    )
+                    mids: list[str] = []
+                    for h in (res_hist.data or []) if hasattr(res_hist, "data") else []:
+                        mid = str(h.get("matched_transaction_id") or "").strip()
+                        if mid and mid not in mids:
+                            mids.append(mid)
+                    if mids:
+                        res_bt: Any = await db.execute(
+                            db.table("bank_transactions")
+                            .select("description, remittance_info")
+                            .eq("empresa_id", eid)
+                            .in_("transaction_id", mids[:45])
+                        )
+                        for bt in (res_bt.data or []) if hasattr(res_bt, "data") else []:
+                            desc = f"{bt.get('description') or ''} {bt.get('remittance_info') or ''}"
+                            hist_overlap = max(hist_overlap, self._token_overlap_score(blob, desc))
+                except Exception:
+                    hist_overlap = 0.0
+
+            inv_hit = 1.0 if inv_cf and inv_cf in blob_cf else 0.0
+            hist_score = min(
+                1.0,
+                0.42 * hist_overlap + 0.33 * inv_hit + 0.25 * float(c.reference_score),
+            )
+            note = (
+                f"LogisAdvisor: hist_overlap={hist_overlap:.2f}, ref_factura={inv_hit:.2f}, "
+                f"fuzzy_ref={float(c.reference_score):.2f}"
+            )
+            ranked.append((int(c.factura_id), float(hist_score), note))
+
+        if not ranked:
+            return None, 0.0, "sin candidatos válidos"
+        ranked.sort(key=lambda x: -x[1])
+        best_id, best_s, best_note = ranked[0]
+        second = ranked[1][1] if len(ranked) > 1 else 0.0
+        if best_s < 0.58:
+            return None, best_s, best_note + " (umbral no alcanzado)"
+        if best_s - second < 0.07 and len(ranked) > 1:
+            return None, best_s, "empate entre candidatos; requiere revisión"
+        return best_id, round(best_s, 4), best_note
 
     async def generate_diagnostic(
         self,
@@ -523,7 +648,10 @@ class LogisAdvisorService:
         if not self.openai_configured():
             raise RuntimeError("OPENAI_API_KEY no configurada")
 
-        client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        api_key = get_secret_manager().get_openai_api_key()
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY no configurada (se requiere para el cliente OpenAI)")
+        client = AsyncOpenAI(api_key=api_key)
         model = self.model_name()
         tools = _tool_specs()
 
@@ -598,7 +726,10 @@ class LogisAdvisorService:
         if not self.openai_configured():
             raise RuntimeError("OPENAI_API_KEY no configurada")
 
-        client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        api_key = get_secret_manager().get_openai_api_key()
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY no configurada (se requiere para el cliente OpenAI)")
+        client = AsyncOpenAI(api_key=api_key)
         model = self.model_name()
 
         system = (

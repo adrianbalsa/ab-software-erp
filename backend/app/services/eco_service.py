@@ -18,10 +18,13 @@ from app.schemas.eco import (
     EcoSimuladorIn,
 )
 from app.schemas.porte import PorteCreate
+from app.core.constants import ISO_14083_DIESEL_CO2_KG_PER_LITRE
 from app.core.esg_engine import calculate_co2_footprint
 
-# Factor estándar UE (Scope 1): emisiones de CO₂ por litro de gasóleo (kg CO₂eq / L), valor por defecto 2,67.
-KG_CO2_POR_LITRO_DIESEL: float = float(os.getenv("ECO_KG_CO2_POR_LITRO_DIESEL") or "2.67")
+# Factor estándar UE (Scope 1): ISO 14083 — 2,67 kg CO₂eq / L (override vía env solo si compliance lo exige).
+KG_CO2_POR_LITRO_DIESEL: float = float(
+    os.getenv("ECO_KG_CO2_POR_LITRO_DIESEL") or str(ISO_14083_DIESEL_CO2_KG_PER_LITRE)
+)
 
 # Precio referencia (EUR/L) para estimar litros a partir del importe de ticket de combustible.
 EUR_POR_LITRO_DIESEL_REF: float = float(os.getenv("ECO_DIESEL_EUR_POR_LITRO_REF") or "1.55")

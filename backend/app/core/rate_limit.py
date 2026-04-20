@@ -28,6 +28,7 @@ def _dev_mode_redis_rate_limit_bypass() -> bool:
 # Endpoints sin límite (health, documentación, webhooks entrantes de terceros).
 RATE_LIMIT_EXEMPT_PATHS: frozenset[str] = frozenset(
     {
+        "/live",
         "/health",
         "/health/deep",
         "/ready",

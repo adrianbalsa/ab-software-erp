@@ -47,3 +47,8 @@ class UserOut(BaseModel):
         default=None,
         description="Identificador de perfil (profiles.id) o None si solo hay login legacy",
     )
+    preferred_language: str = Field(
+        default="es",
+        description="Idioma preferido (usuarios / empresas): es | en — PDFs, correos y exportes.",
+        max_length=5,
+    )

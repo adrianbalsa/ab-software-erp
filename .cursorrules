@@ -2,3 +2,19 @@
 - Siempre usa public.app_current_empresa_id() para el RLS.
 - Las funciones deben estar en el esquema 'public'.
 - Antes de sugerir un cambio en el schema, consulta la estructura actual usando el MCP de Supabase.
+# AB Logistics OS - Reglas de Oro del Proyecto (2026)
+
+## Contexto de Negocio (M&A Critical)
+- Valoración Actual: €1.2M - €1.5M (IP Pura). Objetivo: €5.5M (Serie A).
+- Factor CO2 Oficial: 2.67 kg/L (Normativa ISO 14083). Prohibido usar 2.5.
+- Core Legal: VeriFactu (AEAT). Integridad de la cadena de hashes es PRIORIDAD 1.
+
+## Arquitectura Técnica
+- Backend: FastAPI (Python 3.12) + Supabase (RLS estricto).
+- Seguridad: `SecretManagerService` único (`SECRET_MANAGER_BACKEND`: env, vault KV v2, aws); no leer secretos críticos (pagos, JWT, Fernet, **LLM, OCR Azure**) con `os.getenv` en servicios de aplicación.
+- IA: LogisAdvisor (Contexto de rutas vampiro y EBITDA).
+
+## Reglas de Codificación
+- Unificar: Solo existe una función de hash oficial para VeriFactu.
+- Seguridad: Nunca usar `os.getenv` para claves secretas; usar `get_secret_manager()` (Stripe, GoCardless, JWT/Fernet, OpenAI/Anthropic/Gemini, Azure OCR, etc.).
+- Tests: Siempre mantener la suite de 213 tests en verde. No aceptar cambios que rompan el E2E bancario.

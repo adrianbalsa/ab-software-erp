@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException, status
 
 from app.core.crypto import pii_crypto
+from app.core.i18n import normalize_lang
 from app.core.esg_engine import (
     calculate_nox_emissions,
     esg_certificate_co2_vs_euro_iii,
@@ -22,11 +23,11 @@ from app.core.esg_engine import (
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.services.facturas_service import FacturasService
+from app.services.esg_service import generate_porte_certificate_pdf_reportlab
 from app.services.pdf_esg_service import (
     EsgFacturaCertificatePdfModel,
     EsgPorteCertificatePdfModel,
     generar_pdf_certificado_esg_factura_glec,
-    generar_pdf_certificado_esg_porte_glec,
 )
 from app.services.portes_service import PortesService
 
@@ -60,12 +61,16 @@ def _content_fingerprint_sha256(
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
-async def _empresa_nombre_y_nif(db: SupabaseAsync, empresa_id: str) -> tuple[str, str]:
+async def _empresa_nombre_nif_lang(db: SupabaseAsync, empresa_id: str) -> tuple[str, str, str]:
     nombre = "Empresa"
     nif = ""
+    lang = "es"
     try:
         res: Any = await db.execute(
-            db.table("empresas").select("nombre_comercial,nombre_legal,nif").eq("id", empresa_id).limit(1)
+            db.table("empresas")
+            .select("nombre_comercial,nombre_legal,nif,preferred_language")
+            .eq("id", empresa_id)
+            .limit(1)
         )
         rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
         if rows:
@@ -77,9 +82,10 @@ async def _empresa_nombre_y_nif(db: SupabaseAsync, empresa_id: str) -> tuple[str
             )
             raw_nif = str(r.get("nif") or "").strip()
             nif = (pii_crypto.decrypt_pii(raw_nif) or raw_nif).strip()
+            lang = normalize_lang(str(r.get("preferred_language") or "es"))
     except Exception:
         pass
-    return nombre, nif
+    return nombre, nif, lang
 
 
 class EsgCertificateService:
@@ -181,7 +187,7 @@ class EsgCertificateService:
         mod = str(porte.vehiculo_modelo or "").strip()
         veh_label = " · ".join(x for x in (mat, mod) if x) or "—"
 
-        nombre_em, nif_em = await _empresa_nombre_y_nif(self._db, eid)
+        nombre_em, nif_em, pdf_lang = await _empresa_nombre_nif_lang(self._db, eid)
         fecha_str = str(porte.fecha)[:10] if porte.fecha else "—"
 
         payload = {
@@ -233,7 +239,7 @@ class EsgCertificateService:
             scope_note=scope_note,
         )
 
-        pdf_bytes = generar_pdf_certificado_esg_porte_glec(model)
+        pdf_bytes = generate_porte_certificate_pdf_reportlab(model, lang=pdf_lang)
         sha_pdf = hashlib.sha256(pdf_bytes).hexdigest()
 
         try:
@@ -247,7 +253,7 @@ class EsgCertificateService:
                 metadata={
                     "porte_id": pid,
                     "sha256_pdf": sha_pdf,
-                    "methodology": "GLEC v2.0 / ISO 14083 (platform implementation)",
+                    "methodology": "GLEC v2.0 + ISO 14083 diesel 2,67 kg/L (ReportLab certificate)",
                 },
                 created_by=usuario_id,
             )
@@ -306,6 +312,7 @@ class EsgCertificateService:
 
         nombre_em = pdf_data.emisor.nombre
         nif_em = (pdf_data.emisor.nif or "").strip()
+        pdf_lang = pdf_data.content_language
 
         model = EsgFacturaCertificatePdfModel(
             certificate_id=cert_id,
@@ -323,7 +330,7 @@ class EsgCertificateService:
             esg_ahorro_kg=ahorro,
         )
 
-        pdf_bytes = generar_pdf_certificado_esg_factura_glec(model)
+        pdf_bytes = generar_pdf_certificado_esg_factura_glec(model, lang=pdf_lang)
         sha_pdf = hashlib.sha256(pdf_bytes).hexdigest()
 
         try:

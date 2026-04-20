@@ -22,6 +22,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - handled in runtime/tests
     HTML = None  # type: ignore[assignment]
 
+from app.core.constants import ISO_14083_DIESEL_CO2_KG_PER_LITRE
 from app.db.supabase import SupabaseAsync
 from app.core.crypto import pii_crypto
 
@@ -30,8 +31,10 @@ AB_PRIMARY = colors.HexColor("#2563eb")
 AB_BG = colors.HexColor("#0b1224")
 AB_MUTED = colors.HexColor("#64748b")
 
-# Referencia Euro 6 / declaración CO2 (kg CO2 por litro diésel, marco UE habitual)
-KG_CO2_POR_LITRO_EURO6_REF = float(os.getenv("ESG_CO2_KG_PER_L_EURO6_REF") or "2.64")
+# Referencia diésel certificada (ISO 14083 — alineada con ``app.core.constants``).
+KG_CO2_POR_LITRO_EURO6_REF = float(
+    os.getenv("ESG_CO2_KG_PER_L_EURO6_REF") or str(ISO_14083_DIESEL_CO2_KG_PER_LITRE)
+)
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 _jinja_env = Environment(
     loader=FileSystemLoader(str(_TEMPLATES_DIR)),
@@ -233,7 +236,7 @@ def render_certificado_huella_co2_sync(
 ) -> bytes:
     """
     Certificado de huella Scope 1 (combustible) para un periodo YYYY-MM.
-    Referencia normativa diésel (Euro 6 / UE): kg CO₂/L sobre litros estimados.
+    Referencia normativa diésel ISO 14083: kg CO₂eq/L sobre litros estimados.
     """
     co2_referencia_euro6 = max(0.0, litros_estimados * KG_CO2_POR_LITRO_EURO6_REF)
     co2_declarado = max(0.0, float(co2_kg_mes))
@@ -254,7 +257,7 @@ def render_certificado_huella_co2_sync(
     story.append(Spacer(1, 4 * mm))
     story.append(
         Paragraph(
-            f"Referencia normativa diésel Euro 6 (factor {KG_CO2_POR_LITRO_EURO6_REF} kg CO₂/L, marco UE): "
+            f"Referencia normativa diésel ISO 14083 (factor {KG_CO2_POR_LITRO_EURO6_REF} kg CO₂eq/L): "
             f"<b>{co2_referencia_euro6:.3f} kg CO₂</b>",
             styles["Normal"],
         )

@@ -159,6 +159,29 @@ class AuditLogsService:
             user_id=user_id,
         )
 
+    async def log_bank_reconciliation(
+        self,
+        *,
+        empresa_id: str | UUID,
+        transaction_id: str,
+        factura_id: int,
+        user_id: str | UUID | None = None,
+    ) -> None:
+        """Trazabilidad de conciliación bancaria (auto o manual), alineada con auditoría de API."""
+        await self.log_sensitive_action(
+            empresa_id=empresa_id,
+            table_name="bank_reconciliation",
+            record_id=str(transaction_id).strip(),
+            action="UPDATE",
+            new_value={
+                "transaction_id": str(transaction_id).strip(),
+                "factura_id": int(factura_id),
+                "estado_factura": "cobrada",
+                "source": "reconciliation",
+            },
+            user_id=user_id,
+        )
+
     async def log_cliente_data_change(
         self,
         *,

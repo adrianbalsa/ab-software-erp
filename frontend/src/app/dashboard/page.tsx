@@ -37,23 +37,26 @@ import { useFinanceDashboard } from "@/hooks/useFinanceDashboard";
 import { useFleetAlerts } from "@/hooks/useFleetAlerts";
 import { API_BASE, apiFetch, isAuthCredentialErrorMessage, isOwnerLike, jwtPayload } from "@/lib/api";
 import { useRole } from "@/hooks/useRole";
+import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
+import { currencyLocale, formatCurrencyEUR } from "@/i18n/localeFormat";
 
 const OAUTH_WELCOME_KEY = "abl_oauth_welcome";
 
-function formatEUR(n: number) {
-  return n.toLocaleString("es-ES", { style: "currency", currency: "EUR" });
-}
+const PLACEHOLDER_CHART_VALUES = [12, 16, 14, 20, 18, 24] as const;
 
-const PLACEHOLDER_CHART_DATA = [
-  { label: "Ene", value: 12 },
-  { label: "Feb", value: 16 },
-  { label: "Mar", value: 14 },
-  { label: "Abr", value: 20 },
-  { label: "May", value: 18 },
-  { label: "Jun", value: 24 },
-];
-
-function PlaceholderWelcomeChart({ title, hint }: { title: string; hint: string }) {
+function PlaceholderWelcomeChart({
+  title,
+  hint,
+  overlayTitle,
+  overlayHint,
+  chartData,
+}: {
+  title: string;
+  hint: string;
+  overlayTitle: string;
+  overlayHint: string;
+  chartData: { label: string; value: number }[];
+}) {
   return (
     <div className="dashboard-bento relative h-[280px] overflow-hidden p-6">
       <div className="mb-4">
@@ -62,7 +65,7 @@ function PlaceholderWelcomeChart({ title, hint }: { title: string; hint: string 
       </div>
       <div className="h-[170px] opacity-80">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={PLACEHOLDER_CHART_DATA}>
+          <AreaChart data={chartData}>
             <defs>
               <linearGradient id="welcome-placeholder-gradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#34d399" stopOpacity={0.5} />
@@ -88,8 +91,8 @@ function PlaceholderWelcomeChart({ title, hint }: { title: string; hint: string 
       </div>
       <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/55 backdrop-blur-[1px]">
         <div className="rounded-xl border border-emerald-500/30 bg-zinc-900/90 px-4 py-3 text-center shadow-lg shadow-emerald-500/10">
-          <p className="text-sm font-semibold text-zinc-100">Get Started</p>
-          <p className="text-xs text-zinc-400">Sube tu primera factura para desbloquear esta vista</p>
+          <p className="text-sm font-semibold text-zinc-100">{overlayTitle}</p>
+          <p className="text-xs text-zinc-400">{overlayHint}</p>
         </div>
       </div>
     </div>
@@ -99,11 +102,22 @@ function PlaceholderWelcomeChart({ title, hint }: { title: string; hint: string 
 export default function Dashboard() {
   const router = useRouter();
   const { role } = useRole();
+  const { catalog, locale } = useOptionalLocaleCatalog();
+  const p = catalog.pages;
+  const numLoc = currencyLocale(locale);
+  const placeholderChartData = useMemo(
+    () =>
+      [...p.dashboard.chartMonths].map((label, i) => ({
+        label,
+        value: PLACEHOLDER_CHART_VALUES[i] ?? 0,
+      })),
+    [p.dashboard.chartMonths],
+  );
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [onboarded, setOnboarded] = useState(true);
 
   useEffect(() => {
-    if (role === "cliente") router.replace("/portal");
+    if (role === "cliente") router.replace("/portal-cliente/mis-portes");
   }, [role, router]);
   const isOwner = isOwnerLike(role);
   const canFleetAlerts = isOwnerLike(role) || role === "traffic_manager";
@@ -138,7 +152,7 @@ export default function Dashboard() {
 
   const companyType = useMemo(() => {
     const payload = jwtPayload() as Record<string, unknown> | null;
-    if (!payload) return "empresa logística";
+    if (!payload) return p.dashboard.companyTypeDefault;
     const userMeta = payload.user_metadata as Record<string, unknown> | undefined;
     const appMeta = payload.app_metadata as Record<string, unknown> | undefined;
     const raw =
@@ -148,22 +162,22 @@ export default function Dashboard() {
       appMeta?.tipo_empresa ??
       payload.company_type ??
       payload.tipo_empresa;
-    return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : "empresa logística";
-  }, []);
+    return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : p.dashboard.companyTypeDefault;
+  }, [p.dashboard.companyTypeDefault]);
 
   const aiGreeting = useMemo(() => {
     const lower = companyType.toLowerCase();
     if (lower.includes("frio") || lower.includes("frigor")) {
-      return "Empieza configurando tu flota para activar recomendaciones de rutas con control de frío.";
+      return p.dashboard.greetingCold;
     }
     if (lower.includes("ultima milla") || lower.includes("paqueter")) {
-      return "Te recomiendo subir primero una factura para calcular margen por entrega desde el día uno.";
+      return p.dashboard.greetingLastMile;
     }
     if (lower.includes("internacional")) {
-      return "Configura la flota primero para estimar CO2 y costes por corredor internacional.";
+      return p.dashboard.greetingIntl;
     }
-    return "Primer paso recomendado: sube tu primera factura para que AB Logistics AI active tu radar operativo.";
-  }, [companyType]);
+    return p.dashboard.greetingDefault;
+  }, [companyType, p.dashboard]);
 
   const isWelcomeOwnerDashboard = useMemo(() => {
     if (!isOwner || loading || ecoLoading || !onboarded) return false;
@@ -188,7 +202,7 @@ export default function Dashboard() {
         queueMicrotask(() =>
           setWelcomeToast({
             id: Date.now(),
-            message: "Bienvenido",
+            message: p.dashboard.welcomeToast,
             tone: "success",
           }),
         );
@@ -196,7 +210,7 @@ export default function Dashboard() {
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [p.dashboard.welcomeToast]);
 
   useEffect(() => {
     let isMounted = true;
@@ -228,29 +242,29 @@ export default function Dashboard() {
   useEffect(() => {
     if (!isOwner || !error) return;
     if (isAuthCredentialErrorMessage(error)) {
-      toast.error("Sesión no válida o expirada. Vuelve a iniciar sesión.", { id: "abl-dash-auth" });
+      toast.error(p.dashboard.sessionInvalid, { id: "abl-dash-auth" });
     } else {
-      toast.error(`KPI financieros: ${error}`, { id: "dash-finance-error" });
+      toast.error(`${p.dashboard.financeKpiErr} ${error}`, { id: "dash-finance-error" });
     }
-  }, [isOwner, error]);
+  }, [isOwner, error, p.dashboard]);
 
   useEffect(() => {
     if (isOwner || !statsError) return;
     if (isAuthCredentialErrorMessage(statsError)) {
-      toast.error("Sesión no válida o expirada. Vuelve a iniciar sesión.", { id: "abl-dash-auth" });
+      toast.error(p.dashboard.sessionInvalid, { id: "abl-dash-auth" });
     } else {
-      toast.error(`KPI operativos: ${statsError}`, { id: "dash-stats-error" });
+      toast.error(`${p.dashboard.statsKpiErr} ${statsError}`, { id: "dash-stats-error" });
     }
-  }, [isOwner, statsError]);
+  }, [isOwner, statsError, p.dashboard]);
 
   useEffect(() => {
     if (!ecoError) return;
     if (isAuthCredentialErrorMessage(ecoError)) {
-      toast.error("Sesión no válida o expirada. Vuelve a iniciar sesión.", { id: "abl-dash-auth" });
+      toast.error(p.dashboard.sessionInvalid, { id: "abl-dash-auth" });
     } else {
-      toast.error(`ESG: ${ecoError}`, { id: "dash-eco-error" });
+      toast.error(`${p.dashboard.esgErr} ${ecoError}`, { id: "dash-eco-error" });
     }
-  }, [ecoError]);
+  }, [ecoError, p.dashboard]);
 
   const onRefreshKpis = () => {
     if (isOwner) void refresh();
@@ -263,7 +277,7 @@ export default function Dashboard() {
     return (
       <AppShell active="dashboard">
         <main className="flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
-          <p className="text-sm text-zinc-400">Preparando tu dashboard...</p>
+          <p className="text-sm text-zinc-400">{p.dashboard.preparing}</p>
         </main>
       </AppShell>
     );
@@ -281,11 +295,11 @@ export default function Dashboard() {
         <header className="z-10 flex h-16 shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950/90 px-8 backdrop-blur-md">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">
-              Cuadro de Mando Integral
+              {p.dashboard.title}
             </h1>
             {!isOwner && (
               <p className="mt-0.5 text-xs text-zinc-500">
-                Vista operativa · sin datos financieros globales
+                {p.dashboard.staffSubtitle}
               </p>
             )}
           </div>
@@ -296,10 +310,10 @@ export default function Dashboard() {
               disabled={loadingAny}
               className="text-sm font-medium text-emerald-500 hover:text-emerald-400 disabled:opacity-50"
             >
-              {loadingAny ? "Actualizando…" : "Actualizar KPIs"}
+              {loadingAny ? p.dashboard.refreshing : p.dashboard.refreshKpis}
             </button>
             <span className="text-sm font-medium text-zinc-500">
-              {new Date().toLocaleDateString("es-ES", {
+              {new Date().toLocaleDateString(numLoc, {
                 day: "numeric",
                 month: "long",
                 year: "numeric",
@@ -308,7 +322,7 @@ export default function Dashboard() {
             <button
               type="button"
               className="rounded-full bg-zinc-900/80 p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-              aria-label="Notificaciones"
+              aria-label={p.dashboard.notifications}
             >
               <Bell className="h-5 w-5" />
             </button>
@@ -323,27 +337,28 @@ export default function Dashboard() {
                   <DashboardMotionFadeIn>
                     <div className="dashboard-bento grid gap-4 p-6 lg:grid-cols-[1.4fr_1fr]">
                       <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-400">AB Logistics AI</p>
-                        <h2 className="text-xl font-semibold text-zinc-100">Bienvenido, todo listo para empezar</h2>
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-400">
+                          {p.dashboard.welcomeAiLabel}
+                        </p>
+                        <h2 className="text-xl font-semibold text-zinc-100">{p.dashboard.welcomeTitle}</h2>
                         <p className="text-sm text-zinc-400">
-                          Hemos detectado tu perfil como <span className="font-medium text-zinc-200">{companyType}</span>.
+                          {p.dashboard.welcomeProfilePrefix}{" "}
+                          <span className="font-medium text-zinc-200">{companyType}</span>.
                         </p>
                         <p className="text-sm text-zinc-300">{aiGreeting}</p>
                       </div>
                       <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
                         <div className="mb-2 flex items-center gap-2 text-zinc-200">
                           <Sparkles className="h-4 w-4 text-emerald-400" />
-                          <p className="text-sm font-medium">Siguiente mejor acción</p>
+                          <p className="text-sm font-medium">{p.dashboard.nextBestAction}</p>
                         </div>
-                        <p className="text-sm text-zinc-400">
-                          Sube una primera factura para ver EBITDA, coste por km y alertas inteligentes.
-                        </p>
+                        <p className="text-sm text-zinc-400">{p.dashboard.nextBestActionBody}</p>
                         <Link
                           href="/facturas/nueva"
                           className="mt-3 inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-zinc-950 hover:bg-emerald-400"
                         >
                           <UploadCloud className="h-4 w-4" />
-                          Empezar ahora
+                          {p.dashboard.startNow}
                         </Link>
                       </div>
                     </div>
@@ -351,12 +366,18 @@ export default function Dashboard() {
 
                   <DashboardMotionFadeIn delay={0.05} className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                     <PlaceholderWelcomeChart
-                      title="EBITDA estimado"
-                      hint="Vista de ejemplo hasta que cargues tu primera operación real."
+                      title={p.dashboard.chartEbitdaTitle}
+                      hint={p.dashboard.chartEbitdaHint}
+                      overlayTitle={p.dashboard.overlayGetStarted}
+                      overlayHint={p.dashboard.overlayUnlockHint}
+                      chartData={placeholderChartData}
                     />
                     <PlaceholderWelcomeChart
-                      title="CO2 por tonelada-km"
-                      hint="Activa tu panel ESG en cuanto registres tus primeros portes."
+                      title={p.dashboard.chartCo2Title}
+                      hint={p.dashboard.chartCo2Hint}
+                      overlayTitle={p.dashboard.overlayGetStarted}
+                      overlayHint={p.dashboard.overlayUnlockHint}
+                      chartData={placeholderChartData}
                     />
                   </DashboardMotionFadeIn>
 
@@ -365,16 +386,16 @@ export default function Dashboard() {
                       <div className="mb-3 inline-flex rounded-lg bg-emerald-500/15 p-2 text-emerald-400">
                         <UploadCloud className="h-5 w-5" />
                       </div>
-                      <h3 className="text-base font-semibold text-zinc-100">Subir mi primera factura</h3>
-                      <p className="mt-1 text-sm text-zinc-400">Carga un PDF o crea una factura para activar KPI financieros.</p>
+                      <h3 className="text-base font-semibold text-zinc-100">{p.dashboard.cardUploadTitle}</h3>
+                      <p className="mt-1 text-sm text-zinc-400">{p.dashboard.cardUploadDesc}</p>
                     </Link>
 
                     <Link href="/flota" className="dashboard-bento group p-5 transition hover:border-emerald-500/50">
                       <div className="mb-3 inline-flex rounded-lg bg-emerald-500/15 p-2 text-emerald-400">
                         <Truck className="h-5 w-5" />
                       </div>
-                      <h3 className="text-base font-semibold text-zinc-100">Configurar Flota</h3>
-                      <p className="mt-1 text-sm text-zinc-400">Añade tus vehículos para estimar coste/km y emisiones reales.</p>
+                      <h3 className="text-base font-semibold text-zinc-100">{p.dashboard.cardFleetTitle}</h3>
+                      <p className="mt-1 text-sm text-zinc-400">{p.dashboard.cardFleetDesc}</p>
                     </Link>
 
                     <Link
@@ -390,11 +411,9 @@ export default function Dashboard() {
                       <div className="mb-3 inline-flex rounded-lg bg-zinc-800 p-2 text-zinc-300">
                         {radarLocked ? <Lock className="h-5 w-5" /> : <Sparkles className="h-5 w-5 text-emerald-400" />}
                       </div>
-                      <h3 className="text-base font-semibold text-zinc-100">Ver Radar de Vampiros</h3>
+                      <h3 className="text-base font-semibold text-zinc-100">{p.dashboard.cardRadarTitle}</h3>
                       <p className="mt-1 text-sm text-zinc-400">
-                        {radarLocked
-                          ? "Bloqueado hasta subir tu primer dato operativo."
-                          : "Analiza márgenes y detecta fugas de rentabilidad."}
+                        {radarLocked ? p.dashboard.cardRadarLocked : p.dashboard.cardRadarOpen}
                       </p>
                     </Link>
                   </DashboardMotionFadeIn>
@@ -409,9 +428,9 @@ export default function Dashboard() {
                 <div className="dashboard-bento p-6">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="mb-1 text-sm font-medium text-zinc-400">EBITDA (real)</p>
+                      <p className="mb-1 text-sm font-medium text-zinc-400">{p.dashboard.ebitdaReal}</p>
                       <h3 className="text-3xl font-bold tracking-tight text-zinc-100">
-                        {loading ? "…" : data ? formatEUR(data.ebitda) : "—"}
+                        {loading ? "…" : data ? formatCurrencyEUR(data.ebitda, locale) : "—"}
                       </h3>
                     </div>
                     <div className="rounded-xl bg-emerald-500/15 p-3 text-emerald-400">
@@ -419,9 +438,9 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <p className="mt-4 text-sm text-zinc-500">
-                    Ingresos − Gastos ·{" "}
+                    {p.dashboard.ebitdaFoot}{" "}
                     <Link href="/finanzas" className="font-medium text-emerald-500 hover:text-emerald-400 hover:underline">
-                      Ver dashboard financiero
+                      {p.dashboard.viewFinanceLink}
                     </Link>
                   </p>
                 </div>
@@ -429,9 +448,9 @@ export default function Dashboard() {
                 <div className="dashboard-bento p-6">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="mb-1 text-sm font-medium text-zinc-400">Ingresos (operación)</p>
+                      <p className="mb-1 text-sm font-medium text-zinc-400">{p.dashboard.ingresosOp}</p>
                       <h3 className="text-3xl font-bold tracking-tight text-zinc-100">
-                        {loading ? "…" : data ? formatEUR(data.ingresos) : "—"}
+                        {loading ? "…" : data ? formatCurrencyEUR(data.ingresos, locale) : "—"}
                       </h3>
                     </div>
                     <div className="rounded-xl bg-amber-500/15 p-3 text-amber-400">
@@ -439,7 +458,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <p className="mt-4 text-sm text-zinc-500">
-                    Bases facturadas (sin IVA) ·{" "}
+                    {p.dashboard.ingresosFoot}{" "}
                     <code className="text-xs text-zinc-400">GET /finance/dashboard</code>
                   </p>
                 </div>
@@ -447,31 +466,29 @@ export default function Dashboard() {
                 <div className="dashboard-bento p-6">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="mb-1 text-sm font-medium text-zinc-400">Gastos (operativos)</p>
+                      <p className="mb-1 text-sm font-medium text-zinc-400">{p.dashboard.gastosOp}</p>
                       <h3 className="text-3xl font-bold tracking-tight text-zinc-100">
-                        {loading ? "…" : data ? formatEUR(data.gastos) : "—"}
+                        {loading ? "…" : data ? formatCurrencyEUR(data.gastos, locale) : "—"}
                       </h3>
                     </div>
                     <div className="rounded-xl bg-emerald-500/12 p-3 text-emerald-500">
                       <MapPin className="h-6 w-6" />
                     </div>
                   </div>
-                  <p className="mt-4 text-sm text-zinc-500">Suma de gastos en `gastos`</p>
+                  <p className="mt-4 text-sm text-zinc-500">{p.dashboard.gastosFoot}</p>
                 </div>
 
                 <div className="dashboard-bento p-6">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="mb-1 text-sm font-medium text-zinc-400">Bultos</p>
+                      <p className="mb-1 text-sm font-medium text-zinc-400">{p.dashboard.bultos}</p>
                       <h3 className="text-3xl font-bold tracking-tight text-zinc-100">—</h3>
                     </div>
                     <div className="rounded-xl bg-emerald-500/10 p-3 text-emerald-400">
                       <Package className="h-6 w-6" />
                     </div>
                   </div>
-                  <p className="mt-4 text-sm text-zinc-500">
-                    Margen neto/km y desglose en la sección inferior
-                  </p>
+                  <p className="mt-4 text-sm text-zinc-500">{p.dashboard.bultosFoot}</p>
                 </div>
                   </DashboardMotionFadeIn>
 
@@ -481,10 +498,10 @@ export default function Dashboard() {
                   id="dash-advanced-heading"
                   className="text-lg font-semibold tracking-tight text-zinc-100"
                 >
-                  Tesorería, costes y eficiencia
+                  {p.dashboard.sectionTreasury}
                 </h2>
                 <p className="text-sm text-zinc-500">
-                  Datos del Math Engine vía{" "}
+                  {p.dashboard.sectionTreasurySub}{" "}
                   <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-400">
                     GET /finance/dashboard
                   </code>
@@ -525,10 +542,10 @@ export default function Dashboard() {
                   id="dash-rentabilidad-avanzada"
                   className="text-lg font-semibold tracking-tight text-zinc-100"
                 >
-                  Análisis de Rentabilidad Avanzada
+                  {p.dashboard.sectionAdvanced}
                 </h2>
                 <p className="text-sm text-zinc-500">
-                  Datos consolidados desde endpoints optimizados:
+                  {p.dashboard.sectionAdvancedSub}
                   <code className="ml-1 rounded bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-400">
                     GET /finance/dashboard
                   </code>
@@ -578,12 +595,12 @@ export default function Dashboard() {
               <div className="dashboard-bento p-6 md:col-span-1">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="mb-1 text-sm font-medium text-zinc-400">Km (mes en curso)</p>
+                    <p className="mb-1 text-sm font-medium text-zinc-400">{p.dashboard.kmMonth}</p>
                     <h3 className="text-3xl font-bold tracking-tight text-zinc-100">
                       {statsLoading
                         ? "…"
                         : statsOps != null
-                          ? (statsOps.km_estimados ?? 0).toLocaleString("es-ES", {
+                          ? (statsOps.km_estimados ?? 0).toLocaleString(numLoc, {
                               maximumFractionDigits: 1,
                             })
                           : "—"}
@@ -594,11 +611,11 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <p className="mt-4 text-sm text-zinc-500">
-                  Suma{" "}
+                  {p.dashboard.kmFootPrefix}{" "}
                   <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-400">
                     km_estimados
                   </code>{" "}
-                  de portes del mes ·{" "}
+                  {p.dashboard.kmFootMid}{" "}
                   <code className="text-xs text-zinc-400">GET /dashboard/stats</code>
                 </p>
               </div>
@@ -606,7 +623,7 @@ export default function Dashboard() {
               <div className="dashboard-bento p-6 md:col-span-1">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="mb-1 text-sm font-medium text-zinc-400">Bultos (mes)</p>
+                    <p className="mb-1 text-sm font-medium text-zinc-400">{p.dashboard.bultosMonth}</p>
                     <h3 className="text-3xl font-bold tracking-tight text-zinc-100">
                       {statsLoading ? "…" : statsOps != null ? (statsOps.bultos ?? 0) : "—"}
                     </h3>
@@ -615,7 +632,7 @@ export default function Dashboard() {
                     <Package className="h-6 w-6" />
                   </div>
                 </div>
-                <p className="mt-4 text-sm text-zinc-500">Agregado operativo sin datos de facturación</p>
+                <p className="mt-4 text-sm text-zinc-500">{p.dashboard.bultosAggFoot}</p>
               </div>
             </DashboardMotionFadeIn>
           )}
@@ -631,7 +648,7 @@ export default function Dashboard() {
 
           <div className="dashboard-bento overflow-hidden">
             <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/30 px-6 py-5 backdrop-blur-sm">
-              <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Accesos rápidos</h2>
+              <h2 className="text-lg font-semibold tracking-tight text-zinc-100">{p.dashboard.quickLinks}</h2>
               <div className="flex flex-wrap gap-4">
                 <Link
                   href="/portes"
@@ -646,7 +663,7 @@ export default function Dashboard() {
                 </RoleGuard>
                 {isOwner && (
                   <Link href="/finanzas" className="text-sm font-medium text-zinc-400 hover:text-zinc-200">
-                    Finanzas
+                    {p.dashboard.quickFinanzas}
                   </Link>
                 )}
               </div>
@@ -654,20 +671,20 @@ export default function Dashboard() {
             <div className="p-6 text-sm text-zinc-500">
               {isOwner ? (
                 <>
-                  Los KPI y gráficos avanzados usan{" "}
+                  {p.dashboard.quickOwnerHelp}{" "}
                   <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-zinc-400">
                     GET /finance/dashboard
                   </code>{" "}
-                  con JWT (misma sesión que el resto de módulos).
+                  {p.dashboard.quickOwnerHelpMid}
                 </>
               ) : (
                 <>
-                  Los indicadores de esta vista provienen de{" "}
+                  {p.dashboard.quickStaffHelp}{" "}
                   <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-zinc-400">
                     GET /dashboard/stats
                   </code>{" "}
-                  según tu rol; la facturación y el EBITDA solo están disponibles para el perfil{" "}
-                  <strong className="font-medium text-zinc-300">owner</strong>.
+                  {p.dashboard.quickStaffHelpMid}{" "}
+                  <strong className="font-medium text-zinc-300">{p.dashboard.ownerRole}</strong>.
                 </>
               )}
             </div>

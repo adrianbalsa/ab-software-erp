@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   BadgeCheck,
+  BadgeEuro,
   BarChart3,
   Car,
   CreditCard,
@@ -14,6 +15,7 @@ import {
   LayoutDashboard,
   Landmark,
   Leaf,
+  LifeBuoy,
   LineChart,
   Link2,
   Target,
@@ -32,10 +34,12 @@ import type { LucideIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { useEffect, useState } from "react";
 
+import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { ConfiguracionNavSection, SidebarUserSection } from "@/components/layout/Sidebar";
 import { sidebarNavIcon, sidebarNavRow } from "@/components/layout/sidebarNavStyles";
 import { QuotaStatusCard } from "@/components/QuotaStatusCard";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { useRole } from "@/hooks/useRole";
 import { isOwnerLike, isTrafficManager, type AppRbacRole } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -66,7 +70,8 @@ type Props = {
     | "bi"
     | "vampire_radar"
     | "simulador"
-    | "mapa";
+    | "mapa"
+    | "billing";
 };
 
 function NavSectionHeader({
@@ -171,23 +176,26 @@ function ShellNavAndFooter({
   onNavLinkClick?: () => void;
 }) {
   const { role } = useRole();
+  const { catalog } = useOptionalLocaleCatalog();
+  const s = catalog.appShell;
   const hideFinanceBunkerAndAdminNav = isTrafficManager(role);
   const p = onNavLinkClick ? { onClick: onNavLinkClick } : {};
+  const L = s.links;
 
   return (
     <>
-      <nav className="flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto px-4 py-6" aria-label="Navegación principal">
+      <nav className="flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto px-4 py-6" aria-label={s.navAriaLabel}>
         {/* INSTITUCIONAL */}
         <section className="mt-0">
-          <NavSectionHeader title="Institucional" subtitle="Dashboards" />
+          <NavSectionHeader title={s.sections.institutional.title} subtitle={s.sections.institutional.subtitle} />
           <div className="flex flex-col gap-0.5">
             <SidebarNavLink
               id="tour-nav-dashboard"
               href="/dashboard"
               active={active === "dashboard"}
               icon={LayoutDashboard}
-              title="Dashboard"
-              subtitle="Vista general"
+              title={L.dashboard[0]}
+              subtitle={L.dashboard[1]}
               {...p}
             />
             {isOwnerLike(role) && (
@@ -195,8 +203,8 @@ function ShellNavAndFooter({
                 href="/dashboard/analitica"
                 active={active === "analitica"}
                 icon={BarChart3}
-                title="Matriz CIP"
-                subtitle="Margen vs CO₂"
+                title={L.matrizCip[0]}
+                subtitle={L.matrizCip[1]}
                 {...p}
               />
             )}
@@ -205,8 +213,8 @@ function ShellNavAndFooter({
                 href="/dashboard/bi"
                 active={active === "bi"}
                 icon={Target}
-                title="Inteligencia BI"
-                subtitle="DSO · trayectos · ESG"
+                title={L.bi[0]}
+                subtitle={L.bi[1]}
                 {...p}
               />
             )}
@@ -215,8 +223,8 @@ function ShellNavAndFooter({
                 href="/dashboard/vampire-radar"
                 active={active === "vampire_radar"}
                 icon={Activity}
-                title="Radar de Vampiros"
-                subtitle="Fugas de margen por ruta"
+                title={L.vampire[0]}
+                subtitle={L.vampire[1]}
                 {...p}
               />
             )}
@@ -225,8 +233,8 @@ function ShellNavAndFooter({
                 href="/operaciones/live"
                 active={active === "operaciones"}
                 icon={MapPin}
-                title="Centro de Mando"
-                subtitle="KPIs avanzados"
+                title={L.command[0]}
+                subtitle={L.command[1]}
                 {...p}
               />
             )}
@@ -235,15 +243,15 @@ function ShellNavAndFooter({
 
         {/* OPERACIONES */}
         <section className="mt-6">
-          <NavSectionHeader title="Operaciones" subtitle="Logistics" />
+          <NavSectionHeader title={s.sections.operations.title} subtitle={s.sections.operations.subtitle} />
           <div className="flex flex-col gap-0.5">
             <SidebarNavLink
               id="tour-nav-portes"
               href="/portes"
               active={active === "portes"}
               icon={Truck}
-              title="Portes"
-              subtitle="Gestión de viajes y CMR"
+              title={L.portes[0]}
+              subtitle={L.portes[1]}
               className="nav-portes"
               {...p}
             />
@@ -254,8 +262,8 @@ function ShellNavAndFooter({
                   href="/flota"
                   active={active === "flota"}
                   icon={Car}
-                  title="Flota"
-                  subtitle="Vehículos y eficiencia"
+                  title={L.flota[0]}
+                  subtitle={L.flota[1]}
                   className="nav-flota"
                   {...p}
                 />
@@ -263,8 +271,8 @@ function ShellNavAndFooter({
                   href="/flota/eficiencia"
                   active={active === "eficiencia"}
                   icon={Activity}
-                  title="Eficiencia"
-                  subtitle="Telemetría y consumo"
+                  title={L.eficiencia[0]}
+                  subtitle={L.eficiencia[1]}
                   className="nav-flota-eficiencia"
                   {...p}
                 />
@@ -273,8 +281,8 @@ function ShellNavAndFooter({
                     href="/dashboard/mapa"
                     active={active === "mapa"}
                     icon={MapIcon}
-                    title="Mapa inteligencia"
-                    subtitle="Rentabilidad y CO₂"
+                    title={L.mapa[0]}
+                    subtitle={L.mapa[1]}
                     {...p}
                   />
                 ) : null}
@@ -285,8 +293,8 @@ function ShellNavAndFooter({
                 href="/sostenibilidad"
                 active={active === "sostenibilidad"}
                 icon={Leaf}
-                title="Sostenibilidad"
-                subtitle="Certificados ESG"
+                title={L.sostenibilidad[0]}
+                subtitle={L.sostenibilidad[1]}
                 {...p}
               />
             )}
@@ -296,14 +304,14 @@ function ShellNavAndFooter({
         {/* FINANZAS & FISCAL (Búnker) — oculto explícitamente para traffic_manager */}
         {!hideFinanceBunkerAndAdminNav && showNavItem("finanzas", role) && (
           <section className="mt-6">
-            <NavSectionHeader title="Finanzas & Fiscal" subtitle="Bunker" />
+            <NavSectionHeader title={s.sections.finance.title} subtitle={s.sections.finance.subtitle} />
             <div className="flex flex-col gap-0.5">
               <SidebarNavLink
                 href="/finanzas"
                 active={active === "finanzas"}
                 icon={Wallet}
-                title="Finanzas"
-                subtitle="Panel y métricas"
+                title={L.finanzas[0]}
+                subtitle={L.finanzas[1]}
                 {...p}
               />
               {showNavItem("facturas", role) && (
@@ -311,8 +319,8 @@ function ShellNavAndFooter({
                   href="/facturas"
                   active={active === "facturas"}
                   icon={Receipt}
-                  title="Facturación"
-                  subtitle="Módulo VeriFactu · AEAT"
+                  title={L.facturacion[0]}
+                  subtitle={L.facturacion[1]}
                   {...p}
                 />
               )}
@@ -321,8 +329,8 @@ function ShellNavAndFooter({
                   href="/gastos"
                   active={active === "gastos"}
                   icon={CreditCard}
-                  title="Gastos"
-                  subtitle="Combustible y peajes"
+                  title={L.gastos[0]}
+                  subtitle={L.gastos[1]}
                   {...p}
                 />
               )}
@@ -330,8 +338,8 @@ function ShellNavAndFooter({
                 href="/finanzas/conciliacion"
                 active={active === "conciliacion"}
                 icon={GitCompare}
-                title="Conciliación IA"
-                subtitle="Automatización contable"
+                title={L.conciliacion[0]}
+                subtitle={L.conciliacion[1]}
                 {...p}
               />
               {isOwnerLike(role) && (
@@ -340,8 +348,8 @@ function ShellNavAndFooter({
                   href="/dashboard/finanzas/tesoreria"
                   active={active === "tesoreria"}
                   icon={Landmark}
-                  title="Tesorería"
-                  subtitle="Liquidez y riesgos"
+                  title={L.tesoreria[0]}
+                  subtitle={L.tesoreria[1]}
                   className="nav-finanzas"
                   {...p}
                 />
@@ -351,8 +359,8 @@ function ShellNavAndFooter({
                   href="/dashboard/finanzas/auditoria"
                   active={active === "auditoria"}
                   icon={FileSearch}
-                  title="Auditoría fiscal"
-                  subtitle="Logs inmutables"
+                  title={L.auditoria[0]}
+                  subtitle={L.auditoria[1]}
                   {...p}
                 />
               )}
@@ -361,8 +369,8 @@ function ShellNavAndFooter({
                   href="/dashboard/certificaciones"
                   active={active === "certificaciones"}
                   icon={BadgeCheck}
-                  title="Certificaciones"
-                  subtitle="Cumplimiento y sellos"
+                  title={L.certificaciones[0]}
+                  subtitle={L.certificaciones[1]}
                   {...p}
                 />
               )}
@@ -373,7 +381,7 @@ function ShellNavAndFooter({
         {/* GESTIÓN */}
         {(showNavItem("clientes", role) || isOwnerLike(role)) && (
           <section className="mt-6">
-            <NavSectionHeader title="Gestión" subtitle="Relación y escenarios" />
+            <NavSectionHeader title={s.sections.management.title} subtitle={s.sections.management.subtitle} />
             <div className="flex flex-col gap-0.5">
               {showNavItem("clientes", role) && (
                 <SidebarNavLink
@@ -381,8 +389,8 @@ function ShellNavAndFooter({
                   href="/clientes"
                   active={active === "clientes"}
                   icon={Users}
-                  title="Clientes"
-                  subtitle="CRM"
+                  title={L.clientes[0]}
+                  subtitle={L.clientes[1]}
                   className="nav-clientes"
                   {...p}
                 />
@@ -392,8 +400,8 @@ function ShellNavAndFooter({
                   href="/dashboard/finanzas/simulador"
                   active={active === "simulador"}
                   icon={LineChart}
-                  title="Simulador de impacto"
-                  subtitle="Escenarios económicos"
+                  title={L.simulador[0]}
+                  subtitle={L.simulador[1]}
                   {...p}
                 />
               )}
@@ -403,15 +411,33 @@ function ShellNavAndFooter({
 
         {/* SISTEMA */}
         <section className="mt-6">
-          <NavSectionHeader title="Sistema" subtitle="Cuenta y datos" />
+          <NavSectionHeader title={s.sections.system.title} subtitle={s.sections.system.subtitle} />
           <div className="flex flex-col gap-0.5">
+            <SidebarNavLink
+              href="/help"
+              active={false}
+              icon={LifeBuoy}
+              title={catalog.nav.help}
+              subtitle={catalog.nav.helpSub}
+              {...p}
+            />
+            {isOwnerLike(role) && (
+              <SidebarNavLink
+                href="/dashboard/settings/billing"
+                active={active === "billing"}
+                icon={BadgeEuro}
+                title={catalog.nav.billing}
+                subtitle={catalog.nav.billingSub}
+                {...p}
+              />
+            )}
             {!hideFinanceBunkerAndAdminNav && showNavItem("admin", role) && (
               <SidebarNavLink
                 href="/admin"
                 active={active === "admin"}
                 icon={Settings}
-                title="Configuración"
-                subtitle="Panel de administración"
+                title={L.configuracion[0]}
+                subtitle={L.configuracion[1]}
                 {...p}
               />
             )}
@@ -420,8 +446,8 @@ function ShellNavAndFooter({
                 href="/settings/integrations"
                 active={active === "integrations"}
                 icon={Link2}
-                title="Integraciones"
-                subtitle="Conectores y datos"
+                title={L.integraciones[0]}
+                subtitle={L.integraciones[1]}
                 {...p}
               />
             )}
@@ -432,8 +458,8 @@ function ShellNavAndFooter({
               href="/perfil/seguridad"
               active={active === "seguridad"}
               icon={Shield}
-              title="Seguridad"
-              subtitle="Perfil y sesión"
+              title={L.seguridad[0]}
+              subtitle={L.seguridad[1]}
               {...p}
             />
             {!hideFinanceBunkerAndAdminNav && showNavItem("finanzas", role) && (
@@ -441,8 +467,8 @@ function ShellNavAndFooter({
                 href="/finanzas/exportar"
                 active={active === "exportar"}
                 icon={FileDown}
-                title="Exportar"
-                subtitle="Data center"
+                title={L.exportar[0]}
+                subtitle={L.exportar[1]}
                 {...p}
               />
             )}
@@ -453,9 +479,12 @@ function ShellNavAndFooter({
         <QuotaStatusCard />
       </div>
       <SidebarUserSection />
-      <div className="flex shrink-0 items-center gap-2 border-t border-zinc-800/80 p-4 text-xs text-zinc-500">
-        <Leaf className="h-4 w-4 text-emerald-500" aria-hidden />
-        <span>AB Logistics OS</span>
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-zinc-800/80 p-4 text-xs text-zinc-500">
+        <div className="flex items-center gap-2">
+          <Leaf className="h-4 w-4 text-emerald-500" aria-hidden />
+          <span>{s.sidebarBrand}</span>
+        </div>
+        <LocaleSwitcher />
       </div>
     </>
   );
@@ -464,6 +493,8 @@ function ShellNavAndFooter({
 export function AppShell({ children, active }: Props) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { catalog } = useOptionalLocaleCatalog();
+  const s = catalog.appShell;
 
   const resolvedActive: Props["active"] = (() => {
     if (active) return active;
@@ -473,6 +504,7 @@ export function AppShell({ children, active }: Props) {
     if (pathname === "/dashboard/vampire-radar" || pathname.startsWith("/dashboard/vampire-radar/")) {
       return "vampire_radar";
     }
+    if (pathname.startsWith("/dashboard/settings/billing")) return "billing";
     if (pathname === "/dashboard/finanzas/tesoreria") return "tesoreria";
     if (pathname === "/dashboard/finanzas/simulador") return "simulador";
     if (pathname === "/dashboard/finanzas/auditoria") return "auditoria";
@@ -527,9 +559,7 @@ export function AppShell({ children, active }: Props) {
       <aside className="hidden w-64 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 text-zinc-300 lg:flex">
         <div className="flex h-16 shrink-0 items-center border-b border-zinc-800 px-6">
           <Truck className="mr-2 h-6 w-6 shrink-0 text-emerald-500" />
-          <span className="text-white font-bold text-lg tracking-tight">
-            AB Logistics OS
-          </span>
+          <span className="text-white font-bold text-lg tracking-tight">{s.sidebarBrand}</span>
         </div>
         <ShellNavAndFooter active={resolvedActive} />
       </aside>
@@ -538,20 +568,18 @@ export function AppShell({ children, active }: Props) {
         <SheetContent
           side="left"
           className="border-zinc-800 bg-zinc-950 text-zinc-300"
-          aria-label="Menú de navegación principal"
+          aria-label={s.mainNavSheetAria}
         >
           <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-zinc-800 px-4">
             <div className="flex min-w-0 items-center">
               <Truck className="mr-2 h-6 w-6 shrink-0 text-emerald-500" />
-              <SheetTitle className="truncate border-0 p-0 text-sm font-bold text-white">
-                AB Logistics OS
-              </SheetTitle>
+              <SheetTitle className="truncate border-0 p-0 text-sm font-bold text-white">{s.sidebarBrand}</SheetTitle>
             </div>
             <button
               type="button"
               onClick={closeMobile}
               className="shrink-0 rounded-lg p-2 text-zinc-400 transition-all duration-200 hover:bg-zinc-900/80 hover:text-white"
-              aria-label="Cerrar menú"
+              aria-label={s.closeMenu}
             >
               <X className="h-5 w-5" />
             </button>
@@ -567,12 +595,12 @@ export function AppShell({ children, active }: Props) {
           <button
             type="button"
             className="rounded-lg p-2 transition-all duration-200 hover:bg-zinc-900/80"
-            aria-label="Abrir menú de navegación"
+            aria-label={s.openMenu}
             onClick={() => setMobileOpen(true)}
           >
             <Menu className="h-6 w-6" />
           </button>
-          <span className="truncate font-bold tracking-tight">AB Logistics OS</span>
+          <span className="truncate font-bold tracking-tight">{s.sidebarBrand}</span>
         </div>
         <div className="min-h-0 min-w-0 flex-1">{children}</div>
       </div>

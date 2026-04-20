@@ -23,6 +23,13 @@ _log = logging.getLogger(__name__)
 
 EVENT_FACTURA_FINALIZADA = "factura.finalizada"
 EVENT_PORTE_FACTURADO = "porte.facturado"
+# Informes automáticos / integraciones BI (misma carga que export CSV del front).
+EVENT_ANALYTICS_PROFIT_MARGIN_SNAPSHOT = "analytics.profit_margin.snapshot"
+
+
+def profit_margin_snapshot_envelope(payload: dict[str, Any]) -> dict[str, Any]:
+    """Envoltorio canónico para webhooks salientes (JSON firmado con HMAC)."""
+    return {"event": EVENT_ANALYTICS_PROFIT_MARGIN_SNAPSHOT, "payload": payload}
 
 _MAX_ATTEMPTS = 3
 _BACKOFF_SEC = (1.0, 2.0, 4.0)

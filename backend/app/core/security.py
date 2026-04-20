@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
@@ -60,9 +59,11 @@ def decode_access_token_payload(token: str) -> dict[str, Any]:
         pass
 
     try:
+        from app.services.secret_manager_service import get_secret_manager
+
         return jwt.decode(
             token,
-            settings.JWT_SECRET_KEY,
+            get_secret_manager().get_jwt_secret_key(),
             algorithms=[settings.JWT_ALGORITHM],
             options={"verify_aud": False},
         )
@@ -205,22 +206,47 @@ def create_access_token(
     cj = (cliente_id or "").strip()
     if rr == "cliente" and cj:
         payload["cliente_id"] = cj
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    from app.services.secret_manager_service import get_secret_manager
+
+    return jwt.encode(payload, get_secret_manager().get_jwt_secret_key(), algorithm=settings.JWT_ALGORITHM)
 
 
 # --- Fernet (application-layer encryption for PII at rest) --------------------
 
 
-@lru_cache(maxsize=1)
-def _fernet_from_pii_env() -> Fernet | None:
-    """Clave dedicada PII (44 caracteres base64 url-safe)."""
-    raw = (os.getenv("PII_ENCRYPTION_KEY") or "").strip()
+def _fernet_from_raw_pii(raw: str) -> Fernet | None:
     if len(raw) != 44:
         return None
     try:
         return Fernet(raw.encode("ascii"))
     except Exception:
         return None
+
+
+def _pii_fernets_encrypt_order() -> list[Fernet]:
+    from app.services.secret_manager_service import get_secret_manager
+
+    out: list[Fernet] = []
+    for raw in get_secret_manager().list_fernet_pii_raw_keys(include_previous=False):
+        f = _fernet_from_raw_pii(raw)
+        if f is not None:
+            out.append(f)
+    return out
+
+
+def _pii_fernets_decrypt_order() -> list[Fernet]:
+    from app.services.secret_manager_service import get_secret_manager
+
+    out: list[Fernet] = []
+    seen_raw: set[str] = set()
+    for raw in get_secret_manager().list_fernet_pii_raw_keys(include_previous=True):
+        if raw in seen_raw:
+            continue
+        seen_raw.add(raw)
+        f = _fernet_from_raw_pii(raw)
+        if f is not None:
+            out.append(f)
+    return out
 
 
 def fernet_encrypt_string(plain: str | None) -> str | None:
@@ -239,9 +265,9 @@ def fernet_encrypt_string(plain: str | None) -> str | None:
         return ""
     if s.startswith("gAAAA"):
         return s
-    f = _fernet_from_pii_env()
-    if f is not None:
-        return f.encrypt(s.encode("utf-8")).decode("ascii")
+    ferns = _pii_fernets_encrypt_order()
+    if ferns:
+        return ferns[0].encrypt(s.encode("utf-8")).decode("ascii")
     from app.core.encryption import encrypt_sensitive_data
 
     return encrypt_sensitive_data(s)
@@ -260,12 +286,11 @@ def fernet_decrypt_string(cipher: str | None) -> str | None:
     s = cipher.strip()
     if s == "":
         return ""
-    f = _fernet_from_pii_env()
-    if f is not None:
+    for f in _pii_fernets_decrypt_order():
         try:
             return f.decrypt(s.encode("ascii")).decode("utf-8")
         except (InvalidToken, ValueError, UnicodeEncodeError):
-            pass
+            continue
     from app.core.encryption import decrypt_sensitive_data
 
     return decrypt_sensitive_data(s)

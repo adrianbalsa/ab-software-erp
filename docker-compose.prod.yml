@@ -53,6 +53,7 @@ services:
       - .env
     environment:
       REDIS_URL: redis://redis:6379/0
+      SECURITY_CONTACT_EMAIL: ${SECURITY_CONTACT_EMAIL:-security@ablogistics-os.com}
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
       GUNICORN_GRACEFUL_TIMEOUT: ${GUNICORN_GRACEFUL_TIMEOUT:-30}

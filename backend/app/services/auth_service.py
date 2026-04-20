@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from app.core.config import get_settings
+from app.core.i18n import normalize_lang
 from app.core.rbac import normalize_rbac_role
 from app.models.enums import normalize_user_role
 from app.core.security import hash_password_argon2id, verify_password_against_stored
@@ -37,6 +38,37 @@ class AuthService:
 
     def __init__(self, db: SupabaseAsync) -> None:
         self._db = db
+
+    async def attach_preferred_language(self, user: UserOut) -> UserOut:
+        """
+        ``usuarios.preferred_language`` prevalece sobre ``empresas.preferred_language``.
+        """
+        eid = str(user.empresa_id)
+        emp_lang: str | None = None
+        usr_lang: str | None = None
+        try:
+            re: Any = await self._db.execute(
+                self._db.table("empresas").select("preferred_language").eq("id", eid).limit(1)
+            )
+            er = (re.data or []) if hasattr(re, "data") else []
+            if er:
+                emp_lang = str(er[0].get("preferred_language") or "").strip() or None
+        except Exception:
+            pass
+        try:
+            ru: Any = await self._db.execute(
+                self._db.table("usuarios")
+                .select("preferred_language")
+                .eq("username", user.username)
+                .limit(1)
+            )
+            ur = (ru.data or []) if hasattr(ru, "data") else []
+            if ur:
+                usr_lang = str(ur[0].get("preferred_language") or "").strip() or None
+        except Exception:
+            pass
+        pref = normalize_lang(usr_lang) if usr_lang else normalize_lang(emp_lang) if emp_lang else "es"
+        return user.model_copy(update={"preferred_language": pref})
 
     async def authenticate(self, *, username: str, password: str) -> UserOut | None:
         login_id = (username or "").strip()
@@ -71,7 +103,7 @@ class AuthService:
                 profile.rbac_role,
                 profile.empresa_id,
             )
-            return profile
+            return await self.attach_preferred_language(profile)
         if not user.empresa_id:
             _auth_debug(
                 "authenticate abort: sin profile con empresa y usuarios.empresa_id vacío (usuario=%s)",
@@ -80,7 +112,7 @@ class AuthService:
             return None
         rbac = normalize_rbac_role(None, legacy_rol=user.rol)
         _auth_debug("authenticate fallback UserOut from usuarios only rbac_role=%s", rbac)
-        return UserOut(
+        base = UserOut(
             username=user.username,
             empresa_id=user.empresa_id,
             role=normalize_user_role(None, legacy_role=user.rol),
@@ -89,6 +121,7 @@ class AuthService:
             cliente_id=None,
             usuario_id=None,
         )
+        return await self.attach_preferred_language(base)
 
     async def _lazy_upgrade_password_hash(self, *, username: str, plain_password: str) -> None:
         """Tras login válido con SHA256, reescribe `password_hash` con Argon2id. [cite: 2026-03-22]"""
@@ -131,7 +164,7 @@ class AuthService:
             return profile
         if not empresa_id:
             return None
-        return UserOut(
+        base = UserOut(
             username=username,
             empresa_id=UUID(empresa_id),
             role=normalize_user_role(None, legacy_role=rol),
@@ -140,6 +173,7 @@ class AuthService:
             cliente_id=None,
             usuario_id=None,
         )
+        return await self.attach_preferred_language(base)
 
     async def get_usuario_by_email(self, *, email: str) -> UserInDB | None:
         """
@@ -341,14 +375,15 @@ class AuthService:
         if uid:
             row = await self._fetch_profile_row("id", uid)
             if row is not None:
-                return self._profile_row_to_user_out(row, subject=subject)
+                out = self._profile_row_to_user_out(row, subject=subject)
+                return await self.attach_preferred_language(out) if out is not None else None
 
         for column in ("username", "email"):
             row = await self._fetch_profile_row(column, subject)
             if row is not None:
                 out = self._profile_row_to_user_out(row, subject=subject)
                 if out is not None:
-                    return out
+                    return await self.attach_preferred_language(out)
 
         return None
 

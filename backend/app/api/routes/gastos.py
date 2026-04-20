@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from fastapi.responses import JSONResponse
 
 from app.api import deps
-from app.schemas.gasto import GastoCreate, GastoOCRHint, GastoOut
+from app.schemas.gasto import GastoCreate, GastoOCRExtractOut, GastoOCRHint, GastoOut
 from app.schemas.user import UserOut
 from app.services.gastos_service import GastosService
 
@@ -33,7 +33,7 @@ def _optional_float(name: str, raw: str | None) -> float | None:
 @router.get("/", response_model=list[GastoOut])
 async def list_gastos(
     current_user: UserOut = Depends(deps.get_current_user),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
+    _: None = Depends(deps.RoleChecker(["admin", "gestor", "driver"])),
     service: GastosService = Depends(deps.get_gastos_service),
 ) -> list[GastoOut]:
     return await service.list_gastos(empresa_id=current_user.empresa_id)
@@ -50,9 +50,10 @@ async def create_gasto(
     nif_proveedor: str | None = Form(None),
     iva: str | None = Form(None),
     total_eur: str | None = Form(None),
+    porte_id: str | None = Form(None),
     evidencia: UploadFile | None = File(None),
     current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
+    _: None = Depends(deps.RoleChecker(["admin", "gestor", "driver"])),
     service: GastosService = Depends(deps.get_gastos_service),
 ) -> GastoOut:
     try:
@@ -66,6 +67,7 @@ async def create_gasto(
             nif_proveedor=nif_proveedor,
             iva=_optional_float("iva", iva),
             total_eur=_optional_float("total_eur", total_eur),
+            porte_id=porte_id,
         )
     except HTTPException:
         raise
@@ -169,3 +171,31 @@ async def ocr_hint(
     content = await evidencia.read()
     hint = await service.ocr_extract_hint(content=content, filename=evidencia.filename or "evidencia")
     return hint
+
+
+@router.post("/ocr", response_model=GastoOCRExtractOut)
+async def ocr_extract(
+    evidencia: UploadFile = File(...),
+    current_user: UserOut = Depends(deps.bind_write_context),
+    _: None = Depends(deps.RoleChecker(["admin", "gestor", "driver"])),
+    service: GastosService = Depends(deps.get_gastos_service),
+) -> GastoOCRExtractOut:
+    """
+    OCR de ticket para app móvil. Extrae campos clave para confirmación manual:
+    proveedor, cif, base_imponible, iva, total y fecha.
+    """
+    content = await evidencia.read()
+    hint = await service.ocr_extract_hint(content=content, filename=evidencia.filename or "ticket")
+    total = hint.total
+    iva = hint.iva
+    base_imponible = None
+    if total is not None:
+        base_imponible = max(0.0, float(total) - float(iva or 0.0))
+    return GastoOCRExtractOut(
+        proveedor=hint.proveedor,
+        cif=hint.nif_proveedor,
+        base_imponible=base_imponible,
+        iva=iva,
+        total=total,
+        fecha=hint.fecha,
+    )

@@ -16,8 +16,8 @@
 | **API** | **FastAPI** (ASGI), Uvicorn | `app.main:create_app`, routers bajo `/auth`, `/portes`, `/facturas`, `/finance`, `/eco`, `/reports`, etc. |
 | **Cliente** | **Next.js 16** (App Router), **React 19**, **TypeScript 5**, **Tailwind CSS 4** | `frontend/package.json` |
 | **Datos** | **Supabase** (PostgREST + Postgres) vía cliente async propio | `app.db.supabase`, variables `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` |
-| **Contenedor API** | **Docker** multi-stage, usuario no root, healthcheck `/ready` | `Dockerfile` (raíz repo) |
-| **Observabilidad** | **Sentry** (opcional por `SENTRY_DSN`) | `app.main` inicializa `sentry_sdk` con integraciones FastAPI/Starlette |
+| **Contenedor API** | **Docker** multi-stage, usuario no root, healthcheck `GET /live` | `backend/Dockerfile` |
+| **Observabilidad** | **Sentry** (`SENTRY_DSN`, release vía `APP_RELEASE` o SHA PaaS), logs JSON con `request_id` | `app.main:_init_sentry`, `JsonAccessLogMiddleware`, DRP `docs/operations/DISASTER_RECOVERY.md` |
 
 El backend expone **OpenAPI** en `/docs` y `/redoc`. La configuración está centralizada en `app.core.config.Settings` (dataclass inmutable, caché LRU) con separación explícita **development / production** (CORS, cookies seguras, HSTS vía middleware).
 

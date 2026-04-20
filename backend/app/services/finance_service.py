@@ -27,8 +27,10 @@ from app.schemas.finance import (
     FinanceSummaryOut,
     FinanceTesoreriaMensualOut,
     GastoBucketCincoOut,
+    GastoBucketMensualOut,
 )
 from app.services.auditoria_service import AuditoriaService
+from app.services.eco_service import EUR_POR_LITRO_DIESEL_REF, KG_CO2_POR_LITRO_DIESEL
 
 # Alineado con BI / advisor (fallback si no hay tickets de combustible por vehículo/día).
 COSTE_OPERATIVO_EUR_KM: float = float(os.getenv("COSTE_OPERATIVO_EUR_KM", "0.62"))
@@ -301,7 +303,75 @@ class FinanceService:
                 empresa_id=eid, hoy=hoy, period_month=period_month
             )
 
-        return self._finance_dashboard_from_agg(agg=agg, hoy=hoy, period_month=period_month)
+        base = self._finance_dashboard_from_agg(agg=agg, hoy=hoy, period_month=period_month)
+        co2, kg_lit = await self._co2_savings_ytd_kg(empresa_id=eid, hoy=hoy)
+        from app.services.bi_service import BiService
+
+        rutas = await BiService(self._db).logisadvisor_rutas_margen_negativo(
+            empresa_id=eid,
+            date_from=date(hoy.year, 1, 1),
+            date_to=hoy,
+        )
+        return base.model_copy(
+            update={
+                "co2_savings_ytd": co2,
+                "kg_co2_por_litro_diesel_certificado": kg_lit,
+                "rutas_margen_negativo_logisadvisor": rutas,
+            }
+        )
+
+    async def _co2_savings_ytd_kg(self, *, empresa_id: str, hoy: date) -> tuple[float, float]:
+        """
+        kg CO₂ evitados YTD (año natural) priorizando `esg_co2_ahorro_vs_euro_iii_kg` en portes;
+        respaldo: litros estimados desde tickets combustible × factor 2,67 kg/L × mejora de normativa.
+        """
+        kg_lit = float(os.getenv("ECO_KG_CO2_POR_LITRO_DIESEL") or str(KG_CO2_POR_LITRO_DIESEL))
+        eid = str(empresa_id or "").strip()
+        if not eid:
+            return 0.0, kg_lit
+        d0 = date(hoy.year, 1, 1)
+        total = 0.0
+        try:
+            res_p: Any = await self._db.execute(
+                filter_not_deleted(
+                    self._db.table("portes")
+                    .select("esg_co2_ahorro_vs_euro_iii_kg")
+                    .eq("empresa_id", eid)
+                    .gte("fecha", d0.isoformat())
+                    .lte("fecha", hoy.isoformat())
+                )
+            )
+            for row in (res_p.data or []) if hasattr(res_p, "data") else []:
+                v = row.get("esg_co2_ahorro_vs_euro_iii_kg")
+                if v is not None:
+                    total += max(0.0, float(v))
+        except Exception:
+            total = 0.0
+        if total > 1e-9:
+            return round(total, 4), kg_lit
+
+        # Respaldo: litros desde gastos combustible YTD × factor certificado (sin desglose Euro IV/VI en fila).
+        litros = 0.0
+        try:
+            res_gv: Any = await self._db.execute(
+                filter_not_deleted(self._db.table("gastos").select("*").eq("empresa_id", eid))
+            )
+            gas_rows: list[dict[str, Any]] = (res_gv.data or []) if hasattr(res_gv, "data") else []
+        except Exception:
+            gas_rows = []
+        for r in gas_rows:
+            fd = self._fecha_desde_campo(r.get("fecha"))
+            if fd is None or fd < d0 or fd > hoy:
+                continue
+            if self._bucket_gasto_cinco(str(r.get("categoria") or "")) != "Combustible":
+                continue
+            net = self._gasto_neto_sin_iva(r)
+            if net <= 0:
+                continue
+            litros += float(net) / max(float(EUR_POR_LITRO_DIESEL_REF), 1e-6)
+        # Mejora conservadora: Euro VI vs mix anterior (≈15 % menos CO₂ por litro combustible).
+        mejor_lit = 0.15
+        return round(max(0.0, litros * kg_lit * mejor_lit), 4), kg_lit
 
     async def _pnl_single_month_supabase(self, *, empresa_id: str, period_month: str) -> tuple[Decimal, Decimal, Decimal]:
         eid = str(empresa_id or "").strip()
@@ -343,7 +413,8 @@ class FinanceService:
             self._db.table("facturas")
             .select(
                 "id, empresa_id, base_imponible, total_factura, cuota_iva, fecha_emision, "
-                "estado_cobro, matched_transaction_id, pago_id, total_km_estimados_snapshot"
+                "estado_cobro, matched_transaction_id, pago_id, total_km_estimados_snapshot, "
+                "is_finalized, hash_registro, fingerprint"
             )
             .eq("empresa_id", eid)
         )
@@ -384,10 +455,9 @@ class FinanceService:
         )
 
     def _finance_dashboard_empty_shell(self, *, hoy: date) -> FinanceDashboardOut:
-        year = hoy.year
-        meses = ftk.months_of_calendar_year(year)
         bars = ftk.last_n_month_keys(hoy=hoy, n=6)
         buckets = ["Combustible", "Personal", "Mantenimiento", "Seguros", "Peajes"]
+        kg_co2 = float(os.getenv("ECO_KG_CO2_POR_LITRO_DIESEL") or str(KG_CO2_POR_LITRO_DIESEL))
         return FinanceDashboardOut(
             ingresos=0.0,
             gastos=0.0,
@@ -399,9 +469,19 @@ class FinanceService:
             ],
             tesoreria_mensual=[
                 FinanceTesoreriaMensualOut(periodo=p, ingresos_facturados=0.0, cobros_reales=0.0)
-                for p in meses
+                for p in bars
             ],
             gastos_por_bucket_cinco=[GastoBucketCincoOut(name=n, value=0.0) for n in buckets],
+            gastos_bucket_mensual=[
+                GastoBucketMensualOut(
+                    periodo=p,
+                    buckets=[GastoBucketCincoOut(name=n, value=0.0) for n in buckets],
+                )
+                for p in bars
+            ],
+            rutas_margen_negativo_logisadvisor=[],
+            co2_savings_ytd=0.0,
+            kg_co2_por_litro_diesel_certificado=kg_co2,
             margen_neto_km_mes_actual=None,
             margen_neto_km_mes_anterior=None,
             variacion_margen_km_pct=None,
@@ -434,10 +514,9 @@ class FinanceService:
             for p in bars
         ]
 
-        year = hoy.year
-        meses = ftk.months_of_calendar_year(year)
+        bars6 = ftk.last_n_month_keys(hoy=hoy, n=6)
         tesoreria: list[FinanceTesoreriaMensualOut] = []
-        for p in meses:
+        for p in bars6:
             ing_f = quantize_currency(agg.tesoreria_ing_facturado.get(p, Decimal("0.00")))
             if agg.has_bank_transactions:
                 cob = quantize_currency(agg.tesoreria_cobros_reales.get(p, Decimal("0.00")))
@@ -459,6 +538,21 @@ class FinanceService:
             )
             for name in bucket_order
         ]
+        gastos_mensual: list[GastoBucketMensualOut] = []
+        for p in bars6:
+            per_m = agg.gastos_bucket_por_mes.get(p, {})
+            gastos_mensual.append(
+                GastoBucketMensualOut(
+                    periodo=p,
+                    buckets=[
+                        GastoBucketCincoOut(
+                            name=name,
+                            value=float(quantize_currency(per_m.get(name, Decimal("0.00")))),
+                        )
+                        for name in bucket_order
+                    ],
+                )
+            )
 
         km_act = quantize_currency(agg.km_mes_actual)
         km_prev = quantize_currency(agg.km_mes_anterior)
@@ -474,6 +568,7 @@ class FinanceService:
         if mkm_cur is not None and mkm_prev is not None and mkm_prev != 0:
             var_pct = round(float((mkm_cur - mkm_prev) / mkm_prev * Decimal("100")), 4)
 
+        kg_co2 = float(os.getenv("ECO_KG_CO2_POR_LITRO_DIESEL") or str(KG_CO2_POR_LITRO_DIESEL))
         return FinanceDashboardOut(
             ingresos=float(ing_q),
             gastos=float(gas_q),
@@ -483,6 +578,10 @@ class FinanceService:
             ingresos_vs_gastos_mensual=serie_bars,
             tesoreria_mensual=tesoreria,
             gastos_por_bucket_cinco=gastos_buckets,
+            gastos_bucket_mensual=gastos_mensual,
+            rutas_margen_negativo_logisadvisor=[],
+            co2_savings_ytd=0.0,
+            kg_co2_por_litro_diesel_certificado=kg_co2,
             margen_neto_km_mes_actual=float(mkm_cur) if mkm_cur is not None else None,
             margen_neto_km_mes_anterior=float(mkm_prev) if mkm_prev is not None else None,
             variacion_margen_km_pct=var_pct,

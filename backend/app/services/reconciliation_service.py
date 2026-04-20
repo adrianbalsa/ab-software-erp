@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -13,7 +14,10 @@ from rapidfuzz import fuzz
 
 from app.db.supabase import SupabaseAsync
 from app.schemas.banking import ConciliationCandidate, Transaccion
+from app.services.ai_service import LogisAdvisorService
+from app.services.audit_logs_service import AuditLogsService
 from app.schemas.conciliacion import ConciliacionSugerenciaLLM, ConciliarAiOut
+from app.services.secret_manager_service import get_secret_manager
 
 _log = logging.getLogger(__name__)
 
@@ -157,8 +161,16 @@ def match_invoice_transaction_pair(
 class ReconciliationService:
     """Conciliación automática facturas ↔ bank_transactions."""
 
-    def __init__(self, db: SupabaseAsync) -> None:
+    def __init__(self, db: SupabaseAsync, logis_advisor: LogisAdvisorService | None = None) -> None:
         self._db = db
+        self._logis = logis_advisor
+
+    @staticmethod
+    def _description_ambiguous_for_llm(top_candidates: list[ConciliationCandidate]) -> bool:
+        if len(top_candidates) < 2:
+            return False
+        top = top_candidates[0]
+        return float(top.reference_score) < 0.45
 
     async def auto_reconcile_invoices(self, empresa_id: str) -> tuple[int, list[dict[str, Any]]]:
         """
@@ -209,10 +221,31 @@ class ReconciliationService:
             now_iso = datetime.now(timezone.utc).isoformat()
             await self._db.execute(
                 self._db.table("bank_transactions")
-                .update({"reconciled": True, "updated_at": now_iso})
+                .update(
+                    {
+                        "reconciled": True,
+                        "status_reconciled": "reconciled",
+                        "internal_status": "reconciled",
+                        "updated_at": now_iso,
+                    }
+                )
                 .eq("empresa_id", empresa_id)
                 .eq("transaction_id", tx_id)
             )
+            try:
+                await AuditLogsService(self._db).log_bank_reconciliation(
+                    empresa_id=empresa_id,
+                    transaction_id=tx_id,
+                    factura_id=fid,
+                    user_id=None,
+                )
+            except Exception:
+                _log.warning(
+                    "auto_reconcile: audit log omitido tx=%s factura=%s",
+                    tx_id,
+                    fid,
+                    exc_info=True,
+                )
 
             detalle.append(
                 {
@@ -339,7 +372,7 @@ class ReconciliationService:
 
     @staticmethod
     def _openai_configured() -> bool:
-        return bool((os.getenv("OPENAI_API_KEY") or "").strip())
+        return bool(get_secret_manager().get_openai_api_key())
 
     @staticmethod
     def _llm_model() -> str:
@@ -353,7 +386,7 @@ class ReconciliationService:
     ) -> str:
         from openai import OpenAI
 
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = get_secret_manager().get_openai_api_key()
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY no configurada")
 
@@ -403,7 +436,7 @@ class ReconciliationService:
         """Un solo movimiento ``bank_transactions`` y ≤5 candidatos fuzzy (ahorro de tokens)."""
         from openai import OpenAI
 
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = get_secret_manager().get_openai_api_key()
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY no configurada")
 
@@ -490,6 +523,24 @@ class ReconciliationService:
             return None, None, "empresa_id requerido"
         if not top_candidates:
             return None, None, "sin candidatos para el LLM"
+
+        if self._logis is not None and self._description_ambiguous_for_llm(top_candidates):
+            try:
+                fid_la, conf_la, note_la = await self._logis.score_bank_invoice_match_from_client_history(
+                    empresa_id=eid,
+                    transaction=transaction,
+                    candidates=top_candidates,
+                )
+            except Exception as exc:
+                _log.warning("LogisAdvisor conciliación bancaria: %s", exc, exc_info=True)
+                fid_la, conf_la, note_la = None, 0.0, ""
+
+            if fid_la is not None and conf_la >= 0.58:
+                picked_la = next((c for c in top_candidates if c.factura_id == fid_la), None)
+                if picked_la is not None:
+                    merged_la = picked_la.model_copy(update={"score": round(float(conf_la), 4)})
+                    return merged_la, note_la or "LogisAdvisor (historial cliente)", None
+
         if not self._openai_configured():
             return None, None, "OPENAI_API_KEY no configurada"
 

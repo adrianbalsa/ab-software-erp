@@ -14,7 +14,9 @@
 
 ## Health
 
-- `GET /health` — Supabase REST + `FinanceService.financial_summary` (tenant sintético). `503` si algo falla.
+- `GET /live` — liveness (proceso vivo), sin TrustedHost; uso en Railway `healthcheckPath` y Docker `HEALTHCHECK`.
+- `GET /health` — readiness: Supabase REST + Redis obligatorio. `503` si falla una dependencia crítica.
+- `GET /health/deep` — Supabase + `FinanceService` (tenant sintético) + Postgres/Redis/PgBouncer opcionales. `503` si el estado global no es `healthy`.
 - `GET /ready` — Solo proceso vivo (Kubernetes).
 
 ## Logs JSON

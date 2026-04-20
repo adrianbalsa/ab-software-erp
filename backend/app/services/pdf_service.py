@@ -3,12 +3,15 @@ from __future__ import annotations
 import base64
 import datetime
 import io
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 from PIL import Image
 
+from app.core.i18n import get_translator
 from app.services.pdf_fonts import register_brand_fonts
 
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -23,10 +26,12 @@ WHITE = (255, 255, 255)
 
 
 def _pdf_output_bytes(pdf: FPDF) -> bytes:
-    raw = pdf.output(dest="S")
+    raw = pdf.output()
     if isinstance(raw, (bytes, bytearray)):
         return bytes(raw)
-    return raw.encode("latin-1")
+    if raw is None:
+        return b""
+    return str(raw).encode("latin-1")
 
 
 def _fmt_eur(v: float | int | None) -> str:
@@ -51,10 +56,11 @@ def draw_eco_footer_icon(pdf: FPDF, cx: float, cy: float) -> None:
 class InvoicePDF(FPDF):
     """Factura AB Logistics OS — grid, Zinc / Emerald, VeriFactu."""
 
-    def __init__(self) -> None:
+    def __init__(self, tr: Callable[[str], str] | None = None) -> None:
         super().__init__()
         self.body_family = "helvetica"
         self.mono_family = "courier"
+        self._tr: Callable[[str], str] = tr if tr is not None else (lambda s: s)
         self.set_auto_page_break(auto=True, margin=18)
 
     def header(self) -> None:
@@ -65,24 +71,26 @@ class InvoicePDF(FPDF):
         self.set_xy(12, 12)
         self.set_font(self.body_family, "B", 18)
         self.set_text_color(*EMERALD_600)
-        self.cell(0, 8, "AB Logistics OS", align="R")
+        self.cell(0, 8, self._tr("AB Logistics OS"), align="R")
         self.ln(6)
         self.set_font(self.body_family, "B", 14)
         self.set_text_color(*ZINC_800)
-        self.cell(0, 7, "Factura", align="R")
+        self.cell(0, 7, self._tr("Invoice"), align="R")
         self.ln(12)
 
     def footer(self) -> None:
         self.set_y(-14)
         self.set_font(self.body_family, "", 8)
         self.set_text_color(*ZINC_500)
-        self.cell(0, 5, f"Página {self.page_no()}", align="C")
+        self.cell(0, 5, self._tr("Page {n}").format(n=self.page_no()), align="C")
 
 
 def generar_pdf_factura(
     datos_empresa: dict[str, Any],
     datos_cliente: dict[str, Any],
     conceptos: list[dict[str, Any]],
+    *,
+    lang: str | None = None,
 ) -> bytes:
     """
     PDF de factura con rejilla moderna, sección VeriFactu y fuentes de marca (Roboto / Roboto Mono).
@@ -90,7 +98,8 @@ def generar_pdf_factura(
     ``datos_empresa`` puede incluir (opcional): ``numero_factura``, ``fecha_emision``, ``num_factura``,
     ``base_imponible``, ``cuota_iva``, ``total_factura``, ``iva_porcentaje``, ``hash``.
     """
-    pdf = InvoicePDF()
+    t = get_translator(lang)
+    pdf = InvoicePDF(tr=t)
     body, mono = register_brand_fonts(pdf)
     pdf.body_family = body
     pdf.mono_family = mono
@@ -105,8 +114,8 @@ def generar_pdf_factura(
 
     pdf.set_font(body, "", 9)
     pdf.set_text_color(*ZINC_500)
-    pdf.cell(95, 5, f"Documento n.º {num}", align="L")
-    pdf.cell(95, 5, f"Fecha emisión: {fecha}", align="R")
+    pdf.cell(95, 5, f"{t('Document no.')} {num}", align="L")
+    pdf.cell(95, 5, f"{t('Issue date')}: {fecha}", align="R")
     pdf.ln(8)
     pdf.set_text_color(*ZINC_800)
 
@@ -119,20 +128,20 @@ def generar_pdf_factura(
 
     em_lines = [
         str(datos_empresa.get("nombre") or ""),
-        f"NIF/CIF: {str(datos_empresa.get('nif') or '').strip() or '—'}",
+        f"{t('Tax ID')}: {str(datos_empresa.get('nif') or '').strip() or '—'}",
     ]
     re_lines = [
         str(datos_cliente.get("nombre") or ""),
-        f"NIF/CIF: {str(datos_cliente.get('nif') or '').strip() or '—'}",
-        f"Ref. cliente: {datos_cliente.get('id', '')}",
+        f"{t('Tax ID')}: {str(datos_cliente.get('nif') or '').strip() or '—'}",
+        f"{t('Customer ref.')}: {datos_cliente.get('id', '')}",
     ]
 
     pdf.set_xy(pdf.l_margin, y0)
     pdf.set_font(body, "B", 10)
     pdf.set_text_color(*EMERALD_600)
-    pdf.cell(half, 6, "Emisor", border="LTR", align="L", fill=True)
+    pdf.cell(half, 6, t("Issuer"), border="LTR", align="L", fill=True)
     pdf.set_xy(pdf.l_margin + half + 4, y0)
-    pdf.cell(half, 6, "Receptor", border="LTR", align="L", fill=True)
+    pdf.cell(half, 6, t("Recipient"), border="LTR", align="L", fill=True)
     pdf.ln(6)
 
     y1 = pdf.get_y()
@@ -151,8 +160,26 @@ def generar_pdf_factura(
     pdf.set_fill_color(*EMERALD_600)
     pdf.set_text_color(*WHITE)
     pdf.set_draw_color(*ZINC_200)
-    pdf.cell(118, 8, "Concepto / servicio", 1, 0, "L", True)
-    pdf.cell(65, 8, "Importe (EUR)", 1, 1, "R", True)
+    pdf.cell(
+        118,
+        8,
+        t("Service / line item"),
+        border=1,
+        align="L",
+        fill=True,
+        new_x=XPos.RIGHT,
+        new_y=YPos.TOP,
+    )
+    pdf.cell(
+        65,
+        8,
+        t("Amount (EUR)"),
+        border=1,
+        align="R",
+        fill=True,
+        new_x=XPos.LMARGIN,
+        new_y=YPos.NEXT,
+    )
 
     pdf.set_font(body, "", 8)
     pdf.set_text_color(*ZINC_800)
@@ -166,8 +193,16 @@ def generar_pdf_factura(
         except (TypeError, ValueError):
             precio = 0.0
         subtotal += precio
-        pdf.cell(118, 8, nombre, 1, 0, "L")
-        pdf.cell(65, 8, _fmt_eur(precio), 1, 1, "R")
+        pdf.cell(118, 8, nombre, border=1, align="L", new_x=XPos.RIGHT, new_y=YPos.TOP)
+        pdf.cell(
+            65,
+            8,
+            _fmt_eur(precio),
+            border=1,
+            align="R",
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
 
     # Totales
     base = datos_empresa.get("base_imponible")
@@ -183,20 +218,60 @@ def generar_pdf_factura(
     pdf.ln(2)
     pdf.set_font(body, "", 9)
     pdf.set_text_color(*ZINC_500)
-    pdf.cell(118, 6, "", 0, 0)
+    pdf.cell(118, 6, "", border=0, new_x=XPos.RIGHT, new_y=YPos.TOP)
     if iva_pct is not None:
-        pdf.cell(65, 6, f"Base imponible: {_fmt_eur(base)}", 0, 1, "R")
-        pdf.cell(118, 6, "", 0, 0)
-        pdf.cell(65, 6, f"IVA ({iva_pct}%): {_fmt_eur(cuota)}", 0, 1, "R")
+        pdf.cell(
+            65,
+            6,
+            t("Taxable base: {amt}").format(amt=_fmt_eur(base)),
+            border=0,
+            align="R",
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
+        pdf.cell(118, 6, "", border=0, new_x=XPos.RIGHT, new_y=YPos.TOP)
+        pdf.cell(
+            65,
+            6,
+            t("VAT ({pct}%): {amt}").format(pct=iva_pct, amt=_fmt_eur(cuota)),
+            border=0,
+            align="R",
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
     else:
-        pdf.cell(65, 6, f"Base: {_fmt_eur(base)}", 0, 1, "R")
+        pdf.cell(
+            65,
+            6,
+            t("Base: {amt}").format(amt=_fmt_eur(base)),
+            border=0,
+            align="R",
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
         if cuota is not None:
-            pdf.cell(118, 6, "", 0, 0)
-            pdf.cell(65, 6, f"Cuota IVA: {_fmt_eur(cuota)}", 0, 1, "R")
+            pdf.cell(118, 6, "", border=0, new_x=XPos.RIGHT, new_y=YPos.TOP)
+            pdf.cell(
+                65,
+                6,
+                t("VAT amount: {amt}").format(amt=_fmt_eur(cuota)),
+                border=0,
+                align="R",
+                new_x=XPos.LMARGIN,
+                new_y=YPos.NEXT,
+            )
     pdf.set_font(body, "B", 10)
     pdf.set_text_color(*EMERALD_600)
-    pdf.cell(118, 8, "", 0, 0)
-    pdf.cell(65, 8, f"Total {_fmt_eur(total)}", 0, 1, "R")
+    pdf.cell(118, 8, "", border=0, new_x=XPos.RIGHT, new_y=YPos.TOP)
+    pdf.cell(
+        65,
+        8,
+        t("Total {amt}").format(amt=_fmt_eur(total)),
+        border=0,
+        align="R",
+        new_x=XPos.LMARGIN,
+        new_y=YPos.NEXT,
+    )
 
     # ── Evidencia VeriFactu + QR AEAT ─────────────────────────────────────────
     pdf.ln(6)
@@ -231,14 +306,20 @@ def generar_pdf_factura(
     pdf.set_xy(pdf.l_margin + 3, y_box + 2)
     pdf.set_font(body, "B", 9)
     pdf.set_text_color(*EMERALD_600)
-    pdf.cell(text_col_w - 6, 5, "Evidencia VeriFactu", ln=1)
+    pdf.cell(
+        text_col_w - 6,
+        5,
+        t("VeriFactu evidence"),
+        new_x=XPos.LMARGIN,
+        new_y=YPos.NEXT,
+    )
     pdf.set_font(body, "", 8)
     pdf.set_text_color(*ZINC_800)
     pdf.set_x(pdf.l_margin + 3)
     pdf.multi_cell(
         text_col_w - 6,
         4,
-        f"Identificador registro: {num_vf}\nHuella SHA-256 (encadenamiento SIF):",
+        t("Record ID: {num}\nSHA-256 fingerprint (SIF chain):").format(num=num_vf),
     )
     pdf.set_font(mono, "", 7)
     pdf.set_text_color(*ZINC_800)
@@ -254,7 +335,7 @@ def generar_pdf_factura(
             pdf.set_xy(x_qr, y_qr + 2)
             pdf.set_font(body, "", 7)
             pdf.set_text_color(*ZINC_500)
-            pdf.multi_cell(qr_w_mm, 4, "QR VeriFactu\n(no disponible)", align="C")
+            pdf.multi_cell(qr_w_mm, 4, t("VeriFactu QR\n(unavailable)"), align="C")
 
     pdf.set_y(y_box + box_h + 2)
 
@@ -271,6 +352,7 @@ def generar_pdf_certificado_emisiones_esg(
     kg_co2_por_litro: float,
     eur_por_litro_ref: float,
     factor_huella_tkm: float | None = None,
+    lang: str | None = None,
 ) -> bytes:
     """
     Certificado mensual Scope 1 (combustible) — estilo diploma de sostenibilidad.
@@ -280,6 +362,7 @@ def generar_pdf_certificado_emisiones_esg(
     """
     import os as _os
 
+    t = get_translator(lang)
     f_tkm = float(
         factor_huella_tkm
         if factor_huella_tkm is not None
@@ -303,18 +386,22 @@ def generar_pdf_certificado_emisiones_esg(
     pdf.set_y(18)
     pdf.set_font(body, "B", 11)
     pdf.set_text_color(*EMERALD_600)
-    pdf.cell(0, 8, "DIPLOMA DE SOSTENIBILIDAD", align="C", ln=1)
+    pdf.cell(0, 8, t("Sustainability diploma"), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font(body, "", 9)
     pdf.set_text_color(*ZINC_500)
-    pdf.cell(0, 5, "Emisiones de CO2 - referencia metodológica y datos registrados", align="C", ln=1)
+    pdf.cell(0, 5, t("CO2 emissions — methodology reference and recorded data"), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(4)
 
     pdf.set_font(body, "B", 12)
     pdf.set_text_color(*ZINC_800)
-    pdf.cell(0, 10, "Certificado de emisiones (Scope 1 | combustible)", align="C", ln=1)
+    pdf.cell(0, 10, t("Emissions certificate (Scope 1 | fuel)"), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font(body, "", 9)
     pdf.set_text_color(*ZINC_800)
-    pdf.multi_cell(0, 5, f"Empresa: {empresa_nombre}\nID auditoría: {empresa_id}")
+    pdf.multi_cell(
+        0,
+        5,
+        f"{t('Company')}: {empresa_nombre}\n{t('Audit ID')}: {empresa_id}",
+    )
     pdf.ln(3)
 
     # Fórmula hero (modelo transporte)
@@ -322,11 +409,11 @@ def generar_pdf_certificado_emisiones_esg(
     pdf.set_draw_color(*EMERALD_600)
     pdf.set_text_color(*ZINC_800)
     pdf.set_font(body, "B", 9)
-    pdf.cell(0, 7, "Modelo de huella de transporte (t km)", ln=1)
+    pdf.cell(0, 7, t("Transport footprint model (t km)"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font(body, "", 9)
-    formula = (
-        f"km x toneladas x factor = kg CO2eq  =>  factor de referencia = {f_tkm:.4f} kg CO2 / (t km)"
-    )
+    formula = t(
+        "km × tonnes × factor = kg CO2eq  =>  reference factor = {f} kg CO2 / (t km)"
+    ).format(f=f"{f_tkm:.4f}")
     pdf.multi_cell(0, 5, formula)
     pdf.ln(2)
 
@@ -335,55 +422,75 @@ def generar_pdf_certificado_emisiones_esg(
     pdf.multi_cell(
         0,
         4,
-        "Esta expresión describe el modelo ESG de portes en la plataforma. "
-        "Los totales inferiores se obtienen a partir de gastos clasificados como COMBUSTIBLE (diesel).",
+        t(
+            "This expression describes the ESG port model on the platform. Totals below come from expenses classified as FUEL (diesel)."
+        ),
     )
     pdf.ln(3)
 
     pdf.set_font(body, "B", 10)
     pdf.set_text_color(*ZINC_800)
-    pdf.cell(0, 7, "Metodología combustible (Scope 1)", ln=1)
+    pdf.cell(0, 7, t("Fuel methodology (Scope 1)"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font(body, "", 8)
     pdf.multi_cell(
         0,
         4,
-        f"Litros estimados = importe neto (EUR) / {eur_por_litro_ref:.2f} EUR/L. "
-        f"Emisiones = litros x {kg_co2_por_litro:.2f} kg CO2eq/L.",
+        t(
+            "Estimated litres = net amount (EUR) / {eur} EUR/L. Emissions = litres × {kg} kg CO2eq/L."
+        ).format(eur=f"{eur_por_litro_ref:.2f}", kg=f"{kg_co2_por_litro:.2f}"),
     )
     pdf.ln(2)
 
     pdf.set_font(body, "B", 9)
-    pdf.cell(0, 6, "Totales acumulados", ln=1)
+    pdf.cell(0, 6, t("Running totals"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font(body, "", 9)
     pdf.set_text_color(*ZINC_800)
-    pdf.cell(0, 5, f"Litros diesel estimados: {litros_estimados_total:,.2f} L", ln=1)
+    lit_s = f"{litros_estimados_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    pdf.cell(0, 5, t("Estimated diesel litres: {v} L").format(v=lit_s), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_text_color(*EMERALD_600)
     pdf.set_font(body, "B", 10)
-    pdf.cell(0, 7, f"Emisiones CO2 Scope 1: {co2_combustible_total_kg:,.2f} kg CO2eq", ln=1)
+    co2_s = f"{co2_combustible_total_kg:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    pdf.cell(0, 7, t("Scope 1 CO2 emissions: {v} kg CO2eq").format(v=co2_s), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font(body, "", 9)
     pdf.set_text_color(*ZINC_800)
     pdf.ln(2)
 
     pdf.set_font(body, "B", 9)
-    pdf.cell(0, 6, "Desglose mensual", ln=1)
+    pdf.cell(0, 6, t("Monthly breakdown"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_fill_color(244, 244, 245)
     pdf.set_font(body, "B", 8)
     pdf.set_text_color(*ZINC_800)
-    pdf.cell(45, 7, "Periodo", 1, 0, "L", True)
-    pdf.cell(55, 7, "CO2 (kg)", 1, 0, "C", True)
-    pdf.cell(55, 7, "Litros est.", 1, 0, "C", True)
-    pdf.cell(35, 7, "Unidad", 1, 1, "C", True)
+    pdf.cell(45, 7, t("Period"), border=1, align="L", fill=True, new_x=XPos.RIGHT, new_y=YPos.TOP)
+    pdf.cell(55, 7, t("CO2 (kg)"), border=1, align="C", fill=True, new_x=XPos.RIGHT, new_y=YPos.TOP)
+    pdf.cell(55, 7, t("Est. litres"), border=1, align="C", fill=True, new_x=XPos.RIGHT, new_y=YPos.TOP)
+    pdf.cell(35, 7, t("Unit"), border=1, align="C", fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font(body, "", 8)
     pdf.set_fill_color(255, 255, 255)
 
     if not meses:
-        pdf.cell(0, 7, "Sin registros de combustible en el periodo.", ln=1)
+        pdf.cell(0, 7, t("No fuel records in the period."), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     else:
         for m in meses:
-            pdf.cell(45, 7, str(m.get("periodo", "")), 1)
-            pdf.cell(55, 7, f"{float(m.get('co2_kg', 0)):,.3f}", 1, 0, "R")
-            pdf.cell(55, 7, f"{float(m.get('litros_estimados', 0)):,.3f}", 1, 0, "R")
-            pdf.cell(35, 7, "kg / L", 1, 1, "C")
+            pdf.cell(45, 7, str(m.get("periodo", "")), border=1)
+            pdf.cell(
+                55,
+                7,
+                f"{float(m.get('co2_kg', 0)):,.3f}",
+                border=1,
+                align="R",
+                new_x=XPos.RIGHT,
+                new_y=YPos.TOP,
+            )
+            pdf.cell(
+                55,
+                7,
+                f"{float(m.get('litros_estimados', 0)):,.3f}",
+                border=1,
+                align="R",
+                new_x=XPos.RIGHT,
+                new_y=YPos.TOP,
+            )
+            pdf.cell(35, 7, t("kg / L"), border=1, align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     pdf.ln(6)
     pdf.set_font(body, "", 7)
@@ -391,8 +498,9 @@ def generar_pdf_certificado_emisiones_esg(
     pdf.multi_cell(
         0,
         4,
-        "Documento informativo basado en datos de la plataforma. "
-        "No sustituye informes auditados ni declaraciones regulatorias.",
+        t(
+            "Informational document based on platform data. Does not replace audited reports or regulatory filings."
+        ),
     )
 
     # Pie: icono ecológico
@@ -400,15 +508,17 @@ def generar_pdf_certificado_emisiones_esg(
     draw_eco_footer_icon(pdf, pdf.w / 2 - 3, pdf.h - 18)
     pdf.set_font(body, "", 7)
     pdf.set_text_color(*EMERALD_600)
-    pdf.cell(0, 4, "Compromiso con la eficiencia logística y el clima", align="C", ln=1)
+    pdf.cell(0, 4, t("Commitment to logistics efficiency and climate"), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_text_color(*ZINC_500)
     pdf.set_font(body, "", 7)
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     pdf.cell(
         0,
         4,
-        f"Generado {datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} | AB Logistics OS",
+        t("Generated {ts} | AB Logistics OS").format(ts=ts),
         align="C",
-        ln=1,
+        new_x=XPos.LMARGIN,
+        new_y=YPos.NEXT,
     )
 
     return _pdf_output_bytes(pdf)
@@ -423,10 +533,12 @@ def generar_pdf_certificado_ruta_esg(
     emisiones_kg: float,
     ahorro_kg: float,
     factor_tkm: float | None = None,
+    lang: str | None = None,
 ) -> bytes:
     """Certificado PDF de simulación de ruta — diploma + fórmula km × t × factor."""
     import os as _os
 
+    t = get_translator(lang)
     f_tkm = float(factor_tkm if factor_tkm is not None else (_os.getenv("ECO_FACTOR_HUELLA_PORTE_KG_CO2_TKM") or "0.062"))
     modelo_kg = float(distancia_km) * float(toneladas_carga) * f_tkm
 
@@ -446,15 +558,15 @@ def generar_pdf_certificado_ruta_esg(
     pdf.set_y(16)
     pdf.set_font(body, "B", 13)
     pdf.set_text_color(*EMERALD_600)
-    pdf.cell(0, 8, "DIPLOMA DE SOSTENIBILIDAD", align="C", ln=1)
+    pdf.cell(0, 8, t("Sustainability diploma"), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font(body, "", 9)
     pdf.set_text_color(*ZINC_500)
-    pdf.cell(0, 5, "AB Logistics OS | Certificado de huella de ruta", align="C", ln=1)
+    pdf.cell(0, 5, t("AB Logistics OS | Route footprint certificate"), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(6)
 
     pdf.set_font(body, "B", 11)
     pdf.set_text_color(*ZINC_800)
-    pdf.cell(0, 8, "Cálculo de huella (modelo t km)", align="C", ln=1)
+    pdf.cell(0, 8, t("Footprint calculation (t km model)"), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font(mono, "", 9)
     pdf.set_text_color(*ZINC_800)
     km_s = f"{float(distancia_km):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -467,18 +579,30 @@ def generar_pdf_certificado_ruta_esg(
 
     pdf.set_font(body, "", 9)
     pdf.set_text_color(*ZINC_800)
-    pdf.cell(0, 6, f"Motorización: {tipo_combustible.upper()} | Consumo ref.: {consumo_litros_100km} L/100km", align="C", ln=1)
+    pdf.cell(
+        0,
+        6,
+        t("Powertrain: {motor} | Ref. consumption: {l} L/100km").format(
+            motor=tipo_combustible.upper(),
+            l=consumo_litros_100km,
+        ),
+        align="C",
+        new_x=XPos.LMARGIN,
+        new_y=YPos.NEXT,
+    )
     pdf.ln(3)
 
     pdf.set_fill_color(236, 253, 245)
     pdf.set_draw_color(*EMERALD_600)
     pdf.set_font(body, "B", 9)
     pdf.set_text_color(*EMERALD_600)
-    pdf.cell(0, 7, "Resultados de referencia (simulación)", ln=1)
+    pdf.cell(0, 7, t("Reference results (simulation)"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font(body, "", 9)
     pdf.set_text_color(*ZINC_800)
-    pdf.cell(0, 6, f"Emisiones estimadas (motor de ruta): {emisiones_kg:,.2f} kg CO2", ln=1)
-    pdf.cell(0, 6, f"Ahorro vs. referencia tradicional: {ahorro_kg:,.2f} kg CO2", ln=1)
+    em_s = f"{emisiones_kg:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    ah_s = f"{ahorro_kg:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    pdf.cell(0, 6, t("Estimated emissions (route engine): {v} kg CO2").format(v=em_s), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 6, t("Savings vs traditional reference: {v} kg CO2").format(v=ah_s), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(4)
 
     pdf.set_font(body, "", 8)
@@ -486,8 +610,9 @@ def generar_pdf_certificado_ruta_esg(
     pdf.multi_cell(
         0,
         4,
-        "El motor de ruta puede combinar consumo y factores de combustible; "
-        "la igualdad con el modelo t km no está garantizada en todos los escenarios.",
+        t(
+            "The route engine may combine consumption and fuel factors; equality with the t km model is not guaranteed in all scenarios."
+        ),
         align="C",
     )
 
@@ -495,12 +620,12 @@ def generar_pdf_certificado_ruta_esg(
     draw_eco_footer_icon(pdf, pdf.w / 2 - 3, pdf.h - 19)
     pdf.set_font(body, "", 7)
     pdf.set_text_color(*EMERALD_600)
-    pdf.cell(0, 4, "Sostenibilidad | Logística responsable", align="C", ln=1)
+    pdf.cell(0, 4, t("Sustainability | Responsible logistics"), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     fecha_hoy = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     pdf.set_text_color(*ZINC_500)
     pdf.set_font(body, "", 7)
-    pdf.cell(0, 4, f"Emitido {fecha_hoy} | AB Logistics OS", align="C", ln=1)
+    pdf.cell(0, 4, t("Issued {ts} | AB Logistics OS").format(ts=fecha_hoy), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     return _pdf_output_bytes(pdf)
 
@@ -534,15 +659,17 @@ def generar_albaran_entrega_pdf(
     firma_b64: str,
     fecha_entrega_iso: str,
     dni_consignatario: str | None = None,
+    lang: str | None = None,
 ) -> bytes:
     """
     Albarán de entrega digital (POD) con firma incrustada (PNG Base64).
     """
+    t = get_translator(lang)
     raw_b64 = _strip_data_url_b64(firma_b64)
     try:
         img_bytes = base64.b64decode(raw_b64, validate=True)
     except Exception as e:
-        raise ValueError("Firma Base64 inválida") from e
+        raise ValueError(t("Invalid signature Base64")) from e
 
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=16)
@@ -564,28 +691,34 @@ def generar_albaran_entrega_pdf(
 
     pdf.set_font(body, "B", 16)
     pdf.set_text_color(*EMERALD_600)
-    pdf.cell(0, 10, "Carta de porte / Albarán de entrega (POD)", ln=1)
+    pdf.cell(0, 10, t("Bill of lading / Proof of delivery (POD)"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font(body, "", 9)
     pdf.set_text_color(*ZINC_500)
-    pdf.cell(0, 5, f"Porte {pid} | AB Logistics OS", ln=1)
+    pdf.cell(0, 5, t("Shipment {pid} | AB Logistics OS").format(pid=pid), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(4)
 
     pdf.set_font(body, "B", 10)
     pdf.set_text_color(*ZINC_800)
-    pdf.cell(0, 6, "Transportista", ln=1)
+    pdf.cell(0, 6, t("Carrier"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font(body, "", 9)
     pdf.multi_cell(0, 5, f"{em}\nNIF: {nif_em}")
     pdf.ln(2)
 
     pdf.set_font(body, "B", 10)
-    pdf.cell(0, 6, "Entrega", ln=1)
+    pdf.cell(0, 6, t("Delivery"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font(body, "", 9)
-    pdf.multi_cell(0, 5, f"Origen: {origen}\nDestino: {destino}\nMercancía: {desc}\nBultos: {bultos}")
+    pdf.multi_cell(
+        0,
+        5,
+        t("Origin: {o}\nDestination: {d}\nGoods: {g}\nPackages: {b}").format(
+            o=origen, d=destino, g=desc, b=bultos
+        ),
+    )
     pdf.ln(4)
 
     pdf.set_font(body, "B", 10)
     pdf.set_text_color(*ZINC_800)
-    pdf.cell(0, 6, "Firma del consignatario", ln=1)
+    pdf.cell(0, 6, t("Consignee signature"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(2)
 
     y_img = pdf.get_y()
@@ -600,14 +733,16 @@ def generar_albaran_entrega_pdf(
     except Exception:
         pdf.set_font(body, "", 8)
         pdf.set_text_color(180, 0, 0)
-        pdf.multi_cell(0, 4, "(No se pudo incrustar la imagen de firma.)")
+        pdf.multi_cell(0, 4, t("(Could not embed signature image.)"))
         display_h = 8.0
 
     pdf.set_y(y_img + display_h + 5)
     fecha_txt = _fmt_firma_entrega_exacta(fecha_entrega_iso)
     dni = (dni_consignatario or "").strip()
-    dni_part = f" (DNI/NIE {dni})" if dni else ""
-    linea_firma = f"Firmado por: {nombre_consignatario}{dni_part} el {fecha_txt}"
+    dni_part = t(" (ID {dni})").format(dni=dni) if dni else ""
+    linea_firma = t("Signed by: {name}{dni} on {when}").format(
+        name=nombre_consignatario, dni=dni_part, when=fecha_txt
+    )
     pdf.set_font(body, "B", 9)
     pdf.set_text_color(*ZINC_800)
     pdf.multi_cell(0, 5, linea_firma)
@@ -618,14 +753,15 @@ def generar_albaran_entrega_pdf(
     pdf.multi_cell(
         0,
         4,
-        "Documento generado electrónicamente. La firma reproduce el trazo recogido en dispositivo del "
-        "destinatario. Conserve este albarán como acuse de entrega.",
+        t(
+            "Electronically generated document. The signature reproduces the stroke captured on the recipient device. Keep this POD as proof of delivery."
+        ),
         align="L",
     )
     pdf.set_y(-12)
     pdf.set_font(body, "", 7)
     pdf.set_text_color(*EMERALD_600)
-    pdf.cell(0, 4, "AB Logistics OS — Entrega digital", align="C", ln=1)
+    pdf.cell(0, 4, t("AB Logistics OS — Digital delivery"), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     return _pdf_output_bytes(pdf)
 

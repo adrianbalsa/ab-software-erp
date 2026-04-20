@@ -80,7 +80,7 @@ def _make_service() -> LogisAdvisorService:
     )
     facturas = SimpleNamespace(list_facturas=lambda empresa_id: None)
     flota = SimpleNamespace(_db=_FakeDb())
-    esg = SimpleNamespace()
+    esg = SimpleNamespace(calculate_route_emissions=lambda distance_km: 0.0)
     maps = _FakeMapsService()
     return LogisAdvisorService(
         finance=finance,  # type: ignore[arg-type]

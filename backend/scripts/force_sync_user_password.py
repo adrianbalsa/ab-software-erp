@@ -9,6 +9,8 @@ Uso (desde ``backend/`` con ``.env`` cargado):
   python scripts/force_sync_user_password.py --empresa-id <uuid>
 
 Requiere ``SUPABASE_SERVICE_KEY`` (o la clave de servicio que use el backend).
+La contraseña debe pasarse con ``--password`` o con la variable de entorno ``FORCE_SYNC_USER_PASSWORD``
+(no hay valor por defecto en el repositorio).
 """
 from __future__ import annotations
 
@@ -38,7 +40,6 @@ from app.core.security import hash_password_argon2id  # noqa: E402
 
 DEFAULT_EMAIL = "adrian.balsa@yahoo.es"
 DEFAULT_USERNAME = "adrian_balsa"
-DEFAULT_PASSWORD = "admin123"
 
 
 def _first_empresa_id(client) -> UUID:
@@ -54,7 +55,11 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Sincroniza usuario + password Argon2 + rol owner.")
     p.add_argument("--email", default=DEFAULT_EMAIL)
     p.add_argument("--username", default=DEFAULT_USERNAME, help="username en usuarios si se inserta fila nueva")
-    p.add_argument("--password", default=DEFAULT_PASSWORD)
+    p.add_argument(
+        "--password",
+        default=None,
+        help="Contraseña en claro (obligatorio salvo FORCE_SYNC_USER_PASSWORD en entorno).",
+    )
     p.add_argument("--empresa-id", dest="empresa_id", default=None, help="UUID de public.empresas")
     args = p.parse_args()
 
@@ -64,7 +69,13 @@ def main() -> None:
         raise SystemExit("Falta SUPABASE_URL o SUPABASE_SERVICE_KEY en el entorno.")
 
     email = args.email.strip().lower()
-    password = str(args.password)
+    password = (args.password or os.getenv("FORCE_SYNC_USER_PASSWORD") or "").strip()
+    if not password:
+        raise SystemExit(
+            "Indique --password o defina FORCE_SYNC_USER_PASSWORD. "
+            "No hay contraseña por defecto en el repositorio (Due Diligence / fugas de valor)."
+        )
+    password = str(password)
     username = args.username.strip()
 
     client = create_client(url, key)

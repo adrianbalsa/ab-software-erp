@@ -18,6 +18,10 @@ from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserOut
 from app.services.facturas_service import FacturasService
+from app.services.verifactu_fingerprint_audit import (
+    load_cliente_nif_map_for_facturas,
+    materialize_factura_rows_for_fingerprint_verify,
+)
 from app.services.verifactu_service import VerifactuService
 
 from pydantic import BaseModel
@@ -47,7 +51,7 @@ async def verificar_cadena(
     db: SupabaseAsync = Depends(deps.get_db),
 ) -> dict:
     """
-    Valida las últimas 50 facturas del tenant: recalcula ``hash_factura`` y comprueba el encadenamiento.
+    Valida las últimas 50 facturas del tenant: recalcula huella de emisión y comprueba ``hash_anterior`` / almacenado.
     Si hay discrepancias, dispara alerta crítica (webhook configurado).
     """
     svc = VerifactuService(db)
@@ -72,6 +76,10 @@ async def verificar_cadena(
 )
 async def audit_verify_chain(
     ejercicio: int | None = Query(default=None, ge=2000, le=2100),
+    lang: str | None = Query(
+        default=None,
+        description="Informe legible: es | en (por defecto preferencia de usuario/empresa).",
+    ),
     _: UserOut = Depends(deps.require_role("owner")),
     db: SupabaseAsync = Depends(deps.get_db),
     current_user: UserOut = Depends(deps.get_current_user),
@@ -79,7 +87,10 @@ async def audit_verify_chain(
     eid = str(current_user.empresa_id)
     q = filter_not_deleted(
         db.table("facturas")
-        .select("id,numero_factura,num_factura,fecha_emision,nif_emisor,total_factura,fingerprint_hash,previous_fingerprint")
+        .select(
+            "id,cliente,numero_factura,num_factura,fecha_emision,nif_emisor,total_factura,"
+            "fingerprint_hash,previous_fingerprint"
+        )
         .eq("empresa_id", eid)
         .order("fecha_emision", desc=False)
         .order("numero_secuencial", desc=False)
@@ -90,9 +101,13 @@ async def audit_verify_chain(
 
     res = await db.execute(q)
     rows: list[dict] = (res.data or []) if hasattr(res, "data") else []
-    report = verify_invoice_chain(rows)
+    nif_map = await load_cliente_nif_map_for_facturas(db, empresa_id=eid, rows=rows)
+    rows_m = materialize_factura_rows_for_fingerprint_verify(rows, cliente_nif_map=nif_map)
+    eff_lang = lang or getattr(current_user, "preferred_language", None) or "es"
+    report = verify_invoice_chain(rows_m, lang=eff_lang)
     return {
         "ejercicio": ejercicio,
+        "lang": eff_lang,
         **report,
     }
 
@@ -102,6 +117,10 @@ async def audit_verify_chain(
     summary="Diagnóstico de cadena fiscal y recomendaciones (sin modificar datos)",
 )
 async def audit_chain_repair(
+    lang: str | None = Query(
+        default=None,
+        description="Recomendaciones legibles: es | en (por defecto preferencia de usuario/empresa).",
+    ),
     _: UserOut = Depends(deps.require_role("owner")),
     db: SupabaseAsync = Depends(deps.get_db),
     current_user: UserOut = Depends(deps.get_current_user),
@@ -117,7 +136,7 @@ async def audit_chain_repair(
     q = filter_not_deleted(
         db.table("facturas")
         .select(
-            "id,numero_secuencial,num_factura,numero_factura,fecha_emision,"
+            "id,cliente,numero_secuencial,num_factura,numero_factura,fecha_emision,"
             "nif_emisor,total_factura,fingerprint_hash,previous_fingerprint"
         )
         .eq("empresa_id", eid)
@@ -127,13 +146,18 @@ async def audit_chain_repair(
     )
     res = await db.execute(q)
     rows: list[dict] = list((res.data or []) if hasattr(res, "data") else [])
-    fh = diagnose_fingerprint_hash_chain(rows)
+    nif_map = await load_cliente_nif_map_for_facturas(db, empresa_id=eid, rows=rows)
+    rows_m = materialize_factura_rows_for_fingerprint_verify(rows, cliente_nif_map=nif_map)
+    fh = diagnose_fingerprint_hash_chain(rows_m)
+    eff_lang = lang or getattr(current_user, "preferred_language", None) or "es"
     recs = repair_recommendations(
         db_discrepancies=db_audit.get("discrepancies"),
         fingerprint_hash_report=fh,
+        lang=eff_lang,
     )
     return {
         "empresa_id": eid,
+        "lang": eff_lang,
         "hash_factura_verification": db_audit,
         "fingerprint_hash_chain": fh,
         "recommendations": recs,

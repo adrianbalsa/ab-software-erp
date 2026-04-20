@@ -481,12 +481,14 @@ async def oauth_google_callback(
     if profile is not None and profile.empresa_id:
         user_out = profile
     elif udb.empresa_id:
-        user_out = UserOut(
-            username=udb.username,
-            empresa_id=udb.empresa_id,
-            role=normalize_user_role(None, legacy_role=udb.rol),
-            rol=udb.rol,
-            usuario_id=None,
+        user_out = await auth_service.attach_preferred_language(
+            UserOut(
+                username=udb.username,
+                empresa_id=udb.empresa_id,
+                role=normalize_user_role(None, legacy_role=udb.rol),
+                rol=udb.rol,
+                usuario_id=None,
+            )
         )
     else:
         raise HTTPException(

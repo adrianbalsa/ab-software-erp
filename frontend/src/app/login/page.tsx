@@ -3,11 +3,15 @@
 import Image from "next/image";
 import { useActionState, useEffect, useState } from "react";
 import { loginAction } from "./actions";
+import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
+import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { notifyJwtUpdated } from "@/lib/api";
 import { setAuthToken } from "@/lib/auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 
 export default function LoginPage() {
+  const { catalog } = useOptionalLocaleCatalog();
+  const L = catalog.login;
   const [state, action, isPending] = useActionState(loginAction, null);
   const [oauthError, setOauthError] = useState<string | null>(null);
   const [oauthPending, setOauthPending] = useState(false);
@@ -27,7 +31,7 @@ export default function LoginPage() {
     try {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) {
-        throw new Error("Configuración pendiente de Supabase.");
+        throw new Error(L.supabasePending);
       }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -39,14 +43,17 @@ export default function LoginPage() {
         throw error;
       }
     } catch (error) {
-      setOauthError(error instanceof Error ? error.message : "No se pudo iniciar sesión con Google.");
+      setOauthError(error instanceof Error ? error.message : L.oauthFail);
     } finally {
       setOauthPending(false);
     }
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f4f6fb] px-4 py-10">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[#f4f6fb] px-4 py-10">
+      <div className="mb-4 flex w-full max-w-md justify-end">
+        <LocaleSwitcher className="border-zinc-200 bg-white" />
+      </div>
       <section className="w-full max-w-md rounded-2xl border border-zinc-200/90 bg-white p-8 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
         <div className="mb-6 flex flex-col items-center gap-4 text-center text-slate-800">
           <Image
@@ -59,7 +66,7 @@ export default function LoginPage() {
           />
           <div>
             <h1 className="text-xl font-bold tracking-tight">AB Logistics OS</h1>
-            <p className="text-sm text-slate-500">Inicia sesión en tu empresa</p>
+            <p className="text-sm text-slate-500">{L.tagline}</p>
           </div>
         </div>
         {state && "error" in state ? (
@@ -75,7 +82,7 @@ export default function LoginPage() {
         <form action={action} className="mt-6 space-y-4">
           <div>
             <label htmlFor="email" className="mb-1 block text-sm font-medium text-zinc-700">
-              Email
+              {L.email}
             </label>
             <input
               id="email"
@@ -88,7 +95,7 @@ export default function LoginPage() {
           </div>
           <div>
             <label htmlFor="password" className="mb-1 block text-sm font-medium text-zinc-700">
-              Contraseña
+              {L.password}
             </label>
             <input
               id="password"
@@ -104,11 +111,11 @@ export default function LoginPage() {
             disabled={isPending}
             className="inline-flex w-full items-center justify-center rounded-xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800"
           >
-            {isPending ? "Entrando..." : "Entrar"}
+            {isPending ? L.pendingShort : L.submitShort}
           </button>
         </form>
         <div className="relative py-3 text-center text-xs text-zinc-400">
-          <span className="relative z-10 bg-white px-2">o continúa con</span>
+          <span className="relative z-10 bg-white px-2">{L.oauthDivider}</span>
           <span className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-zinc-200" aria-hidden />
         </div>
         <button
@@ -135,7 +142,7 @@ export default function LoginPage() {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
             />
           </svg>
-          {oauthPending ? "Conectando..." : "Google"}
+          {oauthPending ? L.googlePending : L.google}
         </button>
       </section>
     </main>

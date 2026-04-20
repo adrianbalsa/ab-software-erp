@@ -1,6 +1,8 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from fastapi import HTTPException
+from starlette.background import BackgroundTasks
+
 from app.services.clientes_service import ClientesService
 
 @pytest.mark.asyncio
@@ -16,9 +18,14 @@ async def test_resend_invite_success():
     with patch.object(service, 'get_cliente_by_id', return_value=cliente_mock, create=True), \
          patch('app.services.email_service.send_onboarding_invite') as mock_send_email, \
          patch('app.db.supabase.auth_admin_generate_link', return_value="https://bunker.com/invite?token=xyz"):
-        
-        response = await service.resend_onboarding_invite(cliente_id="123", empresa_id="001")
-        
+        bg = BackgroundTasks()
+        response = await service.resend_onboarding_invite(
+            cliente_id="123",
+            empresa_id="001",
+            background_tasks=bg,
+        )
+        await bg()
+
         assert response["message"] == "Invitación reenviada correctamente"
         mock_send_email.assert_called_once()
 
@@ -33,7 +40,11 @@ async def test_resend_invite_already_active():
     
     with patch.object(service, 'get_cliente_by_id', return_value=cliente_mock, create=True):
         with pytest.raises(HTTPException) as exc:
-            await service.resend_onboarding_invite(cliente_id="123", empresa_id="emp_001")
+            await service.resend_onboarding_invite(
+                cliente_id="123",
+                empresa_id="emp_001",
+                background_tasks=BackgroundTasks(),
+            )
         
         assert exc.value.status_code == 400
         assert "ya completó el onboarding" in exc.value.detail

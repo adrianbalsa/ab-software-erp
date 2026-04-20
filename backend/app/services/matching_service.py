@@ -10,6 +10,7 @@ from typing import Any
 from app.db.supabase import SupabaseAsync
 from app.schemas.banking import ConciliationCandidate, FacturaConciliacion, Transaccion
 from app.services import match_fuzzy as mf
+from app.services.audit_logs_service import AuditLogsService
 
 _log = logging.getLogger(__name__)
 
@@ -312,12 +313,27 @@ class MatchingService:
                 {
                     "reconciled": True,
                     "internal_status": "reconciled",
+                    "status_reconciled": "reconciled",
                     "updated_at": now_iso,
                 }
             )
             .eq("empresa_id", empresa_id)
             .eq("transaction_id", m.transaction_id)
         )
+        try:
+            await AuditLogsService(self._db).log_bank_reconciliation(
+                empresa_id=empresa_id,
+                transaction_id=m.transaction_id,
+                factura_id=int(m.factura_id),
+                user_id=None,
+            )
+        except Exception:
+            _log.warning(
+                "matching_service: audit log conciliación omitido tx=%s factura=%s",
+                m.transaction_id,
+                m.factura_id,
+                exc_info=True,
+            )
         _ = invoice, tx
 
     async def auto_match(

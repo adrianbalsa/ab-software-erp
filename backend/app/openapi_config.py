@@ -13,6 +13,10 @@ API_TITLE = "AB Logistics OS API"
 API_VERSION = "1.0.0"
 API_DESCRIPTION = (
     "API oficial de AB Logistics OS para la gestión integral de transporte y logística.\n\n"
+    "**Contrato estable para integradores:** usar rutas bajo **`/api/v1/`** para nuevas "
+    "integraciones (móvil, B2B, partners). Las rutas sin prefijo existen por compatibilidad con "
+    "el frontend actual; su estabilidad no está garantizada para clientes externos. "
+    "Detalle: `docs/PLATFORM_CONTRACTS.md`.\n\n"
     "**Características Principales:**\n"
     "- **Cumplimiento Fiscal (VeriFactu):** Emisión de facturas con inalterabilidad, huella digital (cadena de hash) y envío a la AEAT.\n"
     "- **Motor ESG:** Cálculo automatizado de emisiones de CO2 y huella de carbono por ruta y vehículo.\n"
@@ -70,6 +74,10 @@ OPENAPI_TAGS: list[dict[str, str]] = [
     {"name": "Auditoría API", "description": "Registro append-only de acciones para trazabilidad y cumplimiento."},
     {"name": "Eco", "description": "Métricas ecológicas y huella operativa."},
     {"name": "Salud", "description": "Healthchecks liveness/readiness y diagnóstico de infraestructura."},
+    {
+        "name": "Transparencia y cumplimiento",
+        "description": "RGPD/SLA/postura de seguridad sin autenticación: JSON de transparencia y security.txt (RFC 9116).",
+    },
     {"name": "Flota - Análisis", "description": "Analíticas avanzadas de flota."},
     {"name": "Webhooks externos", "description": "Webhooks de proveedores externos (GoCardless, Stripe)."},
 ]

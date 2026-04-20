@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,6 +11,7 @@ from app.api import deps
 from app.schemas.user import UserOut
 from app.services.esg_service import EsgService
 from app.services.finance_service import FinanceService
+from app.services.secret_manager_service import get_secret_manager
 
 router = APIRouter()
 
@@ -121,12 +121,10 @@ async def ask_logis_advisor(
             detail="Proveedor AI no disponible en este entorno (falta SDK Anthropic)",
         ) from exc
 
-    api_key = (
-        os.getenv("ANTHROPIC_API_KEY") or os.getenv("CLAUDE_API_KEY") or ""
-    ).strip()
+    api_key = (get_secret_manager().get_anthropic_api_key() or "").strip()
     if not api_key:
         raise HTTPException(
-            status_code=500,
+            status_code=503,
             detail="ANTHROPIC_API_KEY no configurada en el servidor",
         )
 

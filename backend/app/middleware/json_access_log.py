@@ -62,6 +62,7 @@ class JsonAccessLogMiddleware(BaseHTTPMiddleware):
             empresa_id, auth_subject = _extract_auth_context(auth)
             q_masked = mask_query_string(request.url.query)
             status = getattr(response, "status_code", 500) if response is not None else 500
+            request_id = getattr(request.state, "request_id", None)
             entry = {
                 "message": "http_access",
                 "service": self._service_name,
@@ -69,6 +70,7 @@ class JsonAccessLogMiddleware(BaseHTTPMiddleware):
                 "path": request.url.path,
                 "status_code": status,
                 "duration_ms": round(duration_ms, 2),
+                "request_id": request_id,
                 "empresa_id": empresa_id,
                 "auth_subject_masked": mask_subject_for_log(auth_subject),
                 "authorization": mask_bearer_hint(auth),

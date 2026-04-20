@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
+from functools import partial
 from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from starlette.background import BackgroundTasks
 
 from app.db.soft_delete import filter_not_deleted, soft_delete_payload
 from app.db import supabase as supabase_db
@@ -12,6 +15,8 @@ from app.schemas.cliente import ClienteCreate, ClienteOut
 from app.core.crypto import pii_crypto
 from app.services import email_service
 from app.services.audit_logs_service import AuditLogsService
+
+_log = logging.getLogger(__name__)
 
 
 def _eid(empresa_id: str | UUID) -> str:
@@ -80,6 +85,7 @@ class ClientesService:
         *,
         cliente_id: str,
         empresa_id: str,
+        background_tasks: BackgroundTasks,
     ) -> dict[str, str]:
         cliente = await self.get_cliente_by_id(cliente_id=cliente_id, empresa_id=empresa_id)
         if cliente is None:
@@ -120,12 +126,12 @@ class ClientesService:
             },
         )
 
-        email_sent = email_service.send_onboarding_invite(email, magic_link)
-        if not email_sent:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="No se pudo enviar la invitación de onboarding",
-            )
+        _log.info("Email encolado para envío en segundo plano")
+        background_tasks.add_task(
+            email_service.send_email_background_task,
+            "REENVIAR_INVITACION_ONBOARDING_RESEND",
+            partial(email_service.send_onboarding_invite, email, magic_link),
+        )
 
         # Best-effort: no bloquea reenvío si falla por compatibilidad de esquema.
         try:
@@ -135,7 +141,11 @@ class ClientesService:
                 record_id=str(cliente_id).strip(),
                 action="INVITE_RESENT",
                 old_value={},
-                new_value={"invite_email": email, "invite_channel": "resend_email"},
+                new_value={
+                    "invite_email": email,
+                    "invite_channel": "resend_email",
+                    "correo_delegado_segundo_plano": True,
+                },
                 user_id=None,
             )
         except Exception:

@@ -7,6 +7,7 @@ import {
   ClipboardList,
   LayoutDashboard,
   LineChart,
+  MapPin,
   Shield,
   Truck,
   Users,
@@ -342,6 +343,13 @@ export default function AdminPage() {
           >
             <Truck className="h-4 w-4" />
             Portes
+          </Link>
+          <Link
+            href="/admin/dashboard/map"
+            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-900/80 hover:text-zinc-100"
+          >
+            <MapPin className="h-4 w-4" />
+            Mapa actividad
           </Link>
           <div className="flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2.5 text-sm font-medium text-emerald-300">
             <Shield className="h-4 w-4" />

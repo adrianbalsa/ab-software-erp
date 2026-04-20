@@ -2,13 +2,22 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import os
 import sys
+
+# Antes de que los tests importen módulos que instancian SlowAPI en import-time
+# (p. ej. ``app.core.rate_limit``), sin depender del fixture ``_test_env``.
+os.environ.setdefault("DEV_MODE", "true")
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from jose import jwt as jose_jwt
 
 
 def _install_stripe_test_double() -> None:
@@ -39,11 +48,86 @@ def _install_stripe_test_double() -> None:
 
 _install_stripe_test_double()
 
+
+def _install_weasyprint_test_double() -> None:
+    """
+    ``app.api.deps`` arrastra ``facturas_service`` → ``report_service`` → ``weasyprint`` (GTK/Pango).
+    En runners sin esas libs, registrar un stub evita errores de import en colección/ejecución.
+    """
+    m = MagicMock(name="weasyprint_test_double")
+    m.HTML = MagicMock()
+    sys.modules.setdefault("weasyprint", m)
+
+
+_install_weasyprint_test_double()
+
 from app.core.security import create_access_token
 
 # Tenants fijos para suites multi-tenant / JWT de prueba
 EMPRESA_A_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 EMPRESA_B_ID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+
+# Identidad por defecto del fixture ``client`` (perfil semilla + ``sub`` JWT tipo Supabase UUID).
+TEST_CLIENT_SUBJECT = "ci-enterprise-owner@ab-logistics.test"
+TEST_PROFILE_USER_ID = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
+TEST_CLIENT_JWT_SUB = str(TEST_PROFILE_USER_ID)
+
+
+def _resolve_seed_empresa_id() -> UUID:
+    """
+    ``admin_empresa_id`` de ``tests/.smoke_seed_ids.json`` (tras ``seed_test_data``),
+    o ``EMPRESA_A_ID`` si no hay fichero.
+    """
+    here = Path(__file__).resolve()
+    candidates = (
+        here.parent / ".smoke_seed_ids.json",
+        here.parent.parent.parent / "tests" / ".smoke_seed_ids.json",
+    )
+    for p in candidates:
+        if not p.is_file():
+            continue
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            raw = str(data.get("admin_empresa_id") or "").strip()
+            if raw:
+                return UUID(raw)
+        except Exception:
+            continue
+    return EMPRESA_A_ID
+
+
+def _build_default_test_api_jwt(*, empresa_id: UUID) -> str:
+    """JWT HS256 de la API con los claims que exige ``get_current_user`` + middleware RLS."""
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    now = datetime.now(timezone.utc)
+    exp = now + timedelta(hours=2)
+    payload: dict[str, Any] = {
+        "sub": TEST_CLIENT_JWT_SUB,
+        "role": "authenticated",
+        "app_role": "enterprise",
+        "empresa_id": str(empresa_id),
+        "iat": int(now.timestamp()),
+        "exp": int(exp.timestamp()),
+    }
+    return jose_jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+
+@pytest.fixture(autouse=True)
+def _resend_emails_no_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Evita llamadas HTTP reales a Resend cuando los tests ejecutan ``BackgroundTasks``
+    (p. ej. reenvío de invitación o PDF de factura).
+    """
+    from unittest.mock import MagicMock
+
+    fake_emails = MagicMock()
+    fake_emails.send = MagicMock(return_value={"id": "test-resend-stub"})
+    fake_resend = MagicMock()
+    fake_resend.Emails = fake_emails
+    fake_resend.api_key = None
+    monkeypatch.setattr("app.services.email_service.resend", fake_resend, raising=True)
 
 
 @pytest.fixture(autouse=True)
@@ -82,8 +166,10 @@ def _test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SENTRY_DSN", raising=False)
 
     from app.core.config import get_settings
+    from app.services.secret_manager_service import reset_secret_manager
 
     get_settings.cache_clear()
+    reset_secret_manager()
 
 
 class _FakeQuery:
@@ -132,7 +218,31 @@ class _FakeQuery:
 class _FakeSupabaseDb:
     """
     Subconjunto de ``SupabaseAsync``: ``table`` + ``execute`` (tests sin red).
+
+    Conserva el JWT inyectado por ``get_supabase(jwt_token=…)`` (misma identidad que PostgREST/RLS).
     """
+
+    def __init__(self, jwt_token: str | None = None) -> None:
+        t = str(jwt_token).strip() if jwt_token is not None else ""
+        self._jwt_token: str | None = t if t else None
+        self._jwt_claims: dict[str, Any] | None = None
+
+    @property
+    def jwt_token(self) -> str | None:
+        return self._jwt_token
+
+    @property
+    def jwt_claims(self) -> dict[str, Any]:
+        if self._jwt_claims is None:
+            self._jwt_claims = {}
+            if self._jwt_token:
+                from app.core.security import decode_access_token_payload
+
+                try:
+                    self._jwt_claims = decode_access_token_payload(self._jwt_token)
+                except ValueError:
+                    self._jwt_claims = {}
+        return self._jwt_claims
 
     def table(self, _name: str) -> _FakeQuery:
         return _FakeQuery()
@@ -160,13 +270,81 @@ async def client(monkeypatch: pytest.MonkeyPatch):
     from unittest.mock import AsyncMock
 
     from app.core.config import get_settings
+    from app.models.enums import UserRole
+    from app.schemas.user import UserOut
+    from app.services.auth_service import AuthService
 
-    async def _fake_get_supabase(*_a: object, **_k: object) -> _FakeSupabaseDb:
-        return _FakeSupabaseDb()
+    seed_empresa_id = _resolve_seed_empresa_id()
+    default_bearer = _build_default_test_api_jwt(empresa_id=seed_empresa_id)
 
-    # Cada módulo mantiene su referencia importada al importar; parchear todos
+    async def _fake_get_supabase(
+        *_a: object,
+        jwt_token: str | None = None,
+        **_k: object,
+    ) -> _FakeSupabaseDb:
+        return _FakeSupabaseDb(jwt_token=jwt_token)
+
+    def _profile_for_subject(subject: str) -> UserOut | None:
+        s = (subject or "").strip()
+        if s in (TEST_CLIENT_JWT_SUB, TEST_CLIENT_SUBJECT):
+            # JWT puede llevar ``sub`` = profiles.id; ``app_role=enterprise`` es slug de plan
+            # (``get_current_user`` no lo cruza con el rol operativo del perfil).
+            return UserOut(
+                username=TEST_CLIENT_SUBJECT,
+                empresa_id=seed_empresa_id,
+                role=UserRole.ADMIN,
+                rol="admin",
+                rbac_role="owner",
+                cliente_id=None,
+                assigned_vehiculo_id=None,
+                usuario_id=TEST_PROFILE_USER_ID,
+            )
+        if s == "admin@qa.local":
+            # ``tests/e2e/test_onboarding_to_porte_flow`` (Bearer distinto al usuario semilla CI).
+            return UserOut(
+                username=s,
+                empresa_id=EMPRESA_A_ID,
+                role=UserRole.ADMIN,
+                rol="admin",
+                rbac_role="traffic_manager",
+                cliente_id=None,
+                assigned_vehiculo_id=None,
+                usuario_id=UUID("99999999-9999-9999-9999-999999999999"),
+            )
+        # JWT de ``mock_user_empresa_a`` / ``mock_user_empresa_b`` (suites multi-tenant).
+        if s == "user_a@ab-logistics.test":
+            return UserOut(
+                username=s,
+                empresa_id=EMPRESA_A_ID,
+                role=UserRole.GESTOR,
+                rol="user",
+                rbac_role="owner",
+                cliente_id=None,
+                assigned_vehiculo_id=None,
+                usuario_id=None,
+            )
+        if s == "user_b@ab-logistics.test":
+            return UserOut(
+                username=s,
+                empresa_id=EMPRESA_B_ID,
+                role=UserRole.GESTOR,
+                rol="user",
+                rbac_role="owner",
+                cliente_id=None,
+                assigned_vehiculo_id=None,
+                usuario_id=None,
+            )
+        return None
+
+    async def _stub_get_profile_by_subject(self: AuthService, *, subject: str) -> UserOut | None:
+        return _profile_for_subject(subject)
+
+    monkeypatch.setattr(AuthService, "get_profile_by_subject", _stub_get_profile_by_subject)
+
+    # ``deps`` usa ``supabase_db.get_supabase``; middleware importa el símbolo localmente.
     monkeypatch.setattr("app.db.supabase.get_supabase", _fake_get_supabase)
-    monkeypatch.setattr("app.api.deps.get_supabase", _fake_get_supabase)
+    monkeypatch.setattr("app.middleware.tenant_rbac_context.get_supabase", _fake_get_supabase)
+    monkeypatch.setattr("app.middleware.audit_log_middleware.get_supabase", _fake_get_supabase)
 
     monkeypatch.setattr(
         "app.core.health_checks.run_deep_health",
@@ -180,7 +358,10 @@ async def client(monkeypatch: pytest.MonkeyPatch):
             },
         ),
     )
+    from app.services.secret_manager_service import reset_secret_manager
+
     get_settings.cache_clear()
+    reset_secret_manager()
 
     os.environ.setdefault("SUPABASE_URL", "https://test-project.supabase.co")
 
@@ -192,7 +373,11 @@ async def client(monkeypatch: pytest.MonkeyPatch):
         transport = ASGITransport(app=application, lifespan="on")
     except TypeError:
         transport = ASGITransport(app=application)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {default_bearer}"},
+    ) as ac:
         yield ac
 
 

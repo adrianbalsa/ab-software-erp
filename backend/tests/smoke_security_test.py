@@ -92,7 +92,11 @@ class SmokeSecurityTest:
 
     def _wait_for_api_live(self, timeout_seconds: int = 90) -> None:
         deadline = time.time() + timeout_seconds
-        health_urls = [f"{self.base_url}/health", f"{self.base_url}/api/v1/health"]
+        health_urls = [
+            f"{self.base_url}/live",
+            f"{self.base_url}/health",
+            f"{self.base_url}/api/v1/health",
+        ]
         last_error = "health check not started"
         while time.time() < deadline:
             for url in health_urls:

@@ -21,14 +21,25 @@ sys.modules.setdefault("azure.core", MagicMock(name="azure_core_test_double"))
 sys.modules.setdefault("azure.core.credentials", MagicMock(name="azure_core_credentials_test_double"))
 
 from app.api import deps
+from app.models.enums import UserRole
 from app.schemas.user import UserOut
 from app.services.payment_service import PaymentDomainError, PaymentIntegrationError
 
 
 def _user_with_role(role: str) -> UserOut:
+    rbac = (role or "").strip().lower()
+    if rbac == "driver":
+        op_role = UserRole.TRANSPORTISTA
+    elif rbac == "owner":
+        op_role = UserRole.ADMIN
+    elif rbac == "traffic_manager":
+        op_role = UserRole.GESTOR
+    else:
+        op_role = UserRole.GESTOR
     return UserOut(
         username="qa@test.local",
         empresa_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        role=op_role,
         rol="user",
         rbac_role=role,
         usuario_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),

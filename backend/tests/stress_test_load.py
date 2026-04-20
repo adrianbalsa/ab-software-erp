@@ -228,11 +228,12 @@ def _verify_verifactu_chain(
 ) -> tuple[bool, list[str]]:
     """
     Comprueba por empresa:
-      1) Cada fila: hash_registro == generar_hash_factura(..., hash_anterior de la fila).
+      1) Cada fila: hash_registro == ``generar_hash_factura_oficial`` (HUELLA_EMISION, mismo criterio que emisión).
       2) Encadenamiento: hash_anterior[i] == hash_registro[i-1] (i>=1).
     """
     sys.path.insert(0, str(_BACKEND_ROOT))
-    from app.services.verifactu_service import VerifactuService
+    from app.core.crypto import pii_crypto
+    from app.core.verifactu_hashing import VerifactuCadena, generar_hash_factura_oficial
 
     errors: list[str] = []
     headers = {
@@ -262,30 +263,10 @@ def _verify_verifactu_chain(
                 errors.append(f"[{eid}] respuesta inesperada")
                 continue
 
-            # NIFs cliente
-            cids = list(
-                dict.fromkeys(str(x.get("cliente") or "").strip() for x in rows if x.get("cliente"))
-            )
-            nif_map: dict[str, str] = {}
-            if cids:
-                in_list = ",".join(cids)
-                r2 = client.get(
-                    f"{supabase_url.rstrip('/')}/rest/v1/clientes",
-                    params={
-                        "id": f"in.({in_list})",
-                        "select": "id,nif",
-                        "empresa_id": f"eq.{eid}",
-                    },
-                    headers=headers,
-                )
-                if r2.status_code == 200 and isinstance(r2.json(), list):
-                    for cr in r2.json():
-                        nif_map[str(cr.get("id"))] = str(cr.get("nif") or "").strip()
-
             for i, row in enumerate(rows):
-                cid = str(row.get("cliente") or "").strip()
-                nif_c = nif_map.get(cid, "")
-                nif_e = str(row.get("nif_emisor") or "").strip()
+                nif_raw = str(row.get("nif_emisor") or "").strip()
+                nif_dec = pii_crypto.decrypt_pii(nif_raw) if nif_raw else None
+                nif_e = (nif_dec if nif_dec is not None else "") or nif_raw
                 num = str(row.get("num_factura") or row.get("numero_factura") or "").strip()
                 fe = row.get("fecha_emision")
                 fecha = str(fe)[:10] if fe else ""
@@ -297,33 +278,16 @@ def _verify_verifactu_chain(
                 h_prev = str(h_prev_col).strip() if h_prev_col else None
                 if h_prev == "":
                     h_prev = None
-                tipo = str(row.get("tipo_factura") or "").strip() or None
-                rect = row.get("factura_rectificada_id")
-                num_rect = None
-                if tipo and tipo.upper() == "R1" and rect is not None:
-                    # Buscar número de la F1 rectificada
-                    r3 = client.get(
-                        f"{supabase_url.rstrip('/')}/rest/v1/facturas",
-                        params={
-                            "id": f"eq.{rect}",
-                            "select": "num_factura,numero_factura",
-                            "empresa_id": f"eq.{eid}",
-                        },
-                        headers=headers,
-                    )
-                    if r3.status_code == 200 and r3.json():
-                        orig = r3.json()[0]
-                        num_rect = str(orig.get("num_factura") or orig.get("numero_factura") or "")
 
-                expected = VerifactuService.generar_hash_factura(
-                    nif_empresa=nif_e,
-                    nif_cliente=nif_c,
-                    num_factura=num,
-                    fecha=fecha,
-                    total=tot,
-                    hash_anterior=h_prev,
-                    tipo_factura=tipo,
-                    num_factura_rectificada=num_rect,
+                expected = generar_hash_factura_oficial(
+                    VerifactuCadena.HUELLA_EMISION,
+                    {
+                        "num_factura": num,
+                        "fecha_emision": fecha,
+                        "nif_emisor": nif_e,
+                        "total_factura": tot,
+                    },
+                    h_prev,
                 )
                 got = str(row.get("hash_registro") or row.get("hash_factura") or "").strip()
                 if got and expected != got:

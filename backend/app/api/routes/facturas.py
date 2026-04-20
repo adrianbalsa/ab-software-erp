@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from decimal import Decimal
+from functools import partial
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from starlette.requests import Request
 
 from app.api import deps
 from app.db.supabase import SupabaseAsync
@@ -18,12 +21,13 @@ from app.schemas.factura import (
 )
 from app.schemas.user import UserOut
 from app.services.auditoria_service import AuditoriaService
-from app.services.email_service import EmailService, send_invoice_email_from_base64
+from app.services.email_service import EmailService, send_email_background_task, send_invoice_email_from_base64
 from app.services.facturas_service import FacturasService
 from pydantic import BaseModel
 
 
 router = APIRouter()
+_log = logging.getLogger(__name__)
 
 
 class FacturaQueueOut(BaseModel):
@@ -99,6 +103,7 @@ async def obtener_factura(
     status_code=status.HTTP_201_CREATED,
 )
 async def generar_factura_desde_portes(
+    request: Request,
     payload: FacturaCreateFromPortes,
     background_tasks: BackgroundTasks,
     current_user: UserOut = Depends(deps.bind_write_context),
@@ -128,12 +133,24 @@ async def generar_factura_desde_portes(
             "cuota_iva": f.cuota_iva,
             "empresa_nombre": (f"Emisor fiscal {f.nif_emisor}" if f.nif_emisor else "AB Logistics OS"),
             "cliente_nombre": cli.nombre if cli else "Cliente",
+            "preferred_language": getattr(current_user, "preferred_language", None) or "es",
         }
+        request.state.audit_payload_supplement = {
+            "delegado_segundo_plano": True,
+            "operacion": "factura_emitida_envio_pdf_cliente_resend",
+            "mensaje": "Email encolado para envío en segundo plano",
+        }
+        _log.info("Email encolado para envío en segundo plano")
         background_tasks.add_task(
-            send_invoice_email_from_base64,
-            factura_data,
-            result.pdf_base64,
-            dest,
+            send_email_background_task,
+            "ENVIAR_FACTURA_PDF_RESEND",
+            partial(
+                send_invoice_email_from_base64,
+                factura_data,
+                result.pdf_base64,
+                dest,
+                getattr(current_user, "preferred_language", None) or "es",
+            ),
         )
 
     return result
@@ -210,7 +227,12 @@ async def enviar_factura_por_email(
 
     mailer = EmailService()
     try:
-        await mailer.send_invoice_email(dest_email, pdf_bytes, numero_factura)
+        await mailer.send_invoice_email(
+            dest_email,
+            pdf_bytes,
+            numero_factura,
+            lang=getattr(current_user, "preferred_language", None) or "es",
+        )
     except (ValueError, RuntimeError) as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

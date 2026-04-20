@@ -13,6 +13,7 @@ class WebhookEventType(StrEnum):
     CREDIT_LIMIT_EXCEEDED = "credit.limit_exceeded"
     VERIFACTU_INVOICE_SIGNED = "verifactu.invoice_signed"
     ESG_CERTIFICATE_GENERATED = "esg.certificate_generated"
+    ANALYTICS_PROFIT_MARGIN_SNAPSHOT = "analytics.profit_margin.snapshot"
 
 
 class WebhookEndpoint(BaseModel):

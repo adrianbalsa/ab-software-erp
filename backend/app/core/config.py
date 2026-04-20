@@ -71,7 +71,7 @@ class Settings:
     GOCARDLESS_ENV: str
     # GoCardless Payments webhooks (firma HMAC-SHA256 del body crudo)
     GOCARDLESS_WEBHOOK_SECRET: Optional[str]
-    # Fernet (44 chars base64 url-safe). Prioridad en ``app.core.encryption``: ENCRYPTION_KEY → ENCRYPTION_SECRET_KEY → …
+    # Fernet (44 chars base64 url-safe). Ver ``SecretManagerService`` + ``ENCRYPTION_KEY_PREVIOUS`` (rotación).
     ENCRYPTION_KEY: Optional[str]
     # Alias / compatibilidad con despliegues existentes.
     ENCRYPTION_SECRET_KEY: Optional[str]
@@ -108,6 +108,11 @@ class Settings:
     AEAT_VERIFACTU_XSD_VALIDATE_REQUEST: bool
     # Override opcional de la URL del XSD SuministroLR (p. ej. espejo offline).
     AEAT_VERIFACTU_SUMINISTRO_LR_XSD_URL: Optional[str]
+    # Numeración VeriFactu (config centralizada; env histórico VERIFACTU_SERIE_*).
+    VERIFACTU_SERIE_FACTURA: str
+    VERIFACTU_SERIE_RECTIFICATIVA: str
+    # Contacto en ``/.well-known/security.txt`` (RFC 9116); si vacío, fallback ``security@ablogistics-os.com``.
+    SECURITY_CONTACT_EMAIL: Optional[str]
 
 
 def _parse_debug_flag(*, environment: str) -> bool:
@@ -371,6 +376,9 @@ def get_settings() -> Settings:
     aeat_xsd_validate_req = _env_bool("AEAT_VERIFACTU_XSD_VALIDATE_REQUEST", True)
     aeat_lr_xsd = _opt("AEAT_VERIFACTU_SUMINISTRO_LR_XSD_URL")
 
+    vf_serie_f = (getenv("VERIFACTU_SERIE_FACTURA") or "FAC").strip() or "FAC"
+    vf_serie_r = (getenv("VERIFACTU_SERIE_RECTIFICATIVA") or "R").strip() or "R"
+
     # ─── CORS: producción estricta (dominio oficial); desarrollo incluye localhost ───
     official = (getenv("OFFICIAL_FRONTEND_ORIGIN") or "").strip().rstrip("/")
     cors_extra_raw = getenv("CORS_ALLOW_ORIGINS") or ""
@@ -490,6 +498,9 @@ def get_settings() -> Settings:
         AEAT_VERIFACTU_WSDL_URL=aeat_wsdl,
         AEAT_VERIFACTU_XSD_VALIDATE_REQUEST=aeat_xsd_validate_req,
         AEAT_VERIFACTU_SUMINISTRO_LR_XSD_URL=aeat_lr_xsd,
+        VERIFACTU_SERIE_FACTURA=vf_serie_f,
+        VERIFACTU_SERIE_RECTIFICATIVA=vf_serie_r,
+        SECURITY_CONTACT_EMAIL=_opt("SECURITY_CONTACT_EMAIL"),
     )
 
 

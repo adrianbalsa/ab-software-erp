@@ -7,7 +7,10 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from app.core.config import get_settings
+from app.services.secret_manager_service import (
+    get_integration_secret_version,
+    get_secret_manager,
+)
 from app.core.math_engine import round_fiat, to_decimal
 from app.db.supabase import SupabaseAsync
 from app.services.audit_logs_service import AuditLogsService
@@ -21,6 +24,15 @@ class PaymentDomainError(ValueError):
 
 class PaymentIntegrationError(RuntimeError):
     """Fallo de integración externa (SDK/API GoCardless)."""
+
+
+def _to_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    s = str(value).strip().lower()
+    return s in {"1", "true", "t", "yes", "si"}
 
 
 def _minor_units(amount: Decimal) -> int:
@@ -37,11 +49,13 @@ class PaymentService:
     def __init__(self, db: SupabaseAsync, *, gc_client: Any | None = None) -> None:
         self._db = db
         self._client = gc_client
+        self._gc_injected: bool = gc_client is not None
+        self._gc_client_credential_version: int = -1
 
     @staticmethod
     def _build_client() -> Any:
-        cfg = get_settings()
-        token = cfg.GOCARDLESS_ACCESS_TOKEN
+        mgr = get_secret_manager()
+        token = mgr.get_gocardless_access_token()
         if not token:
             raise PaymentIntegrationError(
                 "GoCardless Pro no configurado (falta GOCARDLESS_ACCESS_TOKEN)."
@@ -52,12 +66,18 @@ class PaymentService:
             raise PaymentIntegrationError(
                 "SDK oficial GoCardless no disponible. Instale `gocardless-pro`."
             ) from exc
-        return gocardless_pro.Client(access_token=token, environment=cfg.GOCARDLESS_ENV)
+        return gocardless_pro.Client(access_token=token, environment=mgr.get_gocardless_env())
 
     @property
     def _gc(self) -> Any:
-        if self._client is None:
-            self._client = self._build_client()
+        if self._gc_injected:
+            assert self._client is not None
+            return self._client
+        ver = get_integration_secret_version()
+        if self._client is not None and self._gc_client_credential_version == ver:
+            return self._client
+        self._client = self._build_client()
+        self._gc_client_credential_version = ver
         return self._client
 
     async def create_customer(
@@ -216,7 +236,7 @@ class PaymentService:
 
         res_cli: Any = await self._db.execute(
             self._db.table("clientes")
-            .select("id,empresa_id,nombre,email")
+            .select("id,empresa_id,nombre,email,mandato_activo")
             .eq("id", cid)
             .limit(1)
         )
@@ -227,6 +247,9 @@ class PaymentService:
         empresa_id = str(cliente.get("empresa_id") or "").strip()
         if not empresa_id:
             raise PaymentDomainError("Cliente sin empresa asociada.")
+
+        if _to_bool(cliente.get("mandato_activo")):
+            return {"redirect_url": "", "has_active_mandate": True}
 
         gocardless_customer_id = ""
         try:
@@ -329,5 +352,5 @@ class PaymentService:
             user_id=None,
         )
 
-        return {"redirect_url": redirect_url}
+        return {"redirect_url": redirect_url, "has_active_mandate": False}
 

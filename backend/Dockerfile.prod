@@ -50,6 +50,6 @@ ENV WEB_CONCURRENCY=4 \
     GUNICORN_GRACEFUL_TIMEOUT=30
 
 HEALTHCHECK --interval=30s --timeout=8s --start-period=25s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:8000/ready || exit 1
+    CMD curl -fsS http://127.0.0.1:8000/live || exit 1
 
 CMD ["/bin/sh", "-c", "exec gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w ${WEB_CONCURRENCY:-4} -b 0.0.0.0:8000 --timeout ${GUNICORN_TIMEOUT:-120} --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-30} --worker-tmp-dir /dev/shm --access-logfile - --error-logfile - --capture-output"]

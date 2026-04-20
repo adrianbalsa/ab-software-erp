@@ -40,6 +40,10 @@ class GastoCreate(BaseModel):
     )
 
     evidencia_url: str | None = None
+    porte_id: UUID | None = Field(
+        default=None,
+        description="Porte relacionado para imputación de margen real del viaje.",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -71,6 +75,7 @@ class GastoOut(BaseModel):
     concepto: str | None = None
     moneda: str
     evidencia_url: str | None = None
+    porte_id: UUID | None = None
     nif_proveedor: str | None = None
     iva: float | None = None
     total_eur: float | None = None
@@ -102,3 +107,12 @@ class GastoOCRHint(BaseModel):
         default=False,
         description="True si confianza menor que 90 %: revisión humana recomendada antes de firmar/contabilizar.",
     )
+
+
+class GastoOCRExtractOut(BaseModel):
+    proveedor: str | None = None
+    cif: str | None = None
+    base_imponible: float | None = None
+    iva: float | None = None
+    total: float | None = None
+    fecha: date | None = None

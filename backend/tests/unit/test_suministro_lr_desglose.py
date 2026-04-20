@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from app.core.fiscal_logic import fiscal_amount_string_two_decimals
-from app.core.verifactu import generate_invoice_hash
+from app.core.verifactu_hashing import VerifactuCadena, generar_hash_factura_oficial
 from app.services.aeat_client_py.xsd_validate import validate_reg_factu_payload_against_suministro_lr_xsd
 from app.services.aeat_client_py.zeep_client import default_aeat_suministro_lr_xsd_url
 from app.services.suministro_lr_xml import inner_xml_fragment_unsigned_alta_for_tests
@@ -24,12 +24,14 @@ def test_fiscal_amount_two_decimals_no_float_drift() -> None:
     assert fiscal_amount_string_two_decimals("100") == "100.00"
 
 
-def test_generate_invoice_hash_uses_decimal_two_decimals() -> None:
-    h1 = generate_invoice_hash(
+def test_generar_hash_factura_oficial_emision_decimal_coherente() -> None:
+    h1 = generar_hash_factura_oficial(
+        VerifactuCadena.HUELLA_EMISION,
         {"num_factura": "A", "fecha_emision": "2026-01-01", "total_factura": Decimal("121.00")},
         "0" * 64,
     )
-    h2 = generate_invoice_hash(
+    h2 = generar_hash_factura_oficial(
+        VerifactuCadena.HUELLA_EMISION,
         {"num_factura": "A", "fecha_emision": "2026-01-01", "total_factura": "121.00"},
         "0" * 64,
     )

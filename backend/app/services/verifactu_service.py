@@ -11,6 +11,11 @@ from typing import Any
 from app.db.supabase import SupabaseAsync
 from app.core.crypto import pii_crypto
 from app.core.fiscal_logic import fiscal_amount_string_two_decimals
+from app.core.verifactu_hashing import (
+    VERIFACTU_INVOICE_GENESIS_HASH,
+    VerifactuCadena,
+    generar_hash_factura_oficial,
+)
 from app.services.aeat_qr_service import (
     build_srei_verifactu_url,
     qr_png_bytes_from_url,
@@ -21,11 +26,6 @@ from app.services.aeat_qr_service import (
 VERIFACTU_CHAIN_SEED_HEX = hashlib.sha256(
     b"VERIFACTU|FINGERPRINT_CHAIN|GENESIS|AB_SCANNER|v1"
 ).hexdigest()
-
-# Génesis para cadena de ``hash_factura`` (inalterabilidad): cadena de ceros (64 hex = 256 bits).
-# Primera factura del tenant: ``hash_anterior`` = génesis; ``hash_factura`` = SHA-256(datos|génesis).
-VERIFACTU_INVOICE_GENESIS_HASH = "0" * 64
-
 
 @dataclass(frozen=True, slots=True)
 class EslabonFacturaAnterior:
@@ -99,28 +99,11 @@ class VerifactuService:
         """
         Huella de inalterabilidad para ``public.facturas.hash_factura`` (cadena dependiente del anterior).
 
-        Concatena (determinista): número, fecha ISO, NIF emisor, total con 2 decimales, y ``previous_hash``.
-        Si ``previous_hash`` viene vacío o ``None``, se usa ``VERIFACTU_INVOICE_GENESIS_HASH``
-        como semilla de cadena para la primera factura.
+        Delega en ``generar_hash_factura_oficial`` (HUELLA_EMISION).
         """
-        num = VerifactuService._norm_str(
-            invoice_data.get("num_factura") or invoice_data.get("numero_factura")
+        return generar_hash_factura_oficial(
+            VerifactuCadena.HUELLA_EMISION, invoice_data, previous_hash
         )
-        fecha = VerifactuService._norm_fecha_iso(
-            invoice_data.get("fecha_emision") or invoice_data.get("fecha")
-        )
-        nif_e = VerifactuService._norm_nif(
-            invoice_data.get("nif_emisor") or invoice_data.get("nif_empresa")
-        )
-        tot = fiscal_amount_string_two_decimals(
-            invoice_data.get("total_factura") if invoice_data.get("total_factura") is not None
-            else invoice_data.get("total")
-        )
-        prev = str(previous_hash or "").strip()
-        if not prev:
-            prev = VERIFACTU_INVOICE_GENESIS_HASH
-        cadena = f"{num}|{fecha}|{nif_e}|{tot}|{prev}"
-        return hashlib.sha256(cadena.encode("utf-8")).hexdigest()
 
     @staticmethod
     def _cadena_para_hash_verifactu(

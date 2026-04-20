@@ -51,7 +51,10 @@ class GoCardlessOneOffPaymentOut(BaseModel):
 
 
 class SetupMandateOut(BaseModel):
-    redirect_url: str
+    """Si ya hay mandato activo, ``redirect_url`` va vacío y ``has_active_mandate`` es True."""
+
+    redirect_url: str = ""
+    has_active_mandate: bool = False
 
 
 @router.post(
@@ -119,7 +122,7 @@ async def setup_gocardless_mandate(
     if cliente_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cliente portal no vinculado.")
     base = (get_settings().PUBLIC_APP_URL or "http://localhost:3000").rstrip("/")
-    success_url = f"{base}/portal/facturas?setup=success"
+    success_url = f"{base}/portal-cliente/facturas?setup=success"
     try:
         out = await service.create_mandate_setup_flow(
             cliente_id=str(cliente_id),
@@ -129,5 +132,8 @@ async def setup_gocardless_mandate(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except PaymentIntegrationError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
-    return SetupMandateOut(**out)
+    return SetupMandateOut(
+        redirect_url=str(out.get("redirect_url") or ""),
+        has_active_mandate=bool(out.get("has_active_mandate")),
+    )
 

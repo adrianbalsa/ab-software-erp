@@ -145,6 +145,20 @@ def _period_yyyy_mm(val: Any) -> str | None:
     return None
 
 
+def factura_verifactu_sellada(row: dict[str, Any]) -> bool:
+    """
+    Factura con cadena VeriFactu materializada: finalizada o con huella persistida
+    (``hash_registro`` / ``fingerprint``).
+    """
+    if row.get("is_finalized") is True:
+        return True
+    for key in ("hash_registro", "fingerprint"):
+        raw = row.get(key)
+        if raw is not None and str(raw).strip():
+            return True
+    return False
+
+
 def bucket_gasto_cinco_from_row(
     row: dict[str, Any],
     *,
@@ -186,6 +200,7 @@ class TransactionalDashboardAgg:
     tesoreria_ing_facturado: dict[str, Decimal]
     tesoreria_cobros_reales: dict[str, Decimal]
     gastos_bucket_ytd: dict[str, Decimal]
+    gastos_bucket_por_mes: dict[str, dict[str, Decimal]]
     has_bank_transactions: bool
     ingresos_prev_mes: Decimal
     gastos_prev_mes: Decimal
@@ -223,19 +238,14 @@ def aggregate_dashboard_from_rows(
     bars = last_n_month_keys(hoy=hoy, n=6)
     ing_vs: dict[str, tuple[Decimal, Decimal]] = {k: (Decimal("0.00"), Decimal("0.00")) for k in bars}
     bar_set = set(bars)
-    year = hoy.year
-    y_keys = months_of_calendar_year(year)
-    y_set = set(y_keys)
 
-    tes_ing: dict[str, Decimal] = {k: Decimal("0.00") for k in y_keys}
-    tes_cob: dict[str, Decimal] = {k: Decimal("0.00") for k in y_keys}
-    bucket_acc: dict[str, Decimal] = {
-        "Combustible": Decimal("0.00"),
-        "Personal": Decimal("0.00"),
-        "Mantenimiento": Decimal("0.00"),
-        "Seguros": Decimal("0.00"),
-        "Peajes": Decimal("0.00"),
+    tes_ing: dict[str, Decimal] = {k: Decimal("0.00") for k in bars}
+    tes_cob: dict[str, Decimal] = {k: Decimal("0.00") for k in bars}
+    bucket_order = ("Combustible", "Personal", "Mantenimiento", "Seguros", "Peajes")
+    gastos_bucket_mes: dict[str, dict[str, Decimal]] = {
+        k: {b: Decimal("0.00") for b in bucket_order} for k in bars
     }
+    bucket_acc: dict[str, Decimal] = {b: Decimal("0.00") for b in bucket_order}
 
     ing_m = Decimal("0.00")
     gas_m = Decimal("0.00")
@@ -268,7 +278,7 @@ def aggregate_dashboard_from_rows(
         if pk and pk in bar_set:
             a, b = ing_vs[pk]
             ing_vs[pk] = (a + net, b)
-        if pk and pk in y_set:
+        if pk and pk in bar_set and factura_verifactu_sellada(r):
             tes_ing[pk] = tes_ing.get(pk, Decimal("0.00")) + net
         if fd and cur_m_start <= fd < next_m:
             ing_m += net
@@ -288,8 +298,9 @@ def aggregate_dashboard_from_rows(
         if pk and pk in bar_set:
             a, b = ing_vs[pk]
             ing_vs[pk] = (a, b + net)
-        if fd.year == year:
+        if pk and pk in bar_set:
             bname = bucket_gasto_cinco_from_row(r, fuel_gasto_ids=fuel_gasto_ids)
+            gastos_bucket_mes[pk][bname] = gastos_bucket_mes[pk].get(bname, Decimal("0.00")) + net
             bucket_acc[bname] = bucket_acc.get(bname, Decimal("0.00")) + net
         if cur_m_start <= fd < next_m:
             gas_m += net
@@ -303,6 +314,8 @@ def aggregate_dashboard_from_rows(
         if str(r.get("empresa_id") or "").strip() != eid:
             continue
         if str(r.get("estado_cobro") or "").strip().lower() != "cobrada":
+            continue
+        if not factura_verifactu_sellada(r):
             continue
         mt = str(r.get("matched_transaction_id") or "").strip()
         pid = str(r.get("pago_id") or "").strip()
@@ -332,6 +345,9 @@ def aggregate_dashboard_from_rows(
         if ym in tes_cob:
             tes_cob[ym] = tes_cob[ym] + amt
 
+    for b in bucket_order:
+        bucket_acc[b] = quantize_currency(bucket_acc[b])
+
     ebitda_m = ing_m - gas_m
     return TransactionalDashboardAgg(
         ingresos_mes=ing_m,
@@ -344,6 +360,7 @@ def aggregate_dashboard_from_rows(
         tesoreria_ing_facturado=tes_ing,
         tesoreria_cobros_reales=tes_cob,
         gastos_bucket_ytd=bucket_acc,
+        gastos_bucket_por_mes=gastos_bucket_mes,
         has_bank_transactions=has_bank,
         ingresos_prev_mes=ing_prev_m,
         gastos_prev_mes=gas_prev_m,
@@ -414,10 +431,6 @@ def load_transactional_dashboard(
         d_bar0 = hoy.replace(day=1)
         d_bar1 = _add_one_month(d_bar0)
 
-    year = hoy.year
-    y_start = date(year, 1, 1)
-    y_end = date(year + 1, 1, 1)
-
     ing_vs: dict[str, tuple[Decimal, Decimal]] = {k: (Decimal("0.00"), Decimal("0.00")) for k in bars}
     q_pnl = text(_pnl_month_sql())
     for row in session.execute(
@@ -470,6 +483,13 @@ def load_transactional_dashboard(
     km_act = km_snap
     km_prev = _dec(row_prev["km_snap"]) if row_prev else Decimal("0.00")
 
+    _VF_SELLADA = """
+    (
+      COALESCE(f.is_finalized, false) IS TRUE
+      OR (f.hash_registro IS NOT NULL AND length(trim(f.hash_registro::text)) > 0)
+      OR (f.fingerprint IS NOT NULL AND length(trim(f.fingerprint::text)) > 0)
+    )
+    """
     q_tes_ing = text(
         f"""
         SELECT to_char(date_trunc('month', f.fecha_emision::date), 'YYYY-MM') AS ym,
@@ -479,20 +499,20 @@ def load_transactional_dashboard(
            AND f.fecha_emision IS NOT NULL
            AND f.fecha_emision::date >= CAST(:y0 AS date)
            AND f.fecha_emision::date < CAST(:y1 AS date)
+           AND {_VF_SELLADA}
          GROUP BY 1
         """
     )
-    y_meses = months_of_calendar_year(year)
-    tes_ing: dict[str, Decimal] = {k: Decimal("0.00") for k in y_meses}
+    tes_ing: dict[str, Decimal] = {k: Decimal("0.00") for k in bars}
     for r in session.execute(
-        q_tes_ing, {"eid": eid, "y0": y_start.isoformat(), "y1": y_end.isoformat()}
+        q_tes_ing, {"eid": eid, "y0": d_bar0.isoformat(), "y1": d_bar1.isoformat()}
     ).mappings():
         ym = str(r["ym"])
         if ym in tes_ing:
             tes_ing[ym] = _dec(r["v"])
 
     q_tes_cob = text(
-        """
+        f"""
         SELECT to_char(date_trunc('month', bt.booked_date), 'YYYY-MM') AS ym,
                sum(bt.amount) AS v
           FROM public.bank_transactions bt
@@ -510,13 +530,14 @@ def load_transactional_dashboard(
                         f.matched_transaction_id = bt.transaction_id
                      OR f.pago_id = bt.transaction_id
                    )
+                   AND {_VF_SELLADA}
            )
          GROUP BY 1
         """
     )
-    tes_cob: dict[str, Decimal] = {k: Decimal("0.00") for k in y_meses}
+    tes_cob: dict[str, Decimal] = {k: Decimal("0.00") for k in bars}
     for r in session.execute(
-        q_tes_cob, {"eid": eid, "y0": y_start.isoformat(), "y1": y_end.isoformat()}
+        q_tes_cob, {"eid": eid, "y0": d_bar0.isoformat(), "y1": d_bar1.isoformat()}
     ).mappings():
         ym = str(r["ym"])
         if ym in tes_cob:
@@ -536,11 +557,14 @@ def load_transactional_dashboard(
     except Exception:
         has_bank = False
 
-    q_buckets = text(
+    q_gastos_mes_bucket = text(
         f"""
-        SELECT bkt AS bucket, sum(neto) AS total
+        SELECT to_char(date_trunc('month', s.fecha::date), 'YYYY-MM') AS ym,
+               s.bkt AS bucket,
+               sum(s.neto) AS total
           FROM (
-            SELECT {_BUCKET_EXPR} AS bkt,
+            SELECT g.fecha,
+                   {_BUCKET_EXPR} AS bkt,
                    {_NET_GASTO} AS neto
               FROM public.gastos g
              WHERE g.empresa_id = CAST(:eid AS uuid)
@@ -549,22 +573,25 @@ def load_transactional_dashboard(
                AND g.fecha::date >= CAST(:y0 AS date)
                AND g.fecha::date < CAST(:y1 AS date)
           ) s
-         GROUP BY 1
+         GROUP BY 1, 2
         """
     )
-    bucket_acc: dict[str, Decimal] = {
-        "Combustible": Decimal("0.00"),
-        "Personal": Decimal("0.00"),
-        "Mantenimiento": Decimal("0.00"),
-        "Seguros": Decimal("0.00"),
-        "Peajes": Decimal("0.00"),
+    bucket_order = ("Combustible", "Personal", "Mantenimiento", "Seguros", "Peajes")
+    gastos_bucket_mes: dict[str, dict[str, Decimal]] = {
+        k: {b: Decimal("0.00") for b in bucket_order} for k in bars
     }
     for r in session.execute(
-        q_buckets, {"eid": eid, "y0": y_start.isoformat(), "y1": y_end.isoformat()}
+        q_gastos_mes_bucket, {"eid": eid, "y0": d_bar0.isoformat(), "y1": d_bar1.isoformat()}
     ).mappings():
+        ym = str(r["ym"])
         name = str(r["bucket"])
-        if name in bucket_acc:
-            bucket_acc[name] = _dec(r["total"])
+        if ym in gastos_bucket_mes and name in gastos_bucket_mes[ym]:
+            gastos_bucket_mes[ym][name] = _dec(r["total"])
+
+    bucket_acc: dict[str, Decimal] = {b: Decimal("0.00") for b in bucket_order}
+    for pk in bars:
+        for b in bucket_order:
+            bucket_acc[b] = quantize_currency(bucket_acc[b] + gastos_bucket_mes[pk].get(b, Decimal("0.00")))
 
     ebitda_m = ing_m - gas_m
     return TransactionalDashboardAgg(
@@ -578,6 +605,7 @@ def load_transactional_dashboard(
         tesoreria_ing_facturado=tes_ing,
         tesoreria_cobros_reales=tes_cob,
         gastos_bucket_ytd=bucket_acc,
+        gastos_bucket_por_mes=gastos_bucket_mes,
         has_bank_transactions=has_bank,
         ingresos_prev_mes=ing_prev,
         gastos_prev_mes=gas_prev,

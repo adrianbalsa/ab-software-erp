@@ -11,7 +11,7 @@ from __future__ import annotations
 import io
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
 from app.api import deps
@@ -25,6 +25,10 @@ router = APIRouter()
 
 @router.get("/exportar-aeat/")
 async def exportar_aeat_inspeccion(
+    lang: str | None = Query(
+        default=None,
+        description="Idioma de cabeceras CSV y nombres en ZIP: es | en (por defecto preferencia de usuario).",
+    ),
     current_user: UserOut = Depends(deps.require_admin_user),
     _plan: None = Depends(deps.check_quota_limit("exportacion_aeat")),
     service: FacturasService = Depends(deps.get_facturas_service),
@@ -33,8 +37,10 @@ async def exportar_aeat_inspeccion(
     Exportación fiscal para inspección AEAT: CSV de facturas + JSON cadena VeriFactu en ZIP.
     Solo administradores del tenant; planes PRO o Enterprise.
     """
+    eff_lang = lang or getattr(current_user, "preferred_language", None) or "es"
     body, filename, n_facturas = await service.exportar_aeat_inspeccion_zip(
         empresa_id=current_user.empresa_id,
+        lang=eff_lang,
     )
     logger.critical(
         "EXPORTACION_AEAT_INSPECCION empresa_id=%s username=%s rol=%s facturas=%d fichero=%s",

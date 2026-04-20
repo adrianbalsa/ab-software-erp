@@ -88,7 +88,7 @@ function SetPasswordContent() {
       }
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      router.replace("/portal/facturas");
+      router.replace("/portal-cliente/facturas");
     } catch (e) {
       setSubmitError(
         e instanceof Error ? e.message : "No se pudo actualizar la contraseña.",

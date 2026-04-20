@@ -11,8 +11,10 @@ from typing import Any
 import httpx
 
 from app.core.config import get_settings
+from app.services.secret_manager_service import get_secret_manager
 from app.core.security import fernet_decrypt_string, fernet_encrypt_string
 from app.db.supabase import SupabaseAsync
+from app.services.audit_logs_service import AuditLogsService
 from app.services.reconciliation_service import ReconciliationService, match_invoice_transaction_pair
 
 _log = logging.getLogger(__name__)
@@ -31,8 +33,8 @@ class BankSyncResult:
 
 
 def _gocardless_configured() -> bool:
-    s = get_settings()
-    return bool(s.GOCARDLESS_SECRET_ID and s.GOCARDLESS_SECRET_KEY)
+    m = get_secret_manager()
+    return bool(m.get_gocardless_secret_id() and m.get_gocardless_secret_key())
 
 
 def _encrypt_bank_token(plain: str | None) -> str | None:
@@ -49,15 +51,17 @@ def _decrypt_bank_token(cipher: str | None) -> str:
 
 
 async def _fetch_access_token() -> str:
-    s = get_settings()
-    if not s.GOCARDLESS_SECRET_ID or not s.GOCARDLESS_SECRET_KEY:
+    m = get_secret_manager()
+    sid = m.get_gocardless_secret_id()
+    skey = m.get_gocardless_secret_key()
+    if not sid or not skey:
         raise RuntimeError("GOCARDLESS_SECRET_ID y GOCARDLESS_SECRET_KEY son obligatorios")
     async with httpx.AsyncClient(timeout=45.0) as client:
         r = await client.post(
             f"{_GOCARDLESS_API_V2}/token/new/",
             json={
-                "secret_id": s.GOCARDLESS_SECRET_ID,
-                "secret_key": s.GOCARDLESS_SECRET_KEY,
+                "secret_id": sid,
+                "secret_key": skey,
             },
         )
         if r.status_code != 200:
@@ -313,6 +317,7 @@ class BankService:
             raise RuntimeError("Integraci?n GoCardless no configurada en el servidor")
         req_plain = await self._load_requisition_id(empresa_id)
         access = await _fetch_access_token()
+        tok_row_enc = _encrypt_bank_token(access)
         async with httpx.AsyncClient(timeout=60.0) as client:
             req = await self._get_requisition_json(client, access, req_plain)
             accounts = req.get("accounts") or []
@@ -349,6 +354,8 @@ class BankService:
                     "status": "linked",
                     "updated_at": now,
                 }
+                if tok_row_enc:
+                    row_ins["access_token_encrypted"] = tok_row_enc
                 res_e: Any = await self._db.execute(
                     self._db.table("bank_accounts")
                     .select("id")
@@ -522,6 +529,7 @@ class BankService:
             "remittance_info": rem,
             "internal_status": "imported",
             "reconciled": False,
+            "status_reconciled": "pending",
             "raw_fingerprint": fp,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -700,12 +708,26 @@ class BankService:
                 {
                     "reconciled": True,
                     "internal_status": "reconciled",
+                    "status_reconciled": "reconciled",
                     "updated_at": now_iso,
                 }
             )
             .eq("empresa_id", str(tx.get("empresa_id") or ""))
             .eq("transaction_id", tx_id_clean)
         )
+        try:
+            await AuditLogsService(self._db).log_bank_reconciliation(
+                empresa_id=str(invoice.get("empresa_id") or ""),
+                transaction_id=tx_id_clean,
+                factura_id=inv_id,
+                user_id=None,
+            )
+        except Exception:
+            _log.warning(
+                "match_invoice_to_transaction: audit log omitido tx=%s",
+                tx_id_clean,
+                exc_info=True,
+            )
 
         return {
             "invoice_id": inv_id,

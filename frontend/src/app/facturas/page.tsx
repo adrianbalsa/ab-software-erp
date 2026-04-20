@@ -9,6 +9,8 @@ import { VeriFactuBadge } from "@/components/dashboard/VeriFactuBadge";
 import { SendInvoiceButton } from "@/components/facturas/SendInvoiceButton";
 import { ToastHost, type ToastPayload } from "@/components/ui/ToastHost";
 import { API_BASE, api, apiFetch, type Factura } from "@/lib/api";
+import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
+import { formatCurrencyEUR } from "@/i18n/localeFormat";
 
 function puedeReenviarAeat(r: Factura): boolean {
   if (!r.is_finalized || !r.fingerprint) return false;
@@ -17,6 +19,9 @@ function puedeReenviarAeat(r: Factura): boolean {
 }
 
 export default function FacturasPage() {
+  const { catalog, locale } = useOptionalLocaleCatalog();
+  const p = catalog.pages;
+
   const [rows, setRows] = useState<Factura[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -38,12 +43,12 @@ export default function FacturasPage() {
       setToast({
         id: Date.now(),
         tone: "error",
-        message: "Error al recuperar el listado de facturas.",
+        message: p.facturas.loadError,
       });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [p.facturas.loadError]);
 
   useEffect(() => {
     void load();
@@ -68,7 +73,7 @@ export default function FacturasPage() {
     if (!rectTarget) return;
     const m = motivo.trim();
     if (m.length < 3) {
-      setRectError("Indica un motivo (mín. 3 caracteres).");
+      setRectError(p.facturas.motivoShort);
       return;
     }
     setRectBusy(true);
@@ -90,7 +95,7 @@ export default function FacturasPage() {
       closeModal();
       await load();
     } catch (e: unknown) {
-      setRectError(e instanceof Error ? e.message : "Error al rectificar");
+      setRectError(e instanceof Error ? e.message : p.facturas.rectError);
     } finally {
       setRectBusy(false);
     }
@@ -112,7 +117,7 @@ export default function FacturasPage() {
       }
       await load();
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "No se pudo reenviar a la AEAT");
+      alert(e instanceof Error ? e.message : p.facturas.aeatFail);
     } finally {
       setAeatBusyId(null);
     }
@@ -137,7 +142,7 @@ export default function FacturasPage() {
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "No se pudo descargar el PDF");
+      alert(e instanceof Error ? e.message : p.facturas.pdfFail);
     } finally {
       setDownloadingId(null);
     }
@@ -146,21 +151,25 @@ export default function FacturasPage() {
   const copyAeatCsv = useCallback(async (csv: string) => {
     try {
       await navigator.clipboard.writeText(csv);
-      setToast({ id: Date.now(), tone: "success", message: "CSV copiado" });
+      setToast({ id: Date.now(), tone: "success", message: p.facturas.csvCopied });
     } catch {
-      setToast({ id: Date.now(), tone: "error", message: "No se pudo copiar el CSV" });
+      setToast({ id: Date.now(), tone: "error", message: p.facturas.csvFail });
     }
-  }, []);
+  }, [p.facturas.csvCopied, p.facturas.csvFail]);
 
   return (
     <AppShell active="facturas">
       <ToastHost toast={toast} onDismiss={() => setToast(null)} durationMs={3200} />
       <header className="h-16 ab-header border-b border-slate-200/80 flex items-center justify-between px-8 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Facturas</h1>
-          <p className="text-sm text-slate-500">
-            PDF inmutable vía <code className="text-xs">porte_lineas_snapshot</code> + VeriFactu · Rectificativas R1
-          </p>
+          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">{p.facturas.title}</h1>
+          <p className="text-sm text-slate-500">{p.facturas.subtitle}</p>
+          <Link
+            href="/help/erp-invoicing"
+            className="mt-1 inline-block text-xs font-medium text-[#2563eb] underline-offset-2 hover:underline"
+          >
+            {p.facturas.helpErpInvoices}
+          </Link>
         </div>
         <button
           type="button"
@@ -169,7 +178,7 @@ export default function FacturasPage() {
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#2563eb] disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          Actualizar
+          {p.facturas.refresh}
         </button>
       </header>
 
@@ -177,32 +186,32 @@ export default function FacturasPage() {
         <div className="ab-card rounded-2xl overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2 bg-slate-50/80">
             <FileText className="w-5 h-5 text-[#2563eb]" />
-            <h2 className="font-bold text-[#0b1224]">Facturas emitidas</h2>
+            <h2 className="font-bold text-[#0b1224]">{p.facturas.issued}</h2>
           </div>
           <div className="w-full min-w-0 overflow-x-auto">
             <table className="ab-table w-full min-w-[800px]">
               <thead>
                 <tr>
-                  <th>Número</th>
-                  <th>Tipo</th>
-                  <th>Fecha</th>
-                  <th>Total</th>
-                  <th>Estado AEAT</th>
-                  <th>Hash (preview)</th>
-                  <th className="text-right">Acciones</th>
+                  <th>{p.facturas.colNumber}</th>
+                  <th>{p.facturas.colType}</th>
+                  <th>{p.facturas.colDate}</th>
+                  <th>{p.facturas.colTotal}</th>
+                  <th>{p.facturas.colAeat}</th>
+                  <th>{p.facturas.colHash}</th>
+                  <th className="text-right">{p.facturas.colActions}</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
                     <td colSpan={7} className="text-slate-500 text-sm py-8 text-center">
-                      Cargando…
+                      {p.facturas.loading}
                     </td>
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="text-slate-500 text-sm py-8 text-center">
-                      No hay facturas.
+                      {p.facturas.empty}
                     </td>
                   </tr>
                 ) : (
@@ -219,10 +228,7 @@ export default function FacturasPage() {
                       <td className="text-slate-600 text-sm">{r.tipo_factura ?? "—"}</td>
                       <td className="text-slate-600">{String(r.fecha_emision).slice(0, 10)}</td>
                       <td className="text-slate-800">
-                        {Number(r.total_factura).toLocaleString("es-ES", {
-                          style: "currency",
-                          currency: "EUR",
-                        })}
+                        {formatCurrencyEUR(Number(r.total_factura), locale)}
                       </td>
                       <td className="text-left align-middle">
                         <div className="inline-flex items-center gap-2">
@@ -235,8 +241,8 @@ export default function FacturasPage() {
                               type="button"
                               onClick={() => void copyAeatCsv(r.aeat_sif_csv || "")}
                               className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
-                              title="Copiar CSV AEAT"
-                              aria-label="Copiar CSV AEAT"
+                              title={p.facturas.copyCsvTitle}
+                              aria-label={p.facturas.copyCsvAria}
                             >
                               <Stamp className="h-3.5 w-3.5" />
                             </button>
@@ -256,7 +262,7 @@ export default function FacturasPage() {
                               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
                             >
                               <RefreshCw className={`w-3.5 h-3.5 ${aeatBusyId === String(r.id) ? "animate-spin" : ""}`} />
-                              Reenviar AEAT
+                              {p.facturas.reenviarAeat}
                             </button>
                           )}
                           {r.tipo_factura === "F1" && (
@@ -266,7 +272,7 @@ export default function FacturasPage() {
                               className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
                             >
                               <FileWarning className="w-3.5 h-3.5" />
-                              Rectificar
+                              {p.facturas.rectificar}
                             </button>
                           )}
                           <SendInvoiceButton
@@ -282,7 +288,7 @@ export default function FacturasPage() {
                             className="inline-flex items-center gap-1.5 rounded-lg bg-[#2563eb] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-50"
                           >
                             <Download className="w-3.5 h-3.5" />
-                            {downloadingId === String(r.id) ? "…" : "PDF"}
+                            {downloadingId === String(r.id) ? "…" : p.facturas.pdf}
                           </button>
                         </div>
                       </td>
@@ -308,15 +314,13 @@ export default function FacturasPage() {
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-slate-200">
             <div className="border-b border-slate-100 px-6 py-4">
               <h3 id="rect-modal-title" className="text-lg font-bold text-slate-900">
-                Rectificar factura {rectTarget.numero_factura}
+                {p.facturas.modalTitle} {rectTarget.numero_factura}
               </h3>
-              <p className="text-sm text-slate-500 mt-1">
-                Se emitirá una factura <strong>R1</strong> con importes negativos vinculada a esta F1.
-              </p>
+              <p className="text-sm text-slate-500 mt-1">{p.facturas.modalIntro}</p>
             </div>
             <div className="px-6 py-4 space-y-3">
               <label className="block text-sm font-semibold text-slate-700" htmlFor="motivo-rect">
-                Motivo de la rectificación
+                {p.facturas.motivoLabel}
               </label>
               <textarea
                 id="motivo-rect"
@@ -324,7 +328,7 @@ export default function FacturasPage() {
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
-                placeholder="Ej.: Error en datos fiscales del cliente…"
+                placeholder={p.facturas.motivoPlaceholder}
                 disabled={rectBusy}
               />
               {rectError && (
@@ -340,7 +344,7 @@ export default function FacturasPage() {
                 disabled={rectBusy}
                 className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50"
               >
-                Cancelar
+                {p.facturas.cancel}
               </button>
               <button
                 type="button"
@@ -348,7 +352,7 @@ export default function FacturasPage() {
                 disabled={rectBusy}
                 className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
               >
-                {rectBusy ? "Emitiendo…" : "Emitir R1"}
+                {rectBusy ? p.facturas.emitting : p.facturas.emitR1}
               </button>
             </div>
           </div>

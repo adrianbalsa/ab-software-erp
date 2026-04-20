@@ -14,6 +14,15 @@ from app.services.audit_logs_service import AuditLogsService
 router = APIRouter()
 
 
+def _to_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    s = str(value).strip().lower()
+    return s in {"1", "true", "t", "yes", "si"}
+
+
 async def _get_portal_cliente_row(*, db: SupabaseAsync, user: UserOut) -> dict[str, Any]:
     cliente_id = user.cliente_id
     if cliente_id is None:
@@ -40,7 +49,10 @@ async def get_my_risk(
     db: SupabaseAsync = Depends(deps.get_db),
 ) -> dict[str, Any]:
     cliente = await _get_portal_cliente_row(db=db, user=portal_user)
-    return RiskEngine.calculate_client_risk(cliente)
+    payload = RiskEngine.calculate_client_risk(cliente)
+    payload["riesgo_aceptado"] = _to_bool(cliente.get("riesgo_aceptado"))
+    payload["mandato_activo"] = _to_bool(cliente.get("mandato_activo"))
+    return payload
 
 
 @router.post("/onboarding/accept-risk")

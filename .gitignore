@@ -16,6 +16,7 @@ __pycache__/
 venv/
 env/
 .venv/
+backend/.venv_test_finance/
 
 # Mac
 .DS_Store
@@ -30,3 +31,10 @@ node_modules/
 node_modules/
 backend/.venv312/
 .cursor/
+
+# Terraform (Railway IaC): no subir estado ni caché de providers
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/terraform.tfvars
+infra/terraform/crash.log

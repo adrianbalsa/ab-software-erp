@@ -19,6 +19,7 @@ from app.schemas.esg import (
     EsgAuditReadyOut,
 )
 from app.schemas.user import UserOut
+from app.core.constants import ISO_14083_DIESEL_CO2_KG_PER_LITRE
 from app.core.esg_engine import calculate_co2_emissions, calculate_nox_emissions
 
 router = APIRouter(prefix="/esg")
@@ -42,7 +43,7 @@ class EsgAuditFuelAnnualOut(BaseModel):
     meses: list[EsgAuditFuelMonthlyOut]
 
 
-_CO2_KG_PER_LITRO_DIESEL_A = 2.67
+_CO2_KG_PER_LITRO_DIESEL_A = ISO_14083_DIESEL_CO2_KG_PER_LITRE
 
 
 @router.get(

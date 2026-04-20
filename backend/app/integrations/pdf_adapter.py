@@ -20,11 +20,12 @@ async def generar_pdf_factura_base64(
     datos_empresa: dict[str, Any],
     datos_cliente: dict[str, Any],
     conceptos: list[dict[str, Any]],
+    lang: str | None = None,
 ) -> str:
     generar_pdf_factura = _load_pdf_generator()
 
     def _call() -> bytes:
-        return generar_pdf_factura(datos_empresa, datos_cliente, conceptos)
+        return generar_pdf_factura(datos_empresa, datos_cliente, conceptos, lang=lang)
 
     pdf_bytes = await anyio.to_thread.run_sync(_call)
     return base64.b64encode(pdf_bytes).decode("ascii")

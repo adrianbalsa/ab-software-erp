@@ -1,4 +1,4 @@
-"""Endpoints de salud: liveness ``GET /health`` (middleware), ``/ready``, readiness profundo ``/health/deep``."""
+"""Endpoints de salud: liveness ``GET /live`` (middleware), ``/ready``, readiness profundo ``/health/deep``."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from app.core.config import get_settings
 router = APIRouter(tags=["Salud"])
 
 
-# GET /health (text/plain "OK") lo sirve ``HealthCheckBypassMiddleware`` en ``main.py`` (antes de TrustedHost).
+# GET /live (JSON mínimo) lo sirve ``HealthCheckBypassMiddleware`` en ``main.py`` (antes de TrustedHost).
 
 
 @router.get("/health/deep", include_in_schema=True)

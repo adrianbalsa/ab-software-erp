@@ -18,7 +18,8 @@ import { API_BASE, apiFetch as coreApiFetch, notifyJwtUpdated } from "@/lib/api"
 import { clearAuthToken, getAuthToken, setAuthToken } from "@/lib/auth";
 
 /** kg CO₂ / L — referencia diésel Euro 6 / marco UE (alineado con backend ReportService). */
-const KG_CO2_REF_EURO6 = 2.64;
+/** ISO 14083 — diésel (mismo valor que backend ``ISO_14083_DIESEL_CO2_KG_PER_LITRE``). */
+const KG_CO2_REF_ISO14083_DIESEL = 2.67;
 
 type EmisionMensual = {
   periodo: string;
@@ -175,12 +176,12 @@ export default function SostenibilidadPage() {
 
   const huellaComparativa = useMemo(() => {
     return emisionesMensuales.map((e) => {
-      const co2_referencia_euro6_kg = e.litros_estimados * KG_CO2_REF_EURO6;
+      const co2_referencia_iso14083_kg = e.litros_estimados * KG_CO2_REF_ISO14083_DIESEL;
       return {
         periodo: e.periodo,
         co2_declarado_kg: e.co2_kg,
-        co2_referencia_euro6_kg,
-        co2_ahorro_kg: Math.max(0, co2_referencia_euro6_kg - e.co2_kg),
+        co2_referencia_iso14083_kg,
+        co2_ahorro_kg: Math.max(0, co2_referencia_iso14083_kg - e.co2_kg),
       };
     });
   }, [emisionesMensuales]);
@@ -856,11 +857,11 @@ export default function SostenibilidadPage() {
 
               <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm mt-4">
                 <h2 className="text-lg font-bold text-[#0b1224] mb-1">
-                  Certificados de huella de carbono (Euro 6)
+                  Certificados de huella de carbono (ISO 14083)
                 </h2>
                 <p className="text-sm text-slate-500 mb-4">
-                  Comparativa Scope 1 (combustible): emisiones declaradas vs referencia{" "}
-                  <span className="font-mono text-xs">{KG_CO2_REF_EURO6} kg CO₂/L</span>. Descarga PDF
+                  Comparativa Scope 1 (combustible): emisiones declaradas vs referencia diésel{" "}
+                  <span className="font-mono text-xs">{KG_CO2_REF_ISO14083_DIESEL} kg CO₂/L</span>. Descarga PDF
                   por periodo vía <code className="text-xs">GET /reports/esg/certificado-huella</code>.
                 </p>
                 {loadingEmisiones ? (
@@ -883,8 +884,8 @@ export default function SostenibilidadPage() {
                           <Tooltip />
                           <Legend />
                           <Bar
-                            dataKey="co2_referencia_euro6_kg"
-                            name="Referencia Euro 6 (kg)"
+                            dataKey="co2_referencia_iso14083_kg"
+                            name="Referencia ISO 14083 (kg)"
                             fill="#0b1224"
                             radius={[4, 4, 0, 0]}
                           />

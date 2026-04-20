@@ -12,7 +12,19 @@ Si el trigger falla al crearse, en Postgres 14+ prueba `EXECUTE FUNCTION` en lug
 
 ## VeriFactu (código)
 
-`VerifactuService.generar_hash_factura` usa cadena normalizada (NIF sin espacios y mayúsculas, fecha ISO, total con 2 decimales). El **siguiente secuencial** sale de la última fila de la empresa (orden `numero_secuencial` / `fecha_emision`).
+### Dos huellas SHA-256 (propósito distinto; no duplicar criterio en DD)
+
+1. **Cadena DB emisión** (`hash_registro` / `hash_factura` / `huella_hash`): `generar_hash_factura_oficial(..., HUELLA_EMISION)` — pipe `num|fecha|NIF_emisor|total|hash_prev` (NIF emisor normalizado). Es la que usa `VerifactuService.generate_invoice_hash` al emitir F1/R1.
+2. **Cadena auxiliar** (`fingerprint_hash` / `previous_fingerprint`): misma API con `HUELLA_FINGERPRINT` — pipe `NIF_emisor|NIF_receptor|num|fecha|total|hash_prev` (NIFs como en el legado de emisión; el receptor se resuelve desde `clientes` en auditorías REST).
+3. **XML SuministroLR / presupuestos**: `VerifactuService.generar_hash_factura` — concatenación canónica distinta para el registro exportable AEAT; **no** sustituye a (1) ni (2).
+
+Auditorías (`verify_invoice_chain`, `diagnose_fingerprint_hash_chain`) deben usar filas **materializadas** (`materialize_factura_rows_for_fingerprint_verify` + mapa NIF cliente) para coincidir con lo sellado en emisión.
+
+### Configuración
+
+Series de numeración: `Settings.VERIFACTU_SERIE_FACTURA` y `VERIFACTU_SERIE_RECTIFICATIVA` (env `VERIFACTU_SERIE_*`, por defecto `FAC` / `R`).
+
+`VerifactuService.generar_hash_factura` (punto 3) usa cadena normalizada (NIF sin espacios y mayúsculas, fecha ISO, total con 2 decimales). El **siguiente secuencial** sale de la última fila de la empresa (orden `numero_secuencial` / `fecha_emision`).
 
 Para **F1** desde portes, `hash_anterior` es el hash de esa última factura en cadena.
 

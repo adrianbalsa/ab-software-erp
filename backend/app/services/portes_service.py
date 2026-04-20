@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from app.core.i18n import normalize_lang
 from app.core.math_engine import as_float_fiat, round_fiat, safe_divide, to_decimal
 from app.core.esg_engine import (
     calculate_co2_emissions,
@@ -114,6 +115,72 @@ class PortesService:
         res: Any = await self._db.execute(query)
         rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
         return [dict(r) for r in rows]
+
+    async def list_portes_activos_cliente(
+        self,
+        *,
+        empresa_id: str | UUID,
+        cliente_id: str | UUID,
+    ) -> list[dict[str, Any]]:
+        """Portes no entregados (seguimiento en tiempo casi real para el cargador)."""
+        eid = str(empresa_id).strip()
+        cid = str(cliente_id).strip()
+        if not eid or not cid:
+            return []
+        query = filter_not_deleted(
+            self._db.table("portes")
+            .select("id,origen,destino,fecha,estado,cliente_id")
+            .eq("empresa_id", eid)
+            .eq("cliente_id", cid)
+            .neq("estado", "Entregado")
+            .neq("estado", "facturado")
+            .order("fecha", desc=False)
+        )
+        res: Any = await self._db.execute(query)
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        return [dict(r) for r in rows]
+
+    async def co2_ahorro_ytd_kg_for_cliente(
+        self,
+        *,
+        empresa_id: str | UUID,
+        cliente_id: str | UUID,
+        hoy: date | None = None,
+    ) -> float:
+        """
+        Suma ``esg_co2_ahorro_vs_euro_iii_kg`` persistido YTD (sin recalcular GLEC).
+
+        Para el portal cargador, usar ``esg_service.portal_cliente_esg_ytd_co2_ahorro_kg``
+        (alineado con CSV/certificado).
+        """
+        from datetime import date as date_cls
+
+        eid = str(empresa_id).strip()
+        cid = str(cliente_id).strip()
+        if not eid or not cid:
+            return 0.0
+        if hoy is None:
+            hoy = date_cls.today()
+        d0 = date_cls(hoy.year, 1, 1)
+        total = 0.0
+        try:
+            res_p: Any = await self._db.execute(
+                filter_not_deleted(
+                    self._db.table("portes")
+                    .select("esg_co2_ahorro_vs_euro_iii_kg")
+                    .eq("empresa_id", eid)
+                    .eq("cliente_id", cid)
+                    .gte("fecha", d0.isoformat())
+                    .lte("fecha", hoy.isoformat())
+                )
+            )
+            for row in (res_p.data or []) if hasattr(res_p, "data") else []:
+                v = row.get("esg_co2_ahorro_vs_euro_iii_kg")
+                if v is not None:
+                    total += max(0.0, float(v))
+        except Exception:
+            total = 0.0
+        return round(total, 4)
 
     async def create_porte(
         self,
@@ -736,6 +803,7 @@ class PortesService:
         else:
             fecha_s = datetime.now(timezone.utc).isoformat()
 
+        pdf_lang = normalize_lang(str(emp.get("preferred_language") or "es"))
         return generar_albaran_entrega_pdf(
             datos_empresa=emp,
             datos_porte=pr,
@@ -743,6 +811,7 @@ class PortesService:
             firma_b64=str(firma),
             fecha_entrega_iso=fecha_s,
             dni_consignatario=dni_c,
+            lang=pdf_lang,
         )
 
     async def soft_delete_porte(self, *, empresa_id: str | UUID, porte_id: str | UUID) -> None:

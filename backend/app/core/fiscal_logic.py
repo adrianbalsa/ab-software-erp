@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
 from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 from typing import Any
-
-GENESIS_HASH = "0" * 64
-
 
 def fiscal_amount_string_two_decimals(value: Any) -> str:
     """
@@ -50,59 +46,6 @@ def totals_coherent(
     expected = (b + c).quantize(Decimal("0.01"))
     got = t.quantize(Decimal("0.01"))
     return abs(expected - got) <= tolerance_eur
-
-
-def compute_invoice_fingerprint(invoice_data: dict[str, Any], prev_hash: str) -> str:
-    """
-    Calcula la huella digital SHA-256 de una factura según normativa VeriFactu.
-    
-    Concatenación: ID_Emisor + ID_Receptor + NumeroFactura + Fecha + ImporteTotal + prev_hash
-    
-    Args:
-        invoice_data: Diccionario con campos:
-            - id_emisor o nif_emisor: NIF del emisor
-            - id_receptor o nif_receptor: NIF del receptor
-            - numero_factura o num_factura: Número de factura
-            - fecha_emision o fecha: Fecha de emisión
-            - importe_total o total_factura: Importe total
-        prev_hash: Hash de la factura anterior (GENESIS_HASH si es la primera)
-    
-    Returns:
-        Hash SHA-256 en formato hexadecimal (64 caracteres)
-    """
-    id_emisor = str(
-        invoice_data.get("id_emisor") 
-        or invoice_data.get("nif_emisor") 
-        or ""
-    ).strip()
-    
-    id_receptor = str(
-        invoice_data.get("id_receptor") 
-        or invoice_data.get("nif_receptor") 
-        or ""
-    ).strip()
-    
-    numero_factura = str(
-        invoice_data.get("numero_factura") 
-        or invoice_data.get("num_factura") 
-        or ""
-    ).strip()
-    
-    fecha = str(
-        invoice_data.get("fecha_emision") 
-        or invoice_data.get("fecha") 
-        or ""
-    ).strip()
-    
-    importe_total_str = fiscal_amount_string_two_decimals(
-        invoice_data.get("importe_total") or invoice_data.get("total_factura")
-    )
-    
-    prev = str(prev_hash or "").strip() or GENESIS_HASH
-    
-    payload = f"{id_emisor}|{id_receptor}|{numero_factura}|{fecha}|{importe_total_str}|{prev}"
-    
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def sign_invoice_xades(invoice_xml: str, certificate_path: str) -> str:

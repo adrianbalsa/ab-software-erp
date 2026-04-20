@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { LogOut, Webhook } from "lucide-react";
 import { useMemo } from "react";
+import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { isOwnerLike, isTrafficManager, jwtDisplayName, jwtPayload, type AppRbacRole } from "@/lib/api";
 import { logout } from "@/lib/auth";
 import { useRole } from "@/hooks/useRole";
@@ -16,6 +17,7 @@ type Props = {
 
 /** API y Webhooks (solo owner / admin / developer). */
 export function ConfiguracionNavSection({ active, role, onNavLinkClick }: Props) {
+  const { catalog } = useOptionalLocaleCatalog();
   if (isTrafficManager(role)) return null;
   if (!isOwnerLike(role) && role !== "developer") return null;
 
@@ -30,23 +32,14 @@ export function ConfiguracionNavSection({ active, role, onNavLinkClick }: Props)
     >
       <Webhook className={sidebarNavIcon(isActive)} aria-hidden />
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span>API y Webhooks</span>
+        <span>{catalog.sidebar.developerApi}</span>
         <span className="text-[11px] font-normal leading-snug text-zinc-500 group-hover:text-zinc-400">
-          Claves y endpoints
+          {catalog.sidebar.developerApiSub}
         </span>
       </span>
     </Link>
   );
 }
-
-const ROLE_LABELS: Record<AppRbacRole, string> = {
-  owner: "Propietario",
-  admin: "Administrador",
-  traffic_manager: "Traffic Manager",
-  driver: "Conductor",
-  cliente: "Cliente",
-  developer: "Desarrollador",
-};
 
 function initialsFromSubject(sub: string): string {
   const s = sub.trim();
@@ -66,6 +59,8 @@ const DEMO_EMPRESA_UUID = "406d68d7-52d8-5eb2-bff1-0a03095f7f6f";
 /** Pie de sidebar: avatar, nombre, rol y cierre de sesión (estilo bunker). */
 export function SidebarUserSection() {
   const { role } = useRole();
+  const { catalog } = useOptionalLocaleCatalog();
+  const roleLabels = catalog.sidebar.roleLabels as Record<AppRbacRole, string>;
   const displayName = jwtDisplayName();
   const payload = jwtPayload();
   const empresaClaim = String(
@@ -95,11 +90,11 @@ export function SidebarUserSection() {
             {displayName}
           </p>
           <p className="truncate text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-            {ROLE_LABELS[role] ?? role}
+            {roleLabels[role] ?? role}
           </p>
           {isDemoMode && (
             <span className="mt-1 inline-flex items-center rounded-md border border-amber-700/60 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
-              Modo Demo
+              {catalog.sidebar.demoMode}
             </span>
           )}
         </div>
@@ -110,7 +105,7 @@ export function SidebarUserSection() {
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-700/80 bg-zinc-900/50 px-3 py-2 text-xs font-semibold text-zinc-200 transition-all duration-200 hover:border-zinc-600 hover:bg-zinc-800/90 hover:text-white"
       >
         <LogOut className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-        Cerrar sesión
+        {catalog.sidebar.logout}
       </button>
     </div>
   );

@@ -7,6 +7,12 @@ import stripe
 from fastapi import HTTPException, status
 
 from app.core.config import get_settings
+from app.services.secret_manager_service import get_secret_manager
+from app.services.webhook_idempotency import (
+    claim_webhook_event,
+    finalize_stripe_webhook_claim,
+    release_stripe_webhook_claim,
+)
 from app.core.plans import PLAN_ENTERPRISE, PLAN_PRO, PLAN_STARTER, normalize_plan
 from app.db.supabase import SupabaseAsync
 
@@ -16,6 +22,39 @@ logger = logging.getLogger(__name__)
 _STRIPE_SUBSCRIPTION_INACTIVE: frozenset[str] = frozenset(
     {"canceled", "unpaid", "incomplete_expired", "paused"},
 )
+
+
+def _price_id_to_plan(price_id: str | None) -> str | None:
+    """Mapea el price id de Stripe al plan normalizado, si coincide con variables de entorno."""
+    if not price_id or not str(price_id).strip():
+        return None
+    pid = str(price_id).strip()
+    settings = get_settings()
+    mapping: list[tuple[str, str | None]] = [
+        (PLAN_ENTERPRISE, settings.STRIPE_PRICE_ENTERPRISE),
+        (PLAN_PRO, settings.STRIPE_PRICE_PRO),
+        (PLAN_STARTER, settings.STRIPE_PRICE_STARTER),
+    ]
+    for plan, env_pid in mapping:
+        if env_pid and pid == str(env_pid).strip():
+            return plan
+    return None
+
+
+def _first_subscription_price_id(sub_obj: dict[str, Any]) -> str | None:
+    items = sub_obj.get("items")
+    if not isinstance(items, dict):
+        return None
+    data = items.get("data") or []
+    if not data or not isinstance(data[0], dict):
+        return None
+    price = data[0].get("price")
+    if isinstance(price, str):
+        return price.strip() or None
+    if isinstance(price, dict):
+        raw = price.get("id")
+        return str(raw).strip() if raw else None
+    return None
 
 
 def _plan_to_price_id(plan_type: str) -> str:
@@ -34,6 +73,39 @@ def _plan_to_price_id(plan_type: str) -> str:
     return pid
 
 
+async def _empresa_id_for_stripe_customer(
+    db: SupabaseAsync, *, stripe_customer_id: str
+) -> str | None:
+    cid = str(stripe_customer_id or "").strip()
+    if not cid:
+        return None
+    try:
+        res: Any = await db.execute(
+            db.table("empresas")
+            .select("id")
+            .eq("stripe_customer_id", cid)
+            .limit(1)
+        )
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+    except Exception as exc:
+        logger.warning("lookup empresa por stripe_customer_id: %s", exc)
+        return None
+    if not rows:
+        return None
+    return str(rows[0].get("id") or "").strip() or None
+
+
+async def _merge_empresa_billing_fields(
+    db: SupabaseAsync,
+    *,
+    empresa_id: str,
+    fields: dict[str, Any],
+) -> None:
+    if not fields:
+        return
+    await db.execute(db.table("empresas").update(dict(fields)).eq("id", str(empresa_id).strip()))
+
+
 def _limite_vehiculos_for_plan(plan_normalized: str) -> int | None:
     p = normalize_plan(plan_normalized)
     if p == PLAN_ENTERPRISE:
@@ -44,8 +116,8 @@ def _limite_vehiculos_for_plan(plan_normalized: str) -> int | None:
 
 
 def _stripe_configured() -> bool:
-    s = get_settings()
-    return bool(s.STRIPE_SECRET_KEY and s.STRIPE_SECRET_KEY.strip())
+    sk = get_secret_manager().get_stripe_secret_key()
+    return bool(sk and sk.strip())
 
 
 def is_stripe_configured() -> bool:
@@ -71,7 +143,7 @@ async def assert_empresa_billing_active(db: SupabaseAsync, *, empresa_id: str) -
     try:
         res: Any = await db.execute(
             db.table("empresas")
-            .select("deleted_at, stripe_subscription_id")
+            .select("deleted_at, stripe_subscription_id, is_active")
             .eq("id", eid)
             .limit(1)
         )
@@ -96,6 +168,12 @@ async def assert_empresa_billing_active(db: SupabaseAsync, *, empresa_id: str) -
             detail="La cuenta de empresa está archivada",
         )
 
+    if row.get("is_active") is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="La cuenta de empresa está suspendida por facturación. Actualiza el método de pago o contacta con administración.",
+        )
+
     if not _stripe_configured():
         return
 
@@ -103,9 +181,9 @@ async def assert_empresa_billing_active(db: SupabaseAsync, *, empresa_id: str) -
     if sub_id is None or not str(sub_id).strip():
         return
 
-    settings = get_settings()
-    assert settings.STRIPE_SECRET_KEY is not None
-    stripe.api_key = settings.STRIPE_SECRET_KEY
+    sk = get_secret_manager().get_stripe_secret_key()
+    assert sk is not None
+    stripe.api_key = sk
 
     try:
         sub = stripe.Subscription.retrieve(str(sub_id).strip())
@@ -137,9 +215,9 @@ async def create_checkout_session(
     if not _stripe_configured():
         raise RuntimeError("Stripe no está configurado (STRIPE_SECRET_KEY)")
 
-    settings = get_settings()
-    assert settings.STRIPE_SECRET_KEY is not None
-    stripe.api_key = settings.STRIPE_SECRET_KEY
+    sk = get_secret_manager().get_stripe_secret_key()
+    assert sk is not None
+    stripe.api_key = sk
 
     price_id = _plan_to_price_id(plan_type)
     pnorm = normalize_plan(plan_type)
@@ -173,9 +251,9 @@ async def create_portal_session(*, customer_id: str, return_url: str) -> str:
     if not _stripe_configured():
         raise RuntimeError("Stripe no está configurado (STRIPE_SECRET_KEY)")
 
-    settings = get_settings()
-    assert settings.STRIPE_SECRET_KEY is not None
-    stripe.api_key = settings.STRIPE_SECRET_KEY
+    sk = get_secret_manager().get_stripe_secret_key()
+    assert sk is not None
+    stripe.api_key = sk
 
     portal = stripe.billing_portal.Session.create(
         customer=customer_id,
@@ -203,6 +281,8 @@ async def _apply_subscription_to_empresa(
         "stripe_customer_id": stripe_customer_id,
         "stripe_subscription_id": stripe_subscription_id,
         "limite_vehiculos": limite,
+        "subscription_status": "active",
+        "is_active": True,
     }
     await db.execute(
         db.table("empresas").update(payload).eq("id", str(empresa_id).strip())
@@ -256,25 +336,35 @@ async def _downgrade_empresa_to_starter(
         "plan_type": PLAN_STARTER,
         "limite_vehiculos": 5,
         "stripe_subscription_id": None,
+        "subscription_status": "canceled",
+        "is_active": True,
     }
     await db.execute(db.table("empresas").update(payload).eq("id", eid))
     logger.warning("empresa %s downgrade a Starter tras cancelación de suscripción", eid[:8])
 
 
-async def handle_webhook(*, payload: bytes, sig_header: str | None, db: SupabaseAsync) -> dict[str, Any]:
-    """
-    Verifica firma HMAC de Stripe y procesa eventos relevantes.
-    ``db`` debe ser cliente **service role** (bypass RLS) para actualizar ``empresas``.
-    """
-    settings = get_settings()
-    wh_secret = settings.STRIPE_WEBHOOK_SECRET
-    if not wh_secret:
-        raise RuntimeError("STRIPE_WEBHOOK_SECRET no configurado")
+def _stripe_external_event_id(event: Any) -> str:
+    if isinstance(event, dict):
+        return str(event.get("id") or "").strip()
+    eid = getattr(event, "id", None)
+    if eid is not None and str(eid).strip():
+        return str(eid).strip()
+    if hasattr(event, "get"):
+        try:
+            return str(event.get("id") or "").strip()
+        except Exception:
+            return ""
+    return ""
 
-    event = stripe.Webhook.construct_event(payload, sig_header or "", wh_secret)
 
-    etype = event.get("type")
-    data = event.get("data", {}).get("object", {})
+async def _dispatch_stripe_webhook_event(db: SupabaseAsync, event: Any) -> dict[str, Any]:
+    etype = event.get("type") if hasattr(event, "get") else getattr(event, "type", None)
+    data_obj = event.get("data", {}) if hasattr(event, "get") else getattr(event, "data", {}) or {}
+    if not isinstance(data_obj, dict):
+        data_obj = {}
+    data = data_obj.get("object", {})
+    if not isinstance(data, dict):
+        data = {}
 
     if etype == "checkout.session.completed":
         sess = data
@@ -324,7 +414,6 @@ async def handle_webhook(*, payload: bytes, sig_header: str | None, db: Supabase
         return {"received": True, "event": etype}
 
     if etype == "invoice.paid":
-        # Cobro confirmado; la suscripción activa ya se refleja vía checkout.session.completed.
         inv = data
         cust = inv.get("customer")
         if isinstance(cust, dict):
@@ -332,6 +421,14 @@ async def handle_webhook(*, payload: bytes, sig_header: str | None, db: Supabase
         sub = inv.get("subscription")
         if isinstance(sub, dict):
             sub = sub.get("id")
+        cid = str(cust).strip() if cust else ""
+        if cid:
+            eid = await _empresa_id_for_stripe_customer(db, stripe_customer_id=cid)
+            if eid:
+                fields: dict[str, Any] = {"subscription_status": "active", "is_active": True}
+                if sub:
+                    fields["stripe_subscription_id"] = str(sub).strip()
+                await _merge_empresa_billing_fields(db, empresa_id=eid, fields=fields)
         logger.info(
             "invoice.paid customer=%s subscription=%s amount_paid=%s",
             cust,
@@ -340,4 +437,131 @@ async def handle_webhook(*, payload: bytes, sig_header: str | None, db: Supabase
         )
         return {"received": True, "event": etype}
 
+    if etype == "invoice.payment_failed":
+        inv = data
+        cust = inv.get("customer")
+        if isinstance(cust, dict):
+            cust = cust.get("id")
+        cid = str(cust).strip() if cust else ""
+        if not cid:
+            logger.error("invoice.payment_failed sin customer")
+            return {"received": True, "error": "missing_customer"}
+        eid = await _empresa_id_for_stripe_customer(db, stripe_customer_id=cid)
+        if not eid:
+            logger.warning("invoice.payment_failed: ninguna empresa para customer=%s", cid)
+            return {"received": True, "ignored": "unknown_customer"}
+        await _merge_empresa_billing_fields(
+            db,
+            empresa_id=eid,
+            fields={"subscription_status": "past_due", "is_active": False},
+        )
+        logger.warning(
+            "invoice.payment_failed: empresa %s suspendida (past_due)",
+            eid[:8],
+        )
+        return {"received": True, "event": etype, "empresa_id": eid}
+
+    if etype == "customer.subscription.updated":
+        sub = data
+        st = str(sub.get("status") or "").strip()
+        if st in _STRIPE_SUBSCRIPTION_INACTIVE:
+            return {"received": True, "ignored": "subscription_inactive"}
+
+        meta = sub.get("metadata") or {}
+        if not isinstance(meta, dict):
+            meta = {}
+        empresa_id = str(meta.get("empresa_id") or "").strip() or None
+        sub_id = str(sub.get("id") or "").strip() or None
+
+        if not empresa_id and sub_id:
+            try:
+                res_sub: Any = await db.execute(
+                    db.table("empresas")
+                    .select("id")
+                    .eq("stripe_subscription_id", sub_id)
+                    .limit(1)
+                )
+                rows_sub: list[dict[str, Any]] = (
+                    (res_sub.data or []) if hasattr(res_sub, "data") else []
+                )
+            except Exception as exc:
+                logger.warning("subscription.updated: lookup empresa por sub falló: %s", exc)
+                rows_sub = []
+            if rows_sub:
+                empresa_id = str(rows_sub[0].get("id") or "").strip() or None
+
+        if not empresa_id:
+            logger.warning("customer.subscription.updated sin empresa_id (sub=%s)", sub_id)
+            return {"received": True, "ignored": "missing_empresa_id"}
+
+        price_id = _first_subscription_price_id(sub)
+        mapped = _price_id_to_plan(price_id)
+        meta_plan = str(meta.get("plan_type") or "").strip()
+        if mapped:
+            plan_type = normalize_plan(mapped)
+        elif meta_plan:
+            plan_type = normalize_plan(meta_plan)
+        else:
+            logger.info(
+                "customer.subscription.updated: sin price mapeable ni plan_type en metadata (sub=%s); no actualizamos plan",
+                sub_id,
+            )
+            return {"received": True, "ignored": "no_plan_signal"}
+
+        cust = sub.get("customer")
+        if isinstance(cust, dict):
+            cust = cust.get("id")
+
+        await _apply_subscription_to_empresa(
+            db,
+            empresa_id=empresa_id,
+            plan_type=plan_type,
+            stripe_customer_id=str(cust) if cust else None,
+            stripe_subscription_id=sub_id,
+        )
+        return {"received": True, "event": etype, "empresa_id": empresa_id}
+
     return {"received": True, "ignored": etype}
+
+
+async def handle_webhook(*, payload: bytes, sig_header: str | None, db: SupabaseAsync) -> dict[str, Any]:
+    """
+    Verifica firma HMAC de Stripe (``stripe.Webhook.construct_event`` + secreto vía ``get_secret_manager()``)
+    y procesa eventos relevantes.
+    ``db`` debe ser cliente **service role** (bypass RLS) para actualizar ``empresas``.
+
+    Idempotencia: si el evento incluye ``id`` (evt_…), se registra en ``webhook_events``;
+    entregas duplicadas de Stripe devuelven ``{"received": True, "duplicate": True}`` sin repetir
+    efectos en ``empresas``. Si el procesamiento falla, se libera el claim para permitir reintento.
+    """
+    wh_secret = get_secret_manager().get_stripe_webhook_secret()
+    if not wh_secret:
+        raise RuntimeError("STRIPE_WEBHOOK_SECRET no configurado")
+
+    event = stripe.Webhook.construct_event(payload, sig_header or "", wh_secret)
+    event_id = _stripe_external_event_id(event)
+    etype_raw = event.get("type") if hasattr(event, "get") else getattr(event, "type", None)
+    etype_str = str(etype_raw or "").strip()
+
+    claim_made = False
+    if event_id:
+        claim_made = await claim_webhook_event(
+            db,
+            provider="stripe",
+            external_event_id=event_id,
+            event_type=etype_str or "unknown",
+            payload={"id": event_id, "type": etype_str},
+            status="PROCESSING",
+        )
+        if not claim_made:
+            return {"received": True, "duplicate": True}
+
+    try:
+        result = await _dispatch_stripe_webhook_event(db, event)
+        if claim_made and event_id:
+            await finalize_stripe_webhook_claim(db, external_event_id=event_id)
+        return result
+    except Exception:
+        if claim_made and event_id:
+            await release_stripe_webhook_claim(db, external_event_id=event_id)
+        raise

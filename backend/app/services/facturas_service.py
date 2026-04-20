@@ -6,7 +6,6 @@ import csv
 import io
 import json
 import logging
-import os
 import zipfile
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -18,9 +17,11 @@ from starlette.background import BackgroundTasks
 from supabase.client import AsyncClient
 
 from app.core.config import get_settings
-from app.core.arq_queue import enqueue_submit_to_aeat
+from app.core.i18n import get_translator, normalize_lang
+from app.core.job_queue import enqueue_submit_to_aeat
 from app.core.verifactu import GENESIS_HASH
-from app.core.fiscal_logic import compute_invoice_fingerprint, totals_coherent
+from app.core.fiscal_logic import totals_coherent
+from app.core.verifactu_hashing import VerifactuCadena, generar_hash_factura_oficial
 from app.core.math_engine import (
     InvoiceTotalsResult,
     MathEngine,
@@ -371,7 +372,7 @@ def _pg_emit_f1_desde_portes_tx(
     """
     from sqlalchemy import text
 
-    serie = os.getenv("VERIFACTU_SERIE_FACTURA", "FAC").strip() or "FAC"
+    serie = get_settings().VERIFACTU_SERIE_FACTURA
     with engine.begin() as conn:
         _pg_advisory_xact_lock_empresa(conn, eid)
         chain_h, next_seq = _pg_read_invoice_chain_eslabon(conn, empresa_id=eid)
@@ -387,7 +388,8 @@ def _pg_emit_f1_desde_portes_tx(
             eslabon.hash_anterior,
         )
         previous_fingerprint = _pg_read_last_fingerprint_hash(conn, empresa_id=eid)
-        fingerprint_hash = compute_invoice_fingerprint(
+        fingerprint_hash = generar_hash_factura_oficial(
+            VerifactuCadena.HUELLA_FINGERPRINT,
             {
                 "nif_emisor": nif_emisor,
                 "nif_receptor": nif_cliente,
@@ -511,7 +513,7 @@ def _pg_emit_r1_rectificativa_tx(
     total_r: float,
 ) -> dict[str, Any]:
     """Candado PG + cadena + INSERT R1 en una sola transacción."""
-    serie_r = os.getenv("VERIFACTU_SERIE_RECTIFICATIVA", "R").strip() or "R"
+    serie_r = get_settings().VERIFACTU_SERIE_RECTIFICATIVA
     with engine.begin() as conn:
         _pg_advisory_xact_lock_empresa(conn, eid)
         chain_h, siguiente_seq = _pg_read_invoice_chain_eslabon(conn, empresa_id=eid)
@@ -527,7 +529,8 @@ def _pg_emit_r1_rectificativa_tx(
             eslabon.hash_anterior,
         )
         previous_fingerprint = _pg_read_last_fingerprint_hash(conn, empresa_id=eid)
-        fingerprint_hash = compute_invoice_fingerprint(
+        fingerprint_hash = generar_hash_factura_oficial(
+            VerifactuCadena.HUELLA_FINGERPRINT,
             {
                 "nif_emisor": nif_emisor,
                 "nif_receptor": nif_cliente,
@@ -1152,12 +1155,16 @@ class FacturasService:
             "aeat_sif_estado": "pendiente_envio",
         }
 
-    async def exportar_aeat_inspeccion_zip(self, *, empresa_id: str | UUID) -> tuple[bytes, str, int]:
+    async def exportar_aeat_inspeccion_zip(
+        self, *, empresa_id: str | UUID, lang: str | None = None
+    ) -> tuple[bytes, str, int]:
         """
         Libro CSV + JSON con cadena de hashes VeriFactu, empaquetados en ZIP (inspección AEAT).
         Facturas ordenadas por fecha de emisión y número.
         Devuelve ``(zip_bytes, nombre_descarga, num_facturas)``.
         """
+        t = get_translator(lang)
+        lng = normalize_lang(lang or "es")
         eid = _as_empresa_id_str(empresa_id)
         res: Any = await self._db.execute(
             self._db.table("facturas").select("*").eq("empresa_id", eid)
@@ -1196,13 +1203,13 @@ class FacturasService:
         w = csv.writer(buf_csv, delimiter=";", quoting=csv.QUOTE_MINIMAL)
         w.writerow(
             [
-                "numero",
-                "fecha",
-                "cliente_nif",
-                "base_imponible",
-                "cuota_iva",
-                "total",
-                "hash_verifactu",
+                t("CSV column: invoice number"),
+                t("CSV column: date"),
+                t("CSV column: customer tax ID"),
+                t("CSV column: taxable base"),
+                t("CSV column: VAT amount"),
+                t("CSV column: total"),
+                t("CSV column: VeriFactu hash"),
             ]
         )
         cadena_registros: list[dict[str, Any]] = []
@@ -1246,6 +1253,7 @@ class FacturasService:
             "generado_utc": generado,
             "registros_orden_cronologico": cadena_registros,
             "cadena_hashes": cadena_hashes,
+            "export_language": lng,
         }
         json_bytes = json.dumps(
             payload_json,
@@ -1275,12 +1283,19 @@ class FacturasService:
 
         safe = _safe_zip_label(label_emp)
         fecha_fn = datetime.now(timezone.utc).strftime("%Y%m%d")
-        zip_name = f"Inspeccion_AEAT_{safe}_{fecha_fn}.zip"
+        if lng == "en":
+            zip_name = f"AEAT_inspection_{safe}_{fecha_fn}.zip"
+            csv_inner = "invoice_ledger_aeat.csv"
+            json_inner = "verifactu_hash_chain.json"
+        else:
+            zip_name = f"Inspeccion_AEAT_{safe}_{fecha_fn}.zip"
+            csv_inner = "libro_facturas_aeat.csv"
+            json_inner = "cadena_hashes_verifactu.json"
 
         zip_buf = io.BytesIO()
         with zipfile.ZipFile(zip_buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr("libro_facturas_aeat.csv", csv_bytes)
-            zf.writestr("cadena_hashes_verifactu.json", json_bytes)
+            zf.writestr(csv_inner, csv_bytes)
+            zf.writestr(json_inner, json_bytes)
         zip_buf.seek(0)
         return zip_buf.getvalue(), zip_name, len(rows)
 
@@ -1305,7 +1320,7 @@ class FacturasService:
         1. **Encadenamiento**: ``obtener_ultimo_hash_y_secuencial(empresa_id)`` → ``hash_anterior``,
            ``siguiente_secuencial``.
         2. **Identidad**: ``nif_emisor`` desde ``empresas.nif``; NIF cliente desde ``clientes``.
-        3. **Huella**: ``VerifactuService.generate_invoice_hash`` (cadena inmutable + ``hash_anterior``)
+        3. **Huella**: ``generar_hash_factura_oficial`` (``HUELLA_EMISION``) vía ``VerifactuService.generate_invoice_hash``
            → ``hash_registro`` / ``hash_factura``.
         4. **Persistencia** en ``facturas`` (``tipo_factura='F1'``, ``num_factura``, etc.).
         5. **Portes** (``schemas/porte.py``): tras insert OK, ``estado='facturado'`` y ``factura_id``.
@@ -1471,7 +1486,7 @@ class FacturasService:
                     f"No se pudo obtener el eslabón anterior VeriFactu para la empresa: {e}"
                 ) from e
 
-            serie = os.getenv("VERIFACTU_SERIE_FACTURA", "FAC").strip() or "FAC"
+            serie = get_settings().VERIFACTU_SERIE_FACTURA
             anio = fecha_emision.year
             num_fact = f"{serie}-{anio}-{eslabon.siguiente_secuencial:06d}"
 
@@ -1491,7 +1506,8 @@ class FacturasService:
                 ) from e
 
             previous_fingerprint = await self._get_last_fingerprint_hash(empresa_id=eid)
-            fingerprint_hash = compute_invoice_fingerprint(
+            fingerprint_hash = generar_hash_factura_oficial(
+                VerifactuCadena.HUELLA_FINGERPRINT,
                 {
                     "nif_emisor": nif_emisor,
                     "nif_receptor": nif_cliente,
@@ -1674,7 +1690,10 @@ class FacturasService:
         pdf_storage_path: str | None = None
         try:
             res_emp: Any = await self._db.execute(
-                self._db.table("empresas").select("nombre_comercial, nif").eq("id", eid).limit(1)
+                self._db.table("empresas")
+                .select("nombre_comercial, nif, preferred_language")
+                .eq("id", eid)
+                .limit(1)
             )
             emp_rows: list[dict[str, Any]] = (res_emp.data or []) if hasattr(res_emp, "data") else []
             emp = emp_rows[0] if emp_rows else {}
@@ -1739,10 +1758,12 @@ class FacturasService:
                 "nif": str(cli_nif_plain or "").strip() or None,
             }
 
+            pdf_lang = normalize_lang(str(emp.get("preferred_language") or "es"))
             pdf_base64 = await generar_pdf_factura_base64(
                 datos_empresa=datos_empresa,
                 datos_cliente=datos_cliente,
                 conceptos=conceptos,
+                lang=pdf_lang,
             )
 
             try:
@@ -1917,7 +1938,7 @@ class FacturasService:
         else:
             eslabon = await self._verifactu.obtener_ultimo_hash_y_secuencial(empresa_id=eid)
             siguiente_seq = eslabon.siguiente_secuencial
-            serie_r = os.getenv("VERIFACTU_SERIE_RECTIFICATIVA", "R").strip() or "R"
+            serie_r = get_settings().VERIFACTU_SERIE_RECTIFICATIVA
             anio = fecha_emision.year
             num_fact_r = f"{serie_r}-{anio}-{siguiente_seq:06d}"
 
@@ -1932,7 +1953,8 @@ class FacturasService:
             )
 
             previous_fingerprint = await self._get_last_fingerprint_hash(empresa_id=eid)
-            fingerprint_hash = compute_invoice_fingerprint(
+            fingerprint_hash = generar_hash_factura_oficial(
+                VerifactuCadena.HUELLA_FINGERPRINT,
                 {
                     "nif_emisor": nif_emisor,
                     "nif_receptor": nif_cliente,
@@ -2091,7 +2113,7 @@ class FacturasService:
         try:
             res_e: Any = await self._db.execute(
                 self._db.table("empresas")
-                .select("nif,nombre_comercial,nombre_legal,direccion")
+                .select("nif,nombre_comercial,nombre_legal,direccion,preferred_language")
                 .eq("id", eid)
                 .limit(1)
             )
@@ -2311,6 +2333,7 @@ class FacturasService:
             esg_total_co2_kg=esg_total_co2_kg,
             esg_euro_iii_baseline_kg=esg_euro_iii_baseline_kg,
             esg_ahorro_vs_euro_iii_kg=esg_ahorro_vs_euro_iii_kg,
+            content_language=normalize_lang(str(emp_row.get("preferred_language") or "es")),
         )
 
     async def generate_factura_pdf_bytes(
@@ -2380,13 +2403,43 @@ class FacturasService:
             return []
         res_f: Any = await self._db.execute(
             self._db.table("facturas")
-            .select("id,numero_factura,fecha_emision,total_factura,estado_cobro,cliente")
+            .select(
+                "id,numero_factura,fecha_emision,total_factura,estado_cobro,cliente,xml_verifactu"
+            )
             .eq("empresa_id", eid)
             .eq("cliente", cid)
             .order("fecha_emision", desc=True)
         )
         rows: list[dict[str, Any]] = (res_f.data or []) if hasattr(res_f, "data") else []
         return [dict(r) for r in rows]
+
+    async def get_xml_verifactu_for_cliente_factura(
+        self,
+        *,
+        empresa_id: str | UUID,
+        cliente_id: str | UUID,
+        factura_id: int,
+    ) -> str | None:
+        """XML VeriFactu solo si la factura pertenece al cliente (portal)."""
+        eid = _as_empresa_id_str(empresa_id)
+        cid = str(cliente_id).strip()
+        fid = int(factura_id)
+        if not eid or not cid or fid < 1:
+            return None
+        res_f: Any = await self._db.execute(
+            self._db.table("facturas")
+            .select("id,xml_verifactu,cliente")
+            .eq("empresa_id", eid)
+            .eq("id", fid)
+            .eq("cliente", cid)
+            .limit(1)
+        )
+        rows: list[dict[str, Any]] = (res_f.data or []) if hasattr(res_f, "data") else []
+        if not rows:
+            return None
+        raw = rows[0].get("xml_verifactu")
+        s = str(raw or "").strip()
+        return s or None
 
     async def recalculate_invoice(
         self,
@@ -2486,4 +2539,9 @@ def _factura_pdf_data_to_pdf_bytes(pdf: FacturaPdfDataOut) -> bytes:
         "id": "",
     }
     conceptos = [{"nombre": ln.concepto, "precio": ln.importe} for ln in pdf.lineas]
-    return generar_pdf_factura(datos_empresa, datos_cliente, conceptos)
+    return generar_pdf_factura(
+        datos_empresa,
+        datos_cliente,
+        conceptos,
+        lang=pdf.content_language,
+    )

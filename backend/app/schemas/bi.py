@@ -113,3 +113,62 @@ class BiEsgImpactChartsOut(BaseModel):
         default_factory=dict,
         description="Metadatos opcionales (bins, constantes) para el front.",
     )
+
+
+class ProfitMarginEsgMonthOverMonthOut(BaseModel):
+    """CO₂ equivalente (combustible) vs mes calendario anterior — factor ISO 14083 (kg/L)."""
+
+    anchor_month: str = Field(..., description="Mes de referencia YYYY-MM (según `date_to` o hoy).")
+    previous_month: str = Field(..., description="Mes calendario inmediatamente anterior.")
+    iso_14083_kg_co2_per_litre: float = Field(default=2.67, description="Factor normativo kg CO₂eq / L diésel A.")
+    litros_implied_current: float = Field(..., description="Litros estimados desde tickets combustible (EUR / ref €/L).")
+    litros_implied_previous: float = Field(..., description="Mismo criterio para el mes anterior.")
+    co2_kg_current: float = Field(..., description="Emisiones equivalentes mes actual (litros × factor ISO).")
+    co2_kg_previous: float = Field(..., description="Emisiones equivalentes mes anterior.")
+    co2_saved_vs_previous_kg: float = Field(
+        ...,
+        description="Reducción de emisiones vs mes anterior (max(0, anterior − actual)); ahorro climático operativo.",
+    )
+
+
+class ProfitMarginPeriodRowOut(BaseModel):
+    """Un bucket temporal para series Recharts (Barras / Waterfall)."""
+
+    period_key: str = Field(..., description="Clave estable: YYYY-MM o YYYY-Www (ISO).")
+    period_label: str = Field(..., description="Etiqueta legible para el eje X.")
+    ingresos_totales: float = Field(..., description="Suma precio pactado portes (EUR, HALF_EVEN en agregación).")
+    gastos_combustible: float = Field(..., description="Gastos bucket combustible (EUR netos sin IVA).")
+    gastos_peajes: float = Field(..., description="Gastos bucket peajes (EUR).")
+    gastos_otros: float = Field(..., description="Resto de gastos operativos (EUR).")
+    gastos_totales: float = Field(..., description="Suma de los tres buckets (EUR).")
+    margen_neto: float = Field(..., description="ingresos_totales − gastos_totales (EUR, ROUND_HALF_EVEN).")
+
+
+class ProfitMarginTotalsOut(BaseModel):
+    """Totales del rango solicitado (misma semántica que sumar `series` periodo a periodo)."""
+
+    ingresos_totales: float
+    gastos_combustible: float
+    gastos_peajes: float
+    gastos_otros: float
+    gastos_totales: float
+    margen_neto: float
+
+
+class ProfitMarginAnalyticsOut(BaseModel):
+    """
+    Agregado P&amp;L operativo (portes + gastos) listo para BI en tiempo casi real.
+    CSV export y webhooks salientes deben reutilizar las mismas claves que ``series`` / ``totals_rango``.
+    """
+
+    granularity: str = Field(..., description="`month` o `week`.")
+    series: list[ProfitMarginPeriodRowOut]
+    totals_rango: ProfitMarginTotalsOut
+    esg_month_over_month: ProfitMarginEsgMonthOverMonthOut | None = Field(
+        default=None,
+        description="Comparativa CO₂ combustible (ISO 14083) entre el mes ancla y el anterior.",
+    )
+    meta: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Incluye `webhook_event_type` para informes automáticos y filtros aplicados.",
+    )

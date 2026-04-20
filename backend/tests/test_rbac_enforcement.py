@@ -98,11 +98,13 @@ async def test_transportista_gets_403_on_ai_and_reports_endpoints(client) -> Non
         # En esta API /ai/consult es POST; así validamos el RoleChecker real.
         consult_res = await client.post("/ai/consult", json={"query": "Diagnóstico de prueba"})
         assert consult_res.status_code == 403
-        assert "Acceso denegado" in consult_res.json().get("detail", "")
+        detail_ai = str(consult_res.json().get("detail", ""))
+        assert "Acceso denegado" in detail_ai or "Not enough privileges" in detail_ai
 
         report_res = await client.get(f"/reports/efficiency/{EMPRESA_A}")
         assert report_res.status_code == 403
-        assert "Acceso denegado" in report_res.json().get("detail", "")
+        detail_rep = str(report_res.json().get("detail", ""))
+        assert "Acceso denegado" in detail_rep or "Not enough privileges" in detail_rep
     finally:
         app.dependency_overrides.clear()
 

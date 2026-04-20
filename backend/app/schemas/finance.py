@@ -64,7 +64,38 @@ class GastoBucketCincoOut(BaseModel):
     value: float = Field(
         ...,
         ge=0,
-        description="Acumulado YTD (año calendario del `hoy` de la petición) en EUR netos sin IVA para ese bucket.",
+        description="EUR netos sin IVA en el bucket (ventana o mes según el contenedor padre).",
+    )
+
+
+class GastoBucketMensualOut(BaseModel):
+    """Gastos por los cinco buckets en un mes (serie densa para Recharts / Treemap por periodo)."""
+
+    periodo: str = Field(..., description="YYYY-MM (misma ventana móvil de 6 meses que el resto del dashboard).")
+    buckets: list[GastoBucketCincoOut] = Field(
+        ...,
+        description="Siempre 5 filas en orden fijo (Combustible → Peajes); 0,00 si no hubo gasto en el bucket.",
+    )
+
+
+class RutaMargenNegativoLogisOut(BaseModel):
+    """
+    Ruta agregada donde el ingreso operativo queda por debajo del coste de combustible de referencia LogisAdvisor
+    (ingreso &lt; km × coste €/km).
+    """
+
+    ruta: str = Field(..., description="Origen–destino legible (misma clave de agregación que BI).")
+    total_portes: int = Field(..., ge=0)
+    ingresos_totales_eur: float = Field(..., ge=0)
+    km_totales: float = Field(..., ge=0)
+    coste_combustible_referencia_eur: float = Field(
+        ...,
+        ge=0,
+        description="km_totales × coste_combustible_eur_km (parámetro auditable vía env).",
+    )
+    margen_vs_combustible_eur: float = Field(
+        ...,
+        description="ingresos_totales_eur − coste_combustible_referencia_eur (negativo = alerta).",
     )
 
 
@@ -107,14 +138,33 @@ class FinanceDashboardOut(BaseModel):
     )
     tesoreria_mensual: list[FinanceTesoreriaMensualOut] = Field(
         default_factory=list,
-        description="Serie de **12 meses** del año calendario de `hoy`: facturación neta del mes vs cobros "
-        "bancarios conciliados en ese mes (`booked_date`). Sin movimientos bancarios importados para la empresa, "
-        "`cobros_reales` es 0,00 en todos los meses.",
+        description="Serie de **6 meses** (ventana móvil hasta `hoy`): ingreso neto sin IVA de **facturas VeriFactu "
+        "selladas** (`is_finalized` o huella persistida) por mes de emisión vs cobros bancarios conciliados "
+        "(``booked_date``) vinculados a facturas cobradas selladas. Sin banco importado, `cobros_reales` es 0,00.",
     )
     gastos_por_bucket_cinco: list[GastoBucketCincoOut] = Field(
         default_factory=list,
-        description="Siempre **5 elementos** fijos (orden estable) para evitar errores de UI; importe 0,00 si "
-        "no hay gastos en el bucket en el año en curso.",
+        description="Siempre **5 elementos** fijos: suma de gastos netos sin IVA por bucket en la **misma ventana "
+        "de 6 meses** que `gastos_bucket_mensual` (auditable frente a la serie mensual).",
+    )
+    gastos_bucket_mensual: list[GastoBucketMensualOut] = Field(
+        default_factory=list,
+        description="Desglose mensual (6 filas) de los cinco buckets; densificado con 0,00 sin actividad.",
+    )
+    rutas_margen_negativo_logisadvisor: list[RutaMargenNegativoLogisOut] = Field(
+        default_factory=list,
+        description="Rutas con ingreso agregado &lt; km × coste combustible (parámetro `LOGISADVISOR_COMBUSTIBLE_EUR_PER_KM`).",
+    )
+    co2_savings_ytd: float = Field(
+        default=0.0,
+        ge=0,
+        description="Reducción estimada de emisiones (kg CO₂) año natural en curso vs estándar anterior, "
+        "priorizando `esg_co2_ahorro_vs_euro_iii_kg` en portes y factor certificado 2,67 kg/L como respaldo.",
+    )
+    kg_co2_por_litro_diesel_certificado: float = Field(
+        default=2.67,
+        ge=0,
+        description="Factor de conversión documentado (kg CO₂/L gasóleo) alineado con ECO/VeriFactu.",
     )
     margen_neto_km_mes_actual: float | None = Field(
         default=None,

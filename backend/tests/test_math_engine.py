@@ -123,3 +123,32 @@ def test_calculate_invoice_totals_rectificativa_negative_base_half_even() -> Non
     assert t.cuota_iva_total == Decimal("-21.01")
     assert t.total_factura == Decimal("-121.06")
     assert abs(t.total_factura - (t.base_imponible_total + t.cuota_iva_total)) < Decimal("0.001")
+
+
+def test_net_margin_precision_with_many_decimal_expenses() -> None:
+    """
+    Verifica integridad decimal del beneficio neto tras múltiples gastos con decimales complejos.
+    Beneficio neto = ingresos - suma(gastos) con ROUND_HALF_EVEN a céntimo.
+    """
+    ingresos = Decimal("12345.67")
+    gastos = [
+        Decimal("0.99"),
+        Decimal("12.345"),
+        Decimal("199.995"),
+        Decimal("40.015"),
+        Decimal("300.105"),
+        Decimal("78.335"),
+        Decimal("451.775"),
+        Decimal("0.005"),
+        Decimal("15.555"),
+        Decimal("800.125"),
+    ]
+
+    total_gastos = sum(round_fiat(g) for g in gastos)
+    beneficio_neto = round_fiat(ingresos - total_gastos)
+
+    # Valor esperado calculado manualmente con HALF_EVEN línea a línea.
+    assert total_gastos == Decimal("1899.25")
+    assert beneficio_neto == Decimal("10446.42")
+    # Identidad de control: ingresos = gastos + beneficio
+    assert round_fiat(total_gastos + beneficio_neto) == round_fiat(ingresos)

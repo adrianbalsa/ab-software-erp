@@ -1,0 +1,36 @@
+# Copiar a terraform.tfvars (no commitear secretos) o pasar -var / TF_VAR_* en CI.
+#
+# Referencias Railway (sustituye NombreServicio por el nombre en el canvas):
+#   database_url_*  = "${{ Postgres.DATABASE_URL }}"
+#   redis_url_*     = "${{ Redis.REDIS_URL }}"
+# En Terraform escapa el dólar como: "$${{ Postgres.DATABASE_URL }}"
+
+project_name = "ab-logistics-os-example"
+
+railway_workspace_id = ""
+
+github_repo              = "mi-org/Scanner"
+git_branch_production    = "main"
+git_branch_staging       = "staging"
+
+official_frontend_origin_production = "https://app.example.com"
+official_frontend_origin_staging    = "https://staging-app.example.com"
+
+cors_allow_origins_extra_production = ""
+cors_allow_origins_extra_staging    = ""
+
+supabase_url         = "https://xxxx.supabase.co"
+supabase_key         = "anon-key"
+supabase_service_key = ""
+
+jwt_secret_key     = "change-me-min-32-chars----------------"
+session_secret_key = "change-me-min-32-chars----------------"
+# Opcional: override del buzón de seguridad (default security@ablogistics-os.com).
+# security_contact_email = "security@tu-dominio.com"
+maps_api_key = ""
+
+database_url_production = "$${{ Postgres.DATABASE_URL }}"
+database_url_staging    = "$${{ Postgres.DATABASE_URL }}"
+
+redis_url_production = "$${{ Redis.REDIS_URL }}"
+redis_url_staging    = "$${{ Redis.REDIS_URL }}"

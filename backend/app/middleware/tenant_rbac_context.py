@@ -15,6 +15,7 @@ from app.services.auth_service import AuthService
 _log = logging.getLogger(__name__)
 
 _PUBLIC_PREFIXES = (
+    "/live",
     "/health",
     "/ready",
     "/docs",

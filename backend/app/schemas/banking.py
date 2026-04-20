@@ -205,6 +205,26 @@ class BankingMovimientoOut(BaseModel):
     description: str | None = None
 
 
+class BankPendingReconciliationOut(BaseModel):
+    """Movimiento importado pendiente de conciliar (vista tesorería / portal)."""
+
+    transaction_id: str
+    amount: float
+    currency: str = "EUR"
+    booking_date: str = Field(..., description="YYYY-MM-DD")
+    description: str | None = None
+    ia_confidence: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Confianza del mejor candidato fuzzy (0–1); la IA/LogisAdvisor refina en /reconcile.",
+    )
+    best_invoice_id: int | None = Field(
+        default=None,
+        description="Mejor factura candidata por importe + señales de texto (si existe)",
+    )
+
+
 class BankingOAuthCompleteOut(BaseModel):
     requisition_id: str
     accounts: list[CuentaBancaria]

@@ -280,6 +280,8 @@ async def onboarding_client(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr("app.db.supabase.get_supabase", _fake_get_supabase)
     monkeypatch.setattr("app.api.deps.get_supabase", _fake_get_supabase)
+    monkeypatch.setattr("app.middleware.tenant_rbac_context.get_supabase", _fake_get_supabase)
+    monkeypatch.setattr("app.middleware.audit_log_middleware.get_supabase", _fake_get_supabase)
 
     monkeypatch.setattr(
         "app.core.health_checks.run_deep_health",
