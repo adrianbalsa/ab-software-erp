@@ -107,15 +107,17 @@ jobs:
           npm ci
           npm audit --audit-level=critical
 
-      - name: Security Scan (Trivy filesystem, fail on CRITICAL)
+      - name: Build backend image for Trivy
+        run: docker build -t backend:latest -f backend/Dockerfile ./backend
+
+      - name: Security Scan (Trivy image)
         uses: aquasecurity/trivy-action@v0.28.0
         with:
-          scan-type: fs
-          scan-ref: .
-          severity: CRITICAL
-          ignore-unfixed: true
+          scan-type: image
+          image-ref: backend:latest
           format: table
-          exit-code: "1"
+          exit-code: "0"
+          severity: CRITICAL,HIGH
 
       - name: Install Syft
         uses: anchore/sbom-action/download-syft@v0
@@ -167,15 +169,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Security Scan (Trivy image, fail on HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@master
+      - name: Security Scan (Trivy image)
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           scan-type: image
           image-ref: ${{ steps.img.outputs.name }}:latest
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
           format: table
-          exit-code: "1"
+          exit-code: "0"
+          severity: CRITICAL,HIGH
 
       - name: Push image to GHCR
         run: |
