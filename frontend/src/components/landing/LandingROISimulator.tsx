@@ -26,14 +26,14 @@ export function LandingROISimulator() {
   }, [trucks, kmPerTruck]);
 
   return (
-    <FadeInSection id="roi-simulator" className="scroll-mt-24 px-4 py-16 sm:px-6">
+    <FadeInSection id="roi-simulator" className="scroll-mt-24 px-4 py-24 sm:px-6 sm:py-28">
       <div className="mx-auto max-w-5xl">
         <div className="text-center mb-10">
-          <h2 className="text-2xl font-bold text-white sm:text-3xl">{l.title}</h2>
-          <p className="mt-2 text-zinc-400 max-w-xl mx-auto text-sm sm:text-base">{l.subtitle}</p>
+          <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{l.title}</h2>
+          <p className="mt-2 text-zinc-300 max-w-xl mx-auto text-sm sm:text-base">{l.subtitle}</p>
         </div>
 
-        <div className="rounded-3xl border border-zinc-800 bg-gradient-to-b from-zinc-900/90 to-zinc-950 p-6 sm:p-10 shadow-2xl shadow-black/40">
+        <div className="rounded-3xl border border-zinc-800 bg-surface-roi-gradient p-6 shadow-2xl shadow-black/40 sm:p-10">
           <div className="grid gap-10 lg:grid-cols-2 lg:gap-12">
             <div className="space-y-8">
               <div>
@@ -51,7 +51,7 @@ export function LandingROISimulator() {
                   onChange={(e) => setTrucks(Number(e.target.value))}
                   className="w-full h-2 rounded-full appearance-none cursor-pointer accent-emerald-500 bg-zinc-700"
                 />
-                <p className="mt-1 text-xs text-zinc-500">{l.fleetRangeHint}</p>
+                <p className="mt-1 text-xs text-zinc-300">{l.fleetRangeHint}</p>
               </div>
               <div>
                 <label className="flex justify-between text-sm font-medium text-zinc-300 mb-2">
@@ -67,21 +67,21 @@ export function LandingROISimulator() {
                   onChange={(e) => setKmPerTruck(Number(e.target.value))}
                   className="w-full h-2 rounded-full appearance-none cursor-pointer accent-blue-500 bg-zinc-700"
                 />
-                <p className="mt-1 text-xs text-zinc-500">{l.kmRangeHint}</p>
+                <p className="mt-1 text-xs text-zinc-300">{l.kmRangeHint}</p>
               </div>
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-start gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <div className="flex items-start gap-4 rounded-2xl border border-zinc-800 bg-surface-panel p-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-500/15 text-blue-400">
                   <Clock className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{l.adminSaved}</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-300">{l.adminSaved}</p>
                   <p className="text-2xl font-bold text-white tabular-nums">
-                    {hoursSaved} <span className="text-sm font-normal text-zinc-400">{l.hoursPerMonth}</span>
+                    {hoursSaved} <span className="text-sm font-normal text-zinc-300">{l.hoursPerMonth}</span>
                   </p>
-                  <p className="text-xs text-zinc-500 mt-1">{l.adminSavedHint}</p>
+                  <p className="text-xs text-zinc-300 mt-1">{l.adminSavedHint}</p>
                 </div>
               </div>
               <div className="flex items-start gap-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4">
@@ -89,29 +89,29 @@ export function LandingROISimulator() {
                   <Euro className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{l.economicSaving}</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-300">{l.economicSaving}</p>
                   <p className="text-2xl font-bold text-emerald-400 tabular-nums">
                     {moneySaved.toLocaleString(localeTag, {
                       style: "currency",
                       currency: "EUR",
                       maximumFractionDigits: 0,
                     })}
-                    <span className="text-sm font-normal text-zinc-400"> {l.monthSuffix}</span>
+                    <span className="text-sm font-normal text-zinc-300"> {l.monthSuffix}</span>
                   </p>
-                  <p className="text-xs text-zinc-500 mt-1">{l.economicSavingHint}</p>
+                  <p className="text-xs text-zinc-300 mt-1">{l.economicSavingHint}</p>
                 </div>
               </div>
-              <div className="flex items-start gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <div className="flex items-start gap-4 rounded-2xl border border-zinc-800 bg-surface-panel p-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600/15 text-emerald-400">
                   <Leaf className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{l.trackedEsg}</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-300">{l.trackedEsg}</p>
                   <p className="text-2xl font-bold text-white tabular-nums">
                     {esgKg.toLocaleString(localeTag, { maximumFractionDigits: 0 })}{" "}
-                    <span className="text-sm font-normal text-zinc-400">{l.kgPerMonth}</span>
+                    <span className="text-sm font-normal text-zinc-300">{l.kgPerMonth}</span>
                   </p>
-                  <p className="text-xs text-zinc-500 mt-1">{l.trackedEsgHint}</p>
+                  <p className="text-xs text-zinc-300 mt-1">{l.trackedEsgHint}</p>
                 </div>
               </div>
             </div>

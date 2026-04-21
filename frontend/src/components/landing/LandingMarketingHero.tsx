@@ -14,12 +14,12 @@ export function LandingMarketingHero() {
   const l = catalog.landing.hero;
 
   return (
-    <section className="relative overflow-hidden px-4 pb-20 pt-12 sm:px-6 sm:pb-28 sm:pt-16">
+    <section className="relative overflow-hidden px-4 pb-24 pt-16 sm:px-6 sm:pb-32 sm:pt-24">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(16,185,129,0.12),transparent)]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(39,39,42,0.4),transparent_50%)]" />
       <div className="relative mx-auto max-w-6xl">
         <motion.p
-          className="text-xs font-semibold uppercase tracking-widest text-zinc-500"
+          className="text-xs font-semibold uppercase tracking-widest text-zinc-400"
           variants={fadeUp}
           initial="initial"
           animate="animate"
@@ -28,7 +28,7 @@ export function LandingMarketingHero() {
           {l.eyebrow}
         </motion.p>
         <motion.h1
-          className="mt-5 max-w-4xl text-balance text-4xl font-semibold tracking-tight text-white sm:text-5xl lg:text-[3.25rem] lg:leading-[1.1]"
+          className="mt-5 max-w-4xl text-balance text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-[3.25rem] lg:leading-[1.1]"
           variants={fadeUp}
           initial="initial"
           animate="animate"
@@ -37,7 +37,7 @@ export function LandingMarketingHero() {
           {l.title}
         </motion.h1>
         <motion.p
-          className="mt-6 max-w-3xl text-pretty text-base leading-relaxed text-zinc-400 sm:text-lg"
+          className="mt-6 max-w-3xl text-pretty text-base leading-relaxed text-zinc-300 sm:text-lg"
           variants={fadeUp}
           initial="initial"
           animate="animate"

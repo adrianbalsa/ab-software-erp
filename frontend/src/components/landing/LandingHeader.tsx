@@ -19,7 +19,7 @@ export function LandingHeader() {
   ];
 
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-800/80 bg-zinc-950/85 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-zinc-800/80 bg-surface-nav-strong backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <Link href="/" className="flex items-center gap-2 text-white font-bold tracking-tight">
           <Image
@@ -33,7 +33,7 @@ export function LandingHeader() {
           <span className="hidden sm:inline text-lg">AB Logistics OS</span>
         </Link>
 
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-zinc-400">
+        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-zinc-300">
           {nav.map((item) => (
             <a
               key={item.href}
@@ -60,7 +60,7 @@ export function LandingHeader() {
           </Link>
           <button
             type="button"
-            className="md:hidden rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+            className="md:hidden rounded-lg p-2 text-zinc-300 hover:bg-zinc-800 hover:text-white"
             aria-expanded={open}
             aria-label={l.nav.menuAria}
             onClick={() => setOpen((v) => !v)}
@@ -71,7 +71,7 @@ export function LandingHeader() {
       </div>
 
       {open && (
-        <div className="md:hidden border-t border-zinc-800 px-4 py-4 space-y-3 bg-zinc-950">
+        <div className="bg-surface-base md:hidden space-y-3 border-t border-zinc-800 px-4 py-4">
           {nav.map((item) => (
             <a
               key={item.href}

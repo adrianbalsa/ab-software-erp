@@ -15,7 +15,7 @@ export function LandingMarketingNav() {
     { href: "#help", label: l.nav.help },
   ];
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-zinc-800/80 bg-surface-nav backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
         <Link
           href="/"
@@ -31,7 +31,7 @@ export function LandingMarketingNav() {
             priority
           />
           <span className="text-base font-semibold tracking-tight sm:text-lg">
-            AB Logistics <span className="font-medium text-zinc-500">OS</span>
+            AB Logistics <span className="font-medium text-zinc-400">OS</span>
           </span>
         </Link>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -40,7 +40,7 @@ export function LandingMarketingNav() {
             <a
               key={item.href}
               href={item.href}
-              className="rounded-full border border-transparent px-3 py-2 text-xs font-semibold uppercase tracking-widest text-zinc-400 transition hover:text-white"
+              className="rounded-full border border-transparent px-3 py-2 text-xs font-semibold uppercase tracking-widest text-zinc-300 transition hover:text-white"
             >
               {item.label}
             </a>

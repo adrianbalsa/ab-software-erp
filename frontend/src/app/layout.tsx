@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Inter } from "next/font/google";
+import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import { AppProviders } from "@/components/AppProviders";
 import { SentryInit } from "@/components/SentryInit";
 import { getServerInitialRole } from "@/lib/server-api";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const plusJakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-plus-jakarta",
   subsets: ["latin"],
 });
 
@@ -38,7 +38,7 @@ export default async function RootLayout({
   return (
     <html lang="es">
       <body
-        className={`${inter.variable} ${geistMono.variable} font-sans antialiased`}
+        className={`${plusJakartaSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
         <SentryInit />
         <AppProviders initialRole={initialRole}>{children}</AppProviders>

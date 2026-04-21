@@ -15,11 +15,11 @@ export function LandingHowItWorks() {
   }));
 
   return (
-    <FadeInSection id="how-it-works" className="scroll-mt-24 px-4 py-16 sm:px-6">
+    <FadeInSection id="how-it-works" className="scroll-mt-24 px-4 py-24 sm:px-6 sm:py-28">
       <div className="mx-auto max-w-5xl">
         <div className="text-center mb-12">
-          <h2 className="text-2xl font-bold text-white sm:text-3xl">{l.title}</h2>
-          <p className="mt-2 text-zinc-400 text-sm sm:text-base">{l.subtitle}</p>
+          <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{l.title}</h2>
+          <p className="mt-2 text-zinc-300 text-sm sm:text-base">{l.subtitle}</p>
         </div>
 
         <div className="relative">
@@ -36,8 +36,8 @@ export function LandingHowItWorks() {
                 <span className="mt-4 text-xs font-semibold uppercase tracking-widest text-emerald-500/90">
                   {l.stepLabel} {i + 1} · {step.time}
                 </span>
-                <h3 className="mt-2 text-lg font-bold text-white">{step.title}</h3>
-                <p className="mt-2 text-sm text-zinc-400 leading-relaxed max-w-xs">{step.desc}</p>
+                <h3 className="mt-2 text-lg font-bold tracking-tight text-white">{step.title}</h3>
+                <p className="mt-2 text-sm text-zinc-300 leading-relaxed max-w-xs">{step.desc}</p>
               </div>
             ))}
           </div>

@@ -82,12 +82,12 @@ function BentoCard({
       {item.variant === "fiscal" && <FiscalBackdrop />}
       {item.variant === "fiscal" && <QrHint />}
       <div className="relative flex items-start gap-4">
-        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950/80 text-emerald-500 transition group-hover:border-emerald-500/30 group-hover:text-emerald-400">
+        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-surface-icon text-emerald-500 transition group-hover:border-emerald-500/30 group-hover:text-emerald-400">
           <Icon className="h-5 w-5" strokeWidth={1.75} />
         </span>
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold tracking-tight text-white">{item.title}</h2>
-          <p className="mt-2 text-sm leading-relaxed text-zinc-400">{item.body}</p>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-300">{item.body}</p>
         </div>
       </div>
     </motion.article>
@@ -106,11 +106,11 @@ export function LandingBentoGrid() {
   });
 
   return (
-    <section id="plataforma" className="scroll-mt-24 px-4 pb-20 sm:px-6">
+    <section id="plataforma" className="scroll-mt-24 px-4 pb-24 sm:px-6 sm:pb-28">
       <div className="mx-auto max-w-6xl">
-        <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{l.eyebrow}</p>
-        <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">{l.title}</h2>
-        <p className="mt-2 max-w-2xl text-sm text-zinc-400 sm:text-base">{l.subtitle}</p>
+        <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">{l.eyebrow}</p>
+        <h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">{l.title}</h2>
+        <p className="mt-2 max-w-2xl text-sm text-zinc-300 sm:text-base">{l.subtitle}</p>
         <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
           {items.map((item, i) => (
             <BentoCard key={item.title} item={item} index={i} />

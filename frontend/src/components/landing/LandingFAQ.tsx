@@ -12,11 +12,11 @@ export function LandingFAQ() {
   const l = catalog.landing.faq;
 
   return (
-    <FadeInSection id="help" className="scroll-mt-20 px-4 py-16 sm:px-6">
+    <FadeInSection id="help" className="scroll-mt-20 px-4 py-24 sm:px-6 sm:py-28">
       <div className="mx-auto max-w-3xl">
         <div className="text-center mb-10">
-          <h2 className="text-2xl font-bold text-white sm:text-3xl">{l.title}</h2>
-          <p className="mt-2 text-zinc-400 text-sm">{l.subtitle}</p>
+          <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{l.title}</h2>
+          <p className="mt-2 text-zinc-300 text-sm">{l.subtitle}</p>
         </div>
         <div className="space-y-3">
           {l.items.map((item, i) => {
@@ -34,11 +34,11 @@ export function LandingFAQ() {
                 >
                   {item.q}
                   <ChevronDown
-                    className={`h-5 w-5 shrink-0 text-zinc-500 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                    className={`h-5 w-5 shrink-0 text-zinc-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
                   />
                 </button>
                 {isOpen && (
-                  <div className="px-5 pb-4 text-sm text-zinc-400 leading-relaxed border-t border-zinc-800/80 pt-3">
+                  <div className="px-5 pb-4 text-sm text-zinc-300 leading-relaxed border-t border-zinc-800/80 pt-3">
                     {item.a}
                   </div>
                 )}

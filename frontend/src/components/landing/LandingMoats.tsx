@@ -15,11 +15,14 @@ export function LandingMoats() {
   }));
 
   return (
-    <FadeInSection id="moats" className="scroll-mt-24 px-4 py-16 sm:px-6 bg-zinc-950/50">
+    <FadeInSection
+      id="moats"
+      className="scroll-mt-24 bg-surface-section-strong px-4 py-24 sm:px-6 sm:py-28"
+    >
       <div className="mx-auto max-w-6xl">
         <div className="text-center mb-12 max-w-2xl mx-auto">
-          <h2 className="text-2xl font-bold text-white sm:text-3xl">{l.title}</h2>
-          <p className="mt-2 text-zinc-400 text-sm sm:text-base">{l.subtitle}</p>
+          <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{l.title}</h2>
+          <p className="mt-2 text-zinc-300 text-sm sm:text-base">{l.subtitle}</p>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
@@ -33,8 +36,8 @@ export function LandingMoats() {
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400 mb-4">
                   <Icon className="h-5 w-5" />
                 </div>
-                <h3 className="text-lg font-bold text-white">{capability.title}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-zinc-400">{capability.description}</p>
+                <h3 className="text-lg font-bold tracking-tight text-white">{capability.title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-zinc-300">{capability.description}</p>
               </article>
             );
           })}

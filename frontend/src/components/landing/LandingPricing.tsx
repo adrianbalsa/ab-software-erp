@@ -68,11 +68,14 @@ export function LandingPricing() {
   };
 
   return (
-    <FadeInSection id="pricing" className="scroll-mt-20 px-4 py-16 sm:px-6 bg-zinc-950/40">
+    <FadeInSection
+      id="pricing"
+      className="scroll-mt-20 bg-surface-section px-4 py-24 sm:px-6 sm:py-28"
+    >
       <div className="mx-auto max-w-6xl">
         <div className="text-center mb-12">
-          <h2 className="text-2xl font-bold text-white sm:text-3xl">{l.title}</h2>
-          <p className="mt-2 text-zinc-400 text-sm sm:text-base">{l.subtitle}</p>
+          <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{l.title}</h2>
+          <p className="mt-2 text-zinc-300 text-sm sm:text-base">{l.subtitle}</p>
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -90,19 +93,19 @@ export function LandingPricing() {
                   {l.recommended}
                 </span>
               )}
-              <h3 className="text-lg font-bold text-white">{tier.name}</h3>
+              <h3 className="text-lg font-bold tracking-tight text-white">{tier.name}</h3>
               <div className="mt-6 flex items-baseline gap-1">
                 <span className="text-4xl font-extrabold text-white">{tier.price}€</span>
-                <span className="text-zinc-500">{l.monthSuffix}</span>
+                <span className="text-zinc-400">{l.monthSuffix}</span>
               </div>
-              <ul className="mt-8 flex-1 divide-y divide-zinc-800/80 rounded-2xl border border-zinc-800/80 bg-zinc-950/40 text-sm">
+              <ul className="mt-8 flex-1 divide-y divide-zinc-800/80 rounded-2xl border border-zinc-800/80 bg-surface-elevated text-sm">
                 {l.features.map((feature, index) => (
                   <li key={feature} className="flex items-center justify-between gap-2 px-3 py-2.5 text-zinc-300">
                     <span>{feature}</span>
                     {tier.includes[index] ? (
                       <Check className="h-4 w-4 shrink-0 text-emerald-400" />
                     ) : (
-                      <Minus className="h-4 w-4 shrink-0 text-zinc-600" />
+                      <Minus className="h-4 w-4 shrink-0 text-zinc-500" />
                     )}
                   </li>
                 ))}

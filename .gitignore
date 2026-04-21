@@ -40,3 +40,5 @@ infra/terraform/terraform.tfvars
 infra/terraform/crash.log
 PROJECT_SNAPSHOT_AUDIT.txt
 terraform.tfvars
+.vercel
+.env*.local

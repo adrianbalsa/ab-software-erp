@@ -28,7 +28,7 @@ export function LandingHero() {
             {l.titleHighlight}
           </span>
         </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-zinc-400 sm:text-lg">
+        <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-zinc-300 sm:text-lg">
           {l.description}
         </p>
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -54,7 +54,7 @@ export function LandingHero() {
             </li>
           ))}
         </ul>
-        <p className="mt-10 text-xs sm:text-sm text-zinc-500 max-w-xl mx-auto leading-relaxed border border-zinc-800/80 rounded-lg px-4 py-2.5 bg-zinc-900/40">
+        <p className="mt-10 text-xs sm:text-sm text-zinc-300 max-w-xl mx-auto leading-relaxed border border-zinc-800/80 rounded-lg px-4 py-2.5 bg-zinc-900/40">
           {l.complianceNote}
         </p>
       </div>
