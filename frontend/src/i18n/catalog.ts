@@ -9,6 +9,7 @@ export type AppLocale = "es" | "en";
 
 export type Catalog = {
   appShell: typeof shellEs;
+  landing: typeof extraEs.landing;
   sidebar: typeof extraEs.sidebar;
   login: typeof extraEs.login;
   quota: typeof extraEs.quota;

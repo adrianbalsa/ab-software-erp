@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, Minus, Loader2 } from "lucide-react";
 import { FadeInSection } from "./FadeInSection";
+import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { apiFetch } from "@/lib/api";
 
 /** IDs de precio Stripe (`price_…`); configurar en `.env` del frontend para checkout público. */
@@ -34,23 +35,14 @@ const tiers = [
   },
 ];
 
-const comparedFeatures = [
-  "Certificación VeriFactu",
-  "EBITDA en Tiempo Real",
-  "Portal del Chófer",
-  "Cotizador Inteligente",
-  "Control de Vencimientos",
-  "Liquidaciones Automáticas",
-];
-
 export function LandingPricing() {
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
+  const { catalog } = useOptionalLocaleCatalog();
+  const l = catalog.landing.pricing;
 
   const handleSuscripcion = async (priceId: string) => {
     if (!priceId.trim()) {
-      alert(
-        "Falta configurar los Price IDs de Stripe en el frontend (NEXT_PUBLIC_STRIPE_PRICE_*). Consulta docs/operations/STRIPE_BILLING.md.",
-      );
+      alert(l.missingStripeConfig);
       return;
     }
     setLoadingTier(priceId);
@@ -58,7 +50,7 @@ export function LandingPricing() {
       const response = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/stripe/crear-sesion-checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ price_id: priceId, user_id: "USUARIO_PENDIENTE_DE_REGISTRO" }),
+        body: JSON.stringify({ price_id: priceId, user_id: l.pendingUserId }),
       });
 
       const data = await response.json();
@@ -66,25 +58,21 @@ export function LandingPricing() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert("Hubo un problema al conectar con la pasarela segura.");
+        alert(l.stripeGatewayError);
       }
     } catch {
-      alert("No se pudo conectar con la pasarela segura. Inténtalo de nuevo.");
+      alert(l.stripeConnectionError);
     } finally {
       setLoadingTier(null);
     }
   };
 
   return (
-    <FadeInSection id="pricing" className="scroll-mt-24 px-4 py-16 sm:px-6 bg-zinc-950/40">
+    <FadeInSection id="pricing" className="scroll-mt-20 px-4 py-16 sm:px-6 bg-zinc-950/40">
       <div className="mx-auto max-w-6xl">
         <div className="text-center mb-12">
-          <h2 className="text-2xl font-bold text-white sm:text-3xl">Precios claros</h2>
-          <p className="mt-2 text-zinc-400 text-sm sm:text-base">
-            Inversión mensual orientada a ROI operativo: cada euro debe volver en eficiencia y control de margen.
-            Cifras orientativas + IVA; add-ons (OCR, webhooks premium, IA Pro) documentados en el repositorio
-            bajo docs/operations/STRIPE_BILLING.md.
-          </p>
+          <h2 className="text-2xl font-bold text-white sm:text-3xl">{l.title}</h2>
+          <p className="mt-2 text-zinc-400 text-sm sm:text-base">{l.subtitle}</p>
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -99,16 +87,16 @@ export function LandingPricing() {
             >
               {tier.highlight && (
                 <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-emerald-500 px-3 py-0.5 text-xs font-bold uppercase tracking-wide text-zinc-950">
-                  Recomendado
+                  {l.recommended}
                 </span>
               )}
               <h3 className="text-lg font-bold text-white">{tier.name}</h3>
               <div className="mt-6 flex items-baseline gap-1">
                 <span className="text-4xl font-extrabold text-white">{tier.price}€</span>
-                <span className="text-zinc-500">/mes</span>
+                <span className="text-zinc-500">{l.monthSuffix}</span>
               </div>
               <ul className="mt-8 flex-1 divide-y divide-zinc-800/80 rounded-2xl border border-zinc-800/80 bg-zinc-950/40 text-sm">
-                {comparedFeatures.map((feature, index) => (
+                {l.features.map((feature, index) => (
                   <li key={feature} className="flex items-center justify-between gap-2 px-3 py-2.5 text-zinc-300">
                     <span>{feature}</span>
                     {tier.includes[index] ? (
@@ -133,10 +121,10 @@ export function LandingPricing() {
                 {loadingTier === tier.stripePriceId ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Conectando...
+                    {l.connecting}
                   </>
                 ) : (
-                  "Solicitar Acceso al Sistema"
+                  l.requestAccess
                 )}
               </button>
             </div>

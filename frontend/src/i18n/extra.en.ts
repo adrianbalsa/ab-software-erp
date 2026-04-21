@@ -1,5 +1,189 @@
 /** Login, secondary sidebar, quota, customer portal, help hub, common — EN */
 export const extraEn = {
+  landing: {
+    brandAlt: "AB Logistics logo",
+    nav: {
+      simulator: "Simulator",
+      advantage: "Advantage",
+      howItWorks: "How it works",
+      pricing: "Pricing",
+      help: "Help center",
+      menuAria: "Menu",
+      login: "Sign in",
+      requestAccess: "Request system access",
+      homeAria: "AB Logistics OS - home",
+    },
+    hero: {
+      eyebrow: "Enterprise logistics OS",
+      title: "The fiscal bunker for modern logistics.",
+      description:
+        "Native VeriFactu compliance, ESG optimization and real-time profitability. Built for CFOs and high-performance fleets.",
+      primaryCta: "Request audit",
+      secondaryCta: "View architecture",
+    },
+    bento: {
+      eyebrow: "Architecture",
+      title: "One platform, four advantages",
+      subtitle:
+        "Built for teams that require fiscal traceability, measurable sustainability, and frictionless treasury operations.",
+      cards: [
+        {
+          title: "Fiscal hardening (VeriFactu)",
+          body: "XAdES-BES signature and chained hashes. 100% compliant with Spain's anti-fraud regulation.",
+        },
+        {
+          title: "CIP & ESG matrix",
+          body: "GLEC algorithm to align operational margin with carbon footprint reduction.",
+        },
+        {
+          title: "Bank reconciliation",
+          body: "Native Stripe and GoCardless integrations to automate cashflow.",
+        },
+        {
+          title: "Autonomous intelligence (Roadmap)",
+          body: "Future-ready with LogisAdvisor (AI) and dynamic routing powered by Google Maps.",
+        },
+      ],
+    },
+    pricing: {
+      features: [
+        "VeriFactu certification",
+        "Real-time EBITDA",
+        "Driver portal",
+        "Smart quotation",
+        "Expiration control",
+        "Automated settlements",
+      ],
+      title: "Clear pricing",
+      subtitle:
+        "Monthly investment focused on operational ROI: every euro should return as efficiency and margin control. Indicative figures + VAT; add-ons (OCR, premium webhooks, AI Pro) documented in docs/operations/STRIPE_BILLING.md.",
+      recommended: "Recommended",
+      connecting: "Connecting...",
+      requestAccess: "Request system access",
+      missingStripeConfig:
+        "Stripe Price IDs are missing in the frontend (NEXT_PUBLIC_STRIPE_PRICE_*). See docs/operations/STRIPE_BILLING.md.",
+      stripeGatewayError: "There was a problem connecting to the secure gateway.",
+      stripeConnectionError: "Could not connect to the secure gateway. Please try again.",
+      pendingUserId: "PENDING_USER_REGISTRATION",
+      monthSuffix: "/month",
+    },
+    faq: {
+      title: "Frequently asked questions",
+      subtitle: "Straight answers before you take the next step.",
+      items: [
+        {
+          q: "Is migrating my current data difficult?",
+          a: "No. You can import customers and fleet in a guided way, or start by loading only new shipments and invoices. Our team can assist you during the first month if needed.",
+        },
+        {
+          q: "What if I have fewer than 5 trucks?",
+          a: "The Compliance plan (small fleets) is designed for independent operators and companies with up to 5 vehicles, with full VeriFactu support. No penalty for being small.",
+        },
+        {
+          q: "How does the software guarantee VeriFactu compliance?",
+          a: "Each invoice generates a cryptographic hash chained to the previous record. Data becomes immutable after issuance, and traceability meets AEAT and SIF requirements.",
+        },
+        {
+          q: "Can I try before committing?",
+          a: "Yes. You can request access to audit your operations with dashboards and simulators, with no friction on the first step.",
+        },
+      ],
+    },
+    footer: {
+      description: "Operating system for fleets, finance, and fiscal compliance.",
+      legal: "Legal",
+      legalNotice: "Legal notice",
+      privacy: "Privacy policy (GDPR)",
+      contact: "Contact",
+      readyQuestion: "Ready to digitize your fleet?",
+      salesCta: "Talk to sales",
+      copyright: "All rights reserved.",
+    },
+    moats: {
+      title: "Operational hardening capabilities",
+      subtitle:
+        "Capabilities designed to maximize returns: more control, less margin leakage, and finance-driven decisions.",
+      capabilities: [
+        {
+          title: "VeriFactu certification",
+          description: "Fiscal traceability chain and compliance readiness for AEAT 2026 inspections.",
+        },
+        {
+          title: "Real-time EBITDA",
+          description: "Instant financial visibility by route, customer and vehicle to decide with real margin data.",
+        },
+        {
+          title: "Driver portal",
+          description: "Centralized field operations for records, statuses and communication without friction.",
+        },
+        {
+          title: "Smart quotation",
+          description: "Faster, more consistent budgets based on real costs, history and business rules.",
+        },
+        {
+          title: "Expiration control",
+          description: "Unified alerts for documents, inspections and critical fleet obligations.",
+        },
+        {
+          title: "Automated settlements",
+          description: "Settlement calculation and closure with fewer errors and shorter admin cycles.",
+        },
+      ],
+    },
+    howItWorks: {
+      title: "How it works",
+      subtitle: "Onboarding designed for operators, not consultants.",
+      stepLabel: "Step",
+      steps: [
+        {
+          title: "Add your fleet and fixed costs",
+          desc: "Configure vehicles and cost structure in just over a minute.",
+          time: "~1 min",
+        },
+        {
+          title: "Register a shipment",
+          desc: "From cab or office: origin, destination and price in seconds.",
+          time: "~30 sec",
+        },
+        {
+          title: "The system does the rest",
+          desc: "Invoices, margin, VeriFactu and CO₂ are calculated automatically.",
+          time: "Automatic",
+        },
+      ],
+    },
+    roi: {
+      title: "Interactive ROI simulator",
+      subtitle: "Adjust your fleet and average mileage. Results update instantly.",
+      fleetSize: "Your fleet size",
+      trucksSuffix: "trucks",
+      fleetRangeHint: "Between 1 and 50 trucks",
+      kmPerTruck: "Average kilometers per truck / month",
+      kmRangeHint: "500 - 12,000 km",
+      adminSaved: "Administrative time saved",
+      adminSavedHint: "Estimate: 4 h per truck in administrative tasks",
+      economicSaving: "Estimated cost savings",
+      economicSavingHint: "Reference hourly value: €25",
+      trackedEsg: "Tracked ESG footprint",
+      trackedEsgHint: "Model: km × 0.085 kg CO₂ (indicative)",
+      hoursPerMonth: "h/month",
+      kgPerMonth: "kg CO₂ / month",
+      monthSuffix: "/month",
+      summaryPrefix: "Recover",
+      summarySuffix: "per month. Your subscription pays for itself.",
+    },
+    heroLegacy: {
+      trustSignals: ["Support in Spain", "Onboarding in 24h", "Adapted to VeriFactu 2026"],
+      pill: "B2B platform · Transport and logistics",
+      titlePrefix: "The definitive operating system for",
+      titleHighlight: "Smart fleets",
+      description:
+        "Operational margin optimization (EBITDA), VeriFactu 2026 compliance and financial traceability in one control system for management.",
+      primaryCta: "Audit my fleet",
+      secondaryCta: "View demo",
+      complianceNote: "Ready for AEAT 2026 regulation (Ley Crea y Crece)",
+    },
+  },
   sidebar: {
     developerApi: "API & Webhooks",
     developerApiSub: "Keys & endpoints",
@@ -80,6 +264,7 @@ export const extraEn = {
       "Contractual legal texts (SLA, privacy) are provided under your commercial agreement. For technical compliance posture, use the public compliance API.",
     footerPricing: "View plans",
     footerLogin: "Sign in to ERP",
+    updatedLabel: "Updated",
     categories: {
       onboarding: "Getting started",
       billing: "Billing & Stripe",

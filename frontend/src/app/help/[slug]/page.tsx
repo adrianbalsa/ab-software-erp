@@ -22,7 +22,7 @@ export default function HelpArticlePage() {
     return (
       <div className="min-h-screen px-4 py-16 text-center text-zinc-400">
         <p className="text-lg text-white">404</p>
-        <Link href="/help" className="mt-4 inline-block text-emerald-400 hover:text-emerald-300">
+        <Link href="/#help" className="mt-4 inline-block text-emerald-400 hover:text-emerald-300">
           {catalog.helpBilling.back}
         </Link>
       </div>
@@ -53,7 +53,7 @@ export default function HelpArticlePage() {
 
       <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <Link
-          href="/help"
+          href="/#help"
           className="inline-flex items-center gap-1 text-sm font-medium text-emerald-500/90 hover:text-emerald-400"
         >
           <ChevronLeft className="h-4 w-4" aria-hidden />
@@ -65,7 +65,7 @@ export default function HelpArticlePage() {
         </p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-white">{title}</h1>
         <p className="mt-2 text-xs text-zinc-500">
-          {locale === "es" ? "Actualizado" : "Updated"} · {article.updated}
+          {h.updatedLabel} · {article.updated}
         </p>
 
         <article className="prose prose-invert prose-sm mt-8 max-w-none prose-headings:scroll-mt-20 prose-a:text-emerald-400 prose-strong:text-zinc-100">

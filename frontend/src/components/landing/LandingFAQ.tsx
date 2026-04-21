@@ -3,39 +3,23 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
+import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { FadeInSection } from "./FadeInSection";
-
-const faqs = [
-  {
-    q: "¿Es difícil migrar mis datos actuales?",
-    a: "No. Puedes importar clientes y flota de forma guiada, o empezar cargando solo portes y facturas nuevas. Nuestro equipo puede ayudarte en el primer mes si lo necesitas.",
-  },
-  {
-    q: "¿Qué pasa si tengo menos de 5 camiones?",
-    a: "El plan Compliance (pequeña flota) está pensado para autónomos y operadores con hasta 5 vehículos y VeriFactu completo. Sin penalización por ser pequeño.",
-  },
-  {
-    q: "¿Cómo garantiza el software la ley VeriFactu?",
-    a: "Cada factura genera un hash criptográfico encadenado con el registro anterior. Los datos son inmutables tras emitirse: la trazabilidad cumple los requisitos de la normativa AEAT y el SIF.",
-  },
-  {
-    q: "¿Puedo probar antes de comprometerme?",
-    a: "Sí. Puedes solicitar acceso al sistema para auditar tu operativa con dashboard y simuladores, sin fricción en el primer paso.",
-  },
-];
 
 export function LandingFAQ() {
   const [open, setOpen] = useState<number | null>(0);
+  const { catalog } = useOptionalLocaleCatalog();
+  const l = catalog.landing.faq;
 
   return (
-    <FadeInSection id="faq" className="scroll-mt-24 px-4 py-16 sm:px-6">
+    <FadeInSection id="help" className="scroll-mt-20 px-4 py-16 sm:px-6">
       <div className="mx-auto max-w-3xl">
         <div className="text-center mb-10">
-          <h2 className="text-2xl font-bold text-white sm:text-3xl">Preguntas frecuentes</h2>
-          <p className="mt-2 text-zinc-400 text-sm">Respuestas directas antes de dar el siguiente paso.</p>
+          <h2 className="text-2xl font-bold text-white sm:text-3xl">{l.title}</h2>
+          <p className="mt-2 text-zinc-400 text-sm">{l.subtitle}</p>
         </div>
         <div className="space-y-3">
-          {faqs.map((item, i) => {
+          {l.items.map((item, i) => {
             const isOpen = open === i;
             return (
               <div

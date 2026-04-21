@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import { Brain, CreditCard, Leaf, Shield } from "lucide-react";
+import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { cn } from "@/lib/utils";
 
 type BentoItem = {
@@ -13,32 +14,11 @@ type BentoItem = {
   variant?: "fiscal" | "default";
 };
 
-const items: BentoItem[] = [
-  {
-    title: "Blindaje Fiscal (VeriFactu)",
-    body: "Firma XAdES-BES y encadenamiento de hashes. 100% compliant con la Ley Antifraude de la AEAT.",
-    icon: Shield,
-    span: "2",
-    variant: "fiscal",
-  },
-  {
-    title: "Matriz CIP & ESG",
-    body: "Algoritmo GLEC para alinear el margen operativo con la reducción de la huella de carbono.",
-    icon: Leaf,
-    span: "1",
-  },
-  {
-    title: "Reconciliación Bancaria",
-    body: "Integración nativa con Stripe y GoCardless para automatizar el cashflow.",
-    icon: CreditCard,
-    span: "1",
-  },
-  {
-    title: "Inteligencia Autónoma (Roadmap)",
-    body: "Preparado para el futuro con LogisAdvisor (IA) y enrutamiento dinámico mediante Google Maps.",
-    icon: Brain,
-    span: "2",
-  },
+const bentoIcons: Array<Pick<BentoItem, "icon" | "span" | "variant">> = [
+  { icon: Shield, span: "2", variant: "fiscal" },
+  { icon: Leaf, span: "1" },
+  { icon: CreditCard, span: "1" },
+  { icon: Brain, span: "2" },
 ];
 
 /** Deterministic QR-like pattern (avoids SSR/client random mismatch). */
@@ -115,14 +95,22 @@ function BentoCard({
 }
 
 export function LandingBentoGrid() {
+  const { catalog } = useOptionalLocaleCatalog();
+  const l = catalog.landing.bento;
+  const items: BentoItem[] = l.cards.map((card, idx) => {
+    const iconDef = bentoIcons[idx] ?? bentoIcons[0];
+    return {
+      ...card,
+      ...iconDef,
+    };
+  });
+
   return (
     <section id="plataforma" className="scroll-mt-24 px-4 pb-20 sm:px-6">
       <div className="mx-auto max-w-6xl">
-        <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Arquitectura</p>
-        <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">Una plataforma, cuatro ventajas</h2>
-        <p className="mt-2 max-w-2xl text-sm text-zinc-400 sm:text-base">
-          Diseñada para equipos que exigen trazabilidad fiscal, sostenibilidad medible y tesorería sin fricción.
-        </p>
+        <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{l.eyebrow}</p>
+        <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">{l.title}</h2>
+        <p className="mt-2 max-w-2xl text-sm text-zinc-400 sm:text-base">{l.subtitle}</p>
         <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
           {items.map((item, i) => (
             <BentoCard key={item.title} item={item} index={i} />

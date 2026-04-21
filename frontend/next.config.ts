@@ -11,6 +11,20 @@ const nextConfig: NextConfig = {
         removeConsole: { exclude: ["error", "warn"] },
       }
     : undefined,
+  async redirects() {
+    return [
+      {
+        source: "/precios",
+        destination: "/#pricing",
+        permanent: true,
+      },
+      {
+        source: "/help",
+        destination: "/#help",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

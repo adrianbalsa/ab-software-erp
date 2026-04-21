@@ -428,7 +428,7 @@ function ShellNavAndFooter({
           <NavSectionHeader title={s.sections.system.title} subtitle={s.sections.system.subtitle} />
           <div className="flex flex-col gap-0.5">
             <SidebarNavLink
-              href="/help"
+              href="/#help"
               active={false}
               icon={LifeBuoy}
               title={catalog.nav.help}

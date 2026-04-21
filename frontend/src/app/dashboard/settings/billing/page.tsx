@@ -125,7 +125,7 @@ export default function BillingSettingsPage() {
               {catalog.helpIndex.billingCard}
             </Link>
             {" · "}
-            <Link href="/precios" className="text-emerald-500/90 hover:text-emerald-400">
+            <Link href="/#pricing" className="text-emerald-500/90 hover:text-emerald-400">
               {catalog.nav.pricing}
             </Link>
           </p>

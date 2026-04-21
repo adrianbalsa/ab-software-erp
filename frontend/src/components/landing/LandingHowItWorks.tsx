@@ -2,38 +2,24 @@
 
 import { FileText, Route, Truck } from "lucide-react";
 
+import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { FadeInSection } from "./FadeInSection";
 
-const steps = [
-  {
-    icon: Truck,
-    title: "Añade tu flota y costes fijos",
-    desc: "Configura vehículos y estructura de costes en poco más de un minuto.",
-    time: "~1 min",
-  },
-  {
-    icon: Route,
-    title: "Registra un porte",
-    desc: "Desde la cabina o la oficina: origen, destino y precio en segundos.",
-    time: "~30 seg",
-  },
-  {
-    icon: FileText,
-    title: "El sistema hace el resto",
-    desc: "Factura, calcula margen, VeriFactu y CO₂ automáticamente.",
-    time: "Automático",
-  },
-];
-
 export function LandingHowItWorks() {
+  const { catalog } = useOptionalLocaleCatalog();
+  const l = catalog.landing.howItWorks;
+  const icons = [Truck, Route, FileText] as const;
+  const steps = l.steps.map((step, idx) => ({
+    ...step,
+    icon: icons[idx] ?? icons[0],
+  }));
+
   return (
     <FadeInSection id="how-it-works" className="scroll-mt-24 px-4 py-16 sm:px-6">
       <div className="mx-auto max-w-5xl">
         <div className="text-center mb-12">
-          <h2 className="text-2xl font-bold text-white sm:text-3xl">Cómo funciona</h2>
-          <p className="mt-2 text-zinc-400 text-sm sm:text-base">
-            Onboarding pensado para operadores, no para consultores.
-          </p>
+          <h2 className="text-2xl font-bold text-white sm:text-3xl">{l.title}</h2>
+          <p className="mt-2 text-zinc-400 text-sm sm:text-base">{l.subtitle}</p>
         </div>
 
         <div className="relative">
@@ -48,7 +34,7 @@ export function LandingHowItWorks() {
                   <step.icon className="h-7 w-7" />
                 </div>
                 <span className="mt-4 text-xs font-semibold uppercase tracking-widest text-emerald-500/90">
-                  Paso {i + 1} · {step.time}
+                  {l.stepLabel} {i + 1} · {step.time}
                 </span>
                 <h3 className="mt-2 text-lg font-bold text-white">{step.title}</h3>
                 <p className="mt-2 text-sm text-zinc-400 leading-relaxed max-w-xs">{step.desc}</p>

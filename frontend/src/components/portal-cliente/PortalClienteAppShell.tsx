@@ -43,7 +43,7 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
   const footerLinks = useMemo(
     () =>
       [
-        { href: "/help", label: p.footer.help },
+        { href: "/#help", label: p.footer.help },
         { href: "/privacidad", label: p.footer.privacy },
         { href: "/legal", label: p.footer.legal },
       ] as const,
