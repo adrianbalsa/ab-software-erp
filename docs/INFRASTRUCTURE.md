@@ -93,6 +93,8 @@ terraform apply
 
 Revise los IDs en `terraform output` y valide en el dashboard de Railway que los cuatro servicios de cómputo existen y que las variables aparecen en los entornos **production** y **staging**.
 
+**Healthcheck failure / worker CRASHED con `Missing required env var: SUPABASE_URL`:** el contenedor arranca Uvicorn pero los workers hijos fallan al importar la app porque faltan variables. Suele deberse a (1) servicios `backend-staging` / `worker-staging` creados o desplegados en el entorno equivocado de Railway (Terraform asigna variables al entorno **staging** separado del predeterminado **production**); (2) secretos GitHub `TF_VAR_SUPABASE_URL` / `TF_VAR_SUPABASE_KEY` vacíos o no definidos, que aplican cadenas vacías vía Terraform. Corrija variables en el servicio y entorno correctos, o vuelva a ejecutar `terraform apply` con `tfvars` / CI completos.
+
 ### 5.4 Config as Code en el servicio
 
 En cada servicio de aplicación, en **Settings → Build → Config file**, use rutas **absolutas** desde la raíz del repo (Railway no hereda la ruta relativa del root directory):

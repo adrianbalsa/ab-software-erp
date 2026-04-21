@@ -111,7 +111,7 @@ jobs:
         run: docker build -t backend:latest -f backend/Dockerfile ./backend
 
       - name: Security Scan (Trivy image)
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: image
           image-ref: backend:latest
@@ -170,7 +170,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Security Scan (Trivy image)
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: image
           image-ref: ${{ steps.img.outputs.name }}:latest
@@ -267,6 +267,50 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: terraform init -input=false
+
+      # Evita plan/apply con secretos vacíos: en Railway el API y el worker mueren con
+      # "Missing required env var: SUPABASE_URL" y el healthcheck falla en cadena.
+      - name: Comprobar TF_VAR obligatorias (Railway)
+        if: steps.filter.outputs.infra == 'true'
+        env:
+          TF_VAR_project_name: ${{ vars.TF_VAR_project_name }}
+          TF_VAR_github_repo: ${{ vars.TF_VAR_github_repo }}
+          TF_VAR_official_frontend_origin_production: ${{ vars.TF_VAR_official_frontend_origin_production }}
+          TF_VAR_official_frontend_origin_staging: ${{ vars.TF_VAR_official_frontend_origin_staging }}
+          TF_VAR_supabase_url: ${{ secrets.TF_VAR_SUPABASE_URL }}
+          TF_VAR_supabase_key: ${{ secrets.TF_VAR_SUPABASE_KEY }}
+          TF_VAR_jwt_secret_key: ${{ secrets.TF_VAR_JWT_SECRET_KEY }}
+          TF_VAR_session_secret_key: ${{ secrets.TF_VAR_SESSION_SECRET_KEY }}
+          TF_VAR_database_url_production: ${{ secrets.TF_VAR_DATABASE_URL_PRODUCTION }}
+          TF_VAR_database_url_staging: ${{ secrets.TF_VAR_DATABASE_URL_STAGING }}
+          TF_VAR_redis_url_production: ${{ secrets.TF_VAR_REDIS_URL_PRODUCTION }}
+          TF_VAR_redis_url_staging: ${{ secrets.TF_VAR_REDIS_URL_STAGING }}
+        run: |
+          set -euo pipefail
+          fail=0
+          nonempty() {
+            local gh_name="$1"
+            local val="$2"
+            if [ -z "${val:-}" ]; then
+              echo "::error::${gh_name} está vacío o no definido. Sin SUPABASE_URL/KEY el backend y worker en Railway no arrancan (healthcheck / CRASHED)."
+              fail=1
+            fi
+          }
+          nonempty "Variable TF_VAR_project_name" "${TF_VAR_project_name:-}"
+          nonempty "Variable TF_VAR_github_repo" "${TF_VAR_github_repo:-}"
+          nonempty "Variable TF_VAR_official_frontend_origin_production" "${TF_VAR_official_frontend_origin_production:-}"
+          nonempty "Variable TF_VAR_official_frontend_origin_staging" "${TF_VAR_official_frontend_origin_staging:-}"
+          nonempty "Secret TF_VAR_SUPABASE_URL" "${TF_VAR_supabase_url:-}"
+          nonempty "Secret TF_VAR_SUPABASE_KEY" "${TF_VAR_supabase_key:-}"
+          nonempty "Secret TF_VAR_JWT_SECRET_KEY" "${TF_VAR_jwt_secret_key:-}"
+          nonempty "Secret TF_VAR_SESSION_SECRET_KEY" "${TF_VAR_session_secret_key:-}"
+          nonempty "Secret TF_VAR_DATABASE_URL_PRODUCTION" "${TF_VAR_database_url_production:-}"
+          nonempty "Secret TF_VAR_DATABASE_URL_STAGING" "${TF_VAR_database_url_staging:-}"
+          nonempty "Secret TF_VAR_REDIS_URL_PRODUCTION" "${TF_VAR_redis_url_production:-}"
+          nonempty "Secret TF_VAR_REDIS_URL_STAGING" "${TF_VAR_redis_url_staging:-}"
+          if [ "$fail" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Terraform Plan o Apply
         if: steps.filter.outputs.infra == 'true'
