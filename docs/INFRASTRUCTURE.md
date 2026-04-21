@@ -91,9 +91,9 @@ terraform plan
 terraform apply
 ```
 
-Revise los IDs en `terraform output` y valide en el dashboard de Railway que los cuatro servicios de cómputo existen y que las variables aparecen en los entornos **production** y **staging**.
+Revise los IDs en `terraform output` y valide en el dashboard de Railway que los cuatro servicios de cómputo existen y que las variables aparecen en el lienzo (el entorno por defecto del proyecto suele llamarse **production**).
 
-**Healthcheck failure / worker CRASHED con `Missing required env var: SUPABASE_URL`:** el contenedor arranca Uvicorn pero los workers hijos fallan al importar la app porque faltan variables. Suele deberse a (1) servicios `backend-staging` / `worker-staging` creados o desplegados en el entorno equivocado de Railway (Terraform asigna variables al entorno **staging** separado del predeterminado **production**); (2) secretos GitHub `TF_VAR_SUPABASE_URL` / `TF_VAR_SUPABASE_KEY` vacíos o no definidos, que aplican cadenas vacías vía Terraform. Corrija variables en el servicio y entorno correctos, o vuelva a ejecutar `terraform apply` con `tfvars` / CI completos.
+**Healthcheck failure / worker CRASHED con `Missing required env var: SUPABASE_URL`:** el contenedor arranca Uvicorn pero falla al importar la app si `SUPABASE_URL` / `SUPABASE_KEY` no están en el **mismo entorno Railway** donde corre el servicio. El provider `railway_service` no fija `environment_id`; los servicios suelen quedar en el entorno por defecto del proyecto. Las colecciones de Terraform para `backend-staging` y `worker-staging` deben usar ese entorno (no solo el recurso `railway_environment.staging` aislado). Compruebe también que los secretos GitHub `TF_VAR_SUPABASE_*` no estén vacíos antes de `terraform apply`.
 
 ### 5.4 Config as Code en el servicio
 

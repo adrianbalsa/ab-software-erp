@@ -135,14 +135,18 @@ resource "railway_variable_collection" "worker_production" {
   variables      = local.worker_production_vars
 }
 
+# Staging API/worker usan ramas y URLs de staging, pero el recurso railway_service
+# no fija environment_id: Railway asocia el servicio al entorno por defecto del
+# proyecto (p. ej. "production"). Si las variables solo existían en railway_environment.staging,
+# el runtime veía SUPABASE_URL vacío → CRASHED / healthcheck failure.
 resource "railway_variable_collection" "backend_staging" {
-  environment_id = railway_environment.staging.id
+  environment_id = local.production_environment_id
   service_id     = railway_service.backend_staging.id
   variables      = local.backend_staging_vars
 }
 
 resource "railway_variable_collection" "worker_staging" {
-  environment_id = railway_environment.staging.id
+  environment_id = local.production_environment_id
   service_id     = railway_service.worker_staging.id
   variables      = local.worker_staging_vars
 }
