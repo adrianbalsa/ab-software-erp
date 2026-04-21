@@ -132,3 +132,7 @@ variable "debug_mode" {
   default     = "False"
   description = "Controla el modo depuración del backend (True/False)."
 }
+variable "frontend_urls" {
+  description = "URLs del frontend por entorno"
+  type        = map(string)
+}
