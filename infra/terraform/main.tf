@@ -36,7 +36,7 @@ locals {
       { name = "REDIS_URL", value = var.redis_url_staging },
       { name = "SECURITY_CONTACT_EMAIL", value = var.security_contact_email },
       { name = "ENVIRONMENT", value = "staging" },
-      { name = "DEBUG",       value = "True" },
+      { name = "DEBUG", value = "True" },
       { name = "OFFICIAL_FRONTEND_ORIGIN", value = var.official_frontend_origin_staging },
     ],
     trimspace(var.cors_allow_origins_extra_staging) != "" ? [{ name = "CORS_ALLOW_ORIGINS", value = var.cors_allow_origins_extra_staging }] : [],
@@ -57,16 +57,16 @@ locals {
   ]
 
   worker_staging_vars = [
-   { name = "SUPABASE_URL",      value = var.supabase_url },
-   { name = "SUPABASE_KEY",      value = var.supabase_key },
-   { name = "SUPABASE_SERVICE_KEY", value = local.supabase_service_key_effective },
-   { name = "JWT_SECRET_KEY",    value = var.jwt_secret_key },
-   { name = "SESSION_SECRET_KEY", value = var.session_secret_key },
-   { name = "DATABASE_URL",      value = var.database_url_staging },
-   { name = "REDIS_URL",         value = var.redis_url_staging },
-   { name = "ENVIRONMENT",       value = "staging" },
-   { name = "DEBUG",             value = "True" },
-   { name = "RAILPACK_START_CMD", value = "sh scripts/start-worker.sh" },
+    { name = "SUPABASE_URL", value = var.supabase_url },
+    { name = "SUPABASE_KEY", value = var.supabase_key },
+    { name = "SUPABASE_SERVICE_KEY", value = local.supabase_service_key_effective },
+    { name = "JWT_SECRET_KEY", value = var.jwt_secret_key },
+    { name = "SESSION_SECRET_KEY", value = var.session_secret_key },
+    { name = "DATABASE_URL", value = var.database_url_staging },
+    { name = "REDIS_URL", value = var.redis_url_staging },
+    { name = "ENVIRONMENT", value = "staging" },
+    { name = "DEBUG", value = "True" },
+    { name = "RAILPACK_START_CMD", value = "sh scripts/start-worker.sh" },
   ]
 }
 

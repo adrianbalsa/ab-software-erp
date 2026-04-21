@@ -36,23 +36,43 @@ variable "git_branch_staging" {
 variable "official_frontend_origin_production" {
   type        = string
   description = "Origen HTTPS del frontend en producción (OFFICIAL_FRONTEND_ORIGIN)."
+
+  validation {
+    condition     = length(trimspace(var.official_frontend_origin_production)) > 0
+    error_message = "official_frontend_origin_production no puede estar vacío (OFFICIAL_FRONTEND_ORIGIN en production)."
+  }
 }
 
 variable "official_frontend_origin_staging" {
   type        = string
   description = "Origen HTTPS del frontend en staging (OFFICIAL_FRONTEND_ORIGIN)."
+
+  validation {
+    condition     = length(trimspace(var.official_frontend_origin_staging)) > 0
+    error_message = "official_frontend_origin_staging no puede estar vacío (OFFICIAL_FRONTEND_ORIGIN en staging)."
+  }
 }
 
 variable "supabase_url" {
   type        = string
   sensitive   = true
   description = "SUPABASE_URL (puede diferir entre staging y producción usando dos applies o ampliando el módulo)."
+
+  validation {
+    condition     = length(trimspace(var.supabase_url)) > 0
+    error_message = "supabase_url no puede estar vacío: el backend y el worker fallan al importar (Missing required env var: SUPABASE_URL)."
+  }
 }
 
 variable "supabase_key" {
   type        = string
   sensitive   = true
   description = "SUPABASE_KEY (anon o clave pública usada por el backend)."
+
+  validation {
+    condition     = length(trimspace(var.supabase_key)) > 0
+    error_message = "supabase_key no puede estar vacío: el backend requiere SUPABASE_KEY al arrancar."
+  }
 }
 
 variable "supabase_service_key" {
@@ -66,12 +86,22 @@ variable "jwt_secret_key" {
   type        = string
   sensitive   = true
   description = "JWT_SECRET_KEY o equivalente (>= 32 caracteres recomendado)."
+
+  validation {
+    condition     = length(trimspace(var.jwt_secret_key)) > 0
+    error_message = "jwt_secret_key no puede estar vacío."
+  }
 }
 
 variable "session_secret_key" {
   type        = string
   sensitive   = true
   description = "SESSION_SECRET_KEY (cookies OAuth / sesión)."
+
+  validation {
+    condition     = length(trimspace(var.session_secret_key)) > 0
+    error_message = "session_secret_key no puede estar vacío."
+  }
 }
 
 variable "security_contact_email" {
@@ -91,24 +121,44 @@ variable "database_url_production" {
   type        = string
   sensitive   = true
   description = "DATABASE_URL para production: URL completa o referencia Railway (sintaxis Service.VAR en docs/INFRASTRUCTURE.md)."
+
+  validation {
+    condition     = length(trimspace(var.database_url_production)) > 0
+    error_message = "database_url_production no puede estar vacío."
+  }
 }
 
 variable "database_url_staging" {
   type        = string
   sensitive   = true
   description = "DATABASE_URL para staging (misma convención que production)."
+
+  validation {
+    condition     = length(trimspace(var.database_url_staging)) > 0
+    error_message = "database_url_staging no puede estar vacío."
+  }
 }
 
 variable "redis_url_production" {
   type        = string
   sensitive   = true
   description = "REDIS_URL para production (referencia al plugin Redis o URL explícita)."
+
+  validation {
+    condition     = length(trimspace(var.redis_url_production)) > 0
+    error_message = "redis_url_production no puede estar vacío."
+  }
 }
 
 variable "redis_url_staging" {
   type        = string
   sensitive   = true
   description = "REDIS_URL para staging."
+
+  validation {
+    condition     = length(trimspace(var.redis_url_staging)) > 0
+    error_message = "redis_url_staging no puede estar vacío."
+  }
 }
 
 variable "cors_allow_origins_extra_production" {

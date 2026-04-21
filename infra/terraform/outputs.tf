@@ -16,9 +16,9 @@ output "railway_staging_environment_id" {
 output "service_ids" {
   description = "IDs de los cuatro servicios de cómputo (API + worker × entornos)."
   value = {
-    backend_production  = railway_service.backend_production.id
-    worker_production   = railway_service.worker_production.id
-    backend_staging     = railway_service.backend_staging.id
-    worker_staging      = railway_service.worker_staging.id
+    backend_production = railway_service.backend_production.id
+    worker_production  = railway_service.worker_production.id
+    backend_staging    = railway_service.backend_staging.id
+    worker_staging     = railway_service.worker_staging.id
   }
 }
