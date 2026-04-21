@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
-import { AbLogoMark } from "./AbLogoMark";
 
 export function LandingMarketingNav() {
   const { catalog } = useOptionalLocaleCatalog();
@@ -17,7 +17,14 @@ export function LandingMarketingNav() {
           className="flex items-center gap-3 text-white"
           aria-label="AB Logistics OS — inicio"
         >
-          <AbLogoMark className="h-9 w-9 shrink-0" />
+          <Image
+            src="/logo.png"
+            alt="AB Logistics logo"
+            width={40}
+            height={40}
+            className="h-8 w-8 md:h-10 md:w-10 shrink-0 object-contain"
+            priority
+          />
           <span className="text-base font-semibold tracking-tight sm:text-lg">
             AB Logistics <span className="font-medium text-zinc-500">OS</span>
           </span>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   Activity,
@@ -88,6 +89,19 @@ function NavSectionHeader({
         {subtitle}
       </p>
     </div>
+  );
+}
+
+function BrandLogo({ className = "h-8 w-8 md:h-10 md:w-10" }: { className?: string }) {
+  return (
+    <Image
+      src="/logo.png"
+      alt="AB Logistics logo"
+      width={40}
+      height={40}
+      className={cn("shrink-0 object-contain", className)}
+      priority
+    />
   );
 }
 
@@ -558,7 +572,7 @@ export function AppShell({ children, active }: Props) {
     <div className="flex min-h-screen bg-zinc-950 font-sans text-zinc-100 overflow-x-hidden">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 text-zinc-300 lg:flex">
         <div className="flex h-16 shrink-0 items-center border-b border-zinc-800 px-6">
-          <Truck className="mr-2 h-6 w-6 shrink-0 text-emerald-500" />
+          <BrandLogo className="mr-2 h-8 w-8" />
           <span className="text-white font-bold text-lg tracking-tight">{s.sidebarBrand}</span>
         </div>
         <ShellNavAndFooter active={resolvedActive} />
@@ -572,7 +586,7 @@ export function AppShell({ children, active }: Props) {
         >
           <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-zinc-800 px-4">
             <div className="flex min-w-0 items-center">
-              <Truck className="mr-2 h-6 w-6 shrink-0 text-emerald-500" />
+              <BrandLogo className="mr-2 h-8 w-8" />
               <SheetTitle className="truncate border-0 p-0 text-sm font-bold text-white">{s.sidebarBrand}</SheetTitle>
             </div>
             <button
@@ -600,6 +614,7 @@ export function AppShell({ children, active }: Props) {
           >
             <Menu className="h-6 w-6" />
           </button>
+          <BrandLogo className="h-8 w-8" />
           <span className="truncate font-bold tracking-tight">{s.sidebarBrand}</span>
         </div>
         <div className="min-h-0 min-w-0 flex-1">{children}</div>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -9,7 +10,6 @@ import { ChevronLeft } from "lucide-react";
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { articleBySlug } from "@/help/articles";
-import { AbLogoMark } from "@/components/landing/AbLogoMark";
 
 export default function HelpArticlePage() {
   const params = useParams();
@@ -37,7 +37,14 @@ export default function HelpArticlePage() {
       <header className="border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link href="/" className="flex items-center gap-3 text-white">
-            <AbLogoMark className="h-9 w-9 shrink-0" />
+            <Image
+              src="/logo.png"
+              alt="AB Logistics logo"
+              width={40}
+              height={40}
+              className="h-8 w-8 md:h-10 md:w-10 shrink-0 object-contain"
+              priority
+            />
             <span className="text-base font-semibold tracking-tight">AB Logistics OS</span>
           </Link>
           <LocaleSwitcher />

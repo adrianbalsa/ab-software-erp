@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, Building2, Leaf, LogOut, Moon, Package, Receipt, Sun } from "lucide-react";
+import { BarChart3, Leaf, LogOut, Moon, Package, Receipt, Sun } from "lucide-react";
 
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { PortalClienteRiskModal } from "@/components/portal-cliente/PortalClienteRiskModal";
@@ -92,9 +93,14 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-screen bg-zinc-100 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
         <aside className="hidden w-56 shrink-0 flex-col border-r border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-900/95 md:flex">
           <div className="flex items-center gap-2 border-b border-zinc-200/80 px-4 py-5 dark:border-zinc-800">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900 text-white dark:bg-blue-600">
-              <Building2 className="h-5 w-5" aria-hidden />
-            </div>
+            <Image
+              src="/logo.png"
+              alt="AB Logistics logo"
+              width={40}
+              height={40}
+              className="h-8 w-8 md:h-10 md:w-10 object-contain"
+              priority
+            />
             <div className="min-w-0">
               <p className="truncate text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                 {p.badge}
@@ -154,7 +160,14 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex items-center justify-between gap-3 border-b border-zinc-200/80 bg-white/90 px-4 py-3 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/80">
             <div className="flex min-w-0 items-center gap-2 md:hidden">
-              <Building2 className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden />
+              <Image
+                src="/logo.png"
+                alt="AB Logistics logo"
+                width={40}
+                height={40}
+                className="h-8 w-8 object-contain"
+                priority
+              />
               <span className="truncate text-sm font-semibold">{p.mobileHeader}</span>
             </div>
             <div className="flex flex-1 items-center justify-end gap-2">

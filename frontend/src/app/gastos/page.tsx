@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   CreditCard,
   LayoutDashboard,
@@ -311,7 +312,14 @@ export default function GastosPage() {
     <div className="flex min-h-screen bg-slate-50 font-sans">
       <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0">
         <div className="h-16 flex items-center px-6 border-b border-slate-800">
-          <Truck className="w-6 h-6 text-blue-400 mr-2" />
+          <Image
+            src="/logo.png"
+            alt="AB Logistics logo"
+            width={40}
+            height={40}
+            className="w-8 h-8 md:w-10 md:h-10 mr-2 object-contain"
+            priority
+          />
           <span className="text-white font-bold text-lg">AB Logistics OS</span>
         </div>
         <nav className="flex-1 px-4 py-6 space-y-2">

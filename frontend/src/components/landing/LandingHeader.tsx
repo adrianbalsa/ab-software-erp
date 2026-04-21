@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Menu, Truck, X } from "lucide-react";
+import Image from "next/image";
+import { Menu, X } from "lucide-react";
 import { useState } from "react";
 
 const nav = [
@@ -19,9 +20,14 @@ export function LandingHeader() {
     <header className="sticky top-0 z-50 border-b border-zinc-800/80 bg-zinc-950/85 backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <Link href="/" className="flex items-center gap-2 text-white font-bold tracking-tight">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 shadow-lg shadow-blue-500/20">
-            <Truck className="h-5 w-5 text-white" />
-          </span>
+          <Image
+            src="/logo.png"
+            alt="AB Logistics logo"
+            width={40}
+            height={40}
+            className="h-8 w-8 md:h-10 md:w-10 object-contain"
+            priority
+          />
           <span className="hidden sm:inline text-lg">AB Logistics OS</span>
         </Link>
 

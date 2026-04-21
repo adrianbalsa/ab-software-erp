@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Building2,
   ClipboardList,
@@ -323,7 +324,14 @@ export default function AdminPage() {
     <div className="flex min-h-screen bg-zinc-950 font-sans text-zinc-100">
       <aside className="m-4 flex w-[15.5rem] shrink-0 flex-col rounded-2xl border border-zinc-800/50 bg-black shadow-2xl backdrop-blur-md">
         <div className="flex h-16 items-center border-b border-zinc-800/50 px-5">
-          <Truck className="mr-2 h-6 w-6 text-emerald-500/90" />
+          <Image
+            src="/logo.png"
+            alt="AB Logistics logo"
+            width={40}
+            height={40}
+            className="mr-2 h-8 w-8 object-contain"
+            priority
+          />
           <div>
             <span className="block text-sm font-semibold tracking-tight text-zinc-100">AB Logistics</span>
             <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">Admin Console</span>

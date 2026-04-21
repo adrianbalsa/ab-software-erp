@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Mail, Truck } from "lucide-react";
+import Image from "next/image";
+import { Mail } from "lucide-react";
 
 export function LandingFooter() {
   return (
@@ -10,9 +11,14 @@ export function LandingFooter() {
         <div className="flex flex-col gap-10 lg:flex-row lg:justify-between lg:items-start">
           <div>
             <Link href="/" className="flex items-center gap-2 text-white font-bold text-lg">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600">
-                <Truck className="h-5 w-5 text-white" />
-              </span>
+              <Image
+                src="/logo.png"
+                alt="AB Logistics logo"
+                width={40}
+                height={40}
+                className="h-8 w-8 md:h-10 md:w-10 object-contain"
+                priority
+              />
               AB Logistics OS
             </Link>
             <p className="mt-3 text-sm text-zinc-500 max-w-xs">

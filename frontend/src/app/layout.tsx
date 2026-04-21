@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Inter } from "next/font/google";
 import { AppProviders } from "@/components/AppProviders";
 import { SentryInit } from "@/components/SentryInit";
 import { getServerInitialRole } from "@/lib/server-api";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -19,8 +19,12 @@ export const metadata: Metadata = {
   title: "AB Logistics OS",
   description: "Operaciones, finanzas, VeriFactu y sostenibilidad — AB Software",
   icons: {
-    icon: [{ url: "/icon.svg", type: "image/svg+xml", sizes: "any" }],
-    apple: [{ url: "/apple-icon.svg", type: "image/svg+xml", sizes: "180x180" }],
+    icon: [
+      { url: "/logo.png", type: "image/png", sizes: "32x32" },
+      { url: "/logo.png", type: "image/png", sizes: "192x192" },
+    ],
+    shortcut: [{ url: "/logo.png", type: "image/png", sizes: "32x32" }],
+    apple: [{ url: "/logo.png", type: "image/png", sizes: "180x180" }],
   },
 };
 
@@ -34,7 +38,7 @@ export default async function RootLayout({
   return (
     <html lang="es">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
+        className={`${inter.variable} ${geistMono.variable} font-sans antialiased`}
       >
         <SentryInit />
         <AppProviders initialRole={initialRole}>{children}</AppProviders>

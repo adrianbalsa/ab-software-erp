@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { getAuthToken } from "@/lib/api";
-import { AbLogoMark } from "@/components/landing/AbLogoMark";
 
 function PlanCard({
   name,
@@ -67,7 +67,14 @@ function PreciosContent() {
       <header className="border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link href="/" className="flex items-center gap-3 text-white">
-            <AbLogoMark className="h-9 w-9 shrink-0" />
+            <Image
+              src="/logo.png"
+              alt="AB Logistics logo"
+              width={40}
+              height={40}
+              className="h-8 w-8 md:h-10 md:w-10 shrink-0 object-contain"
+              priority
+            />
             <span className="text-base font-semibold tracking-tight">AB Logistics OS</span>
           </Link>
           <div className="flex items-center gap-3">
