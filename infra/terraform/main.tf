@@ -18,6 +18,7 @@ locals {
     local.backend_common,
     [
       { name = "ENVIRONMENT", value = "production" },
+      { name = "DEBUG", value = "False" },
       { name = "OFFICIAL_FRONTEND_ORIGIN", value = var.official_frontend_origin_production },
     ],
     trimspace(var.cors_allow_origins_extra_production) != "" ? [{ name = "CORS_ALLOW_ORIGINS", value = var.cors_allow_origins_extra_production }] : [],
@@ -34,7 +35,8 @@ locals {
       { name = "DATABASE_URL", value = var.database_url_staging },
       { name = "REDIS_URL", value = var.redis_url_staging },
       { name = "SECURITY_CONTACT_EMAIL", value = var.security_contact_email },
-      { name = "ENVIRONMENT", value = "production" },
+      { name = "ENVIRONMENT", value = "staging" },
+      { name = "DEBUG",       value = "True" },
       { name = "OFFICIAL_FRONTEND_ORIGIN", value = var.official_frontend_origin_staging },
     ],
     trimspace(var.cors_allow_origins_extra_staging) != "" ? [{ name = "CORS_ALLOW_ORIGINS", value = var.cors_allow_origins_extra_staging }] : [],
@@ -50,17 +52,21 @@ locals {
     { name = "DATABASE_URL", value = var.database_url_production },
     { name = "REDIS_URL", value = var.redis_url_production },
     { name = "ENVIRONMENT", value = "production" },
+    # Railpack prioriza ``web`` del Procfile; el worker debe ejecutar ARQ explícitamente.
+    { name = "RAILPACK_START_CMD", value = "sh scripts/start-worker.sh" },
   ]
 
   worker_staging_vars = [
-    { name = "SUPABASE_URL", value = var.supabase_url },
-    { name = "SUPABASE_KEY", value = var.supabase_key },
-    { name = "SUPABASE_SERVICE_KEY", value = local.supabase_service_key_effective },
-    { name = "JWT_SECRET_KEY", value = var.jwt_secret_key },
-    { name = "SESSION_SECRET_KEY", value = var.session_secret_key },
-    { name = "DATABASE_URL", value = var.database_url_staging },
-    { name = "REDIS_URL", value = var.redis_url_staging },
-    { name = "ENVIRONMENT", value = "production" },
+   { name = "SUPABASE_URL",      value = var.supabase_url },
+   { name = "SUPABASE_KEY",      value = var.supabase_key },
+   { name = "SUPABASE_SERVICE_KEY", value = local.supabase_service_key_effective },
+   { name = "JWT_SECRET_KEY",    value = var.jwt_secret_key },
+   { name = "SESSION_SECRET_KEY", value = var.session_secret_key },
+   { name = "DATABASE_URL",      value = var.database_url_staging },
+   { name = "REDIS_URL",         value = var.redis_url_staging },
+   { name = "ENVIRONMENT",       value = "staging" },
+   { name = "DEBUG",             value = "True" },
+   { name = "RAILPACK_START_CMD", value = "sh scripts/start-worker.sh" },
   ]
 }
 
@@ -82,7 +88,7 @@ resource "railway_environment" "staging" {
 }
 
 resource "railway_service" "backend_production" {
-  name               = "backend"
+  name               = "ab-software-erp"
   project_id         = railway_project.app.id
   source_repo        = var.github_repo
   source_repo_branch = var.git_branch_production
@@ -91,7 +97,7 @@ resource "railway_service" "backend_production" {
 }
 
 resource "railway_service" "worker_production" {
-  name               = "worker"
+  name               = "ab-software-worker"
   project_id         = railway_project.app.id
   source_repo        = var.github_repo
   source_repo_branch = var.git_branch_production

@@ -83,4 +83,5 @@ jobs:
           SESSION_SECRET_KEY: ci-session-secret-at-least-32-characters-long
           ENVIRONMENT: development
           DEV_MODE: "true"
+          STRIPE_WEBHOOK_SECRET: whsec_dummy_test_secret
         run: python -m pytest tests/ -v

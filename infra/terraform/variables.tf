@@ -122,3 +122,13 @@ variable "cors_allow_origins_extra_staging" {
   default     = ""
   description = "Opcional: orígenes extra para staging."
 }
+variable "stripe_webhook_secret" {
+  description = "Secreto para validar firmas de Stripe en la Fase 10"
+  type        = string
+  sensitive   = true
+}
+variable "debug_mode" {
+  type        = string
+  default     = "False"
+  description = "Controla el modo depuración del backend (True/False)."
+}

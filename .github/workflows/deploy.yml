@@ -54,6 +54,7 @@ jobs:
           ENVIRONMENT: development
           # SlowAPI: sin Redis en el runner, usar almacenamiento en memoria (solo tests/CI).
           DEV_MODE: "true"
+          STRIPE_WEBHOOK_SECRET: whsec_dummy_test_secret
 
   frontend-build:
     runs-on: ubuntu-latest

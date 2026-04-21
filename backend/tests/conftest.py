@@ -161,6 +161,9 @@ def _test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ENCRYPTION_SECRET_KEY", raising=False)
     monkeypatch.delenv("BANK_TOKEN_ENCRYPTION_KEY", raising=False)
     monkeypatch.setenv("ENVIRONMENT", "development")
+    # Stripe webhooks (``handle_webhook``) leen el secreto vía ``get_secret_manager()``;
+    # en CI no hay signing secret real — dummy estable para idempotencia / construct_event mockeado.
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_dummy_test_secret")
     # Alineado con CI (`.github/workflows/deploy.yml`): SlowAPI sin Redis en tests.
     monkeypatch.setenv("DEV_MODE", "true")
     monkeypatch.delenv("SENTRY_DSN", raising=False)
