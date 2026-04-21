@@ -136,3 +136,29 @@ variable "frontend_urls" {
   description = "URLs del frontend por entorno"
   type        = map(string)
 }
+variable "supabase_url_production" {
+  description = "URL de Supabase para el entorno de producción"
+  type        = string
+}
+
+variable "supabase_key_production" {
+  description = "Service Role Key de Supabase para producción"
+  type        = string
+  sensitive   = true
+}
+
+variable "VERCEL_TOKEN" {
+  description = "Token de acceso para despliegues de Vercel en CI/CD"
+  type        = string
+  sensitive   = true
+}
+
+variable "VERCEL_PROJECT_ID" {
+  description = "Project ID de Vercel"
+  type        = string
+}
+
+variable "VERCEL_ORG_ID" {
+  description = "Organization ID de Vercel"
+  type        = string
+}
