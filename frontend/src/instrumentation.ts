@@ -1,23 +1,11 @@
 /**
- * Servidor Node: Sentry con SENTRY_DSN (compatible Next 16 sin @sentry/nextjs).
+ * Carga la configuración de Sentry por runtime (Node server vs Edge).
+ * Los archivos `sentry.*.config.ts` en la raíz del frontend definen `Sentry.init`.
  */
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") {
-    return;
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    await import("../sentry.server.config");
+  } else if (process.env.NEXT_RUNTIME === "edge") {
+    await import("../sentry.edge.config");
   }
-  const dsn = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN;
-  if (!dsn) {
-    return;
-  }
-  const Sentry = await import("@sentry/node");
-  Sentry.init({
-    dsn,
-    environment: process.env.VERCEL_ENV || process.env.NODE_ENV,
-    release:
-      process.env.APP_RELEASE ||
-      process.env.VERCEL_GIT_COMMIT_SHA ||
-      process.env.RAILWAY_GIT_COMMIT_SHA ||
-      undefined,
-    tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? 0.1),
-  });
 }

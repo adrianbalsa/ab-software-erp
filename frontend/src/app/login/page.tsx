@@ -144,6 +144,20 @@ export default function LoginPage() {
           </svg>
           {oauthPending ? L.googlePending : L.google}
         </button>
+        {process.env.NEXT_PUBLIC_SENTRY_DSN ? (
+          <div className="mt-5 flex justify-center border-t border-zinc-100 pt-3">
+            <button
+              type="button"
+              title="Prueba temporal de captura de errores en Sentry"
+              className="rounded px-1.5 py-0.5 text-[10px] font-normal text-zinc-300 tabular-nums hover:bg-zinc-50 hover:text-zinc-500"
+              onClick={() => {
+                throw new Error("Sentry Frontend Test - AB Logistics OS");
+              }}
+            >
+              Sentry test
+            </button>
+          </div>
+        ) : null}
       </section>
     </main>
   );

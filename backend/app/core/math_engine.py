@@ -9,6 +9,7 @@ alineada con ``numeric(12,2)`` en PostgreSQL/Supabase.
 from __future__ import annotations
 
 import math
+from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import (
     ROUND_HALF_EVEN,
@@ -17,9 +18,21 @@ from decimal import (
     InvalidOperation,
     localcontext,
 )
-from typing import Any
+from typing import Any, Iterator
 
 FIAT_QUANT = Decimal("0.01")
+
+
+@contextmanager
+def _math_engine_sentry_span(description: str) -> Iterator[None]:
+    """Span bajo transacciones Sentry para perfilar/agrupar el Math Engine (no-op si Sentry no está cargado)."""
+    try:
+        import sentry_sdk
+    except ImportError:
+        yield
+        return
+    with sentry_sdk.start_span(op="math_engine", name=description):
+        yield
 
 # Contexto financiero: precisión amplia y redondeo HALF_EVEN al cuantificar a céntimos.
 _MATH_CTX = Context(prec=28, rounding=ROUND_HALF_EVEN)
@@ -301,6 +314,11 @@ class MathEngine:
 
     @staticmethod
     def normalize_items(raw_items: list[dict[str, Any]]) -> list[InvoiceLineInput]:
+        with _math_engine_sentry_span("MathEngine.normalize_items"):
+            return MathEngine._normalize_items_impl(raw_items)
+
+    @staticmethod
+    def _normalize_items_impl(raw_items: list[dict[str, Any]]) -> list[InvoiceLineInput]:
         if not raw_items:
             raise FinancialDomainError("Sin líneas de factura.")
 
@@ -382,6 +400,20 @@ class MathEngine:
         ``items`` puede venir como ``InvoiceLineInput`` o diccionarios crudos;
         en este último caso se normaliza con ``normalize_items``.
         """
+        with _math_engine_sentry_span("MathEngine.calculate_totals"):
+            return MathEngine._calculate_totals_impl(
+                items,
+                global_discount=global_discount,
+                allow_negative_bases=allow_negative_bases,
+            )
+
+    @staticmethod
+    def _calculate_totals_impl(
+        items: list[InvoiceLineInput] | list[dict[str, Any]],
+        global_discount: Decimal = Decimal("0"),
+        *,
+        allow_negative_bases: bool = False,
+    ) -> InvoiceTotalsResult:
         with localcontext(_MATH_CTX):
             if items and isinstance(items[0], dict):
                 typed_items = MathEngine.normalize_items(items)  # type: ignore[arg-type]

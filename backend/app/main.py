@@ -100,11 +100,34 @@ from app.openapi_config import (
     OPENAPI_TAGS,
     attach_custom_openapi,
 )
+from app.core.sentry_privacy import scrub_sentry_breadcrumb
 from app.services.alert_service import alert_service, notify_critical_error, short_traceback_from_exc
 
 
+def _sentry_traces_sample_rate(env: str) -> float:
+    """1.0 en staging/desarrollo; 0.1 en production (override: ``SENTRY_TRACES_SAMPLE_RATE``)."""
+    raw = (os.getenv("SENTRY_TRACES_SAMPLE_RATE") or "").strip()
+    if raw:
+        try:
+            return max(0.0, min(1.0, float(raw)))
+        except ValueError:
+            pass
+    return 0.1 if env == "production" else 1.0
+
+
+def _sentry_profiles_sample_rate(env: str, traces: float) -> float:
+    """Perfiles CPU (p. ej. Math Engine bajo transacciones muestreadas). Override: ``SENTRY_PROFILES_SAMPLE_RATE``."""
+    raw = (os.getenv("SENTRY_PROFILES_SAMPLE_RATE") or "").strip()
+    if raw:
+        try:
+            return max(0.0, min(1.0, float(raw)))
+        except ValueError:
+            pass
+    return 0.1 if env == "production" else min(traces, 1.0)
+
+
 def _init_sentry(settings: Settings) -> None:
-    """Inicializa Sentry tras ``get_settings()`` (única fuente del DSN)."""
+    """Inicializa Sentry tras ``get_settings()`` (única fuente del DSN vía ``SENTRY_DSN``)."""
     dsn = (settings.SENTRY_DSN or "").strip()
     if not dsn:
         return
@@ -113,13 +136,8 @@ def _init_sentry(settings: Settings) -> None:
     from sentry_sdk.integrations.starlette import StarletteIntegration
 
     env = str(getattr(settings, "ENVIRONMENT", "development")).strip().lower()
-    sample = 0.1 if env == "production" else 1.0
-    traces_raw = (os.getenv("SENTRY_TRACES_SAMPLE_RATE") or "").strip()
-    if traces_raw:
-        try:
-            sample = float(traces_raw)
-        except ValueError:
-            pass
+    traces = _sentry_traces_sample_rate(env)
+    profiles = _sentry_profiles_sample_rate(env, traces)
     release = (
         (os.getenv("APP_RELEASE") or "").strip()
         or (os.getenv("RAILWAY_GIT_COMMIT_SHA") or "").strip()
@@ -135,9 +153,11 @@ def _init_sentry(settings: Settings) -> None:
             StarletteIntegration(transaction_style="endpoint"),
             FastApiIntegration(transaction_style="endpoint"),
         ],
-        traces_sample_rate=sample,
-        profiles_sample_rate=min(sample, 1.0),
+        traces_sample_rate=traces,
+        profiles_sample_rate=profiles,
         send_default_pii=False,
+        max_request_body_size="never",
+        before_breadcrumb=scrub_sentry_breadcrumb,
     )
 
 

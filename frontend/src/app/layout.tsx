@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import { AppProviders } from "@/components/AppProviders";
-import { SentryInit } from "@/components/SentryInit";
 import { getServerInitialRole } from "@/lib/server-api";
 import "./globals.css";
 
@@ -40,7 +39,6 @@ export default async function RootLayout({
       <body
         className={`${plusJakartaSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
-        <SentryInit />
         <AppProviders initialRole={initialRole}>{children}</AppProviders>
       </body>
     </html>
