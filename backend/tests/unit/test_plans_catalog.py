@@ -28,7 +28,7 @@ def test_normalize_plan_marketing_aliases() -> None:
 def test_plan_marketing_and_list_prices() -> None:
     assert plan_marketing_name("starter") == "Compliance"
     assert plan_marketing_name("pro") == "Finance"
-    assert plan_marketing_name("enterprise") == "Full-Stack"
+    assert plan_marketing_name("enterprise") == "Enterprise"
     assert plan_list_eur_monthly("compliance") == EUR_MONTHLY_COMPLIANCE
     assert plan_list_eur_monthly("finance") == EUR_MONTHLY_FINANCE
     assert plan_list_eur_monthly("full-stack") == EUR_MONTHLY_FULL_STACK

@@ -152,7 +152,7 @@ class EsgCertificateService:
             if normalize_plan(plan) != PLAN_ENTERPRISE:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="La validación oficial requiere plan Enterprise (Tier Full-Stack).",
+                    detail="La validación oficial requiere plan Enterprise.",
                 )
         verification_status = (
             "pending_external_audit" if official_audit else "self_certified"
@@ -323,7 +323,7 @@ class EsgCertificateService:
             if normalize_plan(plan) != PLAN_ENTERPRISE:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="La validación oficial requiere plan Enterprise (Tier Full-Stack).",
+                    detail="La validación oficial requiere plan Enterprise.",
                 )
         verification_status = (
             "pending_external_audit" if official_audit else "self_certified"

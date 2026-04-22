@@ -68,24 +68,48 @@ export const extraEn = {
       monthSuffix: "/month",
     },
     faq: {
-      title: "Frequently asked questions",
-      subtitle: "Straight answers before you take the next step.",
+      title: "Key questions before rolling out AB Logistics OS",
+      subtitle: "Strategic answers for finance leadership and fleet operations.",
       items: [
         {
-          q: "Is migrating my current data difficult?",
-          a: "No. You can import customers and fleet in a guided way, or start by loading only new shipments and invoices. Our team can assist you during the first month if needed.",
+          q: "Is migrating historical records and current fleet data difficult?",
+          a: "Not at all. You can import your customer and vehicle database in bulk, or start from scratch by running only new shipments. Our B2B onboarding team can guide you through your first month to ensure a frictionless transition.",
         },
         {
-          q: "What if I have fewer than 5 trucks?",
-          a: "The Compliance plan (small fleets) is designed for independent operators and companies with up to 5 vehicles, with full VeriFactu support. No penalty for being small.",
+          q: "Is the system worth it if my fleet has fewer than 5 trucks?",
+          a: "Absolutely. Small volume does not remove fiscal obligations. Our Compliance plan is designed to shield small fleets for VeriFactu, removing hours of administrative paperwork so you can run your business, not your accounting.",
         },
         {
-          q: "How does the software guarantee VeriFactu compliance?",
-          a: "Each invoice generates a cryptographic hash chained to the previous record. Data becomes immutable after issuance, and traceability meets AEAT and SIF requirements.",
+          q: "How exactly does the software guarantee VeriFactu compliance?",
+          a: "We operate like a fiscal bunker. The AB Logistics OS engine automatically chains invoice hashes, issues the mandatory QR code, guarantees immutable records, and is ready for automatic submission to AEAT.",
         },
         {
-          q: "Can I try before committing?",
-          a: "Yes. You can request access to audit your operations with dashboards and simulators, with no friction on the first step.",
+          q: "Are my financial data and customer records secure?",
+          a: "Security is banking-grade. We use AES-128 encryption for sensitive data and strict PostgreSQL Row Level Security (RLS). At the database level, this makes it physically impossible for one customer to access another customer's data.",
+        },
+        {
+          q: "Does the system integrate with my banks for reconciliation and collections?",
+          a: "Yes. AB Logistics OS is designed to integrate with institutional gateways such as GoCardless and Stripe, automating SEPA direct debits and invoice reconciliation so your cash flow is always up to date.",
+        },
+        {
+          q: "How do you automate carbon footprint reporting (ESG)?",
+          a: "Our engine crosses route data with fleet certifications (for example, Euro VI). This produces precise, audit-ready emissions reports, which large multinationals increasingly require from logistics providers.",
+        },
+        {
+          q: "If my company grows fast, can the software keep up?",
+          a: "AB Logistics OS is cloud-native with a serverless architecture that scales dynamically. Whether you manage 10 shipments a month or 10,000, system performance in the Enterprise plan remains consistent with no latency bottlenecks.",
+        },
+        {
+          q: "What level of technical support is included in the subscription?",
+          a: "We provide specialized support. No bots; your team has direct access to technical support for operational questions, integrations, and guidance on the platform's fiscal logic.",
+        },
+        {
+          q: "Are there lock-in contracts or hidden implementation fees?",
+          a: "Transparency is a core principle. We do not charge setup fees and do not require long-term lock-in contracts. It is pure SaaS: pay monthly (or discounted annually) and cancel whenever you decide.",
+        },
+        {
+          q: "Can I test the platform before committing my company's operations?",
+          a: "We know switching ERP is a critical decision. We offer tailored demo sessions and the option to run a controlled pilot so your CFO can validate the platform before full rollout.",
         },
       ],
     },
@@ -94,6 +118,8 @@ export const extraEn = {
       legal: "Legal",
       legalNotice: "Legal notice",
       privacy: "Privacy policy (GDPR)",
+      cookies: "Cookies policy",
+      terms: "Terms and conditions",
       contact: "Contact",
       readyQuestion: "Ready to digitize your fleet?",
       salesCta: "Talk to sales",

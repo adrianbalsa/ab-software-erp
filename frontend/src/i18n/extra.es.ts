@@ -68,24 +68,48 @@ export const extraEs = {
       monthSuffix: "/mes",
     },
     faq: {
-      title: "Preguntas frecuentes",
-      subtitle: "Respuestas directas antes de dar el siguiente paso.",
+      title: "Preguntas clave antes de implantar AB Logistics OS",
+      subtitle: "Respuestas estratégicas para dirección financiera y operaciones de tráfico.",
       items: [
         {
-          q: "¿Es difícil migrar mis datos actuales?",
-          a: "No. Puedes importar clientes y flota de forma guiada, o empezar cargando solo portes y facturas nuevas. Nuestro equipo puede ayudarte en el primer mes si lo necesitas.",
+          q: "¿Es difícil migrar el histórico y los datos de mi flota actual?",
+          a: "En absoluto. Puedes importar tu base de datos de clientes y vehículos de forma masiva, o empezar desde cero operando solo los portes nuevos. Nuestro equipo de onboarding B2B puede guiarte durante el primer mes para asegurar una transición sin fricción.",
         },
         {
-          q: "¿Qué pasa si tengo menos de 5 camiones?",
-          a: "El plan Compliance (pequeña flota) está pensado para autónomos y operadores con hasta 5 vehículos y VeriFactu completo. Sin penalización por ser pequeño.",
+          q: "¿Es rentable el sistema si mi flota tiene menos de 5 camiones?",
+          a: "Totalmente. El volumen no exime de las obligaciones fiscales. Nuestro plan 'Compliance' está diseñado para blindar a pequeñas flotas ante VeriFactu, eliminando horas de papeleo administrativo para que te centres en conducir tu negocio, no tu contabilidad.",
         },
         {
-          q: "¿Cómo garantiza el software la ley VeriFactu?",
-          a: "Cada factura genera un hash criptográfico encadenado con el registro anterior. Los datos son inmutables tras emitirse: la trazabilidad cumple los requisitos de la normativa AEAT y el SIF.",
+          q: "¿Cómo garantiza exactamente el software el cumplimiento de la ley VeriFactu?",
+          a: "Operamos como un \"búnker fiscal\". El motor de AB Logistics OS genera automáticamente el encadenamiento de facturas (hashes), emite el código QR reglamentario, garantiza la inmutabilidad de los registros y está preparado para la remisión automática a la AEAT.",
         },
         {
-          q: "¿Puedo probar antes de comprometerme?",
-          a: "Sí. Puedes solicitar acceso al sistema para auditar tu operativa con dashboard y simuladores, sin fricción en el primer paso.",
+          q: "¿Están seguros mis datos financieros y los de mis clientes?",
+          a: "La seguridad es de nivel bancario. Utilizamos encriptación AES-128 para datos sensibles y Row Level Security (RLS) estricto en PostgreSQL. Esto significa que a nivel de base de datos es físicamente imposible que un cliente acceda a la información de otro.",
+        },
+        {
+          q: "¿El sistema se integra con mis bancos para la conciliación y los cobros?",
+          a: "Sí. AB Logistics OS está diseñado para integrarse con pasarelas institucionales como GoCardless y Stripe, automatizando los adeudos directos SEPA y la conciliación de facturas para que tu flujo de caja esté siempre actualizado.",
+        },
+        {
+          q: "¿Cómo automatizan los reportes de emisiones de huella de carbono (ESG)?",
+          a: "Nuestro motor cruza los datos de tus rutas con las certificaciones de tu flota (ej. Euro VI). Esto genera informes de emisiones precisos y listos para auditar, un requisito que las grandes multinacionales exigen cada vez más a sus proveedores logísticos.",
+        },
+        {
+          q: "Si mi empresa crece rápidamente, ¿el software podrá soportarlo?",
+          a: "AB Logistics OS nace en la nube con una arquitectura serverless capaz de escalar dinámicamente. Ya sea que gestiones 10 portes al mes o 10.000, el rendimiento del sistema (Plan Enterprise) se mantiene intacto sin tiempos de latencia.",
+        },
+        {
+          q: "¿Qué nivel de soporte técnico incluye la suscripción?",
+          a: "Ofrecemos un soporte especializado. No hablamos con bots; tu equipo tendrá línea directa con soporte técnico para resolver dudas operativas, de integración o consultas sobre la lógica fiscal del sistema.",
+        },
+        {
+          q: "¿Existen contratos de permanencia o costes de implantación ocultos?",
+          a: "La transparencia es nuestro pilar. No cobramos \"setup fees\" ni exigimos contratos de permanencia a largo plazo. Es un modelo SaaS puro: pagas tu suscripción mensual (o anual bonificada) y puedes cancelar cuando lo decidas.",
+        },
+        {
+          q: "¿Puedo probar la plataforma antes de comprometer la operativa de mi empresa?",
+          a: "Entendemos que cambiar de ERP es una decisión crítica. Ofrecemos sesiones de demostración personalizadas y la posibilidad de ejecutar un piloto controlado para que tu director financiero valide la herramienta antes del despliegue total.",
         },
       ],
     },
@@ -94,6 +118,8 @@ export const extraEs = {
       legal: "Legal",
       legalNotice: "Aviso legal",
       privacy: "Política de privacidad (RGPD)",
+      cookies: "Política de cookies",
+      terms: "Términos y condiciones",
       contact: "Contacto",
       readyQuestion: "¿Listo para digitalizar tu flota?",
       salesCta: "Hablar con ventas",

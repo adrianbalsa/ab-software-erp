@@ -28,7 +28,7 @@ export function LandingMarketingHero() {
           {l.eyebrow}
         </motion.p>
         <motion.h1
-          className="mt-5 max-w-4xl text-balance text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-[3.25rem] lg:leading-[1.1]"
+          className="mt-5 max-w-4xl text-balance text-3xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-[3.25rem] lg:leading-[1.1]"
           variants={fadeUp}
           initial="initial"
           animate="animate"
@@ -54,13 +54,13 @@ export function LandingMarketingHero() {
         >
           <Link
             href="/login"
-            className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-8 text-sm font-semibold text-zinc-950 shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400"
+            className="inline-flex min-h-11 items-center justify-center rounded-full bg-emerald-500 px-8 py-3 text-sm font-semibold text-zinc-950 shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400"
           >
             {l.primaryCta}
           </Link>
           <Link
             href="#plataforma"
-            className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-700 bg-transparent px-8 text-sm font-semibold text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-900/50 hover:text-white"
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-zinc-700 bg-transparent px-8 py-3 text-sm font-semibold text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-900/50 hover:text-white"
           >
             {l.secondaryCta}
           </Link>

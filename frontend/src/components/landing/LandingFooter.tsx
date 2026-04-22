@@ -14,13 +14,14 @@ export function LandingFooter() {
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-col gap-10 lg:flex-row lg:justify-between lg:items-start">
           <div>
-            <Link href="/" className="flex items-center gap-2 text-white font-bold text-lg">
+            <Link href="/" className="inline-flex min-h-11 items-center gap-2 py-1 text-white font-bold text-lg">
               <Image
                 src="/logo.png"
                 alt={l.brandAlt}
                 width={40}
                 height={40}
                 className="h-8 w-8 md:h-10 md:w-10 object-contain"
+                sizes="(max-width: 640px) 32px, 40px"
                 priority
               />
               AB Logistics OS
@@ -34,14 +35,24 @@ export function LandingFooter() {
               <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">{l.footer.legal}</p>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <a href="/legal" className="text-zinc-300 hover:text-white transition">
+                  <Link href="/aviso-legal" className="inline-flex min-h-11 items-center text-zinc-300 hover:text-white transition">
                     {l.footer.legalNotice}
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="/privacidad" className="text-zinc-300 hover:text-white transition">
+                  <Link href="/privacidad" className="inline-flex min-h-11 items-center text-zinc-300 hover:text-white transition">
                     {l.footer.privacy}
-                  </a>
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/cookies" className="inline-flex min-h-11 items-center text-zinc-300 hover:text-white transition">
+                    {l.footer.cookies}
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/terminos" className="inline-flex min-h-11 items-center text-zinc-300 hover:text-white transition">
+                    {l.footer.terms}
+                  </Link>
                 </li>
               </ul>
             </div>
@@ -49,7 +60,7 @@ export function LandingFooter() {
               <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">{l.footer.contact}</p>
               <a
                 href="mailto:comercial@ablogistics.os"
-                className="inline-flex items-center gap-2 text-sm text-emerald-400/90 hover:text-emerald-300"
+                className="inline-flex min-h-11 items-center gap-2 text-sm text-emerald-400/90 hover:text-emerald-300"
               >
                 <Mail className="h-4 w-4" />
                 comercial@ablogistics.os
@@ -60,7 +71,7 @@ export function LandingFooter() {
             <p className="text-xs text-zinc-400 mb-3">{l.footer.readyQuestion}</p>
             <Link
               href="/login"
-              className="inline-flex rounded-full border border-emerald-500/50 bg-emerald-500/10 px-5 py-2.5 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/20 transition"
+              className="inline-flex min-h-11 items-center rounded-full border border-emerald-500/50 bg-emerald-500/10 px-5 py-2.5 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/20 transition"
             >
               {l.footer.salesCta}
             </Link>

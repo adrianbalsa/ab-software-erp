@@ -78,7 +78,7 @@ Switch **ES / EN** from the language selector (sidebar or public headers). Prefe
     body: {
       es: `
 ### Modelo
-Los planes **Compliance**, **Finance** y **Full-Stack** (slugs técnicos \`starter\`, \`pro\`, \`enterprise\`) se cobran como **suscripción** mediante **Stripe Billing**. Precios de catálogo orientativos: **39 €**, **149 €** y **449 €** / mes (+ IVA); el cargo efectivo depende de tu configuración fiscal y de Stripe Tax si lo activáis.
+Los planes **Compliance**, **Finance** y **Enterprise** (slugs técnicos \`starter\`, \`pro\`, \`enterprise\`) se cobran como **suscripción** mediante **Stripe Billing**. Precios de catálogo orientativos: **39 €**, **149 €** y **399 €** / mes (+ IVA); el cargo efectivo depende de tu configuración fiscal y de Stripe Tax si lo activáis.
 
 ### Add-ons (referencia)
 | Add-on | Orientativo |
@@ -109,7 +109,7 @@ Ver documentación interna \`docs/operations/STRIPE_BILLING.md\` para checklist 
       `.trim(),
       en: `
 ### Model
-**Compliance**, **Finance** and **Full-Stack** (technical slugs \`starter\`, \`pro\`, \`enterprise\`) are charged as **subscriptions** via **Stripe Billing**. Indicative list prices: **€39**, **€149** and **€449** / month (+ VAT); actual charges depend on your tax setup and Stripe Tax if enabled.
+**Compliance**, **Finance** and **Enterprise** (technical slugs \`starter\`, \`pro\`, \`enterprise\`) are charged as **subscriptions** via **Stripe Billing**. Indicative list prices: **€39**, **€149** and **€399** / month (+ VAT); actual charges depend on your tax setup and Stripe Tax if enabled.
 
 ### Add-ons (reference)
 | Add-on | Indicative |
@@ -167,7 +167,7 @@ El backend expone \`GET /api/v1/export/audit-package\` (JWT de propietario).
 ### Contenido típico del ZIP
 - \`INDEX.md\` — índice y enlaces a documentación del repositorio.
 - \`public_compliance_snapshot.json\` — misma información que \`GET /api/v1/public/compliance\` más metadatos de generación.
-- \`pricing_catalog.json\` — planes Compliance / Finance / Full-Stack y add-ons (referencia \`app/core/plans.py\`).
+- \`pricing_catalog.json\` — planes Compliance / Finance / Enterprise y add-ons (referencia \`app/core/plans.py\`).
 - \`security.txt\` — copia del cuerpo RFC 9116.
 
 ### Límites
@@ -187,7 +187,7 @@ The backend route is \`GET /api/v1/export/audit-package\` (owner JWT).
 ### Typical ZIP contents
 - \`INDEX.md\` — index and pointers to repository documentation.
 - \`public_compliance_snapshot.json\` — same payload as \`GET /api/v1/public/compliance\` plus generation metadata.
-- \`pricing_catalog.json\` — Compliance / Finance / Full-Stack plans and add-ons (see \`app/core/plans.py\`).
+- \`pricing_catalog.json\` — Compliance / Finance / Enterprise plans and add-ons (see \`app/core/plans.py\`).
 - \`security.txt\` — RFC 9116 body snapshot.
 
 ### Limits
@@ -210,7 +210,7 @@ This does not replace a legal **Data Room** or tax/ESG exports with their own re
     body: {
       es: `
 ### Flujo
-1. **Full-Stack (Enterprise):** al descargar un certificado PDF con la opción de **validación oficial**, el estado pasa a \`pending_external_audit\` y se genera un **código QR** hacia \`GET /v1/public/verify-esg/{code}\`.
+1. **Enterprise:** al descargar un certificado PDF con la opción de **validación oficial**, el estado pasa a \`pending_external_audit\` y se genera un **código QR** hacia \`GET /v1/public/verify-esg/{code}\`.
 2. La verificación pública devuelve huellas y agregados de emisiones **sin** exponer IDs de porte/factura en el JSON.
 3. La certificadora (o operación interna) confirma: **webhook** \`POST /api/v1/webhooks/esg-external-verify\` con cuerpo JSON \`{"verification_code":"…"}\` y cabecera \`X-ABL-ESG-Signature\` (HMAC-SHA256 del body con \`ESG_EXTERNAL_WEBHOOK_SECRET\`), o el **propietario** cierra manualmente con \`POST /api/v1/esg/certificate/externally-verify/{code}\`.
 4. Estado final: \`externally_verified\`.
@@ -230,7 +230,7 @@ This does not replace a legal **Data Room** or tax/ESG exports with their own re
       `.trim(),
       en: `
 ### Flow
-1. **Full-Stack (Enterprise):** when downloading a certificate PDF with **official validation**, status becomes \`pending_external_audit\` and a **QR** points to \`GET /v1/public/verify-esg/{code}\`.
+1. **Enterprise:** when downloading a certificate PDF with **official validation**, status becomes \`pending_external_audit\` and a **QR** points to \`GET /v1/public/verify-esg/{code}\`.
 2. The public response includes hashes and emission aggregates **without** shipment/invoice IDs in the JSON.
 3. The auditor (or internal ops) confirms via **webhook** \`POST /api/v1/webhooks/esg-external-verify\` with JSON \`{"verification_code":"…"}\` and header \`X-ABL-ESG-Signature\` (HMAC-SHA256 of the raw body with \`ESG_EXTERNAL_WEBHOOK_SECRET\`), or the **owner** closes manually with \`POST /api/v1/esg/certificate/externally-verify/{code}\`.
 4. Final state: \`externally_verified\`.

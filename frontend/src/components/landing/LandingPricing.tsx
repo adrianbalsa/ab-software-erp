@@ -9,7 +9,7 @@ import { apiFetch } from "@/lib/api";
 /** IDs de precio Stripe (`price_…`); configurar en `.env` del frontend para checkout público. */
 const stripePriceCompliance = process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER ?? "";
 const stripePriceFinance = process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO ?? "";
-const stripePriceFullStack = process.env.NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE ?? "";
+const stripePriceEnterprise = process.env.NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE ?? "";
 
 const tiers = [
   {
@@ -27,9 +27,9 @@ const tiers = [
     highlight: true,
   },
   {
-    name: "Full-Stack",
-    price: "449",
-    stripePriceId: stripePriceFullStack,
+    name: "Enterprise",
+    price: "399",
+    stripePriceId: stripePriceEnterprise,
     includes: [true, true, true, true, true, true],
     highlight: false,
   },
@@ -98,6 +98,7 @@ export function LandingPricing() {
                 <span className="text-4xl font-extrabold text-white">{tier.price}€</span>
                 <span className="text-zinc-400">{l.monthSuffix}</span>
               </div>
+              <p className="mt-1 text-xs text-zinc-500">IVA no incluido</p>
               <ul className="mt-8 flex-1 divide-y divide-zinc-800/80 rounded-2xl border border-zinc-800/80 bg-surface-elevated text-sm">
                 {l.features.map((feature, index) => (
                   <li key={feature} className="flex items-center justify-between gap-2 px-3 py-2.5 text-zinc-300">
@@ -115,20 +116,22 @@ export function LandingPricing() {
                 type="button"
                 onClick={() => void handleSuscripcion(tier.stripePriceId)}
                 disabled={loadingTier === tier.stripePriceId}
-                className={`mt-8 flex w-full items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold transition ${
+                className={`mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold transition ${
                   tier.highlight
                     ? "bg-emerald-500 text-zinc-950 hover:bg-emerald-400 disabled:bg-emerald-500/50"
                     : "border border-zinc-600 text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
                 }`}
               >
-                {loadingTier === tier.stripePriceId ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {l.connecting}
-                  </>
-                ) : (
-                  l.requestAccess
-                )}
+                <span className="inline-flex min-w-[8rem] items-center justify-center gap-2">
+                  {loadingTier === tier.stripePriceId ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {l.connecting}
+                    </>
+                  ) : (
+                    l.requestAccess
+                  )}
+                </span>
               </button>
             </div>
           ))}

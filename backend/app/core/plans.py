@@ -6,12 +6,12 @@ from typing import Any, Final
 # ─── Planes SaaS (AB Logistics OS) — catálogo Due Diligence 2026 ─────────────
 # Slugs canónicos en BD (`empresas.plan_type`): starter | pro | enterprise
 # Nombres comerciales: Compliance (antes Starter), Finance (antes Pro),
-# Full-Stack (antes Enterprise). Precios orientativos facturados vía Stripe
+# Enterprise. Precios orientativos facturados vía Stripe
 # (montos en EUR/mes IVA aparte según contrato).
 #
 # Compliance: 39€/mes — VeriFactu + CMR digital.
 # Finance: 149€/mes — BI avanzado, conciliación bancaria e IA.
-# Full-Stack: 449€/mes — certificación ESG ISO 14083 continua y portal B2B.
+# Enterprise: 399€/mes — certificación ESG ISO 14083 continua y portal B2B.
 
 PLAN_STARTER: Final[str] = "starter"
 PLAN_PRO: Final[str] = "pro"
@@ -20,7 +20,7 @@ PLAN_ENTERPRISE: Final[str] = "enterprise"
 # EUR/mes (referencia producto; el cargo real lo define el Price en Stripe Dashboard)
 EUR_MONTHLY_COMPLIANCE: Final[int] = 39
 EUR_MONTHLY_FINANCE: Final[int] = 149
-EUR_MONTHLY_FULL_STACK: Final[int] = 449
+EUR_MONTHLY_FULL_STACK: Final[int] = 399
 
 # Add-ons (líneas de ingreso adicionales)
 ADDON_OCR_PACK: Final[str] = "ocr_pack"
@@ -92,7 +92,7 @@ def billing_addons() -> tuple[BillingAddon, ...]:
             slug=ADDON_LOGISADVISOR_IA_PRO,
             marketing_name="LogisAdvisor IA Pro",
             eur_monthly=29,
-            description="Capa IA avanzada de LogisAdvisor (planes inferiores al Full-Stack).",
+            description="Capa IA avanzada de LogisAdvisor (planes inferiores a Enterprise).",
             stripe_price_env=ENV_STRIPE_PRICE_LOGISADVISOR_IA_PRO,
             stripe_product_env=ENV_STRIPE_PRODUCT_LOGISADVISOR_IA_PRO,
             extra_ocr_documents_per_month=None,
@@ -104,7 +104,7 @@ def plan_marketing_name(plan_normalized: str) -> str:
     """Nombre comercial para UI / mensajes de error (el slug canónico sigue siendo técnico)."""
     p = normalize_plan(plan_normalized)
     if p == PLAN_ENTERPRISE:
-        return "Full-Stack"
+        return "Enterprise"
     if p == PLAN_PRO:
         return "Finance"
     return "Compliance"
@@ -142,7 +142,7 @@ def plan_features(plan_normalized: str) -> PlanFeatures:
 
 
 def max_vehiculos(plan_normalized: str) -> int | None:
-    """None = sin tope (Enterprise / Full-Stack)."""
+    """None = sin tope (Enterprise)."""
     return plan_features(plan_normalized).max_vehiculos
 
 

@@ -158,7 +158,7 @@ $$\text{Margen Neto} = \text{Ingresos} - \sum \text{Gastos (ROUND\_HALF\_EVEN)}$
 | :--- | :---: |
 | **Starter** | **€39** / mes |
 | **Pro** | **€149** / mes |
-| **Enterprise** | **€449** / mes |
+| **Enterprise** | **€399** / mes |
 
 ### Revenue stream: add-ons
 | Add-on | Precio |

@@ -11,7 +11,7 @@ import { LandingTechSpecsBar } from "./LandingTechSpecsBar";
 /** Landing pública (tema oscuro, bento + hero) para el dominio de marketing. */
 export function LandingPageDark() {
   return (
-    <div className="min-h-screen bg-surface-base text-zinc-300">
+    <div className="min-h-screen overflow-x-clip bg-surface-base text-zinc-300">
       <LandingMarketingNav />
       <main>
         <LandingMarketingHero />

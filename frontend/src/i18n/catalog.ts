@@ -97,8 +97,8 @@ const pricingEs = {
     "Hasta 25 vehículos",
     "Inteligencia financiera y BI ampliado",
   ],
-  entName: "Full-Stack",
-  entPrice: "449 €",
+  entName: "Enterprise",
+  entPrice: "399 €",
   entDesc: "Flota ilimitada, ESG comercial y certificación.",
   entBullets: [
     "Todo lo de Finance",
@@ -128,8 +128,8 @@ const pricingEn = {
   proPrice: "€149",
   proDesc: "Up to 25 vehicles and advanced financial intelligence.",
   proBullets: ["Everything in Compliance", "Up to 25 vehicles", "Extended BI & finance engine"],
-  entName: "Full-Stack",
-  entPrice: "€449",
+  entName: "Enterprise",
+  entPrice: "€399",
   entDesc: "Unlimited fleet, commercial ESG and certification.",
   entBullets: ["Everything in Finance", "Unlimited fleet", "ESG module & auditable certificates"],
   choose: "Subscribe",
@@ -139,7 +139,7 @@ const pricingEn = {
 } as const;
 
 const helpBillingMdEs = `
-Los pagos del **plan SaaS** (**Compliance**, **Finance**, **Full-Stack**; slugs \`starter\` / \`pro\` / \`enterprise\`) se procesan con **Stripe** en modo suscripción recurrente. Precios de catálogo orientativos: **39 €**, **149 €** y **449 €** / mes (+ IVA según caso).
+Los pagos del **plan SaaS** (**Compliance**, **Finance**, **Enterprise**; slugs \`starter\` / \`pro\` / \`enterprise\`) se procesan con **Stripe** en modo suscripción recurrente. Precios de catálogo orientativos: **39 €**, **149 €** y **399 €** / mes (+ IVA según caso).
 
 ### Add-ons (referencia comercial)
 | Add-on | Precio orientativo |
@@ -166,7 +166,7 @@ Para incidencias de acceso o datos de transporte, contacta con el administrador 
 `.trim();
 
 const helpBillingMdEn = `
-**SaaS plan** charges (**Compliance**, **Finance**, **Full-Stack**; slugs \`starter\` / \`pro\` / \`enterprise\`) are processed by **Stripe** as recurring subscriptions. Indicative list prices: **€39**, **€149** and **€449** / month (+ VAT as applicable).
+**SaaS plan** charges (**Compliance**, **Finance**, **Enterprise**; slugs \`starter\` / \`pro\` / \`enterprise\`) are processed by **Stripe** as recurring subscriptions. Indicative list prices: **€39**, **€149** and **€399** / month (+ VAT as applicable).
 
 ### Add-ons (commercial reference)
 | Add-on | Indicative price |
@@ -226,7 +226,7 @@ const es: Catalog = {
     portalHint:
       "Te redirigimos a Stripe para tarjeta, facturas PDF y cancelación de renovación. Volverás al panel al cerrar.",
     upgradePro: "Contratar o pasar a Finance",
-    upgradeEnt: "Contratar Full-Stack",
+    upgradeEnt: "Contratar Enterprise",
     loadingPortal: "Abriendo portal…",
     portalDisabled: "Completa antes un checkout para asociar un cliente Stripe a tu empresa.",
     errorPrefix: "No se pudo abrir el portal",
@@ -269,7 +269,7 @@ const en = {
     portalHint:
       "You will be redirected to Stripe for card, PDF invoices and renewal cancellation. You return to the app when finished.",
     upgradePro: "Subscribe or upgrade to Finance",
-    upgradeEnt: "Subscribe to Full-Stack",
+    upgradeEnt: "Subscribe to Enterprise",
     loadingPortal: "Opening portal…",
     portalDisabled: "Complete checkout once so a Stripe customer is linked to your company.",
     errorPrefix: "Could not open portal",
