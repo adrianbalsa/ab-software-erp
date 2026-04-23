@@ -59,11 +59,11 @@ export function LandingFooter() {
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">{l.footer.contact}</p>
               <a
-                href="mailto:comercial@ablogistics.os"
+                href="mailto:comercial@ablogistics-os.com"
                 className="inline-flex min-h-11 items-center gap-2 text-sm text-emerald-400/90 hover:text-emerald-300"
               >
                 <Mail className="h-4 w-4" />
-                comercial@ablogistics.os
+                comercial@ablogistics-os.com
               </a>
             </div>
           </div>

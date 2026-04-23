@@ -12,7 +12,7 @@ export function isPortalApiBaseDebugVisible(): boolean {
 }
 
 export function portalSupportMailto(): string {
-  const addr = (process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "comercial@ablogistics.os").trim();
+  const addr = (process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "comercial@ablogistics-os.com").trim();
   const subject = encodeURIComponent("Portal cliente · soporte");
   return `mailto:${addr}?subject=${subject}`;
 }

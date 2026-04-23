@@ -9,6 +9,7 @@ import smtplib
 import ssl
 from collections.abc import Callable
 from email.message import EmailMessage
+from email.utils import parseaddr
 from typing import Any
 from urllib.parse import urlencode
 
@@ -21,7 +22,25 @@ logger = logging.getLogger(__name__)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
-RESEND_TRANSACTIONAL_FROM = "AB Logistics OS <no-reply@ablogistics-os.com>"
+BRAND_FROM_NAME = "AB Logistics OS"
+BRAND_FROM_EMAIL = "comercial@ablogistics-os.com"
+
+
+def _effective_from_email(settings: Settings) -> str:
+    candidate = (settings.EMAILS_FROM_EMAIL or settings.EMAIL_FROM_ADDRESS or "").strip()
+    if not candidate:
+        return BRAND_FROM_EMAIL
+    _, parsed_email = parseaddr(candidate)
+    email_only = (parsed_email or candidate).strip()
+    if not _EMAIL_RE.match(email_only):
+        return BRAND_FROM_EMAIL
+    if not email_only.lower().endswith("@ablogistics-os.com"):
+        return BRAND_FROM_EMAIL
+    return email_only
+
+
+def _brand_from_header(settings: Settings) -> str:
+    return f"{BRAND_FROM_NAME} <{_effective_from_email(settings)}>"
 
 
 def _transactional_resend_ready() -> bool:
@@ -87,18 +106,18 @@ def send_email_background_task(operacion: str, enviar_sync: Callable[[], bool]) 
 
 def _resend_configured() -> bool:
     s = get_settings()
-    return bool(s.RESEND_API_KEY and s.EMAIL_FROM_ADDRESS)
+    return bool((s.RESEND_API_KEY or "").strip())
 
 
 def _smtp_configured(settings: Settings | None = None) -> bool:
     s = settings if settings is not None else get_settings()
-    return bool((s.SMTP_HOST or "").strip() and s.SMTP_PORT and (s.EMAILS_FROM_EMAIL or "").strip())
+    return bool((s.SMTP_HOST or "").strip() and s.SMTP_PORT and _effective_from_email(s))
 
 
 def resolve_invoice_email_channel(settings: Settings | None = None) -> str:
     s = settings if settings is not None else get_settings()
     strategy = str(getattr(s, "EMAIL_STRATEGY_INVOICE", "resend") or "resend").strip().lower()
-    resend_ok = bool((s.RESEND_API_KEY or "").strip() and (s.EMAIL_FROM_ADDRESS or "").strip())
+    resend_ok = bool((s.RESEND_API_KEY or "").strip())
     smtp_ok = _smtp_configured(s)
     if strategy == "smtp":
         if not smtp_ok:
@@ -156,14 +175,15 @@ def _send_transactional_smtp_sync(
 ) -> None:
     host = (settings.SMTP_HOST or "").strip()
     port = int(settings.SMTP_PORT)
-    from_addr = (settings.EMAILS_FROM_EMAIL or "").strip()
+    from_addr = _effective_from_email(settings)
+    from_header = _brand_from_header(settings)
     if not host or not from_addr:
         raise RuntimeError("SMTP_HOST o EMAILS_FROM_EMAIL no configurados")
     user = (settings.SMTP_USER or "").strip()
     password = (settings.SMTP_PASSWORD or "").strip()
     msg = EmailMessage()
     msg["Subject"] = subject
-    msg["From"] = from_addr
+    msg["From"] = from_header
     msg["To"] = to_email.strip()
     msg.set_content(text_body, charset="utf-8")
     msg.add_alternative(html_body, subtype="html", charset="utf-8")
@@ -400,7 +420,7 @@ class EmailService:
                 with sentry_sdk.start_span(op="email.resend", name="send_reset_password"):
                     resend.Emails.send(
                         {
-                            "from": RESEND_TRANSACTIONAL_FROM,
+                            "from": _brand_from_header(self._settings),
                             "to": [dest],
                             "subject": "Restablecer contraseña · AB Logistics OS",
                             "html": _reset_password_html(reset_url=reset_url),
@@ -446,7 +466,7 @@ class EmailService:
                 with sentry_sdk.start_span(op="email.resend", name="send_welcome_enterprise"):
                     resend.Emails.send(
                         {
-                            "from": RESEND_TRANSACTIONAL_FROM,
+                            "from": _brand_from_header(self._settings),
                             "to": [dest],
                             "subject": f"Bienvenida Enterprise · {co_sub}",
                             "html": _welcome_enterprise_html(company=company),
@@ -491,7 +511,7 @@ class EmailService:
                 with sentry_sdk.start_span(op="email.resend", name="send_esg_report"):
                     resend.Emails.send(
                         {
-                            "from": RESEND_TRANSACTIONAL_FROM,
+                            "from": _brand_from_header(self._settings),
                             "to": [dest],
                             "subject": "Informe de emisiones CO₂ · AB Logistics OS",
                             "html": _esg_report_html(),
@@ -590,11 +610,11 @@ def send_invoice_email(
                 lang=eff_lang,
             )
         else:
-            assert settings.RESEND_API_KEY and settings.EMAIL_FROM_ADDRESS
+            assert settings.RESEND_API_KEY
             resend.api_key = settings.RESEND_API_KEY
             filename = f"Factura_{safe_name}.pdf"
             params: dict[str, Any] = {
-                "from": settings.EMAIL_FROM_ADDRESS,
+                "from": _brand_from_header(settings),
                 "to": [dest],
                 "subject": t("Invoice {num} · AB Logistics OS").format(num=num),
                 "html": _invoice_html(factura_data, lang=eff_lang),
@@ -626,14 +646,14 @@ def send_quota_alert(
         return False
 
     settings = get_settings()
-    assert settings.RESEND_API_KEY and settings.EMAIL_FROM_ADDRESS
+    assert settings.RESEND_API_KEY
     resend.api_key = settings.RESEND_API_KEY
     t = get_translator(lang)
 
     try:
         resend.Emails.send(
             {
-                "from": settings.EMAIL_FROM_ADDRESS,
+                "from": _brand_from_header(settings),
                 "to": [dest],
                 "subject": t("Alert: {current}/{limit} vehicles · AB Logistics OS").format(
                     current=current_count, limit=limit
@@ -709,7 +729,8 @@ def _send_invoice_smtp_sync(
 ) -> None:
     host = (settings.SMTP_HOST or "").strip()
     port = int(settings.SMTP_PORT)
-    from_addr = (settings.EMAILS_FROM_EMAIL or "").strip()
+    from_addr = _effective_from_email(settings)
+    from_header = _brand_from_header(settings)
     if not host or not from_addr:
         raise RuntimeError("SMTP_HOST o EMAILS_FROM_EMAIL no configurados")
 
@@ -720,7 +741,7 @@ def _send_invoice_smtp_sync(
     msg = EmailMessage()
     fn = str(factura_num).strip() or "factura"
     msg["Subject"] = t("Invoice {num} · AB Logistics OS").format(num=fn)
-    msg["From"] = from_addr
+    msg["From"] = from_header
     msg["To"] = to_email.strip()
     msg.set_content(
         t(
@@ -827,11 +848,11 @@ def send_onboarding_invite(dest_email: str, onboarding_link: str, *, lang: str |
         subject = t("Invitation to onboarding · AB Logistics OS")
         html_body = _onboarding_invite_html(link, lang=lang)
         if channel == "resend":
-            assert settings.RESEND_API_KEY and settings.EMAIL_FROM_ADDRESS
+            assert settings.RESEND_API_KEY
             resend.api_key = settings.RESEND_API_KEY
             resend.Emails.send(
                 {
-                    "from": settings.EMAIL_FROM_ADDRESS,
+                    "from": _brand_from_header(settings),
                     "to": [dest],
                     "subject": subject,
                     "html": html_body,
