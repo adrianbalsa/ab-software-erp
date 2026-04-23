@@ -67,7 +67,7 @@ export default function SostenibilidadPage() {
               <CardTitle className="text-lg text-zinc-900 dark:text-zinc-50">{p.co2Title}</CardTitle>
             </div>
             <CardDescription className="dark:text-zinc-400">
-              <code className="rounded bg-zinc-100 px-1 text-xs dark:bg-zinc-800">{p.co2DescLead}</code>
+              {p.co2DescLead}
               {p.co2DescBody}
             </CardDescription>
           </CardHeader>

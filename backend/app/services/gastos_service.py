@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import time
+import uuid
+from datetime import date
 from typing import Any
+from uuid import UUID
 
 from app.db.soft_delete import filter_not_deleted, soft_delete_payload
 from app.db.supabase import SupabaseAsync
@@ -15,8 +18,8 @@ class GastosService:
     Migrado desde `views/gastos_view.py`.
 
     - Persiste gastos en `gastos` con `empresa_id` siempre inyectado por la capa API (JWT).
-    - Subida de evidencia al bucket `tickets-gastos`.
-    - OCR: Azure Document Intelligence (`prebuilt-invoice`) vía `OCRService`.
+    - Subida de evidencia al bucket `tickets-gastos` (opcional; OCR en memoria si no se sube).
+    - OCR: modelo de visión (OpenAI GPT‑4o o Gemini) vía LiteLLM en `OCRService` / `process_logistics_ticket`.
     """
 
     def __init__(self, db: SupabaseAsync) -> None:
@@ -142,11 +145,7 @@ class GastosService:
         """
         Mapea la salida de `OCRService.analizar_ticket` al esquema API.
 
-        Azure prebuilt-invoice → GastoOCRHint:
-        - VendorName → proveedor
-        - VendorTaxId → nif_proveedor
-        - TotalTax → iva
-        - InvoiceTotal (+ currency) → total, moneda
+        JSON visión / pipeline OCR → GastoOCRHint.
         """
         if not data:
             return GastoOCRHint()
@@ -157,6 +156,8 @@ class GastosService:
 
         total = data.get("total")
         iva = data.get("iva")
+        base_raw = data.get("base_imponible")
+        litros_raw = data.get("litros_combustible")
 
         oc = data.get("ocr_confidence")
         conf_f = float(oc) if oc is not None else None
@@ -168,15 +169,94 @@ class GastosService:
             concepto=_empty_to_none(data.get("concepto")),
             nif_proveedor=_empty_to_none(data.get("nif_proveedor")),
             iva=float(iva) if iva is not None else None,
+            base_imponible=float(base_raw) if base_raw is not None else None,
+            litros_combustible=float(litros_raw) if litros_raw is not None else None,
             ocr_confidence=conf_f,
             requires_manual_review=bool(data.get("requires_manual_review")),
         )
 
     async def ocr_extract_hint(self, *, content: bytes, filename: str) -> GastoOCRHint:
         """
-        Analiza el ticket/factura con Azure `prebuilt-invoice` y devuelve `GastoOCRHint`.
+        Analiza el ticket con visión LLM (LiteLLM) y devuelve `GastoOCRHint`.
         """
         _ = filename
         ocr = OCRService()
         raw = await ocr.analizar_ticket(content)
         return self._dict_to_gasto_ocr_hint(raw)
+
+    async def create_gasto_from_logistics_ticket(
+        self,
+        *,
+        empresa_id: str,
+        empleado: str,
+        porte_id: str,
+        image_bytes: bytes,
+        evidencia_filename: str | None = None,
+        evidencia_content_type: str | None = None,
+        persist_evidence: bool = False,
+    ) -> GastoOut:
+        """
+        OCR del ticket (memoria), validación contable (Math Engine) y alta del gasto en ``porte_id``.
+
+        Si ``persist_evidence`` es true, la imagen se sube a ``tickets-gastos/tmp/...`` (objeto temporal
+        en el bucket; la retención se gobierna por política de Storage), no a disco local.
+        """
+        pid = str(porte_id or "").strip()
+        if not pid:
+            raise ValueError("porte_id es obligatorio para vincular el gasto a la ruta")
+        try:
+            UUID(pid)
+        except ValueError as e:
+            raise ValueError("porte_id debe ser un UUID válido") from e
+
+        ocr = OCRService()
+        legacy = await ocr.analizar_ticket(image_bytes)
+        total = legacy.get("total")
+        if total is None or float(total) <= 0:
+            raise ValueError("No se pudo extraer un total válido del ticket")
+
+        proveedor = (legacy.get("proveedor") or "").strip() or "COMBUSTIBLE (OCR)"
+        fecha_val: date
+        raw_fecha = legacy.get("fecha")
+        if isinstance(raw_fecha, str) and len(raw_fecha.strip()) >= 10:
+            try:
+                fecha_val = date.fromisoformat(raw_fecha.strip()[:10])
+            except ValueError:
+                fecha_val = date.today()
+        elif isinstance(raw_fecha, date):
+            fecha_val = raw_fecha
+        else:
+            fecha_val = date.today()
+
+        moneda = (legacy.get("moneda") or "EUR").strip().upper()[:3] or "EUR"
+        gasto_in = GastoCreate(
+            proveedor=proveedor[:255],
+            fecha=fecha_val,
+            total_chf=float(total),
+            categoria="Combustible",
+            concepto=(legacy.get("concepto") or None),
+            moneda=moneda,
+            nif_proveedor=legacy.get("nif_proveedor"),
+            iva=float(legacy["iva"]) if legacy.get("iva") is not None else None,
+            total_eur=float(total) if moneda == "EUR" else None,
+            porte_id=UUID(pid),
+        )
+
+        evidencia_bytes: bytes | None = None
+        evidencia_fn: str | None = None
+        evidencia_ct: str | None = None
+        if persist_evidence and image_bytes:
+            evidencia_bytes = image_bytes
+            evidencia_fn = evidencia_filename or f"ticket_{uuid.uuid4().hex}.jpg"
+            evidencia_ct = evidencia_content_type or "image/jpeg"
+
+        return await self.create_gasto(
+            empresa_id=empresa_id,
+            empleado=empleado,
+            gasto_in=gasto_in,
+            evidencia_bytes=evidencia_bytes,
+            evidencia_filename=(
+                f"tmp/ocr/{evidencia_fn}" if evidencia_fn and persist_evidence else evidencia_fn
+            ),
+            evidencia_content_type=evidencia_ct,
+        )

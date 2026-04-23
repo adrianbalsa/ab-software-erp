@@ -39,12 +39,16 @@ Railway inyecta `$PORT` automáticamente.
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | No | Por defecto `60`. |
 | `CORS_ALLOW_ORIGINS` | Sí (prod) | Orígenes del frontend, p. ej. `https://www.tudominio.com,https://tudominio.com`. |
 | `CORS_ALLOW_ORIGIN_REGEX` | No | Por defecto: previews `*.vercel.app`. `0` o vacío = desactivar. |
-| `AZURE_ENDPOINT` | Sí (OCR) | Endpoint de **Azure AI Document Intelligence** (antes Form Recognizer). |
-| `AZURE_KEY` | Sí (OCR) | Clave de la API Azure. |
+| `OPENAI_API_KEY` | Condicional (OCR / IA) | OCR de tickets de combustible y asistentes: el backend usa **LiteLLM** con visión (`openai/gpt-4o` por defecto si hay clave). Ver `backend/app/services/ocr_service.py`. |
+| `GEMINI_API_KEY` o `GOOGLE_API_KEY` | Condicional (OCR / IA) | Alternativa **Gemini** para el mismo OCR si no hay `OPENAI_API_KEY`. |
+| `OCR_VISION_MODEL` | No | Override del modelo LiteLLM para tickets (p. ej. `openai/gpt-4o`, `gemini/gemini-1.5-flash`). |
+| `OCR_GEMINI_MODEL` | No | Modelo Gemini cuando se elige esa ruta (por defecto `gemini/gemini-1.5-flash`). |
+| `LITELLM_MODEL_OCR` | No | Modelo LiteLLM para **Vampire Radar** (documentos en `ai_documents`). |
+| `LITELLM_EMBEDDING_MODEL` | No | Embeddings post-OCR en Vampire Radar (por defecto `openai/text-embedding-3-small`). |
 | `PROJECT_NAME` | No | Nombre en OpenAPI. |
 | `VERIFACTU_SERIE_FACTURA` | No | Serie de numeración (por defecto `FAC` en código). |
 
-> Referencia Azure Document Intelligence (2026): [Documentación Azure AI](https://learn.microsoft.com/azure/ai-services/document-intelligence/).
+> Ya **no** se usa Azure Document Intelligence para OCR; las claves `AZURE_ENDPOINT` / `AZURE_KEY` son obsoletas para este producto.
 
 ---
 

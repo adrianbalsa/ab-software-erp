@@ -44,6 +44,7 @@ from app.services.banking_service import BankingService
 from app.services.banking_orchestrator import BankingOrchestratorService
 from app.services.matching_service import MatchingService
 from app.services.payment_service import PaymentService
+from app.services.payments_gocardless import GoCardlessPaymentsService
 from app.services.reconciliation_service import ReconciliationService
 from app.services.accounting_export import AccountingExportService
 from app.services.treasury_service import TreasuryService
@@ -79,6 +80,21 @@ _JWT_APP_ROLE_SAAS_PLAN_SLUGS: frozenset[str] = frozenset(
         "full_stack",
     },
 )
+
+_APP_METADATA_SUPPORTED_RBAC_ROLES: frozenset[str] = frozenset(
+    {"owner", "admin", "driver", "traffic_manager", "cliente", "developer"}
+)
+
+
+def _extract_jwt_app_metadata_role(payload: dict[str, Any]) -> str | None:
+    app_metadata = payload.get("app_metadata")
+    if not isinstance(app_metadata, dict):
+        return None
+    role_raw = app_metadata.get("role")
+    role = str(role_raw or "").strip().lower()
+    if role in _APP_METADATA_SUPPORTED_RBAC_ROLES:
+        return role
+    return None
 
 
 async def get_supabase(
@@ -282,6 +298,10 @@ async def get_payment_service(db: SupabaseAsync = Depends(get_db)) -> PaymentSer
     return PaymentService(db)
 
 
+async def get_gocardless_payments_service() -> GoCardlessPaymentsService:
+    return GoCardlessPaymentsService()
+
+
 async def get_treasury_service(db: SupabaseAsync = Depends(get_db)) -> TreasuryService:
     return TreasuryService(db)
 
@@ -361,6 +381,14 @@ async def get_current_user(
                 raise credentials_exc
             if user_out.role != expected_role:
                 raise credentials_exc
+
+    jwt_app_role = _extract_jwt_app_metadata_role(payload)
+    if jwt_app_role:
+        user_out.rbac_role = jwt_app_role
+        try:
+            user_out.role = normalize_user_role(jwt_app_role, legacy_role=user_out.rol)
+        except Exception:
+            user_out.role = normalize_user_role(user_out.role, legacy_role=user_out.rol)
 
     await auth_service.ensure_empresa_context(empresa_id=user_out.empresa_id)
     await auth_service.ensure_rbac_context(user=user_out)

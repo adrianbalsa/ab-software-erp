@@ -15,6 +15,10 @@ from app.services.payment_service import (
     PaymentIntegrationError,
     PaymentService,
 )
+from app.services.payments_gocardless import (
+    GoCardlessPaymentsError,
+    GoCardlessPaymentsService,
+)
 
 router = APIRouter()
 
@@ -55,6 +59,10 @@ class SetupMandateOut(BaseModel):
 
     redirect_url: str = ""
     has_active_mandate: bool = False
+
+
+class BillingRequestFlowOut(BaseModel):
+    authorization_url: str
 
 
 @router.post(
@@ -136,4 +144,25 @@ async def setup_gocardless_mandate(
         redirect_url=str(out.get("redirect_url") or ""),
         has_active_mandate=bool(out.get("has_active_mandate")),
     )
+
+
+@router.post(
+    "/billing-request-flow",
+    response_model=BillingRequestFlowOut,
+    summary="Crear Billing Request Flow SEPA para empresa",
+)
+async def create_gocardless_billing_request_flow(
+    current_user: UserOut = Depends(deps.require_admin_active_write_user),
+    gocardless_service: GoCardlessPaymentsService = Depends(deps.get_gocardless_payments_service),
+) -> BillingRequestFlowOut:
+    base = (get_settings().PUBLIC_APP_URL or "http://localhost:3000").rstrip("/")
+    redirect_uri = f"{base}/dashboard/settings/finance?gocardless=connected"
+    try:
+        authorization_url = await gocardless_service.create_billing_request_flow(
+            empresa_id=str(current_user.empresa_id),
+            redirect_uri=redirect_uri,
+        )
+    except GoCardlessPaymentsError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return BillingRequestFlowOut(authorization_url=authorization_url)
 

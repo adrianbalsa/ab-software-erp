@@ -20,6 +20,7 @@ from uuid import UUID
 
 import litellm
 
+from app.core.ai_observability import attach_ai_usage_to_span
 from app.core.constants import COSTE_OPERATIVO_EUR_KM
 from app.core.esg_engine import calculate_co2_emissions
 from app.core.verifactu import verify_invoice_chain
@@ -37,6 +38,7 @@ from app.services.maps_service import MapsService
 from app.services.matching_service import MatchingService
 from app.services.portes_service import PortesService
 from app.services.secret_manager_service import get_secret_manager
+from app.services.vector_store import VectorStoreService
 
 litellm.drop_params = True
 
@@ -1036,6 +1038,16 @@ async def get_advisor_response(
                 temperature=0.25,
                 api_key=api_key,
             )
+            try:
+                import sentry_sdk
+
+                attach_ai_usage_to_span(
+                    sentry_sdk.get_current_span(),
+                    getattr(response, "usage", None),
+                    model_id=model,
+                )
+            except Exception:
+                pass
             text = _completion_text(response)
             resolved = _response_model_id(response, model)
             usage = _usage_to_dict(getattr(response, "usage", None))
@@ -1107,3 +1119,128 @@ async def stream_advisor_response(
             logger.warning("advisor stream_advisor_response falló model=%s: %s", model, exc, exc_info=False)
 
     raise RuntimeError("No se pudo completar el streaming con ningún modelo configurado") from last_exc
+
+
+def litellm_advisor_rag_model() -> str:
+    """Modelo de chat RAG (por defecto Gemini 1.5 Flash vía LiteLLM)."""
+    return (os.getenv("LITELLM_MODEL_ADVISOR") or "gemini/gemini-1.5-flash").strip()
+
+
+def litellm_embedding_model_name() -> str:
+    return (os.getenv("LITELLM_EMBEDDING_MODEL") or "openai/text-embedding-3-small").strip()
+
+
+async def _rag_query_embedding(*, question: str, api_key: str) -> tuple[list[float], Any]:
+    model = litellm_embedding_model_name()
+    resp = await litellm.aembedding(model=model, input=question.strip(), api_key=api_key)
+    usage = getattr(resp, "usage", None) or (resp.get("usage") if isinstance(resp, dict) else None)
+    data = getattr(resp, "data", None) or (resp.get("data") if isinstance(resp, dict) else None)
+    if not data:
+        raise RuntimeError("embedding RAG: respuesta sin data")
+    first = data[0]
+    vec = getattr(first, "embedding", None) or (first.get("embedding") if isinstance(first, dict) else None)
+    if not isinstance(vec, list) or len(vec) != 1536:
+        raise RuntimeError("embedding RAG: dimensión distinta de 1536")
+    return [float(x) for x in vec], usage
+
+
+async def economic_advisor_rag_ask(
+    db: SupabaseAsync,
+    *,
+    question: str,
+    match_count: int = 8,
+) -> tuple[str, str | None, list[dict[str, Any]]]:
+    """
+    Economic Advisor (RAG): embedding de la pregunta, búsqueda en ``document_embeddings``,
+    respuesta con ``LITELLM_MODEL_ADVISOR`` (p. ej. Gemini 1.5 Flash).
+    """
+    q = (question or "").strip()
+    if not q:
+        raise RuntimeError("Pregunta vacía")
+
+    embed_model = litellm_embedding_model_name()
+    embed_key = _litellm_api_key_for_model(embed_model)
+    if not embed_key:
+        raise RuntimeError(
+            "Sin credenciales para embeddings RAG (configure OPENAI_API_KEY para text-embedding-3-small)."
+        )
+
+    try:
+        import sentry_sdk
+    except ImportError:
+        sentry_sdk = None  # type: ignore[assignment]
+
+    if sentry_sdk is not None:
+        with sentry_sdk.start_span(op="ai.embedding", name="rag_question") as emb_span:
+            qvec, emb_usage = await _rag_query_embedding(question=q, api_key=embed_key)
+            attach_ai_usage_to_span(emb_span, emb_usage, model_id=embed_model)
+    else:
+        qvec, _emb_usage = await _rag_query_embedding(question=q, api_key=embed_key)
+
+    vs = VectorStoreService(db)
+    if sentry_sdk is not None:
+        with sentry_sdk.start_span(op="ai.vector", name="rag_similarity_search") as vec_span:
+            chunks = await vs.similarity_search(query_embedding=qvec, match_count=match_count)
+            vec_span.set_data("rag.chunks_returned", len(chunks or []))
+    else:
+        chunks = await vs.similarity_search(query_embedding=qvec, match_count=match_count)
+
+    blocks: list[str] = []
+    for i, row in enumerate(chunks or []):
+        content = str(row.get("content") or "").strip()
+        if content:
+            blocks.append(f"[{i + 1}] {content}")
+
+    rag_model = litellm_advisor_rag_model()
+    chat_key = _litellm_api_key_for_model(rag_model)
+    if not chat_key:
+        raise RuntimeError("Sin credenciales para LITELLM_MODEL_ADVISOR (p. ej. GOOGLE_API_KEY / GEMINI)")
+
+    ctx_text = "\n".join(blocks) if blocks else "(Sin fragmentos indexados para este tenant.)"
+    messages: list[dict[str, str]] = [
+        {
+            "role": "system",
+            "content": (
+                "Eres Economic Advisor, asistente financiero de una empresa de transporte en España. "
+                "Responde en español usando principalmente el contexto de documentos indexados (tickets, facturas). "
+                "Si el contexto no contiene la información, dilo sin inventar cifras."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Fragmentos recuperados:\n{ctx_text}\n\nPregunta del usuario:\n{q}",
+        },
+    ]
+
+    if sentry_sdk is not None:
+        with sentry_sdk.start_span(op="ai.completion", name="economic_advisor_rag") as comp_span:
+            response = await litellm.acompletion(
+                model=rag_model,
+                messages=messages,
+                temperature=0.2,
+                api_key=chat_key,
+            )
+            attach_ai_usage_to_span(comp_span, getattr(response, "usage", None), model_id=rag_model)
+    else:
+        response = await litellm.acompletion(
+            model=rag_model,
+            messages=messages,
+            temperature=0.2,
+            api_key=chat_key,
+        )
+
+    text = _completion_text(response)
+    resolved = _response_model_id(response, rag_model)
+    usage = _usage_to_dict(getattr(response, "usage", None))
+    _log_advisor_usage(model=resolved, usage=usage, streaming=False)
+
+    sources: list[dict[str, Any]] = []
+    for row in chunks or []:
+        sources.append(
+            {
+                "id": str(row.get("id")) if row.get("id") is not None else None,
+                "similarity": row.get("similarity"),
+                "metadata": row.get("metadata"),
+            }
+        )
+    return _redact_leaks(text.strip()), resolved, sources

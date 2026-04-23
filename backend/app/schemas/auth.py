@@ -55,3 +55,22 @@ class OnboardingSetupOut(BaseModel):
     profile_id: str
     role: str
 
+
+class ForgotPasswordIn(BaseModel):
+    email: str = Field(..., min_length=3, max_length=320)
+
+
+class ForgotPasswordOut(BaseModel):
+    detail: str = Field(
+        default="Si existe una cuenta asociada a este correo, recibirás instrucciones en breve.",
+    )
+
+
+class ResetPasswordIn(BaseModel):
+    token: str = Field(..., min_length=32, max_length=4096)
+    new_password: str = Field(..., min_length=8, max_length=256)
+
+
+class ResetPasswordOut(BaseModel):
+    detail: str = Field(default="Contraseña actualizada correctamente.")
+

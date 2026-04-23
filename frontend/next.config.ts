@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/precios",
-        destination: "/#pricing",
+        destination: "/pricing",
         permanent: true,
       },
       {
@@ -24,6 +24,13 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
     ];
+  },
+  async rewrites() {
+    /*
+     * Auth público (sin middleware de bloqueo en este proyecto): /login, /forgot-password, /reset-password.
+     * Enlace del correo Resend: /auth/reset-password?token=… → /reset-password (route group (auth)).
+     */
+    return [{ source: "/auth/reset-password", destination: "/reset-password" }];
   },
 };
 

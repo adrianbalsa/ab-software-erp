@@ -32,6 +32,7 @@ from app.services.eco_service import (
     peso_ton_desde_porte_create,
     peso_ton_desde_porte_row,
 )
+from app.services.esg_service import EsgService
 from app.services.finance_pending import aggregate_pending_and_trend
 from app.services.maps_service import MapsService
 
@@ -416,7 +417,12 @@ class PortesService:
             km = float(km_estimados or 0.0)
             tiempo_min = MapsService._estimate_duration_minutes(km)
         else:
-            ruta = await self._maps.calcular_ruta_optima(origen, destino, waypoints)
+            ruta = await self._maps.get_truck_route(
+                origin=origen,
+                destination=destino,
+                emission_type="EURO_VI",
+                waypoints=waypoints,
+            )
             km = float(ruta["distancia_km"])
             tiempo_min = int(ruta["tiempo_estimado_min"])
             tiene_peajes = bool(ruta.get("tiene_peajes"))
@@ -726,6 +732,49 @@ class PortesService:
             "estado": "Entregado",
             "co2_kg": calculate_co2_emissions(km_float, euro_entrega),
         }
+        # Trigger ESG al completar ruta (COMPLETED ~= Entregado): km real + tipo de motor.
+        try:
+            real_km = km_float
+            if row.get("origen") and row.get("destino"):
+                truck = await self._maps.get_truck_route(
+                    str(row.get("origen")),
+                    str(row.get("destino")),
+                    weight=float(peso_ton_desde_porte_row(dict(row)) * 1000.0),
+                    emission_type=euro_entrega,
+                )
+                real_km = max(0.0, float(truck.get("distancia_km") or real_km))
+                if truck.get("distance_meters") is not None:
+                    payload["real_distance_meters"] = float(truck.get("distance_meters") or 0.0)
+            engine_class = "EURO_VI"
+            fuel_type = "DIESEL"
+            if vid_raw:
+                try:
+                    rv: Any = await self._db.execute(
+                        filter_not_deleted(
+                            self._db.table("flota")
+                            .select("engine_class,fuel_type")
+                            .eq("empresa_id", eid)
+                            .eq("id", str(vid_raw).strip())
+                            .limit(1)
+                        )
+                    )
+                    vrows = (rv.data or []) if hasattr(rv, "data") else []
+                    if vrows:
+                        engine_class = str(vrows[0].get("engine_class") or "EURO_VI")
+                        fuel_type = str(vrows[0].get("fuel_type") or "DIESEL")
+                except Exception:
+                    pass
+            esg_real = EsgService.calculate_co2_footprint(
+                distance_km=real_km,
+                engine_class=engine_class,
+                fuel_type=fuel_type,
+                km_vacio=float(row.get("km_vacio") or 0.0),
+                subcontratado=bool(row.get("subcontratado") or False),
+            )
+            payload["co2_kg"] = float(esg_real.get("total_co2_kg") or payload["co2_kg"])
+            payload["co2_emitido"] = float(esg_real.get("total_co2_kg") or payload["co2_kg"])
+        except Exception:
+            pass
         try:
             plan_e = await fetch_empresa_plan(self._db, empresa_id=eid)
             if normalize_plan(plan_e) == PLAN_ENTERPRISE and km_float > 0:

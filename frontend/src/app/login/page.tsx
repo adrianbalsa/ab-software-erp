@@ -1,7 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { loginAction } from "./actions";
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
@@ -15,6 +17,14 @@ export default function LoginPage() {
   const [state, action, isPending] = useActionState(loginAction, null);
   const [oauthError, setOauthError] = useState<string | null>(null);
   const [oauthPending, setOauthPending] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("password_reset") !== "success") return;
+    toast.success("Contraseña actualizada correctamente. Inicia sesión con la nueva clave.");
+    window.history.replaceState({}, "", "/login");
+  }, []);
 
   useEffect(() => {
     if (state && "success" in state && state.success) {
@@ -93,7 +103,7 @@ export default function LoginPage() {
               className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-300"
             />
           </div>
-          <div>
+          <div className="pb-2">
             <label htmlFor="password" className="mb-1 block text-sm font-medium text-zinc-700">
               {L.password}
             </label>
@@ -105,6 +115,14 @@ export default function LoginPage() {
               autoComplete="current-password"
               className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-300"
             />
+            <div className="mt-2 flex justify-end">
+              <Link
+                href="/forgot-password"
+                className="text-sm text-zinc-500 transition-colors hover:text-emerald-500"
+              >
+                {L.forgotPassword}
+              </Link>
+            </div>
           </div>
           <button
             type="submit"

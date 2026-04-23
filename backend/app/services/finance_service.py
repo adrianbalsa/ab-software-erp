@@ -1157,18 +1157,15 @@ class FinanceService:
                 },
             )
             try:
-                await self._db.execute(
-                    self._db.table("audit_logs").insert(
-                        {
-                            "empresa_id": eid,
-                            "table_name": "portes",
-                            "record_id": f"fuel_alloc_{start_date.isoformat()}_{end_date.isoformat()}",
-                            "action": "INSERT",
-                            "old_data": None,
-                            "new_data": {"kind": "fuel_allocation", "items": audit_payload[:200]},
-                            "changed_by": None,
-                        }
-                    )
+                await self._db.rpc(
+                    "audit_logs_insert_api_event",
+                    {
+                        "p_empresa_id": eid,
+                        "p_table_name": "portes",
+                        "p_record_id": f"fuel_alloc_{start_date.isoformat()}_{end_date.isoformat()}",
+                        "p_action": "INSERT",
+                        "p_new_data": {"kind": "fuel_allocation", "items": audit_payload[:200]},
+                    },
                 )
             except Exception:
                 pass

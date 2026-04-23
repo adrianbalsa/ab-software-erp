@@ -222,7 +222,7 @@ async def test_enviar_registro_timeout_clasifica_error_tecnico(monkeypatch: pyte
     monkeypatch.setattr(sender, "_limpiar_temp", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         sender,
-        "_post_reg_factu_zeeo_sync",
+        "_post_reg_factu_soap_sync",
         lambda **_kwargs: (_ for _ in ()).throw(VeriFactuException("timeout AEAT", code="AEAT_TRANSPORT")),
     )
 

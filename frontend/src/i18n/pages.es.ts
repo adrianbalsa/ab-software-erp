@@ -241,9 +241,9 @@ export const pagesEs = {
     errCsv: "No se pudo descargar el CSV",
     errCertPdf: "Error al generar certificado",
     co2Title: "Ahorro de CO₂ acumulado",
-    co2DescLead: "co2_savings_ytd",
+    co2DescLead: "Ahorro acumulado de emisiones",
     co2DescBody:
-      ": suma del ahorro CO₂ (GLEC vs Euro III) con la misma ventana YTD, estados y motor que el CSV exportable y el PDF por porte.",
+      " calculado con metodología GLEC y baseline Euro III, consistente con el CSV YTD y los certificados PDF por porte.",
     loadingMetrics: "Cargando métricas…",
     ytdLabel: "Acumulado YTD",
     kgCo2e: "kg CO₂e",

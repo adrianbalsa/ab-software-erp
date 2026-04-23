@@ -1,24 +1,8 @@
 from __future__ import annotations
 
-import sys
 from uuid import UUID
-from unittest.mock import MagicMock
 
 import pytest
-
-# Dependencias opcionales cargadas por imports transversales de app.api.deps
-sys.modules.setdefault("azure", MagicMock(name="azure_test_double"))
-sys.modules.setdefault("azure.ai", MagicMock(name="azure_ai_test_double"))
-sys.modules.setdefault(
-    "azure.ai.formrecognizer",
-    MagicMock(name="azure_formrecognizer_test_double"),
-)
-sys.modules.setdefault(
-    "azure.ai.formrecognizer.aio",
-    MagicMock(name="azure_formrecognizer_aio_test_double"),
-)
-sys.modules.setdefault("azure.core", MagicMock(name="azure_core_test_double"))
-sys.modules.setdefault("azure.core.credentials", MagicMock(name="azure_core_credentials_test_double"))
 
 from app.api import deps
 from app.models.enums import UserRole

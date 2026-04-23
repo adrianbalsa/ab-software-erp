@@ -211,6 +211,53 @@ def create_access_token(
     return jwt.encode(payload, get_secret_manager().get_jwt_secret_key(), algorithm=settings.JWT_ALGORITHM)
 
 
+_PASSWORD_RESET_TTL_MINUTES = 60
+
+
+def create_password_reset_token(*, subject: str) -> str:
+    """
+    JWT de recuperación de contraseña (``typ=pwd_reset``), firmado con la misma clave que los access tokens.
+    """
+    settings = get_settings()
+    sub = (subject or "").strip()
+    if not sub:
+        raise ValueError("password reset: subject vacío")
+    now = datetime.now(tz=timezone.utc)
+    expire = now + timedelta(minutes=_PASSWORD_RESET_TTL_MINUTES)
+    payload: dict[str, object] = {
+        "sub": sub,
+        "exp": int(expire.timestamp()),
+        "iat": int(now.timestamp()),
+        "typ": "pwd_reset",
+    }
+    from app.services.secret_manager_service import get_secret_manager
+
+    return jwt.encode(payload, get_secret_manager().get_jwt_secret_key(), algorithm=settings.JWT_ALGORITHM)
+
+
+def decode_password_reset_token(token: str) -> str | None:
+    """Devuelve el ``username`` canónico si el token es válido y ``typ=pwd_reset``."""
+    raw = (token or "").strip()
+    if not raw:
+        return None
+    try:
+        from app.services.secret_manager_service import get_secret_manager
+
+        settings = get_settings()
+        data = jwt.decode(
+            raw,
+            get_secret_manager().get_jwt_secret_key(),
+            algorithms=[settings.JWT_ALGORITHM],
+            options={"verify_aud": False},
+        )
+    except JWTError:
+        return None
+    if data.get("typ") != "pwd_reset":
+        return None
+    sub = str(data.get("sub") or "").strip()
+    return sub or None
+
+
 # --- Fernet (application-layer encryption for PII at rest) --------------------
 
 

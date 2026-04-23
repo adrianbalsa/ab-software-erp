@@ -8,9 +8,11 @@ import { BankConnectionCard } from "@/components/finance/BankConnectionCard";
 import { ToastHost, type ToastPayload } from "@/components/ui/ToastHost";
 import { useBankSync } from "@/hooks/useBankSync";
 import { hoursSinceSync } from "@/lib/bankStorage";
+import { postEmpresaSepaBillingRequestFlow } from "@/lib/api";
 
 export default function FinanceSettingsPage() {
   const [toast, setToast] = useState<ToastPayload | null>(null);
+  const [isSepaLinking, setIsSepaLinking] = useState(false);
   const bank = useBankSync();
   const { lastSyncAt, hydrated } = bank;
 
@@ -41,6 +43,23 @@ export default function FinanceSettingsPage() {
     if (lastSyncAt === null) return true;
     return staleHours !== null && staleHours > 48;
   }, [hydrated, lastSyncAt, staleHours]);
+
+  const onLinkSepaBankAccount = useCallback(async () => {
+    if (isSepaLinking) return;
+    setIsSepaLinking(true);
+    try {
+      const out = await postEmpresaSepaBillingRequestFlow();
+      if (!out.authorization_url) {
+        throw new Error("No se recibió URL de autorización de GoCardless.");
+      }
+      window.location.assign(out.authorization_url);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudo iniciar la vinculación SEPA.";
+      pushToast(message, "error");
+      setIsSepaLinking(false);
+    }
+  }, [isSepaLinking, pushToast]);
 
   return (
     <AppShell active="dashboard">
@@ -87,6 +106,22 @@ export default function FinanceSettingsPage() {
             </p>
 
             <BankConnectionCard bank={bank} onReconciled={onReconciled} />
+          </section>
+
+          <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+            <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Cobros SEPA (GoCardless)</h2>
+            <p className="text-sm leading-relaxed text-zinc-400">
+              Vincula una cuenta bancaria de adeudo SEPA para automatizar la autorización de mandatos
+              y la activación de cobros enterprise.
+            </p>
+            <button
+              type="button"
+              onClick={onLinkSepaBankAccount}
+              disabled={isSepaLinking}
+              className="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSepaLinking ? "Conectando..." : "Vincular Cuenta Bancaria (SEPA)"}
+            </button>
           </section>
         </div>
       </main>

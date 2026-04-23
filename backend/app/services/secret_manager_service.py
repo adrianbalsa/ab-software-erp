@@ -62,6 +62,34 @@ class SecretManagerService(ABC):
         ...
 
     @abstractmethod
+    def get_stripe_price_starter(self) -> Optional[str]:
+        ...
+
+    @abstractmethod
+    def get_stripe_price_basic(self) -> Optional[str]:
+        ...
+
+    @abstractmethod
+    def get_stripe_price_pro(self) -> Optional[str]:
+        ...
+
+    @abstractmethod
+    def get_stripe_price_enterprise(self) -> Optional[str]:
+        ...
+
+    @abstractmethod
+    def get_stripe_price_ocr_pack(self) -> Optional[str]:
+        ...
+
+    @abstractmethod
+    def get_stripe_price_webhooks_b2b_premium(self) -> Optional[str]:
+        ...
+
+    @abstractmethod
+    def get_stripe_price_logisadvisor_ia_pro(self) -> Optional[str]:
+        ...
+
+    @abstractmethod
     def get_gocardless_access_token(self) -> Optional[str]:
         ...
 
@@ -110,12 +138,12 @@ class SecretManagerService(ABC):
         """Azure OpenAI (``AZURE_API_KEY`` o ``AZURE_OPENAI_API_KEY``)."""
 
     @abstractmethod
-    def get_azure_document_intelligence_endpoint(self) -> Optional[str]:
-        """Endpoint Azure Document Intelligence (OCR facturas), p. ej. ``AZURE_ENDPOINT``."""
+    def get_resend_api_key(self) -> Optional[str]:
+        """Clave de Resend para emails transaccionales/facturación."""
 
     @abstractmethod
-    def get_azure_document_intelligence_key(self) -> Optional[str]:
-        """Clave Azure Document Intelligence (``AZURE_KEY``)."""
+    def get_google_maps_api_key(self) -> Optional[str]:
+        """Clave Google Maps Platform server-side."""
 
     @abstractmethod
     def get_esg_external_webhook_secret(self) -> Optional[str]:
@@ -225,6 +253,27 @@ class EnvSecretManager(SecretManagerService):
     def get_stripe_webhook_secret(self) -> Optional[str]:
         return _strip("STRIPE_WEBHOOK_SECRET")
 
+    def get_stripe_price_starter(self) -> Optional[str]:
+        return _strip("STRIPE_STARTER_PRICE_ID") or _strip("STRIPE_PRICE_STARTER")
+
+    def get_stripe_price_basic(self) -> Optional[str]:
+        return _strip("STRIPE_BASIC_PRICE_ID") or _strip("STRIPE_PRICE_BASIC")
+
+    def get_stripe_price_pro(self) -> Optional[str]:
+        return _strip("STRIPE_PRO_PRICE_ID") or _strip("STRIPE_PRICE_PRO")
+
+    def get_stripe_price_enterprise(self) -> Optional[str]:
+        return _strip("STRIPE_ENTERPRISE_PRICE_ID") or _strip("STRIPE_PRICE_ENTERPRISE")
+
+    def get_stripe_price_ocr_pack(self) -> Optional[str]:
+        return _strip("STRIPE_OCR_PACK_PRICE_ID") or _strip("STRIPE_PRICE_OCR_PACK")
+
+    def get_stripe_price_webhooks_b2b_premium(self) -> Optional[str]:
+        return _strip("STRIPE_WEBHOOKS_B2B_PREMIUM_PRICE_ID") or _strip("STRIPE_PRICE_WEBHOOKS_B2B_PREMIUM")
+
+    def get_stripe_price_logisadvisor_ia_pro(self) -> Optional[str]:
+        return _strip("STRIPE_LOGISADVISOR_IA_PRO_PRICE_ID") or _strip("STRIPE_PRICE_LOGISADVISOR_IA_PRO")
+
     def get_gocardless_access_token(self) -> Optional[str]:
         return _strip("GOCARDLESS_ACCESS_TOKEN")
 
@@ -289,11 +338,11 @@ class EnvSecretManager(SecretManagerService):
     def get_azure_openai_api_key(self) -> Optional[str]:
         return _strip("AZURE_API_KEY") or _strip("AZURE_OPENAI_API_KEY")
 
-    def get_azure_document_intelligence_endpoint(self) -> Optional[str]:
-        return _strip("AZURE_ENDPOINT")
+    def get_resend_api_key(self) -> Optional[str]:
+        return _strip("RESEND_API_KEY")
 
-    def get_azure_document_intelligence_key(self) -> Optional[str]:
-        return _strip("AZURE_KEY")
+    def get_google_maps_api_key(self) -> Optional[str]:
+        return _strip("Maps_API_KEY") or _strip("GOOGLE_MAPS_API_KEY")
 
     def get_esg_external_webhook_secret(self) -> Optional[str]:
         return _strip("ESG_EXTERNAL_WEBHOOK_SECRET")
@@ -342,6 +391,27 @@ class JsonMapSecretManager(SecretManagerService, ABC):
 
     def get_stripe_webhook_secret(self) -> Optional[str]:
         return self._get("STRIPE_WEBHOOK_SECRET")
+
+    def get_stripe_price_starter(self) -> Optional[str]:
+        return self._get("STRIPE_STARTER_PRICE_ID") or self._get("STRIPE_PRICE_STARTER")
+
+    def get_stripe_price_basic(self) -> Optional[str]:
+        return self._get("STRIPE_BASIC_PRICE_ID") or self._get("STRIPE_PRICE_BASIC")
+
+    def get_stripe_price_pro(self) -> Optional[str]:
+        return self._get("STRIPE_PRO_PRICE_ID") or self._get("STRIPE_PRICE_PRO")
+
+    def get_stripe_price_enterprise(self) -> Optional[str]:
+        return self._get("STRIPE_ENTERPRISE_PRICE_ID") or self._get("STRIPE_PRICE_ENTERPRISE")
+
+    def get_stripe_price_ocr_pack(self) -> Optional[str]:
+        return self._get("STRIPE_OCR_PACK_PRICE_ID") or self._get("STRIPE_PRICE_OCR_PACK")
+
+    def get_stripe_price_webhooks_b2b_premium(self) -> Optional[str]:
+        return self._get("STRIPE_WEBHOOKS_B2B_PREMIUM_PRICE_ID") or self._get("STRIPE_PRICE_WEBHOOKS_B2B_PREMIUM")
+
+    def get_stripe_price_logisadvisor_ia_pro(self) -> Optional[str]:
+        return self._get("STRIPE_LOGISADVISOR_IA_PRO_PRICE_ID") or self._get("STRIPE_PRICE_LOGISADVISOR_IA_PRO")
 
     def get_gocardless_access_token(self) -> Optional[str]:
         return self._get("GOCARDLESS_ACCESS_TOKEN")
@@ -417,11 +487,11 @@ class JsonMapSecretManager(SecretManagerService, ABC):
     def get_azure_openai_api_key(self) -> Optional[str]:
         return self._get("AZURE_API_KEY") or self._get("AZURE_OPENAI_API_KEY")
 
-    def get_azure_document_intelligence_endpoint(self) -> Optional[str]:
-        return self._get("AZURE_ENDPOINT")
+    def get_resend_api_key(self) -> Optional[str]:
+        return self._get("RESEND_API_KEY")
 
-    def get_azure_document_intelligence_key(self) -> Optional[str]:
-        return self._get("AZURE_KEY")
+    def get_google_maps_api_key(self) -> Optional[str]:
+        return self._get("Maps_API_KEY") or self._get("GOOGLE_MAPS_API_KEY")
 
     def get_esg_external_webhook_secret(self) -> Optional[str]:
         return self._get("ESG_EXTERNAL_WEBHOOK_SECRET")

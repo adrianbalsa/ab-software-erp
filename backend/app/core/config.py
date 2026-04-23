@@ -50,6 +50,7 @@ class Settings:
     STRIPE_SECRET_KEY: Optional[str]
     STRIPE_WEBHOOK_SECRET: Optional[str]
     STRIPE_PRICE_STARTER: Optional[str]
+    STRIPE_PRICE_BASIC: Optional[str]
     STRIPE_PRICE_PRO: Optional[str]
     STRIPE_PRICE_ENTERPRISE: Optional[str]
     STRIPE_PRICE_OCR_PACK: Optional[str]
@@ -72,6 +73,10 @@ class Settings:
     SMTP_PASSWORD: Optional[str]
     # Remitente From para SMTP (si falta, se puede alinear con EMAIL_FROM_ADDRESS en get_settings)
     EMAILS_FROM_EMAIL: Optional[str]
+    # Estrategia de entrega para facturas: smtp | resend | auto (fallback).
+    EMAIL_STRATEGY_INVOICE: str
+    # Estrategia de transaccional (reset/invitaciones/welcome/esg): resend | smtp | auto.
+    EMAIL_STRATEGY_TRANSACTIONAL: str
     # GoCardless Bank Account Data (ex-Nordigen); opcional — sin credenciales no hay /api/v1/banking/*
     GOCARDLESS_SECRET_ID: Optional[str]
     GOCARDLESS_SECRET_KEY: Optional[str]
@@ -308,15 +313,46 @@ def get_settings() -> Settings:
         v = getenv(name)
         return v.strip() if v and str(v).strip() else None
 
-    stripe_secret = _opt("STRIPE_SECRET_KEY")
-    stripe_wh = _opt("STRIPE_WEBHOOK_SECRET")
+    from app.services.secret_manager_service import get_secret_manager
+
+    secret_manager = get_secret_manager()
+
+    def _opt_secret(name: str, getter_name: str) -> Optional[str]:
+        getter = getattr(secret_manager, getter_name, None)
+        if callable(getter):
+            try:
+                value = getter()
+                if value is not None and str(value).strip():
+                    return str(value).strip()
+            except Exception:
+                pass
+        return _opt(name)
+
+    stripe_secret = _opt_secret("STRIPE_SECRET_KEY", "get_stripe_secret_key")
+    stripe_wh = _opt_secret("STRIPE_WEBHOOK_SECRET", "get_stripe_webhook_secret")
     # Precios base: nombres históricos + alias Due Diligence (Compliance / Finance / Enterprise)
-    stripe_ps = _opt("STRIPE_PRICE_STARTER") or _opt("STRIPE_PRICE_COMPLIANCE")
-    stripe_pp = _opt("STRIPE_PRICE_PRO") or _opt("STRIPE_PRICE_FINANCE")
-    stripe_pe = _opt("STRIPE_PRICE_ENTERPRISE") or _opt("STRIPE_PRICE_FULL_STACK")
-    stripe_p_ocr = _opt("STRIPE_PRICE_OCR_PACK")
-    stripe_p_wh = _opt("STRIPE_PRICE_WEBHOOKS_B2B_PREMIUM")
-    stripe_p_ia = _opt("STRIPE_PRICE_LOGISADVISOR_IA_PRO")
+    stripe_ps = (
+        _opt_secret("STRIPE_STARTER_PRICE_ID", "get_stripe_price_starter")
+        or _opt("STRIPE_PRICE_COMPLIANCE")
+    )
+    stripe_pb = _opt_secret("STRIPE_BASIC_PRICE_ID", "get_stripe_price_basic") or stripe_ps
+    stripe_pp = (
+        _opt_secret("STRIPE_PRO_PRICE_ID", "get_stripe_price_pro")
+        or _opt("STRIPE_PRICE_FINANCE")
+    )
+    stripe_pe = (
+        _opt_secret("STRIPE_ENTERPRISE_PRICE_ID", "get_stripe_price_enterprise")
+        or _opt("STRIPE_PRICE_FULL_STACK")
+    )
+    stripe_p_ocr = _opt_secret("STRIPE_OCR_PACK_PRICE_ID", "get_stripe_price_ocr_pack")
+    stripe_p_wh = _opt_secret(
+        "STRIPE_WEBHOOKS_B2B_PREMIUM_PRICE_ID",
+        "get_stripe_price_webhooks_b2b_premium",
+    )
+    stripe_p_ia = _opt_secret(
+        "STRIPE_LOGISADVISOR_IA_PRO_PRICE_ID",
+        "get_stripe_price_logisadvisor_ia_pro",
+    )
     stripe_prod_s = _opt("STRIPE_PRODUCT_STARTER") or _opt("STRIPE_PRODUCT_COMPLIANCE")
     stripe_prod_p = _opt("STRIPE_PRODUCT_PRO") or _opt("STRIPE_PRODUCT_FINANCE")
     stripe_prod_e = _opt("STRIPE_PRODUCT_ENTERPRISE") or _opt("STRIPE_PRODUCT_FULL_STACK")
@@ -324,7 +360,7 @@ def get_settings() -> Settings:
     stripe_prod_wh = _opt("STRIPE_PRODUCT_WEBHOOKS_B2B_PREMIUM")
     stripe_prod_ia = _opt("STRIPE_PRODUCT_LOGISADVISOR_IA_PRO")
     public_app = _opt("PUBLIC_APP_URL") or _opt("OFFICIAL_FRONTEND_ORIGIN")
-    resend_api_key = _opt("RESEND_API_KEY")
+    resend_api_key = _opt_secret("RESEND_API_KEY", "get_resend_api_key")
     email_from = _opt("EMAIL_FROM_ADDRESS")
     smtp_host = _opt("SMTP_HOST")
     smtp_port_raw = getenv("SMTP_PORT")
@@ -335,6 +371,12 @@ def get_settings() -> Settings:
     smtp_user = _opt("SMTP_USER")
     smtp_password = _opt("SMTP_PASSWORD")
     emails_from_smtp = _opt("EMAILS_FROM_EMAIL") or email_from
+    invoice_strategy_raw = (getenv("EMAIL_STRATEGY_INVOICE") or "resend").strip().lower()
+    if invoice_strategy_raw not in ("smtp", "resend", "auto"):
+        invoice_strategy_raw = "resend"
+    transactional_strategy_raw = (getenv("EMAIL_STRATEGY_TRANSACTIONAL") or "resend").strip().lower()
+    if transactional_strategy_raw not in ("smtp", "resend", "auto"):
+        transactional_strategy_raw = "resend"
     gc_sid = _opt("GOCARDLESS_SECRET_ID")
     gc_skey = _opt("GOCARDLESS_SECRET_KEY")
     gc_access_token = _opt("GOCARDLESS_ACCESS_TOKEN")
@@ -358,12 +400,7 @@ def get_settings() -> Settings:
     if not jwt_secret:
         jwt_secret = session_secret
 
-    maps_api_key_raw = getenv("Maps_API_KEY")
-    maps_api_key = (
-        maps_api_key_raw.strip()
-        if maps_api_key_raw and str(maps_api_key_raw).strip()
-        else None
-    )
+    maps_api_key = _opt_secret("Maps_API_KEY", "get_google_maps_api_key")
 
     database_url = _build_database_url(environment=environment)
     # Due diligence / multi-réplica: en producción se exige URL explícita a Postgres.
@@ -481,6 +518,7 @@ def get_settings() -> Settings:
         STRIPE_SECRET_KEY=stripe_secret,
         STRIPE_WEBHOOK_SECRET=stripe_wh,
         STRIPE_PRICE_STARTER=stripe_ps,
+        STRIPE_PRICE_BASIC=stripe_pb,
         STRIPE_PRICE_PRO=stripe_pp,
         STRIPE_PRICE_ENTERPRISE=stripe_pe,
         STRIPE_PRICE_OCR_PACK=stripe_p_ocr,
@@ -500,6 +538,8 @@ def get_settings() -> Settings:
         SMTP_USER=smtp_user,
         SMTP_PASSWORD=smtp_password,
         EMAILS_FROM_EMAIL=emails_from_smtp,
+        EMAIL_STRATEGY_INVOICE=invoice_strategy_raw,
+        EMAIL_STRATEGY_TRANSACTIONAL=transactional_strategy_raw,
         GOCARDLESS_SECRET_ID=gc_sid,
         GOCARDLESS_SECRET_KEY=gc_skey,
         GOCARDLESS_ACCESS_TOKEN=gc_access_token,

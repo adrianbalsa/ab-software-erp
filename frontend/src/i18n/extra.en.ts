@@ -62,6 +62,9 @@ export const extraEn = {
       requestAccess: "Request system access",
       missingStripeConfig:
         "Stripe Price IDs are missing in the frontend (NEXT_PUBLIC_STRIPE_PRICE_*). See docs/operations/STRIPE_BILLING.md.",
+      pricingStripeFallbackTitle: "Online checkout unavailable",
+      pricingStripeFallbackBody:
+        "Payment links are not configured in this environment. You can still review the plans below; to subscribe, contact sales or finish Stripe setup.",
       stripeGatewayError: "There was a problem connecting to the secure gateway.",
       stripeConnectionError: "Could not connect to the secure gateway. Please try again.",
       pendingUserId: "PENDING_USER_REGISTRATION",
@@ -229,6 +232,17 @@ export const extraEn = {
     username: "Username",
     email: "Email",
     password: "Password",
+    forgotPassword: "Forgot your password?",
+    forgotPasswordTitle: "Reset your password",
+    forgotPasswordSubtitle:
+      "Enter your account email. If an account exists, we'll send you a link to reset your password.",
+    sendInstructions: "Send instructions",
+    checkEmailInbox:
+      "If that email is registered in our system, you'll receive a recovery link shortly.",
+    emailSentTitle: "Email sent",
+    forgotPasswordBackToLogin: "Back to sign in",
+    forgotPasswordEmailRequired: "Please enter a valid email address.",
+    forgotPasswordGenericError: "We could not complete the request. Please try again later.",
     submit: "Sign in",
     submitShort: "Sign in",
     pending: "Signing in…",

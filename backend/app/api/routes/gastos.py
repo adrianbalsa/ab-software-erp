@@ -188,8 +188,8 @@ async def ocr_extract(
     hint = await service.ocr_extract_hint(content=content, filename=evidencia.filename or "ticket")
     total = hint.total
     iva = hint.iva
-    base_imponible = None
-    if total is not None:
+    base_imponible = hint.base_imponible
+    if base_imponible is None and total is not None:
         base_imponible = max(0.0, float(total) - float(iva or 0.0))
     return GastoOCRExtractOut(
         proveedor=hint.proveedor,
@@ -198,4 +198,34 @@ async def ocr_extract(
         iva=iva,
         total=total,
         fecha=hint.fecha,
+        litros=hint.litros_combustible,
+        requires_manual_review=hint.requires_manual_review,
     )
+
+
+@router.post("/logistics-ticket", response_model=GastoOut, status_code=status.HTTP_201_CREATED)
+async def create_gasto_from_logistics_ticket(
+    porte_id: str = Form(...),
+    persist_evidence: bool = Form(False),
+    ticket: UploadFile = File(...),
+    current_user: UserOut = Depends(deps.bind_write_context),
+    _: None = Depends(deps.RoleChecker(["admin", "gestor", "driver"])),
+    service: GastosService = Depends(deps.get_gastos_service),
+) -> GastoOut:
+    """
+    OCR del ticket de combustible (visión LLM), validación contable y alta del gasto vinculado al porte.
+    Por defecto la imagen no se persiste en Storage; use ``persist_evidence=true`` para subirla a ``tmp/ocr/``.
+    """
+    content = await ticket.read()
+    try:
+        return await service.create_gasto_from_logistics_ticket(
+            empresa_id=current_user.empresa_id,
+            empleado=current_user.username,
+            porte_id=porte_id,
+            image_bytes=content,
+            evidencia_filename=ticket.filename,
+            evidencia_content_type=ticket.content_type,
+            persist_evidence=persist_evidence,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e

@@ -130,6 +130,34 @@ def fiscal_rate_limit_key(request: Request) -> str:
     return f"{_RL_NS}:fiscal:ip:{ip}"
 
 
+def expensive_endpoint_bucket(path: str, method: str) -> str | None:
+    """
+    Buckets de endpoints con coste elevado para cuotas específicas por tenant:
+    - ai: llamadas LLM/chat
+    - maps: geodistancia/optimización rutas
+    - ocr: OCR tickets/adjuntos
+    """
+    m = (method or "").upper()
+    p = (path or "").rstrip("/")
+
+    if m == "POST" and p in {"/ai/chat", "/api/v1/advisor/ask", "/api/v1/chatbot/ask"}:
+        return "ai"
+
+    if (m == "GET" and p == "/maps/distance") or (
+        m == "POST" and p == "/api/v1/routes/optimize-route"
+    ):
+        return "maps"
+
+    if m == "POST" and (
+        p.endswith("/gastos/ocr")
+        or p.endswith("/gastos/ocr-hint")
+        or p.endswith("/gastos/logistics-ticket")
+    ):
+        return "ocr"
+
+    return None
+
+
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> Response:
     """
     HTTP 429 con cuerpo estándar; conserva cabeceras Retry-After / X-RateLimit-* de SlowAPI.

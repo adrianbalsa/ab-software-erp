@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { LandingBentoGrid } from "./LandingBentoGrid";
 import { LandingFAQ } from "./LandingFAQ";
 import { LandingFooter } from "./LandingFooter";
@@ -16,7 +17,9 @@ export function LandingPageDark() {
       <main>
         <LandingMarketingHero />
         <LandingBentoGrid />
-        <LandingPricing />
+        <Suspense fallback={null}>
+          <LandingPricing />
+        </Suspense>
         <LandingFAQ />
         <LandingTechSpecsBar />
       </main>

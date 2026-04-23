@@ -76,6 +76,37 @@ class EsgService:
         self._maps = maps
 
     @staticmethod
+    def calculate_co2_footprint(
+        *,
+        distance_km: float,
+        engine_class: str = "EURO_VI",
+        fuel_type: str = "DIESEL",
+        km_vacio: float = 0.0,
+        subcontratado: bool = False,
+    ) -> dict[str, float]:
+        """
+        Wrapper de servicio sobre el motor ESG para uso en triggers de ciclo de vida de ruta.
+        """
+        km_total = max(0.0, float(distance_km or 0.0))
+        km_empty = max(0.0, min(km_total, float(km_vacio or 0.0)))
+        km_loaded = max(0.0, km_total - km_empty)
+        out = calculate_co2_footprint(
+            km_cargado=km_loaded,
+            km_vacio=km_empty,
+            engine_class=str(engine_class or "EURO_VI"),
+            fuel_type=str(fuel_type or "DIESEL"),
+            subcontratado=bool(subcontratado),
+        )
+        return {
+            "km_total": km_total,
+            "km_cargado": km_loaded,
+            "km_vacio": km_empty,
+            "total_co2_kg": max(0.0, float(out.get("total_co2_kg") or 0.0)),
+            "factor_kg_km_cargado": max(0.0, float(out.get("factor_kg_km_cargado") or 0.0)),
+            "factor_kg_km_vacio": max(0.0, float(out.get("factor_kg_km_vacio") or 0.0)),
+        }
+
+    @staticmethod
     def _to_decimal(value: Any, default: str = "0") -> Decimal:
         try:
             if value is None:

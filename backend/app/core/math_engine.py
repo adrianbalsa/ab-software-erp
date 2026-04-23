@@ -9,6 +9,7 @@ alineada con ``numeric(12,2)`` en PostgreSQL/Supabase.
 from __future__ import annotations
 
 import math
+from datetime import datetime
 from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import (
@@ -18,6 +19,7 @@ from decimal import (
     InvalidOperation,
     localcontext,
 )
+from os import getenv
 from typing import Any, Iterator
 
 FIAT_QUANT = Decimal("0.01")
@@ -594,3 +596,168 @@ class MathEngine:
             global_discount=global_discount,
             allow_negative_bases=allow_negative_bases,
         )
+
+    @staticmethod
+    def calculate_route_costs(
+        *,
+        distance_km: float | str | Decimal,
+        toll_cost: float | str | Decimal | None = None,
+        consumo_medio_camion_l_km: float | str | Decimal | None = None,
+        precio_diesel_actual_eur_l: float | str | Decimal | None = None,
+    ) -> dict[str, float]:
+        """
+        Coste operativo de ruta logística con distancia real (Truck API):
+        - Combustible: distancia_km × consumo_medio_camion_l_km × precio_diesel_actual_eur_l
+        - Peajes: importe directo si la API los reporta
+        """
+        with _math_engine_sentry_span("MathEngine.calculate_route_costs"):
+            km = max(Decimal("0.00"), to_decimal(distance_km))
+            toll = max(Decimal("0.00"), to_decimal(toll_cost or 0))
+
+            consumo_default = getenv("TRUCK_AVG_CONSUMPTION_L_PER_KM", "0.32")
+            diesel_default = getenv("DIESEL_PRICE_EUR_PER_L", "1.55")
+            consumo = max(
+                Decimal("0.00"),
+                to_decimal(
+                    consumo_medio_camion_l_km
+                    if consumo_medio_camion_l_km is not None
+                    else consumo_default
+                ),
+            )
+            diesel_price = max(
+                Decimal("0.00"),
+                to_decimal(
+                    precio_diesel_actual_eur_l
+                    if precio_diesel_actual_eur_l is not None
+                    else diesel_default
+                ),
+            )
+
+            fuel_liters = quantize_currency(km * consumo)
+            fuel_cost = quantize_currency(fuel_liters * diesel_price)
+            total = quantize_currency(fuel_cost + toll)
+            return {
+                "route_distance_km": float(quantize_currency(km)),
+                "fuel_liters_estimate": float(fuel_liters),
+                "fuel_cost_estimate": float(fuel_cost),
+                "toll_cost": float(quantize_currency(toll)),
+                "total_route_cost": float(total),
+            }
+
+    @staticmethod
+    def match_transactions_to_invoices(
+        *,
+        transactions: list[dict[str, Any]],
+        pending_invoices: list[dict[str, Any]],
+        date_tolerance_days: int = 3,
+    ) -> list[dict[str, Any]]:
+        """
+        Encuentra coincidencias exactas por importe con tolerancia de fecha (+/- N días).
+
+        Retorna pares candidatos en formato:
+        ``{"transaction_id": str, "factura_id": int}``.
+        """
+        with _math_engine_sentry_span("MathEngine.match_transactions_to_invoices"):
+            out: list[dict[str, Any]] = []
+            if not transactions or not pending_invoices:
+                return out
+
+            inv_pool = list(pending_invoices)
+            used_invoice_ids: set[int] = set()
+
+            for tx in transactions:
+                tx_id = str(tx.get("transaction_id") or "").strip()
+                if not tx_id:
+                    continue
+                tx_amount = round_fiat(tx.get("amount") or 0)
+                try:
+                    tx_dt = datetime.fromisoformat(
+                        str(
+                            tx.get("booked_date")
+                            or tx.get("booking_date")
+                            or tx.get("valueDate")
+                            or tx.get("bookingDate")
+                            or ""
+                        ).strip()[:10]
+                    ).date()
+                except ValueError:
+                    continue
+
+                selected: dict[str, Any] | None = None
+                min_days = 999_999
+                for inv in inv_pool:
+                    try:
+                        inv_id = int(inv.get("id") or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    if inv_id <= 0 or inv_id in used_invoice_ids:
+                        continue
+
+                    inv_amount = round_fiat(inv.get("total_factura") or 0)
+                    if inv_amount != tx_amount:
+                        continue
+
+                    try:
+                        inv_dt = datetime.fromisoformat(
+                            str(inv.get("fecha_emision") or "").strip()[:10]
+                        ).date()
+                    except ValueError:
+                        continue
+
+                    delta_days = abs((tx_dt - inv_dt).days)
+                    if delta_days > max(0, int(date_tolerance_days)):
+                        continue
+                    if delta_days < min_days:
+                        min_days = delta_days
+                        selected = {"transaction_id": tx_id, "factura_id": inv_id}
+
+                if selected:
+                    used_invoice_ids.add(int(selected["factura_id"]))
+                    out.append(selected)
+            return out
+
+
+def validate_logistics_ticket_amounts(
+    *,
+    base_imponible: Any = None,
+    iva: Any = None,
+    total: Any = None,
+    tolerance_eur: Decimal | float | str = Decimal("0.02"),
+) -> tuple[bool, str | None]:
+    """
+    Comprueba que el total del ticket sea positivo y, si hay base e IVA,
+    que ``base + IVA`` cuadre con el total en céntimos (HALF_EVEN).
+
+    Retorna ``(True, None)`` si es coherente o si no hay base para contrastar;
+    ``(False, motivo)`` si el total es inválido o hay descuadre material.
+    """
+    with _math_engine_sentry_span("MathEngine.validate_logistics_ticket"):
+        try:
+            tol = quantize_financial(tolerance_eur)
+        except Exception:
+            tol = Decimal("0.02")
+        if total is None:
+            return False, "total ausente"
+        try:
+            t = quantize_currency(to_decimal(total))
+        except FinancialDomainError as e:
+            return False, str(e)
+        if t <= 0:
+            return False, "total no positivo"
+        if base_imponible is None:
+            return True, None
+        try:
+            b = quantize_currency(to_decimal(base_imponible))
+        except FinancialDomainError:
+            return False, "base_imponible inválida"
+        i = Decimal("0.00")
+        if iva is not None:
+            try:
+                i = quantize_currency(to_decimal(iva))
+            except FinancialDomainError:
+                return False, "iva inválido"
+        expected = quantize_currency(b + i)
+        diff = abs(t - expected)
+        if diff > tol:
+            return False, "descuadre base+iva vs total"
+        return True, None

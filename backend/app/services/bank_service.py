@@ -16,6 +16,7 @@ from app.core.security import fernet_decrypt_string, fernet_encrypt_string
 from app.db.supabase import SupabaseAsync
 from app.services.audit_logs_service import AuditLogsService
 from app.services.reconciliation_service import ReconciliationService, match_invoice_transaction_pair
+from app.services.math_engine import BankingMathEngineService
 
 _log = logging.getLogger(__name__)
 
@@ -171,6 +172,29 @@ class BankService:
     async def exchange_token(self) -> str:
         """JWT de acceso de corta duraci?n para llamadas a la API (no persistir en logs)."""
         return await _fetch_access_token()
+
+    async def get_institutions(self, *, country_code: str = "ES") -> list[dict[str, Any]]:
+        """Lista instituciones disponibles para un país (PSD2)."""
+        if not _gocardless_configured():
+            raise RuntimeError("Integración GoCardless no configurada en el servidor")
+        country = (country_code or "ES").strip().upper()[:2] or "ES"
+        access = await _fetch_access_token()
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            r = await client.get(
+                f"{_GOCARDLESS_API_V2}/institutions/",
+                headers={"Authorization": f"Bearer {access}", "accept": "application/json"},
+                params={"country": country},
+            )
+            if r.status_code != 200:
+                raise RuntimeError(f"GoCardless institutions HTTP {r.status_code}: {r.text[:500]}")
+            data = r.json()
+        if isinstance(data, list):
+            return [x for x in data if isinstance(x, dict)]
+        if isinstance(data, dict):
+            rows = data.get("results")
+            if isinstance(rows, list):
+                return [x for x in rows if isinstance(x, dict)]
+        return []
 
     async def _load_requisition_id(self, empresa_id: str) -> str:
         for table in ("empresa_bank_accounts", "empresa_banco_sync"):
@@ -570,11 +594,24 @@ class BankService:
         if date_from is None:
             date_from = date_to - timedelta(days=max(1, min(days, 365)))
 
-        movs = await self.get_transactions(
-            requisition_id=req_plain,
-            date_from=date_from,
-            date_to=date_to,
-        )
+        try:
+            import sentry_sdk
+        except Exception:  # pragma: no cover
+            sentry_sdk = None  # type: ignore[assignment]
+
+        if sentry_sdk is not None:
+            with sentry_sdk.start_span(op="banking.sync", name="fetch_bank_transactions"):
+                movs = await self.get_transactions(
+                    requisition_id=req_plain,
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+        else:
+            movs = await self.get_transactions(
+                requisition_id=req_plain,
+                date_from=date_from,
+                date_to=date_to,
+            )
 
         rows: list[dict[str, Any]] = []
         normalized: list[dict[str, Any]] = []
@@ -767,8 +804,33 @@ class BankService:
             .eq("empresa_id", empresa_id)
         )
 
-        recon = ReconciliationService(self._db)
-        coincidencias, detalle = await recon.auto_reconcile_invoices(empresa_id)
+        res_inv: Any = await self._db.execute(
+            self._db.table("facturas")
+            .select("id,empresa_id,total_factura,fecha_emision,estado_cobro")
+            .eq("empresa_id", empresa_id)
+            .in_("estado_cobro", ["pendiente", "PENDING", "pending"])
+            .limit(2000)
+        )
+        pending_invoices: list[dict[str, Any]] = (res_inv.data or []) if hasattr(res_inv, "data") else []
+        res_tx: Any = await self._db.execute(
+            self._db.table("bank_transactions")
+            .select("transaction_id,empresa_id,amount,booked_date,reconciled")
+            .eq("empresa_id", empresa_id)
+            .eq("reconciled", False)
+            .limit(3000)
+        )
+        pending_transactions: list[dict[str, Any]] = (res_tx.data or []) if hasattr(res_tx, "data") else []
+
+        detalle = await BankingMathEngineService(self._db).match_transactions_to_invoices(
+            empresa_id=empresa_id,
+            pending_transactions=pending_transactions,
+            pending_invoices=pending_invoices,
+        )
+        coincidencias = len(detalle)
+
+        if coincidencias == 0:
+            recon = ReconciliationService(self._db)
+            coincidencias, detalle = await recon.auto_reconcile_invoices(empresa_id)
 
         return BankSyncResult(
             transacciones_procesadas=max(n_written, 0),

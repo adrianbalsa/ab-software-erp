@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 from datetime import datetime, timezone
 from decimal import Decimal
 from functools import partial
@@ -21,7 +22,12 @@ from app.schemas.factura import (
 )
 from app.schemas.user import UserOut
 from app.services.auditoria_service import AuditoriaService
-from app.services.email_service import EmailService, send_email_background_task, send_invoice_email_from_base64
+from app.services.email_service import (
+    resolve_invoice_email_channel,
+    send_email_background_task,
+    send_invoice_email_from_base64,
+    send_invoice_email,
+)
 from app.services.facturas_service import FacturasService
 from pydantic import BaseModel
 
@@ -135,9 +141,13 @@ async def generar_factura_desde_portes(
             "cliente_nombre": cli.nombre if cli else "Cliente",
             "preferred_language": getattr(current_user, "preferred_language", None) or "es",
         }
+        try:
+            invoice_channel = resolve_invoice_email_channel()
+        except RuntimeError:
+            invoice_channel = "none"
         request.state.audit_payload_supplement = {
             "delegado_segundo_plano": True,
-            "operacion": "factura_emitida_envio_pdf_cliente_resend",
+            "operacion": f"factura_emitida_envio_pdf_cliente_{invoice_channel}",
             "mensaje": "Email encolado para envío en segundo plano",
         }
         _log.info("Email encolado para envío en segundo plano")
@@ -185,7 +195,7 @@ async def rectificar_factura(
 @router.post(
     "/{factura_id}/enviar",
     response_model=FacturaEmailEnviadaOut,
-    summary="Enviar factura por correo (SMTP)",
+    summary="Enviar factura por correo (estrategia configurable)",
 )
 async def enviar_factura_por_email(
     factura_id: int,
@@ -198,15 +208,14 @@ async def enviar_factura_por_email(
 ) -> FacturaEmailEnviadaOut:
     """
     Genera el PDF al vuelo (misma pipeline que ``GET …/pdf-data``), obtiene el email del cliente
-    y envía el documento por **SMTP** si está configurado (``SMTP_*``, ``EMAILS_FROM_EMAIL``).
+    y envía el documento según ``EMAIL_STRATEGY_INVOICE`` (``smtp`` / ``resend`` / ``auto``).
 
     Registra un evento best-effort en ``auditoria`` con la marca temporal del envío.
     """
-    if not EmailService.smtp_configured():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Servicio SMTP no configurado (SMTP_HOST, SMTP_PORT, EMAILS_FROM_EMAIL).",
-        )
+    try:
+        channel = resolve_invoice_email_channel()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     try:
         numero_factura, dest_email = await service.resolve_destinatario_email_factura(
             empresa_id=current_user.empresa_id,
@@ -225,15 +234,17 @@ async def enviar_factura_por_email(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
-    mailer = EmailService()
     try:
-        await mailer.send_invoice_email(
-            dest_email,
+        ok = await asyncio.to_thread(
+            send_invoice_email,
+            {"numero_factura": numero_factura, "preferred_language": getattr(current_user, "preferred_language", None) or "es"},
             pdf_bytes,
-            numero_factura,
+            dest_email,
             lang=getattr(current_user, "preferred_language", None) or "es",
         )
-    except (ValueError, RuntimeError) as e:
+        if not ok:
+            raise RuntimeError("No se pudo enviar el correo de factura.")
+    except RuntimeError as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=str(e),
@@ -250,7 +261,7 @@ async def enviar_factura_por_email(
             "numero_factura": numero_factura,
             "destinatario": dest_email,
             "enviado_en": enviado_en.isoformat(),
-            "canal": "smtp",
+            "canal": channel,
         },
     )
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 from uuid import UUID
 
@@ -9,6 +10,8 @@ from app.core.i18n import normalize_lang
 from app.core.rbac import normalize_rbac_role
 from app.models.enums import normalize_user_role
 from app.core.security import hash_password_argon2id, verify_password_against_stored
+
+_NOTIFICATION_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserInDB, UserOut
 
@@ -424,4 +427,50 @@ class AuthService:
     async def try_set_empresa_context(self, *, empresa_id: str | UUID) -> None:
         """Alias retrocompatible de ``ensure_empresa_context``."""
         await self.ensure_empresa_context(empresa_id=empresa_id)
+
+    async def set_password_for_username(self, *, username: str, new_plain_password: str) -> bool:
+        """
+        Persiste ``password_hash`` en Argon2id para el usuario canónico de ``usuarios``.
+        Tras un JWT ``pwd_reset`` válido.
+        """
+        canon = (username or "").strip()
+        if not canon:
+            return False
+        pwd = new_plain_password or ""
+        if len(pwd) < 8:
+            raise ValueError("password_too_short")
+        u = await self.get_user(username=canon)
+        if u is None:
+            return False
+        key = str(u.username or "").strip()
+        if not key:
+            return False
+        new_hash = hash_password_argon2id(pwd)
+        await self._db.execute(
+            self._db.table("usuarios").update({"password_hash": new_hash}).eq("username", key)
+        )
+        logger.info("password_hash actualizado tras recuperación (usuario prefix=%s)", key[:48])
+        return True
+
+    async def get_usuario_email_for_notifications(self, *, username: str) -> str | None:
+        """
+        Devuelve ``usuarios.email`` si existe y parece un correo; usado para envío Resend
+        cuando el login no es una dirección de correo.
+        """
+        key = (username or "").strip()
+        if not key:
+            return None
+        try:
+            q = self._db.table("usuarios").select("email").eq("username", key).limit(1)
+            res: Any = await self._db.execute(q)
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        except Exception as exc:
+            logger.warning("get_usuario_email_for_notifications: %s", exc)
+            return None
+        if not rows:
+            return None
+        em = str(rows[0].get("email") or "").strip()
+        if not em or not _NOTIFICATION_EMAIL_RE.match(em):
+            return None
+        return em.lower()
 

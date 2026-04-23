@@ -84,10 +84,10 @@ class GastoOut(BaseModel):
 
 class GastoOCRHint(BaseModel):
     """
-    Hints desde Azure Document Intelligence (`prebuilt-invoice`).
+    Hints desde OCR de ticket (modelo de visión GPT‑4o / Gemini vía LiteLLM).
 
-    Mapeo típico: VendorName → proveedor, VendorTaxId → nif_proveedor,
-    TotalTax → iva, InvoiceTotal (+ currency) → total / moneda.
+    Mapeo típico: nombre_gasolinera → proveedor, cif_emisor → nif_proveedor,
+    iva/total/base_imponible del JSON estructurado.
     """
 
     proveedor: str | None = None
@@ -97,15 +97,17 @@ class GastoOCRHint(BaseModel):
     concepto: str | None = None
     nif_proveedor: str | None = None
     iva: float | None = None
+    base_imponible: float | None = None
+    litros_combustible: float | None = None
     ocr_confidence: float | None = Field(
         default=None,
         ge=0.0,
         le=1.0,
-        description="Confianza agregada Azure DI (0–1).",
+        description="Confianza agregada (0–1) si el proveedor la expone; con visión LLM suele ser null.",
     )
     requires_manual_review: bool = Field(
         default=False,
-        description="True si confianza menor que 90 %: revisión humana recomendada antes de firmar/contabilizar.",
+        description="True si el modelo marcó revisión, hay descuadre base+IVA vs total o datos dudosos.",
     )
 
 
@@ -116,3 +118,5 @@ class GastoOCRExtractOut(BaseModel):
     iva: float | None = None
     total: float | None = None
     fecha: date | None = None
+    litros: float | None = None
+    requires_manual_review: bool = False

@@ -1,48 +1,70 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Check, Minus, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { FadeInSection } from "./FadeInSection";
 import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { apiFetch } from "@/lib/api";
 
-/** IDs de precio Stripe (`price_…`); configurar en `.env` del frontend para checkout público. */
-const stripePriceCompliance = process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER ?? "";
-const stripePriceFinance = process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO ?? "";
-const stripePriceEnterprise = process.env.NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE ?? "";
-
-const tiers = [
-  {
-    name: "Compliance",
-    price: "39",
-    stripePriceId: stripePriceCompliance,
-    includes: [true, true, false, false, false, false],
-    highlight: false,
-  },
-  {
-    name: "Finance",
-    price: "149",
-    stripePriceId: stripePriceFinance,
-    includes: [true, true, true, true, true, false],
-    highlight: true,
-  },
-  {
-    name: "Enterprise",
-    price: "399",
-    stripePriceId: stripePriceEnterprise,
-    includes: [true, true, true, true, true, true],
-    highlight: false,
-  },
-];
+function stripePriceIds() {
+  return {
+    compliance: (
+      process.env.NEXT_PUBLIC_STRIPE_PRICE_BASIC ??
+      process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER ??
+      ""
+    ).trim(),
+    finance: (process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO ?? "").trim(),
+    enterprise: (process.env.NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE ?? "").trim(),
+  };
+}
 
 export function LandingPricing() {
+  const searchParams = useSearchParams();
+  const empresaId = (searchParams.get("empresa_id") ?? "").trim();
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
   const { catalog } = useOptionalLocaleCatalog();
   const l = catalog.landing.pricing;
 
+  const { tiers, stripeCheckoutReady } = useMemo(() => {
+    const ids = stripePriceIds();
+    const stripeCheckoutReady = Boolean(ids.compliance && ids.finance && ids.enterprise);
+    const tiersLocal = [
+      {
+        name: "Compliance",
+        price: "39",
+        stripePriceId: ids.compliance,
+        includes: [true, true, false, false, false, false] as const,
+        highlight: false,
+      },
+      {
+        name: "Finance",
+        price: "149",
+        stripePriceId: ids.finance,
+        includes: [true, true, true, true, true, false] as const,
+        highlight: true,
+      },
+      {
+        name: "Enterprise",
+        price: "399",
+        stripePriceId: ids.enterprise,
+        includes: [true, true, true, true, true, true] as const,
+        highlight: false,
+      },
+    ];
+    return { tiers: tiersLocal, stripeCheckoutReady };
+  }, []);
+
   const handleSuscripcion = async (priceId: string) => {
     if (!priceId.trim()) {
-      alert(l.missingStripeConfig);
+      toast.error(l.missingStripeConfig);
+      return;
+    }
+    if (!empresaId) {
+      toast.error(
+        "Indica tu empresa en la URL (?empresa_id=UUID) o abre el enlace de alta. También puedes usar /pricing.",
+      );
       return;
     }
     setLoadingTier(priceId);
@@ -50,7 +72,7 @@ export function LandingPricing() {
       const response = await apiFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/stripe/crear-sesion-checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ price_id: priceId, user_id: l.pendingUserId }),
+        body: JSON.stringify({ price_id: priceId, empresa_id: empresaId }),
       });
 
       const data = await response.json();
@@ -58,10 +80,10 @@ export function LandingPricing() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert(l.stripeGatewayError);
+        toast.error(l.stripeGatewayError);
       }
     } catch {
-      alert(l.stripeConnectionError);
+      toast.error(l.stripeConnectionError);
     } finally {
       setLoadingTier(null);
     }
@@ -77,6 +99,16 @@ export function LandingPricing() {
           <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{l.title}</h2>
           <p className="mt-2 text-zinc-300 text-sm sm:text-base">{l.subtitle}</p>
         </div>
+
+        {!stripeCheckoutReady ? (
+          <div
+            role="status"
+            className="mb-8 rounded-2xl border border-amber-500/25 bg-amber-950/35 px-4 py-3 text-left sm:px-5 sm:py-4"
+          >
+            <p className="text-sm font-semibold text-amber-100">{l.pricingStripeFallbackTitle}</p>
+            <p className="mt-1 text-sm leading-relaxed text-amber-100/85">{l.pricingStripeFallbackBody}</p>
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {tiers.map((tier) => (
@@ -115,7 +147,8 @@ export function LandingPricing() {
               <button
                 type="button"
                 onClick={() => void handleSuscripcion(tier.stripePriceId)}
-                disabled={loadingTier === tier.stripePriceId}
+                disabled={!tier.stripePriceId || loadingTier === tier.stripePriceId}
+                title={!tier.stripePriceId ? l.missingStripeConfig : undefined}
                 className={`mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold transition ${
                   tier.highlight
                     ? "bg-emerald-500 text-zinc-950 hover:bg-emerald-400 disabled:bg-emerald-500/50"

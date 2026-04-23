@@ -1,0 +1,107 @@
+name: Backup Restore Smoke
+
+on:
+  schedule:
+    - cron: "15 4 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  restore-smoke:
+    name: Validate backup restore on ephemeral Postgres
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: restore_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d restore_smoke"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.BACKUP_AWS_REGION }}
+
+      - name: Download latest backup from S3
+        env:
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_S3_PREFIX: ${{ secrets.BACKUP_S3_PREFIX }}
+        run: |
+          set -euo pipefail
+          test -n "${BACKUP_S3_BUCKET}" || (echo "Missing BACKUP_S3_BUCKET" && exit 1)
+          PREFIX="${BACKUP_S3_PREFIX:-ab-logistics/daily}"
+          mkdir -p restore_artifacts
+          LATEST_KEY="$(aws s3 ls "s3://${BACKUP_S3_BUCKET}/${PREFIX}/" | awk '{print $4}' | grep 'supabase_backup_.*\.tar\.gz$' | sort | tail -n 1)"
+          test -n "${LATEST_KEY}" || (echo "No backup archives found in s3://${BACKUP_S3_BUCKET}/${PREFIX}/" && exit 1)
+          aws s3 cp "s3://${BACKUP_S3_BUCKET}/${PREFIX}/${LATEST_KEY}" "restore_artifacts/${LATEST_KEY}"
+          echo "BACKUP_FILE=restore_artifacts/${LATEST_KEY}" >> "$GITHUB_ENV"
+
+      - name: Extract and validate backup layout
+        run: |
+          set -euo pipefail
+          mkdir -p restore_tmp
+          tar -xzf "${BACKUP_FILE}" -C restore_tmp
+          test -f restore_tmp/schema.sql || (echo "schema.sql missing in backup" && exit 1)
+          test -f restore_tmp/public_data.sql || (echo "public_data.sql missing in backup" && exit 1)
+
+      - name: Restore schema and data into ephemeral Postgres
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@localhost:5432/restore_smoke" -v ON_ERROR_STOP=1 -f restore_tmp/schema.sql
+          psql "postgresql://postgres:postgres@localhost:5432/restore_smoke" -v ON_ERROR_STOP=1 -f restore_tmp/public_data.sql
+
+      - name: Integrity Check (structure, data, RLS)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          DB_URL="postgresql://postgres:postgres@localhost:5432/restore_smoke"
+          MIN_PUBLIC_TABLES=15
+
+          table_count="$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tA -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';")"
+          if [ "${table_count}" -lt "${MIN_PUBLIC_TABLES}" ]; then
+            echo "[ERROR] Estructura incompleta: solo ${table_count} tablas en public (mínimo esperado ${MIN_PUBLIC_TABLES})."
+            exit 1
+          fi
+
+          audit_logs_count="$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tA -c "SELECT COUNT(*) FROM public.audit_logs;")"
+          if [ "${audit_logs_count}" -le 0 ]; then
+            echo "[ERROR] No hay datos en public.audit_logs tras restore."
+            exit 1
+          fi
+
+          # Validación de existencia (pg_tables) + estado RLS (pg_class.relrowsecurity).
+          critical_tables_present="$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tA -c "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('facturas_emitidas', 'clientes', 'flota');")"
+          if [ "${critical_tables_present}" -ne 3 ]; then
+            echo "[ERROR] Faltan tablas críticas para verificación RLS (esperadas: facturas_emitidas, clientes, flota)."
+            exit 1
+          fi
+
+          rls_missing="$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tA -c "SELECT COUNT(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname IN ('facturas_emitidas', 'clientes', 'flota') AND c.relrowsecurity IS NOT TRUE;")"
+          if [ "${rls_missing}" -ne 0 ]; then
+            echo "[ERROR] RLS desactivada en una o más tablas críticas (facturas_emitidas/clientes/flota)."
+            exit 1
+          fi
+
+          echo "[OK] Estructura de tablas completa."
+          echo "[OK] Datos de auditoría presentes."
+          echo "[OK] Políticas RLS activas."

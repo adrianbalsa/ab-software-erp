@@ -14,6 +14,7 @@ from app.db.supabase import SupabaseAsync
 from app.services.geo_service import GeoBatchCache, GeoService, normalize_addr, route_cache_key
 
 _DISTANCE_MATRIX_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
+_ROUTES_API_V2_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
 
 
 def _cache_key(origin: str, destination: str) -> str:
@@ -374,6 +375,177 @@ class MapsService:
         )
         return _parse_directions_response(raw)
 
+    async def get_truck_route(
+        self,
+        origin: str,
+        destination: str,
+        *,
+        weight: float | None = None,
+        height: float | None = None,
+        width: float | None = None,
+        length: float | None = None,
+        emission_type: str | None = "EURO_VI",
+        waypoints: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Google Routes API v2 para vehículo pesado.
+        Incluye RouteModifiers y vehicleInfo para casos de logística truck.
+        """
+        o = (origin or "").strip()
+        d = (destination or "").strip()
+        if not o or not d:
+            raise ValueError("origin y destination son obligatorios")
+        if normalize_addr(o) == normalize_addr(d):
+            return {
+                "distancia_km": 0.0,
+                "tiempo_estimado_min": 0,
+                "distance_meters": 0,
+                "duration_seconds": 0,
+                "tiene_peajes": False,
+                "peajes_estimados_eur": 0.0,
+                "travel_mode": "DRIVE",
+                "vehicle_type": "HEAVY_TRUCK",
+            }
+
+        api_key = self.maps_api_key()
+        if not api_key:
+            raise ValueError(
+                "Maps_API_KEY no configurada: indique km manualmente o defina la clave de Google Maps"
+            )
+
+        try:
+            import sentry_sdk
+        except ImportError:
+            sentry_sdk = None  # type: ignore[assignment]
+
+        span_cm = (
+            sentry_sdk.start_span(op="maps.routing", name="calculate_heavy_vehicle_route")
+            if sentry_sdk
+            else None
+        )
+        if span_cm is None:
+            return await self._compute_truck_route_impl(
+                origin=o,
+                destination=d,
+                api_key=api_key,
+                weight=weight,
+                height=height,
+                width=width,
+                length=length,
+                emission_type=emission_type,
+                waypoints=waypoints,
+                span=None,
+            )
+        with span_cm as span:
+            return await self._compute_truck_route_impl(
+                origin=o,
+                destination=d,
+                api_key=api_key,
+                weight=weight,
+                height=height,
+                width=width,
+                length=length,
+                emission_type=emission_type,
+                waypoints=waypoints,
+                span=span,
+            )
+
+    async def _compute_truck_route_impl(
+        self,
+        *,
+        origin: str,
+        destination: str,
+        api_key: str,
+        weight: float | None,
+        height: float | None,
+        width: float | None,
+        length: float | None,
+        emission_type: str | None,
+        waypoints: list[str] | None,
+        span: Any | None,
+    ) -> dict[str, Any]:
+        vehicle_info = {
+            "emissionType": _normalize_routes_emission_type(emission_type),
+        }
+        if span is not None:
+            span.set_data("travel_mode", "DRIVE")
+            span.set_data("vehicle_type", "HEAVY_TRUCK")
+            span.set_data("truck_weight_kg", max(0.0, float(weight or 0.0)))
+            span.set_data("truck_height_m", max(0.0, float(height or 0.0)))
+            span.set_data("truck_width_m", max(0.0, float(width or 0.0)))
+            span.set_data("truck_length_m", max(0.0, float(length or 0.0)))
+            span.set_data("truck_emission_type", vehicle_info["emissionType"])
+
+        payload: dict[str, Any] = {
+            "origin": {"address": origin},
+            "destination": {"address": destination},
+            "travelMode": "DRIVE",
+            "routingPreference": "TRAFFIC_AWARE",
+            "routeModifiers": {
+                "avoidTolls": False,
+                "avoidHighways": False,
+                "avoidFerries": False,
+                "vehicleInfo": vehicle_info,
+            },
+            "extraComputations": ["TOLLS"],
+            "units": "METRIC",
+        }
+        wp = [w.strip() for w in (waypoints or []) if (w or "").strip()]
+        if wp:
+            payload["intermediates"] = [{"address": w} for w in wp]
+
+        headers = {
+            "X-Goog-Api-Key": api_key,
+            "X-Goog-FieldMask": (
+                "routes.distanceMeters,routes.duration,routes.travelAdvisory.tollInfo"
+            ),
+        }
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0)) as client:
+            resp = await client.post(_ROUTES_API_V2_URL, json=payload, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+
+        routes = data.get("routes") or []
+        if not routes:
+            raise ValueError("Routes API v2: sin rutas para vehículo pesado")
+        route = routes[0]
+        meters = int(route.get("distanceMeters") or 0)
+        duration_seconds = _duration_to_seconds(route.get("duration"))
+        km = 0.0 if meters <= 0 else round(meters / 1000.0, 4)
+        mins = (
+            MapsService._estimate_duration_minutes(km)
+            if duration_seconds <= 0
+            else max(0, int(round(duration_seconds / 60.0)))
+        )
+        tolls = _parse_toll_amount_eur(route.get("travelAdvisory") or {})
+        fuel_cost_estimate = None
+        try:
+            from app.core.math_engine import MathEngine
+
+            costs = MathEngine.calculate_route_costs(
+                distance_km=km,
+                toll_cost=tolls,
+            )
+            fuel_cost_estimate = float(costs.get("fuel_cost_estimate") or 0.0)
+        except Exception:
+            fuel_cost_estimate = None
+        if span is not None:
+            span.set_data("distance_km", km)
+            span.set_data("duration_minutes", mins)
+            span.set_data("toll_cost_estimate", tolls)
+            if fuel_cost_estimate is not None:
+                span.set_data("fuel_cost_estimate", fuel_cost_estimate)
+        return {
+            "distancia_km": km,
+            "tiempo_estimado_min": mins,
+            "distance_meters": meters,
+            "duration_seconds": duration_seconds,
+            "tiene_peajes": tolls > 0.0,
+            "peajes_estimados_eur": tolls,
+            "travel_mode": "DRIVE",
+            "vehicle_type": "HEAVY_TRUCK",
+        }
+
 
 def _directions_api_sync(
     origin: str,
@@ -409,6 +581,49 @@ def _route_has_tolls(route: dict[str, Any]) -> bool:
                 return True
     blob = json.dumps(route, ensure_ascii=False).lower()
     return "toll" in blob
+
+
+def _normalize_routes_emission_type(raw: str | None) -> str:
+    val = str(raw or "").strip().upper()
+    if "ELECT" in val:
+        return "ELECTRIC"
+    if "HYBRID" in val or "HIBRID" in val:
+        return "HYBRID"
+    if "CNG" in val:
+        return "CNG"
+    if "GAS" in val and "DIESEL" not in val:
+        return "GASOLINE"
+    # EURO_VI / EURO VI se mapea a diésel por compatibilidad del enum Routes v2.
+    return "DIESEL"
+
+
+def _duration_to_seconds(raw: Any) -> int:
+    if isinstance(raw, str) and raw.endswith("s"):
+        try:
+            return max(0, int(float(raw[:-1])))
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def _parse_toll_amount_eur(travel_advisory: dict[str, Any]) -> float:
+    toll_info = travel_advisory.get("tollInfo") if isinstance(travel_advisory, dict) else None
+    if not isinstance(toll_info, dict):
+        return 0.0
+    prices = toll_info.get("estimatedPrice")
+    if not isinstance(prices, list):
+        return 0.0
+    total_eur = 0.0
+    for p in prices:
+        if not isinstance(p, dict):
+            continue
+        code = str(p.get("currencyCode") or "").upper().strip()
+        if code and code != "EUR":
+            continue
+        units = float(p.get("units") or 0.0)
+        nanos = float(p.get("nanos") or 0.0)
+        total_eur += units + (nanos / 1_000_000_000.0)
+    return round(max(0.0, total_eur), 2)
 
 
 def _parse_directions_response(routes: list[dict[str, Any]]) -> dict[str, Any]:

@@ -1,0 +1,63 @@
+name: Backup Daily
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup-db:
+    name: Supabase backup and secure upload
+    runs-on: ubuntu-latest
+    env:
+      BACKUP_DIR: ./backups
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate required secrets
+        run: |
+          test -n "${SUPABASE_ACCESS_TOKEN}" || (echo "Missing SUPABASE_ACCESS_TOKEN" && exit 1)
+          test -n "${SUPABASE_PROJECT_REF}" || (echo "Missing SUPABASE_PROJECT_REF" && exit 1)
+          test -n "${SUPABASE_DB_PASSWORD}" || (echo "Missing SUPABASE_DB_PASSWORD" && exit 1)
+
+      - name: Generate backup archive
+        run: |
+          chmod +x ./scripts/backup_db.sh
+          ./scripts/backup_db.sh
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.BACKUP_AWS_REGION }}
+
+      - name: Upload backup to secure external storage (S3)
+        env:
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_S3_PREFIX: ${{ secrets.BACKUP_S3_PREFIX }}
+        run: |
+          test -n "${BACKUP_S3_BUCKET}" || (echo "Missing BACKUP_S3_BUCKET" && exit 1)
+          PREFIX="${BACKUP_S3_PREFIX:-ab-logistics/daily}"
+          LATEST_BACKUP="$(ls -1t ${BACKUP_DIR}/supabase_backup_*.tar.gz | head -n 1)"
+          aws s3 cp "${LATEST_BACKUP}" "s3://${BACKUP_S3_BUCKET}/${PREFIX}/$(basename "${LATEST_BACKUP}")"
+
+      - name: Upload backup artifact (short retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-backup
+          path: backups/supabase_backup_*.tar.gz
+          retention-days: 2

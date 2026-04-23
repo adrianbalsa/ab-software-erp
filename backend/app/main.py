@@ -38,11 +38,13 @@ from app.api.routes import (
     utils,
 )
 from app.api.endpoints import ai as ai_endpoints
+from app.api.v1 import auth as auth_password_v1
 from app.api.v1 import advisor as advisor_v1
 from app.api.v1 import bi as bi_v1
 from app.api.v1 import product_config as product_config_v1
 from app.api.v1 import analytics as analytics_v1
 from app.api.v1 import banking as banking_v1
+from app.api.v1 import ai_documents as ai_documents_v1
 from app.api.v1 import chat as chat_v1
 from app.api.v1 import chatbot as chatbot_v1
 from app.api.v1 import clientes as clientes_v1
@@ -74,7 +76,7 @@ from app.api.v1.webhooks import esg_external_verify as webhooks_esg_external_v1
 from app.api.v1 import treasury as treasury_v1
 from app.api.v1 import verifactu as verifactu_v1
 from app.api.v1.webhooks import b2b as webhooks_v1
-from app.api.v1 import webhooks_gocardless as webhooks_gocardless_v1
+from app.api.v1.webhooks import gocardless as webhooks_gocardless_v1
 from app.core.config import ConfigError, Settings, get_settings
 from app.core.job_queue import close_arq_redis_pool
 from app.core.rate_limit import (
@@ -89,7 +91,7 @@ from app.middleware.login_debug_print import LoginDebugPrintMiddleware
 from app.middleware.json_access_log import JsonAccessLogMiddleware
 from app.middleware.audit_log_middleware import AuditLogMiddleware
 from app.middleware.fiscal_rate_limit_middleware import FiscalVerifactuRateLimitMiddleware
-from app.middleware.rate_limit_middleware import AuthLoginRateLimitMiddleware
+from app.middleware.rate_limit_middleware import AuthLoginRateLimitMiddleware, EndpointCostRateLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.slow_request_log import SlowRequestLogMiddleware
 from app.middleware.tenant_rbac_context import TenantRBACContextMiddleware
@@ -230,6 +232,7 @@ def create_app() -> FastAPI:
     app.add_middleware(SlowRequestLogMiddleware)
     app.add_middleware(SkipOptionsSlowAPIMiddleware)
     app.add_middleware(AuthLoginRateLimitMiddleware)
+    app.add_middleware(EndpointCostRateLimitMiddleware)
     # Debe ejecutarse antes que el resto de middlewares de rate limit para envolver
     # envíos fiscales AEAT (ruta /api/v1/verifactu y finalizaciones de factura).
     app.add_middleware(FiscalVerifactuRateLimitMiddleware)
@@ -334,6 +337,7 @@ def create_app() -> FastAPI:
     app.include_router(utils.router, tags=["Salud"])
     app.include_router(payments.router, prefix="/payments", tags=["Pagos"])
     app.include_router(auth.router, prefix="/auth", tags=["Autenticación"])
+    app.include_router(auth_password_v1.router, prefix="/api/v1/auth", tags=["Autenticación"])
     app.include_router(portes.router, prefix="/portes", tags=["Portes"])
     app.include_router(portes.router, prefix="/api/v1/portes", tags=["Portes"])
     app.include_router(clientes.router, prefix="/clientes", tags=["Clientes"])
@@ -368,7 +372,7 @@ def create_app() -> FastAPI:
     app.include_router(stripe.router, prefix="/api/v1/stripe", tags=["Pagos"])
     app.include_router(
         stripe_webhook_v1.router,
-        prefix="/api/v1/webhooks",
+        prefix="/api/v1",
         tags=["Webhooks Stripe"],
     )
     app.include_router(
@@ -396,6 +400,11 @@ def create_app() -> FastAPI:
     app.include_router(esg_v1.router, prefix="/api/v1", tags=["ESG"])
     app.include_router(esg_auditoria_v1.router, prefix="/api/v1", tags=["ESG - Auditoría"])
     app.include_router(chat_v1.router, prefix="/api/v1/chat", tags=["IA y chat"])
+    app.include_router(
+        ai_documents_v1.router,
+        prefix="/api/v1/ai",
+        tags=["IA — Vampire Radar / Economic Advisor"],
+    )
     app.include_router(chatbot_v1.router, prefix="/api/v1/chatbot", tags=["IA y chat"])
     app.include_router(banking_v1.router, prefix="/api/v1/banking", tags=["Banking"])
     app.include_router(treasury_v1.router, prefix="/api/v1/treasury", tags=["Tesorería"])

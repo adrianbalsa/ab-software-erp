@@ -10,6 +10,7 @@ import ssl
 from collections.abc import Callable
 from email.message import EmailMessage
 from typing import Any
+from urllib.parse import urlencode
 
 import resend
 
@@ -19,6 +20,16 @@ from app.core.i18n import get_translator, normalize_lang
 logger = logging.getLogger(__name__)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+RESEND_TRANSACTIONAL_FROM = "AB Logistics OS <no-reply@ablogistics-os.com>"
+
+
+def _transactional_resend_ready() -> bool:
+    return bool((get_settings().RESEND_API_KEY or "").strip())
+
+
+def _frontend_public_base(settings: Settings) -> str:
+    return (settings.PUBLIC_APP_URL or "").strip().rstrip("/")
 
 
 def _sentry_capture_email_failure(
@@ -79,6 +90,53 @@ def _resend_configured() -> bool:
     return bool(s.RESEND_API_KEY and s.EMAIL_FROM_ADDRESS)
 
 
+def _smtp_configured(settings: Settings | None = None) -> bool:
+    s = settings if settings is not None else get_settings()
+    return bool((s.SMTP_HOST or "").strip() and s.SMTP_PORT and (s.EMAILS_FROM_EMAIL or "").strip())
+
+
+def resolve_invoice_email_channel(settings: Settings | None = None) -> str:
+    s = settings if settings is not None else get_settings()
+    strategy = str(getattr(s, "EMAIL_STRATEGY_INVOICE", "resend") or "resend").strip().lower()
+    resend_ok = bool((s.RESEND_API_KEY or "").strip() and (s.EMAIL_FROM_ADDRESS or "").strip())
+    smtp_ok = _smtp_configured(s)
+    if strategy == "smtp":
+        if not smtp_ok:
+            raise RuntimeError("EMAIL_STRATEGY_INVOICE=smtp pero SMTP no está configurado.")
+        return "smtp"
+    if strategy == "resend":
+        if not resend_ok:
+            raise RuntimeError("EMAIL_STRATEGY_INVOICE=resend pero Resend no está configurado.")
+        return "resend"
+    # auto
+    if smtp_ok:
+        return "smtp"
+    if resend_ok:
+        return "resend"
+    raise RuntimeError("Sin proveedor de correo para facturas (configure SMTP o Resend).")
+
+
+def resolve_transactional_email_channel(settings: Settings | None = None) -> str:
+    s = settings if settings is not None else get_settings()
+    strategy = str(getattr(s, "EMAIL_STRATEGY_TRANSACTIONAL", "resend") or "resend").strip().lower()
+    resend_ok = bool((s.RESEND_API_KEY or "").strip())
+    smtp_ok = _smtp_configured(s)
+    if strategy == "smtp":
+        if not smtp_ok:
+            raise RuntimeError("EMAIL_STRATEGY_TRANSACTIONAL=smtp pero SMTP no está configurado.")
+        return "smtp"
+    if strategy == "resend":
+        if not resend_ok:
+            raise RuntimeError("EMAIL_STRATEGY_TRANSACTIONAL=resend pero Resend no está configurado.")
+        return "resend"
+    # auto
+    if resend_ok:
+        return "resend"
+    if smtp_ok:
+        return "smtp"
+    raise RuntimeError("Sin proveedor de correo transaccional (configure Resend o SMTP).")
+
+
 def _normalize_dest_email(raw: str | None) -> str | None:
     if not raw or not str(raw).strip():
         return None
@@ -86,6 +144,44 @@ def _normalize_dest_email(raw: str | None) -> str | None:
     if not _EMAIL_RE.match(e):
         return None
     return e
+
+
+def _send_transactional_smtp_sync(
+    settings: Settings,
+    *,
+    to_email: str,
+    subject: str,
+    html_body: str,
+    text_body: str,
+) -> None:
+    host = (settings.SMTP_HOST or "").strip()
+    port = int(settings.SMTP_PORT)
+    from_addr = (settings.EMAILS_FROM_EMAIL or "").strip()
+    if not host or not from_addr:
+        raise RuntimeError("SMTP_HOST o EMAILS_FROM_EMAIL no configurados")
+    user = (settings.SMTP_USER or "").strip()
+    password = (settings.SMTP_PASSWORD or "").strip()
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_email.strip()
+    msg.set_content(text_body, charset="utf-8")
+    msg.add_alternative(html_body, subtype="html", charset="utf-8")
+    ctx = ssl.create_default_context()
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port, timeout=60, context=ctx) as smtp:
+            if user:
+                smtp.login(user, password)
+            smtp.send_message(msg)
+    else:
+        with smtplib.SMTP(host, port, timeout=60) as smtp:
+            smtp.ehlo()
+            if smtp.has_extn("starttls"):
+                smtp.starttls(context=ctx)
+                smtp.ehlo()
+            if user:
+                smtp.login(user, password)
+            smtp.send_message(msg)
 
 
 def _invoice_html(factura_data: dict[str, Any], *, lang: str | None = None) -> str:
@@ -195,6 +291,241 @@ def _onboarding_invite_html(onboarding_link: str, *, lang: str | None = None) ->
 </body></html>"""
 
 
+def _reset_password_html(*, reset_url: str) -> str:
+    safe = html.escape(reset_url, quote=True)
+    return f"""<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background-color:#1c1917;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#1c1917;padding:28px 14px;">
+    <tr><td align="center">
+      <table width="560" style="max-width:560px;background:#292524;border-radius:14px;overflow:hidden;border:1px solid #44403c;">
+        <tr>
+          <td style="padding:26px 28px;background:linear-gradient(145deg,#292524 0%,#134e4a 55%,#14532d 100%);border-bottom:1px solid #44403c;">
+            <p style="margin:0;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#a8a29e;">AB Logistics OS</p>
+            <h1 style="margin:10px 0 0;font-size:20px;font-weight:700;color:#fafaf9;line-height:1.25;">Recuperar contraseña</h1>
+            <p style="margin:10px 0 0;font-size:14px;color:#d6d3d1;">Hemos recibido una solicitud para restablecer el acceso a tu cuenta.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:26px 28px;color:#e7e5e4;font-size:15px;line-height:1.65;">
+            <p style="margin:0 0 18px;">Pulsa el botón para elegir una contraseña nueva. El enlace caduca en una hora.</p>
+            <p style="margin:0 0 22px;text-align:center;">
+              <a href="{safe}" style="display:inline-block;background:#0d9488;color:#f0fdfa;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;font-size:15px;">
+                Restablecer contraseña
+              </a>
+            </p>
+            <p style="margin:0;font-size:12px;color:#a8a29e;word-break:break-all;">Si no ves el botón, copia y pega esta URL en el navegador:<br/>{safe}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 28px;background:#1c1917;border-top:1px solid #44403c;font-size:11px;color:#78716c;">
+            Si no solicitaste este cambio, ignora este mensaje. Tu contraseña actual no se modifica hasta que uses el enlace.
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>"""
+
+
+def _welcome_enterprise_html(*, company: str) -> str:
+    co = html.escape((company or "").strip() or "tu empresa")
+    return f"""<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;background-color:#1c1917;font-family:ui-sans-serif,system-ui,sans-serif;">
+  <table width="100%" style="background:#1c1917;padding:28px 14px;"><tr><td align="center">
+    <table width="560" style="max-width:560px;background:#292524;border-radius:14px;border:1px solid #44403c;">
+      <tr><td style="padding:26px 28px;background:linear-gradient(145deg,#292524,#14532d);">
+        <h1 style="margin:0;font-size:20px;color:#fafaf9;">Bienvenida · Plan Enterprise</h1>
+        <p style="margin:10px 0 0;font-size:14px;color:#d6d3d1;">{co}</p>
+      </td></tr>
+      <tr><td style="padding:24px 28px;color:#e7e5e4;font-size:15px;line-height:1.65;">
+        <p style="margin:0;">Gracias por confiar en AB Logistics OS. Tu espacio ya incluye VeriFactu, motor financiero avanzado y módulos ESG.</p>
+        <p style="margin:16px 0 0;">El equipo puede empezar a operar de inmediato: crea tu primer porte o importa flota desde el panel.</p>
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>"""
+
+
+def _esg_report_html() -> str:
+    return """<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;background-color:#1c1917;font-family:ui-sans-serif,system-ui,sans-serif;">
+  <table width="100%" style="background:#1c1917;padding:28px 14px;"><tr><td align="center">
+    <table width="560" style="max-width:560px;background:#292524;border-radius:14px;border:1px solid #44403c;">
+      <tr><td style="padding:26px 28px;background:linear-gradient(145deg,#292524,#134e4a);">
+        <h1 style="margin:0;font-size:20px;color:#fafaf9;">Informe de emisiones CO₂</h1>
+        <p style="margin:10px 0 0;font-size:14px;color:#d6d3d1;">AB Logistics OS · ESG</p>
+      </td></tr>
+      <tr><td style="padding:24px 28px;color:#e7e5e4;font-size:15px;line-height:1.65;">
+        <p style="margin:0;">Adjuntamos el informe en PDF con el detalle de emisiones calculadas con el motor ESG.</p>
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>"""
+
+
+class EmailService:
+    """
+    Correo transaccional con **Resend** (recuperación de contraseña, bienvenida enterprise, informes ESG).
+
+    Remitente fijado a la identidad de producto; requiere ``RESEND_API_KEY`` y dominio verificado en Resend.
+    """
+
+    def __init__(self, settings: Settings | None = None) -> None:
+        self._settings = settings if settings is not None else get_settings()
+
+    def send_reset_password(self, email: str, token: str) -> bool:
+        dest = _normalize_dest_email(email)
+        tok = (token or "").strip()
+        if not dest or not tok:
+            logger.info("reset password email omitido: destino o token inválido")
+            return False
+        try:
+            channel = resolve_transactional_email_channel(self._settings)
+        except RuntimeError as exc:
+            logger.warning("correo reset password omitido: %s", exc)
+            return False
+        base = _frontend_public_base(self._settings)
+        if not base:
+            logger.warning("PUBLIC_APP_URL vacío; no se construye enlace de reset")
+            return False
+        reset_url = f"{base}/auth/reset-password?{urlencode({'token': tok})}"
+        try:
+            import sentry_sdk
+
+            if channel == "resend":
+                resend.api_key = (self._settings.RESEND_API_KEY or "").strip()
+                with sentry_sdk.start_span(op="email.resend", name="send_reset_password"):
+                    resend.Emails.send(
+                        {
+                            "from": RESEND_TRANSACTIONAL_FROM,
+                            "to": [dest],
+                            "subject": "Restablecer contraseña · AB Logistics OS",
+                            "html": _reset_password_html(reset_url=reset_url),
+                        }
+                    )
+            else:
+                with sentry_sdk.start_span(op="email.smtp", name="send_reset_password"):
+                    _send_transactional_smtp_sync(
+                        self._settings,
+                        to_email=dest,
+                        subject="Restablecer contraseña · AB Logistics OS",
+                        html_body=_reset_password_html(reset_url=reset_url),
+                        text_body=f"Restablece tu contraseña en: {reset_url}",
+                    )
+            logger.info("correo reset password encolado/enviado (dest=%s)", dest[:48])
+            return True
+        except Exception as exc:
+            logger.exception("Fallo Resend send_reset_password: %s", exc)
+            try:
+                import sentry_sdk
+
+                sentry_sdk.capture_exception(exc)
+            except Exception:
+                pass
+            _sentry_capture_email_failure("send_reset_password", exc=exc, extra={"dest_hint": dest[:3] + "…"})
+            return False
+
+    def send_welcome_enterprise(self, email: str, company: str) -> bool:
+        dest = _normalize_dest_email(email)
+        if not dest:
+            return False
+        try:
+            channel = resolve_transactional_email_channel(self._settings)
+        except RuntimeError as exc:
+            logger.warning("correo welcome enterprise omitido: %s", exc)
+            return False
+        try:
+            import sentry_sdk
+
+            co_sub = " ".join((company or "").strip().split())[:80] or "AB Logistics OS"
+            if channel == "resend":
+                resend.api_key = (self._settings.RESEND_API_KEY or "").strip()
+                with sentry_sdk.start_span(op="email.resend", name="send_welcome_enterprise"):
+                    resend.Emails.send(
+                        {
+                            "from": RESEND_TRANSACTIONAL_FROM,
+                            "to": [dest],
+                            "subject": f"Bienvenida Enterprise · {co_sub}",
+                            "html": _welcome_enterprise_html(company=company),
+                        }
+                    )
+            else:
+                with sentry_sdk.start_span(op="email.smtp", name="send_welcome_enterprise"):
+                    _send_transactional_smtp_sync(
+                        self._settings,
+                        to_email=dest,
+                        subject=f"Bienvenida Enterprise · {co_sub}",
+                        html_body=_welcome_enterprise_html(company=company),
+                        text_body=f"Bienvenida Enterprise, {co_sub}.",
+                    )
+            logger.info("correo welcome enterprise enviado (dest=%s)", dest[:48])
+            return True
+        except Exception as exc:
+            logger.exception("Fallo Resend send_welcome_enterprise: %s", exc)
+            try:
+                import sentry_sdk
+
+                sentry_sdk.capture_exception(exc)
+            except Exception:
+                pass
+            _sentry_capture_email_failure("send_welcome_enterprise", exc=exc)
+            return False
+
+    def send_esg_report(self, email: str, pdf_content: bytes) -> bool:
+        dest = _normalize_dest_email(email)
+        if not dest or not pdf_content:
+            return False
+        try:
+            channel = resolve_transactional_email_channel(self._settings)
+        except RuntimeError as exc:
+            logger.warning("correo informe ESG omitido: %s", exc)
+            return False
+        try:
+            import sentry_sdk
+
+            if channel == "resend":
+                resend.api_key = (self._settings.RESEND_API_KEY or "").strip()
+                with sentry_sdk.start_span(op="email.resend", name="send_esg_report"):
+                    resend.Emails.send(
+                        {
+                            "from": RESEND_TRANSACTIONAL_FROM,
+                            "to": [dest],
+                            "subject": "Informe de emisiones CO₂ · AB Logistics OS",
+                            "html": _esg_report_html(),
+                            "attachments": [
+                                {
+                                    "filename": "Informe_emisiones_CO2.pdf",
+                                    "content": list(pdf_content),
+                                }
+                            ],
+                        }
+                    )
+            else:
+                with sentry_sdk.start_span(op="email.smtp", name="send_esg_report"):
+                    _send_invoice_smtp_sync(
+                        self._settings,
+                        dest,
+                        pdf_content,
+                        "Informe_emisiones_CO2",
+                        lang="es",
+                    )
+            logger.info("correo informe ESG enviado (dest=%s)", dest[:48])
+            return True
+        except Exception as exc:
+            logger.exception("Fallo Resend send_esg_report: %s", exc)
+            try:
+                import sentry_sdk
+
+                sentry_sdk.capture_exception(exc)
+            except Exception:
+                pass
+            _sentry_capture_email_failure("send_esg_report", exc=exc)
+            return False
+
+
 def send_invoice_email_from_base64(
     factura_data: dict[str, Any],
     pdf_base64: str | None,
@@ -232,44 +563,54 @@ def send_invoice_email(
         logger.info("email factura omitido: destino no válido o vacío")
         return False
 
-    if not _resend_configured():
-        logger.warning("Resend no configurado (RESEND_API_KEY / EMAIL_FROM_ADDRESS); no se envía factura")
-        return False
-
     if not pdf_content:
         logger.warning("email factura omitido: PDF vacío")
+        return False
+
+    settings = get_settings()
+    try:
+        channel = resolve_invoice_email_channel(settings)
+    except RuntimeError as exc:
+        logger.warning("email factura omitido: %s", exc)
         return False
 
     eff_lang = lang or factura_data.get("preferred_language")
     t = get_translator(eff_lang)
 
-    settings = get_settings()
-    assert settings.RESEND_API_KEY and settings.EMAIL_FROM_ADDRESS
-    resend.api_key = settings.RESEND_API_KEY
-
     num = str(factura_data.get("numero_factura") or "factura")
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in num)[:80]
-    filename = f"Factura_{safe_name}.pdf"
 
     try:
-        params: dict[str, Any] = {
-            "from": settings.EMAIL_FROM_ADDRESS,
-            "to": [dest],
-            "subject": t("Invoice {num} · AB Logistics OS").format(num=num),
-            "html": _invoice_html(factura_data, lang=eff_lang),
-            "attachments": [
-                {
-                    "filename": filename,
-                    # SDK Resend: bytes como lista de int, o string base64
-                    "content": list(pdf_content),
-                }
-            ],
-        }
-        resend.Emails.send(params)
-        logger.info("email factura enviado (numero_factura=%s)", num)
+        if channel == "smtp":
+            _send_invoice_smtp_sync(
+                settings,
+                dest,
+                pdf_content,
+                safe_name,
+                lang=eff_lang,
+            )
+        else:
+            assert settings.RESEND_API_KEY and settings.EMAIL_FROM_ADDRESS
+            resend.api_key = settings.RESEND_API_KEY
+            filename = f"Factura_{safe_name}.pdf"
+            params: dict[str, Any] = {
+                "from": settings.EMAIL_FROM_ADDRESS,
+                "to": [dest],
+                "subject": t("Invoice {num} · AB Logistics OS").format(num=num),
+                "html": _invoice_html(factura_data, lang=eff_lang),
+                "attachments": [
+                    {
+                        "filename": filename,
+                        # SDK Resend: bytes como lista de int, o string base64
+                        "content": list(pdf_content),
+                    }
+                ],
+            }
+            resend.Emails.send(params)
+        logger.info("email factura enviado (numero_factura=%s via=%s)", num, channel)
         return True
     except Exception as exc:
-        logger.exception("Fallo al enviar email de factura: %s", exc)
+        logger.exception("Fallo al enviar email de factura (via=%s): %s", channel, exc)
         return False
 
 
@@ -416,7 +757,7 @@ def _send_invoice_smtp_sync(
     logger.info("Factura enviada por SMTP (num=%s → %s)", fn, to_email.strip())
 
 
-class EmailService:
+class SmtpInvoiceEmailService:
     """
     Envío de correo vía SMTP (facturación).
 
@@ -428,8 +769,7 @@ class EmailService:
 
     @staticmethod
     def smtp_configured(settings: Settings | None = None) -> bool:
-        s = settings if settings is not None else get_settings()
-        return bool((s.SMTP_HOST or "").strip() and s.SMTP_PORT and (s.EMAILS_FROM_EMAIL or "").strip())
+        return _smtp_configured(settings)
 
     async def send_invoice_email(
         self, to_email: str, pdf_content: bytes, factura_num: str, *, lang: str | None = None
@@ -475,24 +815,36 @@ def send_onboarding_invite(dest_email: str, onboarding_link: str, *, lang: str |
     if not dest or not link:
         logger.info("email onboarding omitido: destino o enlace inválido")
         return False
-    if not _resend_configured():
-        logger.warning("Resend no configurado; no se envía invitación de onboarding")
-        return False
-
     settings = get_settings()
-    assert settings.RESEND_API_KEY and settings.EMAIL_FROM_ADDRESS
-    resend.api_key = settings.RESEND_API_KEY
+    try:
+        channel = resolve_transactional_email_channel(settings)
+    except RuntimeError as exc:
+        logger.warning("email onboarding omitido: %s", exc)
+        return False
     t = get_translator(lang)
 
     try:
-        resend.Emails.send(
-            {
-                "from": settings.EMAIL_FROM_ADDRESS,
-                "to": [dest],
-                "subject": t("Invitation to onboarding · AB Logistics OS"),
-                "html": _onboarding_invite_html(link, lang=lang),
-            }
-        )
+        subject = t("Invitation to onboarding · AB Logistics OS")
+        html_body = _onboarding_invite_html(link, lang=lang)
+        if channel == "resend":
+            assert settings.RESEND_API_KEY and settings.EMAIL_FROM_ADDRESS
+            resend.api_key = settings.RESEND_API_KEY
+            resend.Emails.send(
+                {
+                    "from": settings.EMAIL_FROM_ADDRESS,
+                    "to": [dest],
+                    "subject": subject,
+                    "html": html_body,
+                }
+            )
+        else:
+            _send_transactional_smtp_sync(
+                settings,
+                to_email=dest,
+                subject=subject,
+                html_body=html_body,
+                text_body=f"Completa tu onboarding: {link}",
+            )
         logger.info("invitación onboarding enviada (email=%s)", dest)
         return True
     except Exception as exc:

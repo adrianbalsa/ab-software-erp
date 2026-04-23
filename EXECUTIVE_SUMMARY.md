@@ -409,7 +409,7 @@ Integrations:
 - openai>=1.40.0
 - google-genai>=1.0.0
 - googlemaps>=4.10.0
-- azure-ai-formrecognizer>=3.3.0
+- litellm (visión OCR tickets / Vampire Radar)
 
 PDF/Reports:
 - fpdf2>=2.7.0

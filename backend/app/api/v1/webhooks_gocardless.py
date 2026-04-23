@@ -73,6 +73,29 @@ def _extract_gocardless_customer_id(event: dict[str, Any]) -> str:
     return ""
 
 
+async def _insert_audit_log_rpc(
+    *,
+    db: SupabaseAsync,
+    empresa_id: str,
+    table_name: str,
+    record_id: str,
+    action: str,
+    old_data: dict[str, Any] | None = None,
+    new_data: dict[str, Any] | None = None,
+) -> None:
+    params: dict[str, Any] = {
+        "p_empresa_id": empresa_id,
+        "p_table_name": table_name,
+        "p_record_id": record_id,
+        "p_action": action,
+    }
+    if old_data is not None:
+        params["p_old_data"] = old_data
+    if new_data is not None:
+        params["p_new_data"] = new_data
+    await db.rpc("audit_logs_insert_api_event", params)
+
+
 async def _mark_factura_as_paid_and_audit(
     *,
     db: SupabaseAsync,
@@ -118,25 +141,21 @@ async def _mark_factura_as_paid_and_audit(
         )
 
     # Trazabilidad explícita (además del trigger de facturas).
-    await db.execute(
-        db.table("audit_logs").insert(
-            {
-                "empresa_id": empresa_id,
-                "table_name": "facturas",
-                "record_id": str(factura_id),
-                "action": "UPDATE",
-                "old_data": {"estado_cobro": row.get("estado_cobro"), "pago_id": row.get("pago_id")},
-                "new_data": {
-                    "estado_cobro": "cobrada",
-                    "pago_id": payment_id or f"gocardless:{factura_id}",
-                    "source": "gocardless_webhook",
-                    "event_type": _extract_event_type(event),
-                    "event_id": str(event.get("id") or ""),
-                    "body_sha256": body_digest,
-                },
-                "changed_by": None,
-            }
-        )
+    await _insert_audit_log_rpc(
+        db=db,
+        empresa_id=empresa_id,
+        table_name="facturas",
+        record_id=str(factura_id),
+        action="UPDATE",
+        old_data={"estado_cobro": row.get("estado_cobro"), "pago_id": row.get("pago_id")},
+        new_data={
+            "estado_cobro": "cobrada",
+            "pago_id": payment_id or f"gocardless:{factura_id}",
+            "source": "gocardless_webhook",
+            "event_type": _extract_event_type(event),
+            "event_id": str(event.get("id") or ""),
+            "body_sha256": body_digest,
+        },
     )
 
 
@@ -193,26 +212,22 @@ async def _mark_cliente_mandate_active_and_audit(
             .eq("empresa_id", empresa_id)
         )
 
-    await db.execute(
-        db.table("audit_logs").insert(
-            {
-                "empresa_id": empresa_id,
-                "table_name": "clientes",
-                "record_id": cliente_id,
-                "action": "UPDATE",
-                "old_data": {"mandato_activo": old_mandato},
-                "new_data": {
-                    "mandato_activo": True,
-                    "evento": "mandate_activated",
-                    "source": "gocardless_webhook",
-                    "event_type": _extract_event_type(event),
-                    "event_id": str(event.get("id") or ""),
-                    "gocardless_customer_id": customer_id,
-                    "body_sha256": body_digest,
-                },
-                "changed_by": None,
-            }
-        )
+    await _insert_audit_log_rpc(
+        db=db,
+        empresa_id=empresa_id,
+        table_name="clientes",
+        record_id=cliente_id,
+        action="UPDATE",
+        old_data={"mandato_activo": old_mandato},
+        new_data={
+            "mandato_activo": True,
+            "evento": "mandate_activated",
+            "source": "gocardless_webhook",
+            "event_type": _extract_event_type(event),
+            "event_id": str(event.get("id") or ""),
+            "gocardless_customer_id": customer_id,
+            "body_sha256": body_digest,
+        },
     )
 
 

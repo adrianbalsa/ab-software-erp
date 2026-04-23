@@ -15,6 +15,7 @@ from app.services.webhook_idempotency import (
 )
 from app.core.plans import PLAN_ENTERPRISE, PLAN_PRO, PLAN_STARTER, normalize_plan
 from app.db.supabase import SupabaseAsync
+from app.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,87 @@ logger = logging.getLogger(__name__)
 _STRIPE_SUBSCRIPTION_INACTIVE: frozenset[str] = frozenset(
     {"canceled", "unpaid", "incomplete_expired", "paused"},
 )
+
+
+def _checkout_session_customer_email(sess: dict[str, Any]) -> str | None:
+    cd = sess.get("customer_details")
+    if isinstance(cd, dict):
+        raw = cd.get("email")
+        if raw and str(raw).strip():
+            return str(raw).strip()
+    raw = sess.get("customer_email")
+    if raw and str(raw).strip():
+        return str(raw).strip()
+    return None
+
+
+def _sentry_onboarding_email_failed(*, empresa_id: str, detail: str) -> None:
+    try:
+        import sentry_sdk
+
+        with sentry_sdk.push_scope() as scope:
+            scope.set_context("stripe_checkout", {"empresa_id": empresa_id, "detail": detail})
+            with sentry_sdk.start_span(op="stripe.webhook", name="onboarding_email_failed"):
+                sentry_sdk.capture_message("onboarding_email_failed", level="error")
+    except Exception:
+        pass
+
+
+async def _send_enterprise_welcome_after_checkout(
+    db: SupabaseAsync,
+    *,
+    empresa_id: str,
+    customer_email: str | None,
+) -> None:
+    """No lanza: fallos → log + Sentry (op ``stripe.webhook``); la respuesta HTTP a Stripe sigue siendo 200."""
+    em = (customer_email or "").strip()
+    if not em:
+        _sentry_onboarding_email_failed(empresa_id=empresa_id, detail="missing_customer_email")
+        return
+    try:
+        res: Any = await db.execute(
+            db.table("empresas")
+            .select("nombre_comercial,nombre_legal")
+            .eq("id", str(empresa_id).strip())
+            .limit(1)
+        )
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+    except Exception as exc:
+        logger.warning("welcome enterprise: lectura empresa falló: %s", exc)
+        _sentry_onboarding_email_failed(empresa_id=empresa_id, detail=f"db_read:{exc!s}")
+        return
+    if not rows:
+        _sentry_onboarding_email_failed(empresa_id=empresa_id, detail="empresa_not_found")
+        return
+    row = rows[0]
+    company = str(row.get("nombre_comercial") or row.get("nombre_legal") or "").strip() or "AB Logistics OS"
+    try:
+        ok = EmailService().send_welcome_enterprise(em, company)
+    except Exception as exc:
+        logger.exception("welcome enterprise: excepción inesperada: %s", exc)
+        _sentry_onboarding_email_failed(empresa_id=empresa_id, detail=f"exception:{exc!s}")
+        try:
+            import sentry_sdk
+
+            sentry_sdk.capture_exception(exc)
+        except Exception:
+            pass
+        return
+    if not ok:
+        _sentry_onboarding_email_failed(empresa_id=empresa_id, detail="send_returned_false")
+
+
+def _subscription_object_to_dict(sub_obj: Any) -> dict[str, Any]:
+    if isinstance(sub_obj, dict):
+        return sub_obj
+    fn = getattr(sub_obj, "to_dict", None)
+    if callable(fn):
+        try:
+            out = fn()
+            return out if isinstance(out, dict) else {}
+        except Exception:
+            return {}
+    return {}
 
 
 def _price_id_to_plan(price_id: str | None) -> str | None:
@@ -33,6 +115,7 @@ def _price_id_to_plan(price_id: str | None) -> str | None:
     mapping: list[tuple[str, str | None]] = [
         (PLAN_ENTERPRISE, settings.STRIPE_PRICE_ENTERPRISE),
         (PLAN_PRO, settings.STRIPE_PRICE_PRO),
+        (PLAN_STARTER, settings.STRIPE_PRICE_BASIC),
         (PLAN_STARTER, settings.STRIPE_PRICE_STARTER),
     ]
     for plan, env_pid in mapping:
@@ -96,6 +179,7 @@ def _infer_base_plan_from_subscription_line_items(sub_obj: dict[str, Any]) -> st
     tier: list[tuple[int, str, str | None]] = [
         (3, PLAN_ENTERPRISE, settings.STRIPE_PRICE_ENTERPRISE),
         (2, PLAN_PRO, settings.STRIPE_PRICE_PRO),
+        (1, PLAN_STARTER, settings.STRIPE_PRICE_BASIC),
         (1, PLAN_STARTER, settings.STRIPE_PRICE_STARTER),
     ]
     for prio, plan, env_pid in tier:
@@ -335,6 +419,7 @@ async def _apply_subscription_to_empresa(
         "stripe_subscription_id": stripe_subscription_id,
         "limite_vehiculos": limite,
         "subscription_status": "active",
+        "plan_status": "active",
         "is_active": True,
     }
     await db.execute(
@@ -390,6 +475,7 @@ async def _downgrade_empresa_to_starter(
         "limite_vehiculos": 5,
         "stripe_subscription_id": None,
         "subscription_status": "canceled",
+        "plan_status": "canceled",
         "is_active": True,
     }
     await db.execute(db.table("empresas").update(payload).eq("id", eid))
@@ -427,9 +513,31 @@ async def _dispatch_stripe_webhook_event(db: SupabaseAsync, event: Any) -> dict[
 
         empresa_id = (sess.get("client_reference_id") or "").strip() or None
         meta = sess.get("metadata") or {}
+        if not isinstance(meta, dict):
+            meta = {}
         if not empresa_id:
             empresa_id = (meta.get("empresa_id") or "").strip() or None
-        plan_type = normalize_plan(str(meta.get("plan_type") or PLAN_STARTER))
+        raw_meta_plan = str(meta.get("plan_type") or "").strip()
+        if raw_meta_plan:
+            plan_type = normalize_plan(raw_meta_plan)
+        else:
+            plan_type = normalize_plan(PLAN_STARTER)
+            sub_probe = sess.get("subscription")
+            if isinstance(sub_probe, dict):
+                sub_probe = sub_probe.get("id")
+            if sub_probe and _stripe_configured():
+                sk = get_secret_manager().get_stripe_secret_key()
+                if sk and str(sk).strip():
+                    stripe.api_key = sk
+                    try:
+                        sub_obj = stripe.Subscription.retrieve(str(sub_probe))
+                        mapped = _infer_base_plan_from_subscription_line_items(
+                            _subscription_object_to_dict(sub_obj)
+                        )
+                        if mapped:
+                            plan_type = normalize_plan(mapped)
+                    except Exception as exc:
+                        logger.warning("checkout.session.completed: inferir plan desde subscription: %s", exc)
 
         if not empresa_id:
             logger.error("checkout.session.completed sin empresa_id")
@@ -449,6 +557,12 @@ async def _dispatch_stripe_webhook_event(db: SupabaseAsync, event: Any) -> dict[
             stripe_customer_id=str(cust) if cust else None,
             stripe_subscription_id=str(sub) if sub else None,
         )
+        if normalize_plan(plan_type) == PLAN_ENTERPRISE:
+            await _send_enterprise_welcome_after_checkout(
+                db,
+                empresa_id=empresa_id,
+                customer_email=_checkout_session_customer_email(sess),
+            )
         return {"received": True, "event": etype, "empresa_id": empresa_id}
 
     if etype == "customer.subscription.deleted":
@@ -478,7 +592,11 @@ async def _dispatch_stripe_webhook_event(db: SupabaseAsync, event: Any) -> dict[
         if cid:
             eid = await _empresa_id_for_stripe_customer(db, stripe_customer_id=cid)
             if eid:
-                fields: dict[str, Any] = {"subscription_status": "active", "is_active": True}
+                fields: dict[str, Any] = {
+                    "subscription_status": "active",
+                    "plan_status": "active",
+                    "is_active": True,
+                }
                 if sub:
                     fields["stripe_subscription_id"] = str(sub).strip()
                 await _merge_empresa_billing_fields(db, empresa_id=eid, fields=fields)
@@ -510,7 +628,11 @@ async def _dispatch_stripe_webhook_event(db: SupabaseAsync, event: Any) -> dict[
         await _merge_empresa_billing_fields(
             db,
             empresa_id=eid,
-            fields={"subscription_status": "past_due", "is_active": False},
+            fields={
+                "subscription_status": "past_due",
+                "plan_status": "past_due",
+                "is_active": False,
+            },
         )
         logger.warning(
             "invoice.payment_failed: empresa %s suspendida (past_due)",

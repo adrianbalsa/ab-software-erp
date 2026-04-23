@@ -70,7 +70,42 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
 
-      - name: Run pytest (backend/tests; DATABASE_URL → Postgres del servicio)
+      - name: Guardrail — forbid direct audit_logs mutations
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          roots = [Path("backend/app"), Path("backend/scripts"), Path("scripts")]
+          patterns = [
+              re.compile(r'table\("audit_logs"\)\.(insert|update|delete)', re.IGNORECASE),
+              re.compile(r"insert\s+into\s+audit_logs", re.IGNORECASE),
+              re.compile(r"update\s+audit_logs\s+set", re.IGNORECASE),
+              re.compile(r"delete\s+from\s+audit_logs", re.IGNORECASE),
+              re.compile(r"truncate\s+(table\s+)?audit_logs", re.IGNORECASE),
+          ]
+
+          violations: list[tuple[Path, int, str]] = []
+          for root in roots:
+              if not root.exists():
+                  continue
+              for path in root.rglob("*.py"):
+                  text = path.read_text(encoding="utf-8", errors="ignore")
+                  for idx, line in enumerate(text.splitlines(), start=1):
+                      for pat in patterns:
+                          if pat.search(line):
+                              violations.append((path, idx, line.strip()))
+                              break
+
+          if violations:
+              print("Direct mutations on audit_logs are forbidden. Use audit_logs_insert_api_event RPC.")
+              for path, line_no, line in violations:
+                  print(f"{path}:{line_no}: {line}")
+              raise SystemExit(1)
+          print("Guardrail OK: no direct audit_logs mutations found.")
+          PY
+
+      - name: Run pytest (backend/tests; incluye routes optimizer Truck API)
         working-directory: backend
         env:
           # Driver por defecto del proyecto (SQLAlchemy + psycopg v3).
@@ -84,4 +119,28 @@ jobs:
           ENVIRONMENT: development
           DEV_MODE: "true"
           STRIPE_WEBHOOK_SECRET: whsec_dummy_test_secret
-        run: python -m pytest tests/ -v
+        run: python -m pytest -k routes_optimizer tests/ -v
+
+  frontend-unit-tests:
+    name: Frontend — unit tests (Vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test:unit

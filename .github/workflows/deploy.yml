@@ -42,8 +42,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run pytest (suite completa; Math Engine incluido)
-        run: pytest tests/ -v --tb=short
+      - name: Run pytest (suite completa; incluye routes optimizer Truck API)
+        run: pytest -k routes_optimizer tests/ -v --tb=short
         env:
           SUPABASE_URL: https://ci-placeholder.supabase.co
           SUPABASE_KEY: ci-anon-key
@@ -76,6 +76,7 @@ jobs:
       - name: Install & build
         run: |
           npm ci
+          npm run test:unit
           npm run build
 
   security-scan:

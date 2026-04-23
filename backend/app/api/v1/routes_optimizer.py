@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.api import deps
 from app.core.esg_engine import calculate_co2_emissions, get_co2_factor_kg_per_km
+from app.core.math_engine import MathEngine
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserOut
 from app.services.maps_service import MapsService
@@ -49,6 +50,9 @@ class RouteOption(BaseModel):
     co2_kg: float = Field(description="Emisiones estimadas de CO₂ en kg")
     nox_g: float = Field(default=0.0, description="Emisiones estimadas de NOx en gramos")
     tiene_peajes: bool
+    peajes_estimados_eur: float = Field(default=0.0, description="Coste estimado de peajes en EUR")
+    fuel_cost_estimate: float = Field(default=0.0, description="Estimación coste combustible en EUR")
+    total_route_cost: float = Field(default=0.0, description="Coste total de ruta (combustible + peajes)")
     normativa_euro: str = Field(default="Euro VI", description="Normativa EURO del vehículo")
     factor_co2_kg_per_km: float = Field(description="Factor de emisión kg CO₂/km")
 
@@ -115,14 +119,21 @@ async def optimize_route(
     factor_co2 = get_co2_factor_kg_per_km(normativa_euro)
 
     try:
-        km, duration_min = await maps_service.get_distance_and_duration(
+        truck_main = await maps_service.get_truck_route(
             origin=origen,
             destination=destino,
-            tenant_empresa_id=current_user.empresa_id,
+            emission_type=normativa_euro,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    km = float(truck_main.get("distancia_km") or 0.0)
+    duration_min = int(truck_main.get("tiempo_estimado_min") or 0)
+    peajes_main = float(truck_main.get("peajes_estimados_eur") or 0.0)
+    costs_main = MathEngine.calculate_route_costs(
+        distance_km=km,
+        toll_cost=peajes_main,
+    )
     co2_kg = calculate_co2_emissions(distancia_km=km, categoria_euro=normativa_euro)
 
     ruta_principal = RouteOption(
@@ -131,7 +142,10 @@ async def optimize_route(
         tiempo_estimado_min=duration_min,
         co2_kg=round(co2_kg, 2),
         nox_g=0.0,
-        tiene_peajes=False,
+        tiene_peajes=bool(truck_main.get("tiene_peajes")),
+        peajes_estimados_eur=float(costs_main.get("toll_cost") or 0.0),
+        fuel_cost_estimate=float(costs_main.get("fuel_cost_estimate") or 0.0),
+        total_route_cost=float(costs_main.get("total_route_cost") or 0.0),
         normativa_euro=normativa_euro,
         factor_co2_kg_per_km=round(factor_co2, 4),
     )
@@ -143,13 +157,19 @@ async def optimize_route(
         addresses = [w.address for w in sorted_waypoints]
 
         try:
-            result = await maps_service.calcular_ruta_optima(
-                origen=origen,
-                destino=destino,
+            result = await maps_service.get_truck_route(
+                origin=origen,
+                destination=destino,
+                emission_type=normativa_euro,
                 waypoints=addresses,
             )
             km_wp = result.get("distancia_km", km)
             dur_wp = result.get("tiempo_estimado_min", duration_min)
+            peajes_wp = float(result.get("peajes_estimados_eur") or 0.0)
+            costs_wp = MathEngine.calculate_route_costs(
+                distance_km=km_wp,
+                toll_cost=peajes_wp,
+            )
             co2_wp = calculate_co2_emissions(
                 distancia_km=km_wp,
                 categoria_euro=normativa_euro,
@@ -162,6 +182,9 @@ async def optimize_route(
                 co2_kg=round(co2_wp, 2),
                 nox_g=0.0,
                 tiene_peajes=result.get("tiene_peajes", False),
+                peajes_estimados_eur=float(costs_wp.get("toll_cost") or 0.0),
+                fuel_cost_estimate=float(costs_wp.get("fuel_cost_estimate") or 0.0),
+                total_route_cost=float(costs_wp.get("total_route_cost") or 0.0),
                 normativa_euro=normativa_euro,
                 factor_co2_kg_per_km=round(factor_co2, 4),
             )

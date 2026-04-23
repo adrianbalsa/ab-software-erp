@@ -49,9 +49,9 @@ SUBPROCESSORS: list[dict[str, Any]] = [
         "category": "ai_document_processing",
         "description": "Asistentes y OCR cuando el cliente usa funciones que llaman a proveedores externos.",
         "vendors": [
-            {"name": "OpenAI", "role": "Modelos de lenguaje (LogisAdvisor, conciliación asistida, etc.)"},
-            {"name": "Anthropic / Google / Azure", "role": "Proveedores alternativos según configuración"},
-            {"name": "Microsoft Azure", "role": "Document Intelligence (OCR) si está configurado"},
+            {"name": "OpenAI", "role": "Modelos de lenguaje y visión OCR (tickets) vía LiteLLM si está configurado"},
+            {"name": "Google (Gemini)", "role": "Visión OCR alternativa vía LiteLLM si está configurado"},
+            {"name": "Anthropic / Azure OpenAI", "role": "Proveedores alternativos de IA según configuración LiteLLM"},
         ],
     },
     {

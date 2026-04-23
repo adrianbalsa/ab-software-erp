@@ -75,7 +75,7 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
               autoComplete="username"
             />
           </div>
-          <div>
+          <div className="pb-2">
             <label className="mb-1 block text-sm font-medium text-slate-600" htmlFor="login-password">
               {L.password}
             </label>
@@ -87,6 +87,14 @@ export function LoginForm({ hideBackToMarketing = false }: LoginFormProps) {
               className="w-full rounded-lg border border-slate-300 p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
               autoComplete="current-password"
             />
+            <div className="mt-2 flex justify-end">
+              <Link
+                href="/forgot-password"
+                className="text-sm text-zinc-500 transition-colors hover:text-emerald-500"
+              >
+                {L.forgotPassword}
+              </Link>
+            </div>
           </div>
           {state && "error" in state ? (
             <p className="text-sm text-red-600" role="alert">

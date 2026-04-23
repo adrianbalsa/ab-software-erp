@@ -62,6 +62,9 @@ export const extraEs = {
       requestAccess: "Solicitar acceso al sistema",
       missingStripeConfig:
         "Falta configurar los Price IDs de Stripe en el frontend (NEXT_PUBLIC_STRIPE_PRICE_*). Consulta docs/operations/STRIPE_BILLING.md.",
+      pricingStripeFallbackTitle: "Contratación en línea no disponible",
+      pricingStripeFallbackBody:
+        "Los enlaces de pago no están configurados en este entorno. Puedes revisar los planes; para contratar, contacta con ventas o completa la configuración de Stripe.",
       stripeGatewayError: "Hubo un problema al conectar con la pasarela segura.",
       stripeConnectionError: "No se pudo conectar con la pasarela segura. Inténtalo de nuevo.",
       pendingUserId: "USUARIO_PENDIENTE_DE_REGISTRO",
@@ -229,6 +232,17 @@ export const extraEs = {
     username: "Usuario",
     email: "Email",
     password: "Contraseña",
+    forgotPassword: "¿Has olvidado tu contraseña?",
+    forgotPasswordTitle: "Recuperar acceso",
+    forgotPasswordSubtitle:
+      "Indica el correo de tu cuenta. Si existe una cuenta asociada, recibirás un enlace para restablecer la contraseña.",
+    sendInstructions: "Enviar instrucciones",
+    checkEmailInbox:
+      "Si el correo existe en nuestro sistema, recibirás un enlace de recuperación pronto.",
+    emailSentTitle: "Correo enviado",
+    forgotPasswordBackToLogin: "Volver al inicio de sesión",
+    forgotPasswordEmailRequired: "Indica un correo electrónico válido.",
+    forgotPasswordGenericError: "No se pudo completar la solicitud. Inténtalo de nuevo más tarde.",
     submit: "Iniciar sesión",
     submitShort: "Entrar",
     pending: "Entrando…",

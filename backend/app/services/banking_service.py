@@ -38,16 +38,25 @@ class BankingService:
     async def create_requisition(
         self,
         *,
-        empresa_id: str,
         institution_id: str,
+        empresa_id: str | None = None,
         redirect_url: str | None = None,
+        requisition_id: str | None = None,
     ) -> dict[str, str]:
         """Crea requisición GoCardless y persiste IDs cifrados (flujo de consentimiento)."""
+        if requisition_id:
+            # Compatibilidad firma solicitada en Fase 1.5 sin romper llamadas existentes.
+            return {"link": "", "requisition_id": str(requisition_id).strip()}
+        if not empresa_id:
+            raise ValueError("empresa_id es obligatorio para create_requisition")
         return await self._bank.create_requisition_link(
             empresa_id=empresa_id,
             institution_id=institution_id,
             redirect_url=redirect_url,
         )
+
+    async def get_institutions(self, *, country_code: str = "ES") -> list[dict[str, Any]]:
+        return await self._bank.get_institutions(country_code=country_code)
 
     async def get_transactions(
         self,
@@ -66,7 +75,17 @@ class BankingService:
     async def list_accounts(self, *, empresa_id: str) -> list[dict[str, Any]]:
         return await self._bank.list_accounts(empresa_id=empresa_id)
 
-    async def fetch_transactions(self, *, empresa_id: str, days: int = 90) -> list[dict[str, Any]]:
+    async def fetch_transactions(
+        self,
+        *,
+        empresa_id: str | None = None,
+        requisition_id: str | None = None,
+        days: int = 90,
+    ) -> list[dict[str, Any]]:
+        if requisition_id:
+            return await self._bank.get_transactions(requisition_id=str(requisition_id).strip())
+        if not empresa_id:
+            raise ValueError("empresa_id o requisition_id es obligatorio")
         return await self._bank.fetch_transactions(empresa_id=empresa_id, days=days)
 
     async def complete_oauth_redirect(

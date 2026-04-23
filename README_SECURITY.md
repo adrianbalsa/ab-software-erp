@@ -38,7 +38,8 @@ despliegue).
 | `ANTHROPIC_API_KEY` / `CLAUDE_API_KEY` | Anthropic (endpoint chat legacy `/chatbot/ask`) |
 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Google AI / Gemini (LiteLLM / asistente) |
 | `AZURE_API_KEY` / `AZURE_OPENAI_API_KEY` | Azure OpenAI (LiteLLM) |
-| `AZURE_ENDPOINT` / `AZURE_KEY` | Azure Document Intelligence (OCR de facturas/gastos) |
+| `OPENAI_API_KEY` / `GEMINI_API_KEY` / `GOOGLE_API_KEY` | OCR de tickets y visión LLM (LiteLLM; ver `ocr_service.py`) |
+| `OCR_VISION_MODEL` / `OCR_GEMINI_MODEL` / `LITELLM_MODEL_OCR` / `LITELLM_EMBEDDING_MODEL` | Overrides opcionales de modelos OCR / Vampire Radar |
 
 Lectura en código: ``get_secret_manager()`` (`backend/app/services/secret_manager_service.py`) — **no** usar ``os.getenv`` para estas claves en servicios de aplicación.
 

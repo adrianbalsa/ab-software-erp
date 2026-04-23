@@ -1285,6 +1285,15 @@ export type PortalMandateSetupResponse = {
 export const postPortalSetupMandate = async () =>
   getJson<PortalMandateSetupResponse>(`${API_BASE}/api/v1/payments/gocardless/mandates/setup`, { method: "POST" });
 
+export type GoCardlessBillingRequestFlowResponse = {
+  authorization_url: string;
+};
+
+export const postEmpresaSepaBillingRequestFlow = async () =>
+  getJson<GoCardlessBillingRequestFlowResponse>(`${API_BASE}/api/v1/payments/gocardless/billing-request-flow`, {
+    method: "POST",
+  });
+
 /** Stripe Customer Portal (tarjeta, facturas, cancelar renovación). Requiere admin + checkout previo. */
 export async function createStripeBillingPortalUrl(): Promise<string> {
   const res = await apiFetch(`${API_BASE}/payments/create-portal`, {

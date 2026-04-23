@@ -44,16 +44,16 @@ from app.core.config import Settings
 from app.core.config import get_settings
 from app.core.crypto import pii_crypto
 from app.core.xades_signer import sign_xml_xades
+from app.services.crypto_service import sign_invoice_xml
 from app.services.suministro_lr_xml import FacturaRectificadaRefAEAT
 from app.services.suministro_lr_xml import RegistroAnteriorAEAT
 from app.services.suministro_lr_xml import fecha_iso_u_otra_a_dd_mm_yyyy
 from app.services.suministro_lr_xml import inner_xml_fragment_from_signed_registro_alta
 from app.services.suministro_lr_xml import inner_xml_fragment_unsigned_alta_for_tests
 from app.services.suministro_lr_xml import build_registro_alta_unsigned
-from app.services.aeat_client_py import AEATZeepClient
 from app.services.aeat_client_py import RegFactuPostResult
 from app.services.aeat_client_py import VeriFactuException
-from app.services.aeat_client_py.zeep_client import default_aeat_verifactu_wsdl_url
+from app.services.aeat_soap_client import AeatSoapClient
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.db.supabase import get_supabase
@@ -675,7 +675,7 @@ AEAT_HTTP_MAX_ATTEMPTS = 6
 AEAT_BACKOFF_BASE_SEC = 1.5
 
 
-def _post_reg_factu_zeeo_sync(
+def _post_reg_factu_soap_sync(
     *,
     url: str,
     soap_body: str,
@@ -683,20 +683,19 @@ def _post_reg_factu_zeeo_sync(
     cert_tuple: tuple[str, str],
     settings: Settings,
 ) -> tuple[int, str, RegFactuPostResult]:
-    wsdl = (settings.AEAT_VERIFACTU_WSDL_URL or "").strip() or default_aeat_verifactu_wsdl_url()
-    client = AEATZeepClient(
-        wsdl_url=wsdl,
+    client = AeatSoapClient(
         cert_file=cert_tuple[0],
         key_file=cert_tuple[1],
-        app_settings=settings,
+        settings=settings,
     )
     try:
-        out = client.post_registro_facturacion(
+        out = client.submit_signed_soap(
             service_url=url,
             soap12_body=soap_body,
-            signed_inner_xml_for_optional_xsd=signed_inner_xml,
+            signed_inner_xml=signed_inner_xml,
         )
-        return out.http_status, out.raw_body, out
+        post_result = out.post_result
+        return post_result.http_status, post_result.raw_body, post_result
     finally:
         client.close()
 
@@ -721,7 +720,7 @@ async def _post_soap_aeat_with_retries(
         try:
 
             def _sync() -> tuple[int, str, RegFactuPostResult]:
-                return _post_reg_factu_zeeo_sync(
+                return _post_reg_factu_soap_sync(
                     url=url,
                     soap_body=soap_body,
                     signed_inner_xml=signed_inner_xml,
@@ -784,6 +783,57 @@ def _password_clave_pem(settings: Settings) -> bytes | None:
     if raw is None or not str(raw).strip():
         return None
     return str(raw).strip().encode("utf-8")
+
+
+def _password_p12(settings: Settings) -> str | None:
+    raw = getattr(settings, "AEAT_CLIENT_P12_PASSWORD", None)
+    if raw is None or not str(raw).strip():
+        return None
+    return str(raw).strip()
+
+
+def _extraer_registro_alta_firmado(xml_firmado: str) -> bytes:
+    parser = etree.XMLParser(resolve_entities=False)
+    root = etree.fromstring(xml_firmado.encode("utf-8"), parser=parser)
+    if etree.QName(root.tag).localname == "RegistroAlta":
+        return etree.tostring(root, xml_declaration=True, encoding="utf-8")
+    matches = root.xpath(".//*[local-name()='RegistroAlta']")
+    if not matches:
+        raise ValueError("Firma XAdES sin nodo RegistroAlta en salida.")
+    return etree.tostring(matches[0], xml_declaration=True, encoding="utf-8")
+
+
+def _firmar_registro_alta(
+    *,
+    alta_xml: bytes,
+    empresa_row: Mapping[str, Any],
+    settings: Settings,
+    cert_pem: bytes,
+    key_pem: bytes,
+    pwd: bytes | None,
+) -> bytes:
+    """
+    Firma de compatibilidad:
+    - Preferencia por ``crypto_service.sign_invoice_xml`` cuando hay .p12 disponible.
+    - Fallback a firmador legacy PEM (``sign_xml_xades``).
+    """
+    try:
+        _, _, p12_path = _tls_paths_desde_empresa_y_settings(empresa_row, settings)
+    except AttributeError:
+        p12_path = None
+    if p12_path and os.path.isfile(p12_path):
+        signed = sign_invoice_xml(
+            alta_xml,
+            p12_path,
+            _password_p12(settings),
+        )
+        return _extraer_registro_alta_firmado(signed)
+    return sign_xml_xades(
+        alta_xml,
+        cert_pem,
+        key_pem,
+        pwd,
+    )
 
 
 async def enviar_registro_y_persistir(
@@ -887,11 +937,13 @@ async def enviar_registro_y_persistir(
         )
 
         def _sign_payload() -> bytes:
-            return sign_xml_xades(
-                alta_xml,
-                cert_pem,
-                key_pem,
-                pwd,
+            return _firmar_registro_alta(
+                alta_xml=alta_xml,
+                empresa_row=empresa_row,
+                settings=settings,
+                cert_pem=cert_pem,
+                key_pem=key_pem,
+                pwd=pwd,
             )
 
         xml_firmado = await asyncio.to_thread(_sign_payload)
@@ -900,6 +952,13 @@ async def enviar_registro_y_persistir(
             factura=factura_row,
             signed_registro_alta_xml=xml_firmado,
         )
+        # Validación explícita del XML RegFactu antes de envolver en SOAP.
+        if bool(getattr(settings, "AEAT_VERIFACTU_XSD_VALIDATE_REQUEST", False)):
+            from app.services.verifactu_xml_service import VeriFactuXmlService
+
+            VeriFactuXmlService().validate_against_regfactu_schema(
+                '<?xml version="1.0" encoding="UTF-8"?>\n' + xml_para_soap
+            )
         asyncio.create_task(
             run_webhook_deliveries_for_event(
                 empresa_id,

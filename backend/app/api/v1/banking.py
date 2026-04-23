@@ -6,6 +6,7 @@ from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pydantic import BaseModel, Field
 
 from app.api import deps
 from app.schemas.banking import (
@@ -32,6 +33,11 @@ from app.services.matching_service import MatchingService
 from app.services.reconciliation_service import ReconciliationService
 
 router = APIRouter()
+
+
+class BankingConnectIn(BaseModel):
+    institution_id: str = Field(..., min_length=4)
+    redirect_url: str | None = None
 
 
 def _parse_opt_date(raw: str | None) -> date | None:
@@ -110,6 +116,61 @@ async def banking_connect(
         return BankingConnectOut(**out)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+@router.post("/connect", response_model=BankingConnectOut)
+async def banking_connect_post(
+    body: BankingConnectIn,
+    current_user: UserOut = Depends(deps.require_admin_active_write_user),
+    service: BankingService = Depends(deps.get_banking_service),
+) -> BankingConnectOut:
+    """Inicia conexión bancaria PSD2 (mismo flujo que GET /connect, vía POST)."""
+    if not _gocardless_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Integración bancaria no configurada (GOCARDLESS_SECRET_ID / GOCARDLESS_SECRET_KEY)",
+        )
+    try:
+        out = await service.create_requisition(
+            empresa_id=str(current_user.empresa_id),
+            institution_id=body.institution_id,
+            redirect_url=body.redirect_url,
+        )
+        return BankingConnectOut(**out)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+@router.get("/institutions")
+async def banking_institutions(
+    country_code: str = Query(default="ES", min_length=2, max_length=2),
+    _: UserOut = Depends(deps.require_admin_active_write_user),
+    service: BankingService = Depends(deps.get_banking_service),
+) -> list[dict[str, str | None]]:
+    """Lista bancos/instituciones disponibles para consentimiento PSD2."""
+    if not _gocardless_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Integración bancaria no configurada (GOCARDLESS_SECRET_ID / GOCARDLESS_SECRET_KEY)",
+        )
+    try:
+        rows = await service.get_institutions(country_code=country_code)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    out: list[dict[str, str | None]] = []
+    for row in rows:
+        out.append(
+            {
+                "id": str(row.get("id") or ""),
+                "name": str(row.get("name") or "") or None,
+                "bic": str(row.get("bic") or "") or None,
+                "transaction_total_days": str(row.get("transaction_total_days") or "") or None,
+                "countries": ",".join(row.get("countries", []))
+                if isinstance(row.get("countries"), list)
+                else None,
+            }
+        )
+    return out
 
 
 @router.get("/accounts", response_model=list[CuentaBancaria])
@@ -217,6 +278,22 @@ async def banking_sync(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+@router.get("/sync", response_model=BankingSyncOut)
+async def banking_sync_get(
+    date_from: str | None = Query(default=None, description="YYYY-MM-DD inicio ventana movimientos"),
+    date_to: str | None = Query(default=None, description="YYYY-MM-DD fin ventana movimientos"),
+    current_user: UserOut = Depends(deps.require_admin_active_write_user),
+    service: BankingService = Depends(deps.get_banking_service),
+) -> BankingSyncOut:
+    """Dispara sincronización manual (alias GET para Fase 1.5)."""
+    return await banking_sync(
+        date_from=date_from,
+        date_to=date_to,
+        current_user=current_user,
+        service=service,
+    )
 
 
 @router.post(
