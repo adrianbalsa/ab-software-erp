@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { hasRoutePermission, isPublicPath, requiresAuth, roleFromJwtPayload, type AppRbacRole } from "@/lib/route-authz";
+import { hasRoutePermission, isPublicPath, pathStartsWith, requiresAuth, roleFromJwtPayload } from "@/lib/route-authz";
 
 const AUTH_COOKIE = "abl_auth_token";
 
