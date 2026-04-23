@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Minus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { FadeInSection } from "./FadeInSection";
@@ -21,6 +21,7 @@ function stripePriceIds() {
 }
 
 export function LandingPricing() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const empresaId = (searchParams.get("empresa_id") ?? "").trim();
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
@@ -56,15 +57,15 @@ export function LandingPricing() {
     return { tiers: tiersLocal, stripeCheckoutReady };
   }, []);
 
-  const handleSuscripcion = async (priceId: string) => {
+  const handleSuscripcion = async (priceId: string, planName: string) => {
     if (!priceId.trim()) {
       toast.error(l.missingStripeConfig);
       return;
     }
     if (!empresaId) {
-      toast.error(
-        "Indica tu empresa en la URL (?empresa_id=UUID) o abre el enlace de alta. También puedes usar /pricing.",
-      );
+      const plan = planName.toLowerCase();
+      const target = `/pricing${plan ? `?plan=${encodeURIComponent(plan)}` : ""}`;
+      router.push(target);
       return;
     }
     setLoadingTier(priceId);
@@ -146,7 +147,7 @@ export function LandingPricing() {
 
               <button
                 type="button"
-                onClick={() => void handleSuscripcion(tier.stripePriceId)}
+                onClick={() => void handleSuscripcion(tier.stripePriceId, tier.name)}
                 disabled={!tier.stripePriceId || loadingTier === tier.stripePriceId}
                 title={!tier.stripePriceId ? l.missingStripeConfig : undefined}
                 className={`mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold transition ${
