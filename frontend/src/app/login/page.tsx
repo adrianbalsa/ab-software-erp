@@ -9,7 +9,6 @@ import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { notifyJwtUpdated } from "@/lib/api";
 import { setAuthToken } from "@/lib/auth";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
 
 export default function LoginPage() {
   const { catalog } = useOptionalLocaleCatalog();
@@ -39,22 +38,9 @@ export default function LoginPage() {
     setOauthError(null);
     setOauthPending(true);
     try {
-      const supabase = getSupabaseBrowserClient();
-      if (!supabase) {
-        throw new Error(L.supabasePending);
-      }
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/dashboard`,
-        },
-      });
-      if (error) {
-        throw error;
-      }
+      window.location.assign("/auth/google");
     } catch (error) {
       setOauthError(error instanceof Error ? error.message : L.oauthFail);
-    } finally {
       setOauthPending(false);
     }
   };

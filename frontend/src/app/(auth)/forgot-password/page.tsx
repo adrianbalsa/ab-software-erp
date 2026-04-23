@@ -20,6 +20,22 @@ export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const postForgotPassword = async (trimmedEmail: string): Promise<Response> => {
+    const base = API_BASE.replace(/\/$/, "");
+    const payload = JSON.stringify({ email: trimmedEmail });
+    const commonInit: RequestInit = {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: payload,
+    };
+
+    const primary = await apiFetch(`${base}/api/v1/auth/forgot-password`, commonInit);
+    if (primary.status !== 404) return primary;
+
+    // Compatibilidad con despliegues que aún exponen la ruta legacy sin prefijo /api/v1.
+    return apiFetch(`${base}/auth/forgot-password`, commonInit);
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = email.trim();
@@ -29,18 +45,19 @@ export default function ForgotPasswordPage() {
     }
     setSubmitting(true);
     try {
-      const res = await apiFetch(`${API_BASE}/api/v1/auth/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ email: trimmed }),
-      });
+      const res = await postForgotPassword(trimmed);
       if (!res.ok) {
         const msg = await parseApiError(res);
         throw new Error(msg);
       }
       setSent(true);
     } catch (err) {
-      const message = err instanceof Error ? err.message : L.forgotPasswordGenericError;
+      const message =
+        err instanceof TypeError
+          ? "No se pudo conectar con el servidor. Reintenta en unos segundos."
+          : err instanceof Error
+            ? err.message
+            : L.forgotPasswordGenericError;
       toast.error(message);
     } finally {
       setSubmitting(false);
