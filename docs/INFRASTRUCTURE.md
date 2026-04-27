@@ -12,7 +12,7 @@ Este documento está orientado a un **adquirente** o equipo de plataforma que de
 | Datos transaccionales | **PostgreSQL** (`DATABASE_URL`) | SQLAlchemy; en producción la app **exige** `DATABASE_URL` explícita. |
 | Auth / storage / RLS | **Supabase** | `SUPABASE_URL`, claves y JWKS; Postgres puede ser el de Supabase o uno dedicado en Railway según diseño. |
 
-Referencia de variables de aplicación: `docs/DEPLOYMENT.md` y `backend/app/core/config.py`. El backend Terraform incluye `SECURITY_CONTACT_EMAIL` (divulgación RFC 9116; por defecto `security@ablogistics-os.com` — crear el buzón y MX en el dominio antes de go-live).
+Referencia de variables de aplicación: `docs/DEPLOYMENT.md`, `docs/operations/OPS_001_TOPOLOGIA_PLATAFORMA.md`, `docs/operations/REDIS_001_HA_BILLING_QUEUE.md` y `backend/app/core/config.py`. El backend Terraform incluye `SECURITY_CONTACT_EMAIL` (divulgación RFC 9116; por defecto `security@ablogistics-os.com` — crear el buzón y MX en el dominio antes de go-live).
 
 ## 2. Qué hay en el repositorio
 
@@ -20,6 +20,8 @@ Referencia de variables de aplicación: `docs/DEPLOYMENT.md` y `backend/app/core
 |------|-----------|
 | `infra/terraform/` | **Terraform** con el provider comunitario [`railway`](https://registry.terraform.io/providers/terraform-community-providers/railway/latest): proyecto, entorno `staging`, servicios de cómputo y variables por entorno. |
 | `backend/railway.json` | Config as Code del **API** (Nixpacks, `uvicorn`, healthcheck `GET /live`). |
+| `docs/operations/OPS_001_TOPOLOGIA_PLATAFORMA.md` | Manual operativo OPS-001 de topología VPS/Railway/Vercel: servicios, dominios, variables, despliegue, backups y responsables. |
+| `docs/operations/REDIS_001_HA_BILLING_QUEUE.md` | Runbook REDIS-001: HA de Redis para cola de facturación, retry/backoff del worker y observabilidad de fallos. |
 | `docs/operations/DISASTER_RECOVERY.md` | **DRP** (RPO/RTO, escenarios, enlaces a runbooks). |
 | `infra/railway/worker.railway.json` | Config as Code del **worker ARQ** (`arq app.worker.WorkerSettings`). |
 | `.github/workflows/deploy.yml` | CI/CD existente más job **Railway IaC**: plan o apply de Terraform según configuración (ver §6). |

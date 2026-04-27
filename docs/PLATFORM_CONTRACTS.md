@@ -50,6 +50,7 @@ infraestructura **sin romper** el producto actual. Orden de prioridad alineado a
   importar funciones de encolado desde ahí, no instanciar Redis/ARQ directamente. Facilita sustituir
   el broker (p. ej. cola administrada) sin tocar VeriFactu ni facturación.
 - **Worker:** mismo repositorio, proceso separado (`infra/railway/worker.railway.json`).
+- **HA / retry / observabilidad:** `docs/operations/REDIS_001_HA_BILLING_QUEUE.md`.
 
 ## 6. Pagos y webhooks (Stripe / GoCardless)
 

@@ -86,6 +86,11 @@ Sustituye `tudominio.com` por tu dominio real.
 
 Tras propagar DNS (minutos–48 h), actualiza `CORS_ALLOW_ORIGINS` y `NEXT_PUBLIC_API_URL` con las URLs HTTPS definitivas.
 
+### Go-live Fase 3.2 (TLS, CORS, Redis)
+
+Checklist operativo (comandos `dig`/`openssl`/`curl`, Redis TLS, smoke): **`docs/operations/DEPLOY_FINAL_TLS_CHECKLIST.md`**.  
+Validación local de variables (sin red): `cd backend && PYTHONPATH=. python scripts/check_deploy_infra_readiness.py` (opción `--strict` en producción).
+
 ---
 
 ## 5. PgBouncer (alta concurrencia / self‑hosted Postgres)

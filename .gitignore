@@ -32,6 +32,9 @@ node_modules/
 backend/.venv312/
 .cursor/
 
+# Evidencias compliance generadas (M&A); no versionar salidas locales
+backend/reports/compliance_evidence_*.md
+
 # Terraform (Railway IaC): no subir estado ni caché de providers
 infra/terraform/.terraform/
 infra/terraform/*.tfstate
