@@ -6,29 +6,29 @@
 from __future__ import annotations
 
 import logging
-import os
 import time
 
 import anyio
 from limits import parse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
 
+from app.core.config import get_settings
 from app.core.http_client_meta import get_client_ip
 from app.core.rate_limit import (
     AUTH_RATE_LIMIT_PATHS,
     expensive_endpoint_bucket,
     get_rate_limit_strategy,
+    is_rate_limit_exempt_path,
     rate_limit_key,
+    rate_limit_response,
+    resolve_rate_limit_identity,
 )
 
 _log = logging.getLogger(__name__)
 
 _limit_auth = parse("10 per minute")
-_limit_ai = parse((os.getenv("AI_RATE_LIMIT") or "30 per minute").strip())
-_limit_maps = parse((os.getenv("MAPS_RATE_LIMIT") or "120 per minute").strip())
-_limit_ocr = parse((os.getenv("OCR_RATE_LIMIT") or "20 per minute").strip())
 
 
 def _retry_after_seconds(strategy, limit_item, key: str) -> int:
@@ -40,6 +40,72 @@ def _retry_after_seconds(strategy, limit_item, key: str) -> int:
     except Exception:
         pass
     return 60
+
+
+def _parse_limit_or_default(raw: str, fallback: str = "200 per minute"):
+    try:
+        return parse((raw or fallback).strip())
+    except Exception:
+        _log.warning("rate_limit: límite inválido %r; usando %s", raw, fallback)
+        return parse(fallback)
+
+
+class TenantRateLimitMiddleware(BaseHTTPMiddleware):
+    """
+    Límite HTTP global configurable por empresa.
+
+    ``TENANT_RATE_LIMIT_DEFAULT`` cubre todos los tenants y
+    ``TENANT_RATE_LIMIT_OVERRIDES`` permite límites por ``empresa_id``.
+    """
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        path = request.scope.get("path") or ""
+        if path in AUTH_RATE_LIMIT_PATHS or is_rate_limit_exempt_path(path):
+            return await call_next(request)
+
+        settings = get_settings()
+        identity = resolve_rate_limit_identity(request)
+        limit_raw = settings.TENANT_RATE_LIMIT_DEFAULT
+        if identity.tenant_id:
+            limit_raw = settings.TENANT_RATE_LIMIT_OVERRIDES.get(
+                identity.tenant_id.lower(),
+                limit_raw,
+            )
+        limit_item = _parse_limit_or_default(limit_raw)
+
+        strategy = get_rate_limit_strategy()
+        key = identity.key
+
+        def _hit() -> bool:
+            return strategy.hit(limit_item, key)
+
+        try:
+            ok = await anyio.to_thread.run_sync(_hit)
+        except Exception as exc:
+            _log.warning("rate_limit tenant: error comprobando límite (dejamos pasar): %s", exc)
+            return await call_next(request)
+
+        if not ok:
+            ra = _retry_after_seconds(strategy, limit_item, key)
+            _log.warning(
+                "rate_limit tenant exceeded key=%s scope=%s tenant_id=%s limit=%s",
+                key,
+                identity.scope,
+                identity.tenant_id or "-",
+                str(limit_item),
+            )
+            return rate_limit_response(
+                request,
+                retry_after_sec=ra,
+                scope=identity.scope,
+                tenant_id=identity.tenant_id,
+                limit=str(limit_item),
+            )
+
+        return await call_next(request)
 
 
 class AuthLoginRateLimitMiddleware(BaseHTTPMiddleware):
@@ -68,12 +134,16 @@ class AuthLoginRateLimitMiddleware(BaseHTTPMiddleware):
 
         if not ok:
             ra = _retry_after_seconds(strategy, _limit_auth, key)
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "error": "Rate limit exceeded",
-                    "retry_after": f"{ra} seconds",
-                },
+            _log.warning(
+                "rate_limit auth exceeded key=%s scope=ip limit=%s",
+                key,
+                str(_limit_auth),
+            )
+            return rate_limit_response(
+                request,
+                retry_after_sec=ra,
+                scope="ip",
+                limit=str(_limit_auth),
             )
 
         return await call_next(request)
@@ -82,12 +152,14 @@ class AuthLoginRateLimitMiddleware(BaseHTTPMiddleware):
 class EndpointCostRateLimitMiddleware(BaseHTTPMiddleware):
     """Cuotas específicas para endpoints de coste alto (AI, Maps, OCR)."""
 
-    def dispatch_limit(self, bucket: str):
+    @staticmethod
+    def _limit_item_for_bucket(bucket: str):
+        s = get_settings()
         if bucket == "ai":
-            return _limit_ai
+            return _parse_limit_or_default(s.AI_RATE_LIMIT, "30 per minute")
         if bucket == "maps":
-            return _limit_maps
-        return _limit_ocr
+            return _parse_limit_or_default(s.MAPS_RATE_LIMIT, "120 per minute")
+        return _parse_limit_or_default(s.OCR_RATE_LIMIT, "20 per minute")
 
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.method == "OPTIONS":
@@ -101,7 +173,7 @@ class EndpointCostRateLimitMiddleware(BaseHTTPMiddleware):
         strategy = get_rate_limit_strategy()
         base_key = rate_limit_key(request)
         key = f"{base_key}:bucket:{bucket}"
-        limit_item = self.dispatch_limit(bucket)
+        limit_item = self._limit_item_for_bucket(bucket)
 
         def _hit() -> bool:
             return strategy.hit(limit_item, key)
@@ -114,13 +186,22 @@ class EndpointCostRateLimitMiddleware(BaseHTTPMiddleware):
 
         if not ok:
             ra = _retry_after_seconds(strategy, limit_item, key)
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "error": "Rate limit exceeded",
-                    "retry_after": f"{ra} seconds",
-                    "bucket": bucket,
-                },
+            identity = resolve_rate_limit_identity(request)
+            _log.warning(
+                "rate_limit bucket exceeded key=%s bucket=%s scope=%s tenant_id=%s limit=%s",
+                key,
+                bucket,
+                identity.scope,
+                identity.tenant_id or "-",
+                str(limit_item),
+            )
+            return rate_limit_response(
+                request,
+                retry_after_sec=ra,
+                scope=identity.scope,
+                tenant_id=identity.tenant_id,
+                bucket=bucket,
+                limit=str(limit_item),
             )
 
         return await call_next(request)

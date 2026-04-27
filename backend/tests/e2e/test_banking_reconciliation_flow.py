@@ -225,6 +225,19 @@ class BankingReconciliationMemoryDb:
         if fn == "audit_logs_insert_api_event":
             self.audit_rpc_calls.append(dict(p))
             return _ExecResult([{"id": str(uuid4())}])
+        if fn == "consume_tenant_monthly_quota":
+            return _ExecResult(
+                [
+                    {
+                        "allowed": True,
+                        "empresa_id": p.get("p_empresa_id"),
+                        "period_yyyymm": p.get("p_period_yyyymm"),
+                        "meter": p.get("p_meter"),
+                        "used_units": int(p.get("p_units") or 0),
+                        "limit_units": max(1, int(p.get("p_limit_units") or 1_000_000)),
+                    }
+                ]
+            )
         return _ExecResult([])
 
     @staticmethod

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from functools import lru_cache
 from os import getenv
@@ -95,6 +96,16 @@ class Settings:
     DATABASE_URL: Optional[str]
     # Redis (rate limiting, colas); opcional — sin URL el rate limit usa almacenamiento en memoria.
     REDIS_URL: Optional[str]
+    # TTL de caché geocoding/rutas (Redis + geo_cache) en segundos.
+    GEO_CACHE_TTL_SECONDS: int
+    # Límite HTTP global por tenant. Overrides: JSON {"empresa_id": "100 per minute"}
+    # o lista "empresa_id=100 per minute,otra=300 per minute".
+    TENANT_RATE_LIMIT_DEFAULT: str
+    TENANT_RATE_LIMIT_OVERRIDES: dict[str, str]
+    # Cuotas por bucket (leídas en runtime vía ``get_settings()``; reinicio worker si cambian).
+    AI_RATE_LIMIT: str
+    MAPS_RATE_LIMIT: str
+    OCR_RATE_LIMIT: str
     # Google OAuth (authlib OIDC); opcional — sin credenciales no hay flujo /auth/oauth/google/*
     GOOGLE_CLIENT_ID: Optional[str]
     GOOGLE_CLIENT_SECRET: Optional[str]
@@ -255,6 +266,44 @@ def _build_database_url(*, environment: str) -> Optional[str]:
     return f"{driver}://{user_enc}:{password_enc}@{host}:{port}/{db}"
 
 
+def _parse_tenant_rate_limit_overrides(raw: str | None) -> dict[str, str]:
+    value = (raw or "").strip()
+    if not value:
+        return {}
+
+    parsed: dict[str, str] = {}
+    if value.startswith("{"):
+        try:
+            data = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ConfigError("TENANT_RATE_LIMIT_OVERRIDES debe ser JSON válido") from exc
+        if not isinstance(data, dict):
+            raise ConfigError("TENANT_RATE_LIMIT_OVERRIDES debe ser un objeto JSON")
+        items = data.items()
+    else:
+        normalized = value.replace(";", ",")
+        pairs: list[tuple[str, str]] = []
+        for chunk in normalized.split(","):
+            part = chunk.strip()
+            if not part:
+                continue
+            if "=" not in part:
+                raise ConfigError(
+                    "TENANT_RATE_LIMIT_OVERRIDES debe usar formato empresa_id=limite"
+                )
+            tenant_id, limit = part.split("=", 1)
+            pairs.append((tenant_id, limit))
+        items = pairs
+
+    for tenant_id, limit in items:
+        tenant_key = str(tenant_id or "").strip().lower()
+        limit_value = str(limit or "").strip()
+        if not tenant_key or not limit_value:
+            raise ConfigError("TENANT_RATE_LIMIT_OVERRIDES contiene claves o límites vacíos")
+        parsed[tenant_key] = limit_value
+    return parsed
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     # Reuse your current env var names (as seen in Streamlit main.py)
@@ -413,6 +462,22 @@ def get_settings() -> Settings:
                 "El modo exclusivamente Supabase/REST sin DATABASE_URL está prohibido en producción."
             )
     redis_url = _opt("REDIS_URL")
+    try:
+        geo_cache_ttl_seconds = int(
+            (getenv("GEO_CACHE_TTL_SECONDS") or getenv("GEOCODING_CACHE_TTL_SECONDS") or "").strip()
+            or str(30 * 24 * 60 * 60)
+        )
+    except ValueError:
+        geo_cache_ttl_seconds = 30 * 24 * 60 * 60
+    tenant_rate_limit_default = (
+        getenv("TENANT_RATE_LIMIT_DEFAULT") or "200 per minute"
+    ).strip() or "200 per minute"
+    tenant_rate_limit_overrides = _parse_tenant_rate_limit_overrides(
+        getenv("TENANT_RATE_LIMIT_OVERRIDES")
+    )
+    ai_rate_limit = (getenv("AI_RATE_LIMIT") or "30 per minute").strip() or "30 per minute"
+    maps_rate_limit = (getenv("MAPS_RATE_LIMIT") or "120 per minute").strip() or "120 per minute"
+    ocr_rate_limit = (getenv("OCR_RATE_LIMIT") or "20 per minute").strip() or "20 per minute"
 
     def _env_bool(name: str, default: bool = False) -> bool:
         raw = getenv(name)
@@ -550,6 +615,12 @@ def get_settings() -> Settings:
         BANK_TOKEN_ENCRYPTION_KEY=bank_enc,
         DATABASE_URL=database_url,
         REDIS_URL=redis_url,
+        GEO_CACHE_TTL_SECONDS=max(60, geo_cache_ttl_seconds),
+        TENANT_RATE_LIMIT_DEFAULT=tenant_rate_limit_default,
+        TENANT_RATE_LIMIT_OVERRIDES=tenant_rate_limit_overrides,
+        AI_RATE_LIMIT=ai_rate_limit,
+        MAPS_RATE_LIMIT=maps_rate_limit,
+        OCR_RATE_LIMIT=ocr_rate_limit,
         GOOGLE_CLIENT_ID=google_cid,
         GOOGLE_CLIENT_SECRET=google_sec,
         GOOGLE_OAUTH_REDIRECT_URI=google_redirect,

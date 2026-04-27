@@ -74,6 +74,7 @@ from app.api.v1 import stripe
 from app.api.v1.webhooks import stripe as stripe_webhook_v1
 from app.api.v1.webhooks import esg_external_verify as webhooks_esg_external_v1
 from app.api.v1 import treasury as treasury_v1
+from app.api.v1 import usage as usage_v1
 from app.api.v1 import verifactu as verifactu_v1
 from app.api.v1.webhooks import b2b as webhooks_v1
 from app.api.v1.webhooks import gocardless as webhooks_gocardless_v1
@@ -91,7 +92,11 @@ from app.middleware.login_debug_print import LoginDebugPrintMiddleware
 from app.middleware.json_access_log import JsonAccessLogMiddleware
 from app.middleware.audit_log_middleware import AuditLogMiddleware
 from app.middleware.fiscal_rate_limit_middleware import FiscalVerifactuRateLimitMiddleware
-from app.middleware.rate_limit_middleware import AuthLoginRateLimitMiddleware, EndpointCostRateLimitMiddleware
+from app.middleware.rate_limit_middleware import (
+    AuthLoginRateLimitMiddleware,
+    EndpointCostRateLimitMiddleware,
+    TenantRateLimitMiddleware,
+)
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.slow_request_log import SlowRequestLogMiddleware
 from app.middleware.tenant_rbac_context import TenantRBACContextMiddleware
@@ -167,6 +172,9 @@ def _init_sentry(settings: Settings) -> None:
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await warmup_rate_limit_backend()
     yield
+    from app.services.geo_service import close_geo_redis_cache
+
+    await close_geo_redis_cache()
     await close_arq_redis_pool()
 
 
@@ -182,6 +190,9 @@ def create_app() -> FastAPI:
             "DATABASE_URL resuelta vacía en producción: se requiere Postgres directo para "
             "candados transaccionales VeriFactu y coherencia multi-réplica."
         )
+    from app.services.verifactu_genesis import assert_verifactu_genesis_configured_for_production_aeat
+
+    assert_verifactu_genesis_configured_for_production_aeat(settings)
 
     app = FastAPI(
         title=API_TITLE,
@@ -231,6 +242,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(SlowRequestLogMiddleware)
     app.add_middleware(SkipOptionsSlowAPIMiddleware)
+    app.add_middleware(TenantRateLimitMiddleware)
     app.add_middleware(AuthLoginRateLimitMiddleware)
     app.add_middleware(EndpointCostRateLimitMiddleware)
     # Debe ejecutarse antes que el resto de middlewares de rate limit para envolver
@@ -435,6 +447,7 @@ def create_app() -> FastAPI:
     app.include_router(analytics_v1.router, prefix="/api/v1", tags=["Finanzas"])
     app.include_router(advisor_v1.router, prefix="/api/v1/advisor", tags=["LogisAdvisor"])
     app.include_router(bi_v1.router, prefix="/api/v1", tags=["Business Intelligence"])
+    app.include_router(usage_v1.router, prefix="/api/v1")
     app.include_router(product_config_v1.router, prefix="/api/v1")
 
     return app

@@ -1,4 +1,6 @@
 "use client";
+import Image from "next/image";
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
@@ -127,6 +129,42 @@ const fadeUp: Variants = {
   }),
 };
 
+type InputFieldProps = {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  suffix: string;
+  step?: number;
+};
+
+function InputField({
+  label,
+  value,
+  onChange,
+  suffix,
+  step = 1,
+}: InputFieldProps) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          type="number"
+          step={step}
+          value={value}
+          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+          className="w-full bg-[#F8FAFC] border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 transition-all pr-10"
+        />
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">
+          {suffix}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ─── NAVBAR ───────────────────────────────────────────────────────────────────
 function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -152,12 +190,12 @@ function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <a href="/" className="flex items-center gap-2 group">
-            <img src="/logo.png" alt="AB Logo" className="w-9 h-9 object-contain" />
+          <Link href="/" className="flex items-center gap-2 group">
+            <Image src="/logo.png" alt="AB Logo" width={36} height={36} className="w-9 h-9 object-contain" />
             <span className="font-bold text-zinc-900 text-[15px] tracking-tight">
               AB Logistics OS
             </span>
-          </a>
+          </Link>
 
           {/* Desktop links */}
           <div className="hidden md:flex items-center gap-8">
@@ -349,38 +387,6 @@ function ROICalculator() {
 
   const fmt = (n: number, dec = 2) =>
     n.toLocaleString("es-ES", { minimumFractionDigits: dec, maximumFractionDigits: dec });
-
-  const InputField = ({
-    label,
-    value,
-    onChange,
-    suffix,
-    step = 1,
-  }: {
-    label: string;
-    value: number;
-    onChange: (v: number) => void;
-    suffix: string;
-    step?: number;
-  }) => (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-        {label}
-      </label>
-      <div className="relative">
-        <input
-          type="number"
-          step={step}
-          value={value}
-          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-          className="w-full bg-[#F8FAFC] border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 transition-all pr-10"
-        />
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">
-          {suffix}
-        </span>
-      </div>
-    </div>
-  );
 
   return (
     <section id="calculadora" className="py-24 bg-[#F8FAFC]">
@@ -799,7 +805,7 @@ function Footer() {
           {/* Brand */}
           <div>
             <div className="mb-4 flex items-center gap-2">
-              <img src="/logo.png" alt="AB Logo" className="h-8 w-8 object-contain" />
+              <Image src="/logo.png" alt="AB Logo" width={32} height={32} className="h-8 w-8 object-contain" />
               <span className="text-sm font-bold text-zinc-100">AB Logistics OS</span>
             </div>
             <p className="text-sm leading-relaxed">

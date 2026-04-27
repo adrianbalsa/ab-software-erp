@@ -14,9 +14,9 @@ export default function TerminosPage() {
     >
       <h2>1. Partes y objeto del contrato</h2>
       <p>
-        Estos Términos y Condiciones (los "Términos") regulan la prestación del servicio SaaS AB Logistics OS
+        Estos Términos y Condiciones (los &quot;Términos&quot;) regulan la prestación del servicio SaaS AB Logistics OS
         por [NOMBRE_EMPRESA], con NIF [NIF] y domicilio en [DIRECCIÓN], a favor de clientes profesionales o
-        empresariales (el "Cliente").
+        empresariales (el &quot;Cliente&quot;).
       </p>
       <p>
         El servicio comprende funcionalidades de gestión de flotas y operaciones logísticas, facturación

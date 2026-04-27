@@ -21,7 +21,6 @@ from uuid import UUID, uuid4
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-sys.modules.setdefault("rapidfuzz", MagicMock(name="rapidfuzz_test_double"))
 sys.modules.setdefault("litellm", MagicMock(name="litellm_test_double"))
 sys.modules.setdefault("anthropic", MagicMock(name="anthropic_test_double"))
 
@@ -128,6 +127,19 @@ class OnboardingFakeSupabase:
             return _ExecResult([])
         if fn == "auth_onboarding_setup":
             return self._rpc_auth_onboarding_setup(p)
+        if fn == "consume_tenant_monthly_quota":
+            return _ExecResult(
+                [
+                    {
+                        "allowed": True,
+                        "empresa_id": p.get("p_empresa_id"),
+                        "period_yyyymm": p.get("p_period_yyyymm"),
+                        "meter": p.get("p_meter"),
+                        "used_units": int(p.get("p_units") or 0),
+                        "limit_units": max(1, int(p.get("p_limit_units") or 1_000_000)),
+                    }
+                ]
+            )
         return _ExecResult([])
 
     def _rpc_auth_onboarding_setup(self, p: dict[str, Any]) -> _ExecResult:

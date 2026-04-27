@@ -398,7 +398,7 @@ async def esg_annual_memory(
 )
 async def list_esg_certificate_registry(
     limit: int = Query(50, ge=1, le=200),
-    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager", "gestor")),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     db: SupabaseAsync = Depends(deps.get_db),
 ) -> list[EsgCertificateRegistryItem]:
     eid = str(current_user.empresa_id)
@@ -459,7 +459,7 @@ async def esg_emissions_export_iso14083(
         False,
         description="Si true y formato=json, omite empresa_id en meta (entrega a terceros).",
     ),
-    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager", "gestor")),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     export_svc: EsgExportService = Depends(deps.get_esg_export_service),
 ) -> StreamingResponse:
     if fecha_fin < fecha_inicio:

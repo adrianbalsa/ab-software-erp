@@ -49,8 +49,7 @@ async def list_portes(
 async def create_porte(
     porte_in: PorteCreate,
     background_tasks: BackgroundTasks,
-    current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
+    current_user: UserOut = Depends(deps.require_write_role("owner", "traffic_manager")),
     service: PortesService = Depends(deps.get_portes_service),
 ) -> PorteOut:
     try:
@@ -81,8 +80,7 @@ async def create_porte(
 @router.post("/cotizar", response_model=PorteCotizarOut)
 async def cotizar_porte(
     payload: PorteCotizarIn,
-    current_user: UserOut = Depends(deps.get_current_user),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     service: PortesService = Depends(deps.get_portes_service),
 ) -> PorteCotizarOut:
     if payload.empresa_id is not None and payload.empresa_id != current_user.empresa_id:
@@ -112,8 +110,7 @@ async def cotizar_porte(
 async def facturar_desde_portes(
     payload: FacturaCreateFromPortes,
     background_tasks: BackgroundTasks,
-    current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
+    current_user: UserOut = Depends(deps.require_write_role("owner", "traffic_manager")),
     facturas: FacturasService = Depends(deps.get_facturas_service),
 ) -> FacturaGenerateResult:
     """

@@ -19,7 +19,6 @@ from supabase.client import AsyncClient
 from app.core.config import get_settings
 from app.core.i18n import get_translator, normalize_lang
 from app.core.job_queue import enqueue_submit_to_aeat
-from app.core.verifactu import GENESIS_HASH
 from app.core.fiscal_logic import totals_coherent
 from app.core.verifactu_hashing import VerifactuCadena, generar_hash_factura_oficial
 from app.core.math_engine import (
@@ -61,9 +60,9 @@ from app.services.eco_service import co2_emitido_desde_porte_row
 from app.services.report_service import _parse_porte_lineas_snapshot
 from app.services.verifactu_service import (
     EslabonFacturaAnterior,
-    VERIFACTU_INVOICE_GENESIS_HASH,
     VerifactuService,
 )
+from app.services.verifactu_genesis import get_verifactu_genesis_hash_for_issuer
 from app.core.crypto import pii_crypto
 from app.core.esg_engine import esg_certificate_co2_vs_euro_iii
 
@@ -119,7 +118,12 @@ def _pg_advisory_xact_lock_empresa(conn: Any, empresa_id: str) -> None:
     )
 
 
-def _pg_read_invoice_chain_eslabon(conn: Any, *, empresa_id: str) -> tuple[str, int]:
+def _pg_read_invoice_chain_eslabon(
+    conn: Any,
+    *,
+    empresa_id: str,
+    genesis_hash: str,
+) -> tuple[str, int]:
     """
     Equivalente a ``VerifactuService.obtener_ultimo_hash_y_secuencial`` en una sola lectura SQL.
     Devuelve ``(hash_anterior_para_generate_invoice_hash, siguiente_secuencial)``.
@@ -152,11 +156,11 @@ def _pg_read_invoice_chain_eslabon(conn: Any, *, empresa_id: str) -> tuple[str, 
         {"eid": str(empresa_id).strip()},
     ).mappings().first()
     if m is None:
-        return VERIFACTU_INVOICE_GENESIS_HASH, 1
+        return genesis_hash, 1
     raw_h = m.get("chain_hash")
     h = str(raw_h).strip() if raw_h is not None else ""
     if not h:
-        chain_prev = VERIFACTU_INVOICE_GENESIS_HASH
+        chain_prev = genesis_hash
     else:
         chain_prev = h
     try:
@@ -167,7 +171,12 @@ def _pg_read_invoice_chain_eslabon(conn: Any, *, empresa_id: str) -> tuple[str, 
     return chain_prev, siguiente
 
 
-def _pg_read_last_fingerprint_hash(conn: Any, *, empresa_id: str) -> str:
+def _pg_read_last_fingerprint_hash(
+    conn: Any,
+    *,
+    empresa_id: str,
+    genesis_hash: str,
+) -> str:
     """Misma semántica que ``FacturasService._get_last_fingerprint_hash`` (solo lectura)."""
     from sqlalchemy import text
 
@@ -187,9 +196,9 @@ def _pg_read_last_fingerprint_hash(conn: Any, *, empresa_id: str) -> str:
         {"eid": str(empresa_id).strip()},
     ).mappings().first()
     if m is None or m.get("fingerprint_hash") is None:
-        return GENESIS_HASH
+        return genesis_hash
     prev = str(m.get("fingerprint_hash") or "").strip()
-    return prev or GENESIS_HASH
+    return prev or genesis_hash
 
 
 def _pg_insert_factura_emit_row(
@@ -365,6 +374,7 @@ def _pg_emit_f1_desde_portes_tx(
     cuota_iva: float,
     total_factura: float,
     enterprise: bool,
+    genesis_hash: str,
 ) -> tuple[dict[str, Any], EslabonFacturaAnterior, str, str]:
     """
     Candado ``pg_advisory_xact_lock``, lectura de cadena, SHA-256 (``hash_anterior``),
@@ -375,7 +385,11 @@ def _pg_emit_f1_desde_portes_tx(
     serie = get_settings().VERIFACTU_SERIE_FACTURA
     with engine.begin() as conn:
         _pg_advisory_xact_lock_empresa(conn, eid)
-        chain_h, next_seq = _pg_read_invoice_chain_eslabon(conn, empresa_id=eid)
+        chain_h, next_seq = _pg_read_invoice_chain_eslabon(
+            conn,
+            empresa_id=eid,
+            genesis_hash=genesis_hash,
+        )
         eslabon = EslabonFacturaAnterior(hash_anterior=chain_h, siguiente_secuencial=next_seq)
         num_fact = f"{serie}-{anio}-{eslabon.siguiente_secuencial:06d}"
         hash_registro = VerifactuService.generate_invoice_hash(
@@ -387,7 +401,11 @@ def _pg_emit_f1_desde_portes_tx(
             },
             eslabon.hash_anterior,
         )
-        previous_fingerprint = _pg_read_last_fingerprint_hash(conn, empresa_id=eid)
+        previous_fingerprint = _pg_read_last_fingerprint_hash(
+            conn,
+            empresa_id=eid,
+            genesis_hash=genesis_hash,
+        )
         fingerprint_hash = generar_hash_factura_oficial(
             VerifactuCadena.HUELLA_FINGERPRINT,
             {
@@ -511,12 +529,17 @@ def _pg_emit_r1_rectificativa_tx(
     base_r: float,
     cuota_r: float,
     total_r: float,
+    genesis_hash: str,
 ) -> dict[str, Any]:
     """Candado PG + cadena + INSERT R1 en una sola transacción."""
     serie_r = get_settings().VERIFACTU_SERIE_RECTIFICATIVA
     with engine.begin() as conn:
         _pg_advisory_xact_lock_empresa(conn, eid)
-        chain_h, siguiente_seq = _pg_read_invoice_chain_eslabon(conn, empresa_id=eid)
+        chain_h, siguiente_seq = _pg_read_invoice_chain_eslabon(
+            conn,
+            empresa_id=eid,
+            genesis_hash=genesis_hash,
+        )
         eslabon = EslabonFacturaAnterior(hash_anterior=chain_h, siguiente_secuencial=siguiente_seq)
         num_fact_r = f"{serie_r}-{anio}-{siguiente_seq:06d}"
         hash_registro = VerifactuService.generate_invoice_hash(
@@ -528,7 +551,11 @@ def _pg_emit_r1_rectificativa_tx(
             },
             eslabon.hash_anterior,
         )
-        previous_fingerprint = _pg_read_last_fingerprint_hash(conn, empresa_id=eid)
+        previous_fingerprint = _pg_read_last_fingerprint_hash(
+            conn,
+            empresa_id=eid,
+            genesis_hash=genesis_hash,
+        )
         fingerprint_hash = generar_hash_factura_oficial(
             VerifactuCadena.HUELLA_FINGERPRINT,
             {
@@ -684,6 +711,10 @@ def _pg_finalizar_factura_verifactu(*, empresa_id: str, factura_id: int) -> dict
             tipo_t = str(r.get("tipo_factura") or "").strip() or None
             nif_emisor_raw = str(r.get("nif_emisor") or "").strip()
             nif_emisor_plain = pii_crypto.decrypt_pii(nif_emisor_raw) or nif_emisor_raw
+            genesis_hash = get_verifactu_genesis_hash_for_issuer(
+                issuer_id=str(empresa_id),
+                issuer_nif=nif_emisor_plain,
+            )
 
             fp, prev_fp = VerifactuService.fingerprint_desde_eslabon_finalizado(
                 prev_fingerprint_final=prev_raw,
@@ -694,6 +725,7 @@ def _pg_finalizar_factura_verifactu(*, empresa_id: str, factura_id: int) -> dict
                 total_factura=float(r.get("total_factura") or 0.0),
                 tipo_factura=tipo_t,
                 num_factura_rectificada=num_rect,
+                genesis_hash=genesis_hash,
             )
             url = build_srei_verifactu_url(
                 nif_emisor_plain,
@@ -783,7 +815,8 @@ class FacturasService:
         """
         eid = str(empresa_id or "").strip()
         if not eid:
-            return GENESIS_HASH
+            raise RuntimeError("empresa_id vacío al resolver génesis VeriFactu")
+        genesis_hash = get_verifactu_genesis_hash_for_issuer(issuer_id=eid)
         try:
             res: Any = await self._db.execute(
                 self._db.table("facturas")
@@ -797,11 +830,13 @@ class FacturasService:
             )
             rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
             if not rows:
-                return GENESIS_HASH
+                return genesis_hash
             prev = str(rows[0].get("fingerprint_hash") or "").strip()
-            return prev or GENESIS_HASH
+            return prev or genesis_hash
+        except RuntimeError:
+            raise
         except Exception:
-            return GENESIS_HASH
+            return genesis_hash
 
     async def list_facturas(
         self,
@@ -903,6 +938,10 @@ class FacturasService:
         num_f = str(r.get("num_factura") or r.get("numero_factura") or "").strip()
         fe = _fecha_para_finalizar_iso(r)
         tipo_t = str(r.get("tipo_factura") or "").strip() or None
+        genesis_hash = get_verifactu_genesis_hash_for_issuer(
+            issuer_id=eid,
+            issuer_nif=nif_emisor_plain,
+        )
 
         fp, prev_fp = VerifactuService.fingerprint_desde_eslabon_finalizado(
             prev_fingerprint_final=prev_raw,
@@ -913,6 +952,7 @@ class FacturasService:
             total_factura=float(r.get("total_factura") or 0.0),
             tipo_factura=tipo_t,
             num_factura_rectificada=num_rect,
+            genesis_hash=genesis_hash,
         )
         url = build_srei_verifactu_url(
             nif_emisor_plain,
@@ -1436,6 +1476,10 @@ class FacturasService:
         except Exception:
             pass
 
+        genesis_hash = get_verifactu_genesis_hash_for_issuer(
+            issuer_id=eid,
+            issuer_nif=nif_emisor,
+        )
         plan_f = await fetch_empresa_plan(self._db, empresa_id=eid)
         enterprise = normalize_plan(plan_f) == PLAN_ENTERPRISE
         eng = get_engine()
@@ -1465,6 +1509,7 @@ class FacturasService:
                 cuota_iva=float(cuota_iva),
                 total_factura=float(total_factura),
                 enterprise=enterprise,
+                genesis_hash=genesis_hash,
             )
             factura_id = _factura_pk(factura_row.get("id"))
             await self._verifactu.registrar_evento(
@@ -1914,6 +1959,10 @@ class FacturasService:
             pass
 
         eng_r1 = get_engine()
+        genesis_hash = get_verifactu_genesis_hash_for_issuer(
+            issuer_id=eid,
+            issuer_nif=nif_emisor,
+        )
         row_new: dict[str, Any]
         if eng_r1 is not None:
             row_new = await asyncio.to_thread(
@@ -1934,6 +1983,7 @@ class FacturasService:
                 base_r=base_r,
                 cuota_r=cuota_r,
                 total_r=total_r,
+                genesis_hash=genesis_hash,
             )
         else:
             eslabon = await self._verifactu.obtener_ultimo_hash_y_secuencial(empresa_id=eid)

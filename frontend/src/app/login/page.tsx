@@ -66,9 +66,20 @@ export default function LoginPage() {
           </div>
         </div>
         {state && "error" in state ? (
-          <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-            {state.error}
-          </p>
+          <div
+            className={`mt-4 rounded-lg border px-3 py-2 text-sm ${
+              state.resetRequired
+                ? "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-rose-200 bg-rose-50 text-rose-700"
+            }`}
+          >
+            <p>{state.error}</p>
+            {state.resetRequired ? (
+              <Link href="/forgot-password" className="mt-2 inline-block font-medium underline underline-offset-4">
+                Solicitar nuevo enlace de recuperación
+              </Link>
+            ) : null}
+          </div>
         ) : null}
         {oauthError ? (
           <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">

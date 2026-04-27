@@ -16,7 +16,9 @@ function AuthCallbackInner() {
       sessionStorage.setItem(WELCOME_FLAG, "1");
       notifyJwtUpdated();
     } catch {
-      setError("No se pudo preparar la sesión en este navegador.");
+      queueMicrotask(() => {
+        setError("No se pudo preparar la sesión en este navegador.");
+      });
       return;
     }
     router.replace("/onboarding");

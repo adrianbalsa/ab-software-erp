@@ -88,7 +88,7 @@ export async function loadSvgLogoAsPngDataUrl(logoPath = "/logo.svg"): Promise<s
 /**
  * Exporta filas a Excel con cabeceras PascalCase (desde `snake_case` o mezcla).
  */
-export function exportToExcel(data: any[], fileName: string): void {
+export function exportToExcel(data: unknown[], fileName: string): void {
   const name = ensureFileExtension(fileName, ".xlsx");
   const rows =
     data.length > 0
@@ -107,7 +107,7 @@ export function exportToExcel(data: any[], fileName: string): void {
  * `columns` son los títulos de columna (PascalCase); cada fila en `data` debe exponer las mismas claves.
  */
 export async function exportToPDF(
-  data: any[],
+  data: unknown[],
   columns: string[],
   title: string,
   fileName: string,

@@ -9,9 +9,15 @@ import anyio
 from limits import parse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
 
-from app.core.rate_limit import fiscal_aeat_submission_path, fiscal_rate_limit_key, get_rate_limit_strategy
+from app.core.rate_limit import (
+    fiscal_aeat_submission_path,
+    fiscal_rate_limit_key,
+    get_rate_limit_strategy,
+    rate_limit_response,
+    resolve_rate_limit_identity,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -55,12 +61,14 @@ class FiscalVerifactuRateLimitMiddleware(BaseHTTPMiddleware):
 
         if not ok:
             ra = _retry_after_seconds(strategy, _limit_fiscal, key)
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "error": "Rate limit exceeded",
-                    "retry_after": f"{ra} seconds",
-                },
+            identity = resolve_rate_limit_identity(request)
+            return rate_limit_response(
+                request,
+                retry_after_sec=ra,
+                scope=identity.scope,
+                tenant_id=identity.tenant_id,
+                bucket="fiscal",
+                limit=str(_limit_fiscal),
             )
 
         return await call_next(request)

@@ -13,7 +13,7 @@ import pytest
 
 from app.core.security import hash_password_argon2id, hash_refresh_token, sha256_hex
 from app.schemas.user import UserInDB, UserOut
-from app.services.auth_service import AuthService
+from app.services.auth_service import AuthService, PasswordResetRequired
 from app.services.refresh_token_service import RefreshTokenService
 
 from tests.conftest import EMPRESA_A_ID
@@ -72,6 +72,145 @@ async def test_lazy_migration_sha256_to_argon2id_tras_login(monkeypatch: pytest.
 
     assert out is not None
     assert argon2_calls == [True], "Migración lazy debe invocar Argon2id tras validar SHA-256"
+
+
+@pytest.mark.asyncio
+async def test_password_must_reset_bloquea_login_sha256_legacy() -> None:
+    """Con credenciales válidas, una cuenta marcada no recibe sesión ni migración lazy."""
+    password = "ClaveSegura!2026"
+    user_row = UserInDB(
+        id=UUID("44444444-4444-4444-4444-444444444444"),
+        username="legacy_reset@test",
+        empresa_id=EMPRESA_A_ID,
+        rol="user",
+        password_hash=sha256_hex(password),
+        password_must_reset=True,
+    )
+
+    async def fake_get_user(self: AuthService, *, username: str) -> UserInDB | None:
+        if username == user_row.username:
+            return user_row
+        return None
+
+    db = MagicMock()
+    db.execute = AsyncMock()
+    svc = AuthService(db)
+
+    with patch.object(AuthService, "get_user", fake_get_user):
+        with pytest.raises(PasswordResetRequired) as exc:
+            await svc.authenticate(username=user_row.username, password=password)
+
+    assert exc.value.username == user_row.username
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_set_password_for_username_limpia_password_must_reset() -> None:
+    user_row = UserInDB(
+        id=UUID("44444444-4444-4444-4444-444444444444"),
+        username="reset@test",
+        empresa_id=EMPRESA_A_ID,
+        rol="user",
+        password_hash=sha256_hex("old-password"),
+        password_must_reset=True,
+    )
+
+    async def fake_get_user(self: AuthService, *, username: str) -> UserInDB | None:
+        if username == user_row.username:
+            return user_row
+        return None
+
+    table = MagicMock()
+    table.update.return_value = table
+    table.eq.return_value = table
+    db = MagicMock()
+    db.table.return_value = table
+    db.execute = AsyncMock(return_value=_data([{}]))
+    svc = AuthService(db)
+
+    with patch.object(AuthService, "get_user", fake_get_user):
+        ok = await svc.set_password_for_username(
+            username=user_row.username,
+            new_plain_password="NuevaClave!2026",
+        )
+
+    assert ok is True
+    update_payload = table.update.call_args.args[0]
+    assert update_payload["password_must_reset"] is False
+    assert update_payload["password_hash"].startswith("$argon2id$")
+
+
+class _UsuariosQuery:
+    def __init__(self, db: "_LegacyMarkerDb", op: str = "select") -> None:
+        self.db = db
+        self.op = op
+        self.payload: dict[str, object] = {}
+        self.filters: list[tuple[str, object]] = []
+
+    def select(self, _columns: str) -> "_UsuariosQuery":
+        self.op = "select"
+        return self
+
+    def limit(self, count: int) -> "_UsuariosQuery":
+        self.payload["limit"] = count
+        return self
+
+    def update(self, payload: dict[str, object]) -> "_UsuariosQuery":
+        self.op = "update"
+        self.payload.update(payload)
+        return self
+
+    def eq(self, column: str, value: object) -> "_UsuariosQuery":
+        self.filters.append((column, value))
+        return self
+
+
+class _LegacyMarkerDb:
+    def __init__(self, rows: list[dict[str, object]]) -> None:
+        self.rows = rows
+        self.updates: list[_UsuariosQuery] = []
+
+    def table(self, name: str) -> _UsuariosQuery:
+        assert name == "usuarios"
+        return _UsuariosQuery(self)
+
+    async def execute(self, query: _UsuariosQuery) -> SimpleNamespace:
+        if query.op == "select":
+            return _data(self.rows)
+        self.updates.append(query)
+        return _data([{}])
+
+
+@pytest.mark.asyncio
+async def test_mark_legacy_sha256_passwords_for_reset_solo_marca_sha256_no_marcados() -> None:
+    db = _LegacyMarkerDb(
+        [
+            {
+                "id": "11111111-1111-1111-1111-111111111111",
+                "username": "legacy@test",
+                "password_hash": sha256_hex("ClaveSegura!2026"),
+                "password_must_reset": False,
+            },
+            {
+                "id": "22222222-2222-2222-2222-222222222222",
+                "username": "argon@test",
+                "password_hash": hash_password_argon2id("ClaveSegura!2026"),
+                "password_must_reset": False,
+            },
+            {
+                "id": "33333333-3333-3333-3333-333333333333",
+                "username": "already@test",
+                "password_hash": sha256_hex("ClaveSegura!2026"),
+                "password_must_reset": True,
+            },
+        ]
+    )
+
+    marked = await AuthService(db).mark_legacy_sha256_passwords_for_reset(limit=50)  # type: ignore[arg-type]
+
+    assert marked == 1
+    assert db.updates[0].payload == {"password_must_reset": True}
+    assert db.updates[0].filters == [("id", "11111111-1111-1111-1111-111111111111")]
 
 
 @pytest.mark.asyncio

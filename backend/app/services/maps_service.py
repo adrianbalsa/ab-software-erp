@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import logging
 import time
 from typing import Any
 from uuid import UUID
@@ -10,11 +12,24 @@ import httpx
 
 from app.core.config import get_settings
 from app.core.constants import COSTE_OPERATIVO_EUR_KM
+from app.core.plans import CostMeter
 from app.db.supabase import SupabaseAsync
-from app.services.geo_service import GeoBatchCache, GeoService, normalize_addr, route_cache_key
+from app.services.geo_service import (
+    GeoBatchCache,
+    GeoService,
+    _geo_cache_ttl_seconds,
+    _get_redis_client,
+    normalize_addr,
+    record_maps_redis_meter,
+    route_cache_key,
+)
+from app.services.usage_quota_service import UsageQuotaService
+
+_log = logging.getLogger(__name__)
 
 _DISTANCE_MATRIX_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
 _ROUTES_API_V2_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
+_MAPS_REDIS_PREFIX = "scanner:maps:v1"
 
 
 def _cache_key(origin: str, destination: str) -> str:
@@ -31,18 +46,91 @@ def _mem_storage_key(tenant_empresa_id: str | UUID | None, route_key: str) -> st
     return f"{t}:{route_key}"
 
 
+def _truck_route_redis_key(
+    tenant_empresa_id: str | UUID | None,
+    origin: str,
+    destination: str,
+    weight: float | None,
+    height: float | None,
+    width: float | None,
+    length: float | None,
+    emission_type: str | None,
+    waypoints: list[str] | None,
+) -> str:
+    tid = str(tenant_empresa_id).strip() if tenant_empresa_id is not None else ""
+    tid = tid or "global"
+    wp_norm = [normalize_addr(w) for w in (waypoints or []) if (w or "").strip()]
+    payload = {
+        "d": normalize_addr(destination),
+        "e": str(emission_type or "EURO_VI").strip().upper(),
+        "h": round(float(height or 0.0), 4),
+        "l": round(float(length or 0.0), 4),
+        "o": normalize_addr(origin),
+        "w": round(float(weight or 0.0), 4),
+        "wi": round(float(width or 0.0), 4),
+        "wp": wp_norm,
+    }
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    fp = hashlib.sha256(raw).hexdigest()
+    return f"{_MAPS_REDIS_PREFIX}:truck:{tid}:{fp}"
+
+
+def _dm_redis_key(mem_key: str) -> str:
+    return f"{_MAPS_REDIS_PREFIX}:dm:{mem_key}"
+
+
+async def _redis_get_json(key: str) -> dict[str, Any] | None:
+    client = await _get_redis_client()
+    if client is None:
+        return None
+    try:
+        raw = await client.get(key)
+        if not raw:
+            return None
+        out = json.loads(raw)
+        return out if isinstance(out, dict) else None
+    except Exception as exc:
+        _log.debug("maps redis cache read skipped: %s", exc)
+        return None
+
+
+async def _redis_set_json(key: str, payload: dict[str, Any]) -> None:
+    client = await _get_redis_client()
+    if client is None:
+        return
+    try:
+        await client.set(
+            key,
+            json.dumps(payload, separators=(",", ":")),
+            ex=_geo_cache_ttl_seconds(),
+        )
+    except Exception as exc:
+        _log.debug("maps redis cache write skipped: %s", exc)
+
+
 class MapsService:
     """
     Distancias vía Google Distance Matrix API con caché en memoria + tabla
     ``maps_distance_cache`` (si existe y RLS permite).
     """
 
-    def __init__(self, db: SupabaseAsync | None = None) -> None:
+    def __init__(
+        self,
+        db: SupabaseAsync | None = None,
+        quota_service: UsageQuotaService | None = None,
+    ) -> None:
         self._db = db
-        self._geo = GeoService(db)
+        self._quota_service = quota_service
+        self._geo = GeoService(db, quota_service)
         self._mem: dict[str, float] = {}
         self._route_mem: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
+
+    async def _consume_maps_quota(self, tenant_empresa_id: str | UUID | None) -> None:
+        eid = str(tenant_empresa_id or "").strip()
+        if not eid or self._quota_service is None:
+            return
+        await self._quota_service.consume(empresa_id=eid, meter=CostMeter.MAPS)
 
     @staticmethod
     def calculate_operational_cost(distance_km: float) -> float:
@@ -54,6 +142,7 @@ class MapsService:
         destination: str,
         *,
         batch: GeoBatchCache | None = None,
+        tenant_empresa_id: str | UUID | None = None,
     ) -> dict[str, Any]:
         """
         Cache-first route lookup backed by ``geo_cache`` (Routes API v2 en ``GeoService``).
@@ -71,7 +160,12 @@ class MapsService:
             if mem_row is not None:
                 return dict(mem_row)
 
-        out = await self._geo.get_route_data(o, d, batch=batch)
+        out = await self._geo.get_route_data(
+            o,
+            d,
+            batch=batch,
+            tenant_empresa_id=str(tenant_empresa_id) if tenant_empresa_id is not None else None,
+        )
         async with self._lock:
             self._route_mem[route_key] = out
         return dict(out)
@@ -104,10 +198,22 @@ class MapsService:
             if mem_key in self._mem:
                 return float(self._mem[mem_key])
 
+        rcli = await _get_redis_client()
+        if rcli is not None:
+            rd = await _redis_get_json(_dm_redis_key(mem_key))
+            if rd is not None and rd.get("distance_km") is not None:
+                km_redis = float(rd["distance_km"])
+                async with self._lock:
+                    self._mem[mem_key] = km_redis
+                await record_maps_redis_meter(kind="distance_matrix", hit=True)
+                return km_redis
+            await record_maps_redis_meter(kind="distance_matrix", hit=False)
+
         cached = await self._load_db_cache(key, tenant_empresa_id)
         if cached is not None:
             async with self._lock:
                 self._mem[mem_key] = cached
+            await _redis_set_json(_dm_redis_key(mem_key), {"distance_km": cached})
             return cached
 
         api_key = self.maps_api_key()
@@ -116,6 +222,7 @@ class MapsService:
                 "Maps_API_KEY no configurada: indique km_estimados manualmente o defina la clave de Google Maps"
             )
 
+        await self._consume_maps_quota(tenant_empresa_id)
         km, _duration_min = await self._fetch_distance_matrix(
             origin=o,
             destination=d,
@@ -131,6 +238,7 @@ class MapsService:
             km=km,
             tenant_empresa_id=tenant_empresa_id,
         )
+        await _redis_set_json(_dm_redis_key(mem_key), {"distance_km": km})
         return km
 
     async def geocode_lat_lng(
@@ -138,13 +246,24 @@ class MapsService:
         address: str,
         *,
         batch: GeoBatchCache | None = None,
+        tenant_empresa_id: str | UUID | None = None,
     ) -> tuple[float, float] | None:
         """
         Geocodificación (lat, lng) vía Geocoding API con caché en ``geo_cache`` + RAM.
         """
-        return await self._geo.get_coordinates(address, batch=batch)
+        return await self._geo.get_coordinates(
+            address,
+            batch=batch,
+            tenant_empresa_id=str(tenant_empresa_id) if tenant_empresa_id is not None else None,
+        )
 
-    async def try_porte_geo_payload(self, origen: str, destino: str) -> dict[str, Any]:
+    async def try_porte_geo_payload(
+        self,
+        origen: str,
+        destino: str,
+        *,
+        tenant_empresa_id: str | UUID | None = None,
+    ) -> dict[str, Any]:
         """
         Coordenadas origen/destino + distancia real (m) para persistir en ``portes``.
         Falla de API o clave ausente → dict vacío (no bloquea alta de porte).
@@ -156,21 +275,34 @@ class MapsService:
             return out
         batch = GeoBatchCache()
         try:
-            co = await self._geo.get_coordinates(o, batch=batch)
+            co = await self._geo.get_coordinates(
+                o,
+                batch=batch,
+                tenant_empresa_id=str(tenant_empresa_id) if tenant_empresa_id is not None else None,
+            )
             if co:
                 out["lat_origin"] = float(co[0])
                 out["lng_origin"] = float(co[1])
         except Exception:
             pass
         try:
-            cd = await self._geo.get_coordinates(d, batch=batch)
+            cd = await self._geo.get_coordinates(
+                d,
+                batch=batch,
+                tenant_empresa_id=str(tenant_empresa_id) if tenant_empresa_id is not None else None,
+            )
             if cd:
                 out["lat_dest"] = float(cd[0])
                 out["lng_dest"] = float(cd[1])
         except Exception:
             pass
         try:
-            rd = await self._geo.get_route_data(o, d, batch=batch)
+            rd = await self._geo.get_route_data(
+                o,
+                d,
+                batch=batch,
+                tenant_empresa_id=str(tenant_empresa_id) if tenant_empresa_id is not None else None,
+            )
             dm = rd.get("distance_meters")
             if dm is not None:
                 out["real_distance_meters"] = float(dm)
@@ -203,10 +335,22 @@ class MapsService:
                 km = float(self._mem[mem_key])
                 return km, self._estimate_duration_minutes(km)
 
+        rcli = await _get_redis_client()
+        if rcli is not None:
+            rd = await _redis_get_json(_dm_redis_key(mem_key))
+            if rd is not None and rd.get("distance_km") is not None:
+                km_redis = float(rd["distance_km"])
+                async with self._lock:
+                    self._mem[mem_key] = km_redis
+                await record_maps_redis_meter(kind="distance_matrix", hit=True)
+                return km_redis, self._estimate_duration_minutes(km_redis)
+            await record_maps_redis_meter(kind="distance_matrix", hit=False)
+
         cached = await self._load_db_cache(key, tenant_empresa_id)
         if cached is not None:
             async with self._lock:
                 self._mem[mem_key] = cached
+            await _redis_set_json(_dm_redis_key(mem_key), {"distance_km": cached})
             return cached, self._estimate_duration_minutes(cached)
 
         api_key = self.maps_api_key()
@@ -215,6 +359,7 @@ class MapsService:
                 "Maps_API_KEY no configurada: indique km_estimados manualmente o defina la clave de Google Maps"
             )
 
+        await self._consume_maps_quota(tenant_empresa_id)
         km, duration_min = await self._fetch_distance_matrix(
             origin=o,
             destination=d,
@@ -229,6 +374,7 @@ class MapsService:
             km=km,
             tenant_empresa_id=tenant_empresa_id,
         )
+        await _redis_set_json(_dm_redis_key(mem_key), {"distance_km": km})
         return km, duration_min
 
     async def _load_db_cache(
@@ -341,6 +487,8 @@ class MapsService:
         origen: str,
         destino: str,
         waypoints: list[str] | None = None,
+        *,
+        tenant_empresa_id: str | UUID | None = None,
     ) -> dict[str, Any]:
         """
         Directions API (googlemaps) con tráfico: distancia exacta, duración con tráfico y peajes.
@@ -364,6 +512,7 @@ class MapsService:
                 "Maps_API_KEY no configurada: indique km manualmente o defina la clave de Google Maps"
             )
 
+        await self._consume_maps_quota(tenant_empresa_id)
         wp = [w.strip() for w in (waypoints or []) if (w or "").strip()]
 
         raw = await asyncio.to_thread(
@@ -386,6 +535,7 @@ class MapsService:
         length: float | None = None,
         emission_type: str | None = "EURO_VI",
         waypoints: list[str] | None = None,
+        tenant_empresa_id: str | UUID | None = None,
     ) -> dict[str, Any]:
         """
         Google Routes API v2 para vehículo pesado.
@@ -407,12 +557,32 @@ class MapsService:
                 "vehicle_type": "HEAVY_TRUCK",
             }
 
+        truck_rkey = _truck_route_redis_key(
+            tenant_empresa_id,
+            o,
+            d,
+            weight,
+            height,
+            width,
+            length,
+            emission_type,
+            waypoints,
+        )
+        rcli = await _get_redis_client()
+        if rcli is not None:
+            tr_cached = await _redis_get_json(truck_rkey)
+            if tr_cached is not None and tr_cached.get("distancia_km") is not None:
+                await record_maps_redis_meter(kind="truck", hit=True)
+                return dict(tr_cached)
+            await record_maps_redis_meter(kind="truck", hit=False)
+
         api_key = self.maps_api_key()
         if not api_key:
             raise ValueError(
                 "Maps_API_KEY no configurada: indique km manualmente o defina la clave de Google Maps"
             )
 
+        await self._consume_maps_quota(tenant_empresa_id)
         try:
             import sentry_sdk
         except ImportError:
@@ -424,7 +594,7 @@ class MapsService:
             else None
         )
         if span_cm is None:
-            return await self._compute_truck_route_impl(
+            result = await self._compute_truck_route_impl(
                 origin=o,
                 destination=d,
                 api_key=api_key,
@@ -436,19 +606,22 @@ class MapsService:
                 waypoints=waypoints,
                 span=None,
             )
-        with span_cm as span:
-            return await self._compute_truck_route_impl(
-                origin=o,
-                destination=d,
-                api_key=api_key,
-                weight=weight,
-                height=height,
-                width=width,
-                length=length,
-                emission_type=emission_type,
-                waypoints=waypoints,
-                span=span,
-            )
+        else:
+            with span_cm as span:
+                result = await self._compute_truck_route_impl(
+                    origin=o,
+                    destination=d,
+                    api_key=api_key,
+                    weight=weight,
+                    height=height,
+                    width=width,
+                    length=length,
+                    emission_type=emission_type,
+                    waypoints=waypoints,
+                    span=span,
+                )
+        await _redis_set_json(truck_rkey, dict(result))
+        return result
 
     async def _compute_truck_route_impl(
         self,

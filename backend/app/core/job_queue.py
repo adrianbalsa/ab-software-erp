@@ -10,12 +10,14 @@ from __future__ import annotations
 
 from app.core.arq_queue import (
     close_arq_redis_pool,
+    enqueue_mark_legacy_sha256_passwords,
     enqueue_submit_to_aeat,
     get_arq_redis_pool,
 )
 
 __all__ = [
     "close_arq_redis_pool",
+    "enqueue_mark_legacy_sha256_passwords",
     "enqueue_submit_to_aeat",
     "get_arq_redis_pool",
 ]

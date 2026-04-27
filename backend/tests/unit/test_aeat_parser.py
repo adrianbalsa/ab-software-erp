@@ -165,6 +165,71 @@ class _FakeDb:
 
 
 @pytest.mark.asyncio
+async def test_enviar_registro_bloquea_certificado_expirado_antes_de_soap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = _FakeDb()
+    settings = SimpleNamespace(
+        AEAT_VERIFACTU_ENABLED=True,
+        ENVIRONMENT="development",
+        AEAT_BLOQUEAR_PROD_EN_DESARROLLO=True,
+        AEAT_VERIFACTU_USE_PRODUCTION=False,
+        AEAT_VERIFACTU_SUBMIT_URL_TEST="https://www2.agenciatributaria.gob.es/test",
+        AEAT_VERIFACTU_SUBMIT_URL_PROD=None,
+    )
+    factura_row = {
+        "id": 10,
+        "hash_registro": "abc123",
+        "fingerprint": "fp123",
+        "prev_fingerprint": None,
+        "num_factura": "FAC-2026-000010",
+        "fecha_emision": "2026-03-27",
+        "base_imponible": 100.0,
+        "cuota_iva": 21.0,
+        "total_factura": 121.0,
+        "tipo_factura": "F1",
+        "nif_emisor": "B12345678",
+    }
+    empresa_row = {"id": "emp-1", "nif": "B12345678", "nombre_comercial": "Empresa unit test"}
+
+    monkeypatch.setattr(
+        sender,
+        "_inspeccionar_certificado_mtls_bloqueante",
+        lambda *_args, **_kwargs: {
+            "ok": False,
+            "alert_level": "expired",
+            "detail": "mtls_certificate_expiry_alert",
+            "expires_at": "2026-04-25T00:00:00+00:00",
+        },
+    )
+    monkeypatch.setattr(
+        sender,
+        "_post_soap_aeat_with_retries",
+        lambda **_kwargs: pytest.fail("No debe intentar SOAP con mTLS caducado"),
+    )
+
+    out = await sender.enviar_registro_y_persistir(
+        db,
+        settings=settings,
+        empresa_id="emp-1",
+        empresa_row=empresa_row,
+        factura_row=factura_row,
+        cliente={"nif": "12345678Z", "nombre": "Cliente Test"},
+    )
+
+    assert out.get("aeat_sif_estado") == "error_tecnico"
+    assert any(
+        table == "verifactu_envios" and row.get("codigo_error") == "CERT_EXPIRED"
+        for table, row in db.inserts
+    )
+    assert any(
+        payload.get("aeat_sif_codigo") == "CERT_EXPIRED"
+        for table, payload, _filters in db.updates
+        if table == "facturas"
+    )
+
+
+@pytest.mark.asyncio
 async def test_enviar_registro_timeout_clasifica_error_tecnico(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.services.aeat_client_py.exceptions import VeriFactuException
 
@@ -204,6 +269,11 @@ async def test_enviar_registro_timeout_clasifica_error_tecnico(monkeypatch: pyte
     )
     monkeypatch.setattr(
         sender,
+        "_inspeccionar_certificado_mtls_bloqueante",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        sender,
         "_leer_pem_certificado_y_clave",
         lambda *_args, **_kwargs: (b"cert", b"key"),
     )
@@ -220,6 +290,11 @@ async def test_enviar_registro_timeout_clasifica_error_tecnico(monkeypatch: pyte
 
     monkeypatch.setattr(sender, "sign_xml_xades", _stub_sign)
     monkeypatch.setattr(sender, "_limpiar_temp", lambda *_args, **_kwargs: None)
+
+    async def _noop_webhook_delivery(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(sender, "run_webhook_deliveries_for_event", _noop_webhook_delivery)
     monkeypatch.setattr(
         sender,
         "_post_reg_factu_soap_sync",

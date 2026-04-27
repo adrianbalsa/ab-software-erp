@@ -13,7 +13,9 @@ import pytest
 
 from app.schemas.factura import FacturaCreateFromPortes
 from app.services.facturas_service import FacturasService
-from app.services.verifactu_service import VERIFACTU_INVOICE_GENESIS_HASH, VerifactuService
+from app.services.verifactu_service import VerifactuService
+
+TEST_GENESIS_HASH = "11" * 32
 
 
 def _data(rows: list[object]) -> SimpleNamespace:
@@ -35,7 +37,7 @@ async def test_emitir_f1_genera_hash_registro_correcto() -> None:
             "nif_emisor": "B12345678",
             "total_factura": 121.0,
         },
-        VERIFACTU_INVOICE_GENESIS_HASH,
+        TEST_GENESIS_HASH,
     )
 
     porte_row = {
@@ -71,7 +73,7 @@ async def test_emitir_f1_genera_hash_registro_correcto() -> None:
         "cuota_iva": 21.0,
         "fecha_emision": fixed.isoformat(),
         "numero_secuencial": 1,
-        "hash_anterior": VERIFACTU_INVOICE_GENESIS_HASH,
+        "hash_anterior": TEST_GENESIS_HASH,
         "hash_registro": expected_hash,
         "hash_factura": expected_hash,
         "bloqueado": True,
@@ -105,9 +107,21 @@ async def test_emitir_f1_genera_hash_registro_correcto() -> None:
     payload = FacturaCreateFromPortes(cliente_id=UUID(cid), iva_porcentaje=21.0)
 
     with patch("app.services.facturas_service.get_engine", return_value=None):
-        with patch("app.services.facturas_service.date") as mock_date:
-            mock_date.today.return_value = fixed
-            result = await svc.generar_desde_portes(empresa_id=eid, payload=payload, usuario_id="qa")
+        with patch(
+            "app.services.facturas_service.get_verifactu_genesis_hash_for_issuer",
+            return_value=TEST_GENESIS_HASH,
+        ):
+            with patch(
+                "app.services.verifactu_service.get_verifactu_genesis_hash_for_issuer",
+                return_value=TEST_GENESIS_HASH,
+            ):
+                with patch("app.services.facturas_service.date") as mock_date:
+                    mock_date.today.return_value = fixed
+                    result = await svc.generar_desde_portes(
+                        empresa_id=eid,
+                        payload=payload,
+                        usuario_id="qa",
+                    )
 
     assert result.factura.hash_registro == expected_hash
     assert len(expected_hash) == 64
@@ -232,14 +246,22 @@ async def test_emitir_r1_rectificativa_vincula_f1_e_importes_negativos() -> None
     svc = FacturasService(db)
 
     with patch("app.services.facturas_service.get_engine", return_value=None):
-        with patch("app.services.facturas_service.date") as mock_date:
-            mock_date.today.return_value = fixed
-            out = await svc.emitir_factura_rectificativa(
-                empresa_id=eid,
-                factura_id=fid,
-                motivo="Error en base imponible",
-                usuario_id="qa",
-            )
+        with patch(
+            "app.services.facturas_service.get_verifactu_genesis_hash_for_issuer",
+            return_value=TEST_GENESIS_HASH,
+        ):
+            with patch(
+                "app.services.verifactu_service.get_verifactu_genesis_hash_for_issuer",
+                return_value=TEST_GENESIS_HASH,
+            ):
+                with patch("app.services.facturas_service.date") as mock_date:
+                    mock_date.today.return_value = fixed
+                    out = await svc.emitir_factura_rectificativa(
+                        empresa_id=eid,
+                        factura_id=fid,
+                        motivo="Error en base imponible",
+                        usuario_id="qa",
+                    )
 
     assert out.factura_rectificada_id == fid
     assert out.total_factura < 0

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,7 +12,10 @@ import pytest
 def mock_boto3_client(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     sm_client = MagicMock()
     sm_client.get_secret_value.return_value = {
-        "SecretString": '{"STRIPE_SECRET_KEY": " sk_aws ", "JWT_SECRET_KEY": "jwt-aws"}',
+        "SecretString": (
+            '{"STRIPE_SECRET_KEY": " sk_aws ", "JWT_SECRET_KEY": "jwt-aws", '
+            '"VERIFACTU_GENESIS_HASHES": {"empresa-1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}'
+        ),
     }
 
     def _client(name: str, **kwargs: object) -> MagicMock:
@@ -37,6 +41,7 @@ def test_aws_backend_uses_secrets_manager(
     assert isinstance(mgr, sm.AwsSecretsManagerSecretManager)
     assert mgr.get_stripe_secret_key() == "sk_aws"
     assert mgr.get_jwt_secret_key() == "jwt-aws"
+    assert mgr.get_verifactu_genesis_hash(issuer_id="EMPRESA-1") == "a" * 64
     mock_boto3_client.get_secret_value.assert_called_once()
 
 
@@ -49,3 +54,40 @@ def test_aws_backend_fallback_without_secret_id(monkeypatch: pytest.MonkeyPatch)
     sm.reset_secret_manager()
     mgr = sm.get_secret_manager()
     assert isinstance(mgr, sm.EnvSecretManager)
+
+
+def test_env_backend_reads_verifactu_genesis_from_runtime_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SECRET_MANAGER_BACKEND", "env")
+    monkeypatch.setenv("VERIFACTU_GENESIS_HASHES", '{"empresa-1": "' + ("b" * 64) + '"}')
+
+    from app.services import secret_manager_service as sm
+
+    sm.reset_secret_manager()
+    mgr = sm.get_secret_manager()
+    assert mgr.get_verifactu_genesis_hash(issuer_id="empresa-1") == "b" * 64
+
+
+def test_aws_backend_verifactu_global_single_hash_in_json_secret(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_boto3_client: MagicMock,
+) -> None:
+    """Paridad con env: JSON puede llevar solo ``VERIFACTU_GENESIS_HASH`` (un solo emisor / sandbox)."""
+    g = "e" * 64
+    mock_boto3_client.get_secret_value.return_value = {
+        "SecretString": json.dumps(
+            {
+                "STRIPE_SECRET_KEY": " sk_aws ",
+                "JWT_SECRET_KEY": "jwt-aws",
+                "VERIFACTU_GENESIS_HASH": g,
+            }
+        ),
+    }
+    monkeypatch.setenv("SECRET_MANAGER_BACKEND", "aws")
+    monkeypatch.setenv("AWS_SECRETS_MANAGER_SECRET_ID", "arn:aws:secretsmanager:eu-west-1:1:secret:y")
+    monkeypatch.setenv("AWS_REGION", "eu-west-1")
+
+    from app.services import secret_manager_service as sm
+
+    sm.reset_secret_manager()
+    mgr = sm.get_secret_manager()
+    assert mgr.get_verifactu_genesis_hash(issuer_id="issuer-cualquiera") == g

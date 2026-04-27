@@ -10,7 +10,6 @@ from uuid import UUID
 import pytest
 
 # Optional dependency imported transitively by app.api.deps in this test env.
-sys.modules.setdefault("rapidfuzz", MagicMock(name="rapidfuzz_test_double"))
 sys.modules.setdefault("litellm", MagicMock(name="litellm_test_double"))
 sys.modules.setdefault("anthropic", MagicMock(name="anthropic_test_double"))
 
@@ -66,7 +65,12 @@ class _FakeDb:
 
 
 class _FakeMapsService:
-    async def get_route_data(self, _origin: str, _destination: str) -> dict[str, object]:
+    async def get_route_data(
+        self,
+        _origin: str,
+        _destination: str,
+        **_kwargs: object,
+    ) -> dict[str, object]:
         return {
             "distance_km": 200.0,
             "duration_mins": 130,
@@ -138,7 +142,10 @@ async def test_api_consult_returns_structured_json_and_redacts_sensitive_context
     monkeypatch.setattr(service._finance, "financial_summary", _financial_summary)
     monkeypatch.setattr(service._finance, "financial_dashboard", _financial_dashboard)
     monkeypatch.setattr(service._facturas, "list_facturas", _list_facturas)
+    from app.services.secret_manager_service import reset_secret_manager
+
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    reset_secret_manager()
 
     captured_prompt: dict[str, str] = {}
 

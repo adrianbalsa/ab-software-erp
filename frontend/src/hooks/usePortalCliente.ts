@@ -61,14 +61,15 @@ export function usePortalPortesActivos(options?: { pollMs?: number }): AsyncStat
   const pollMs = options?.pollMs ?? 45_000;
   const loader = useCallback(() => fetchPortalPortesActivos(), []);
   const state = usePortalResource(loader, []);
+  const { refetch } = state;
 
   useEffect(() => {
     if (pollMs <= 0) return undefined;
     const id = window.setInterval(() => {
-      void state.refetch();
+      void refetch();
     }, pollMs);
     return () => window.clearInterval(id);
-  }, [pollMs, state.refetch]);
+  }, [pollMs, refetch]);
 
   return state;
 }
@@ -84,33 +85,38 @@ export function usePortalClienteOverview() {
   const activos = usePortalPortesActivos();
   const esg = usePortalEsgResumen();
 
-  const loading = facturas.loading || entregados.loading || activos.loading || esg.loading;
-  const error = facturas.error || entregados.error || activos.error || esg.error;
+  const { data: facturasData, loading: facturasLoading, error: facturasError, refetch: refetchFacturas } = facturas;
+  const {
+    data: entregadosData,
+    loading: entregadosLoading,
+    error: entregadosError,
+    refetch: refetchEntregados,
+  } = entregados;
+  const { data: activosData, loading: activosLoading, error: activosError, refetch: refetchActivos } = activos;
+  const { data: esgData, loading: esgLoading, error: esgError, refetch: refetchEsg } = esg;
+
+  const loading = facturasLoading || entregadosLoading || activosLoading || esgLoading;
+  const error = facturasError || entregadosError || activosError || esgError;
 
   const refetchAll = useCallback(async () => {
-    await Promise.all([
-      facturas.refetch(),
-      entregados.refetch(),
-      activos.refetch(),
-      esg.refetch(),
-    ]);
-  }, [facturas.refetch, entregados.refetch, activos.refetch, esg.refetch]);
+    await Promise.all([refetchFacturas(), refetchEntregados(), refetchActivos(), refetchEsg()]);
+  }, [refetchFacturas, refetchEntregados, refetchActivos, refetchEsg]);
 
   return useMemo(
     () => ({
-      facturas: facturas.data,
-      portesEntregados: entregados.data,
-      portesActivos: activos.data,
-      esg: esg.data,
+      facturas: facturasData,
+      portesEntregados: entregadosData,
+      portesActivos: activosData,
+      esg: esgData,
       loading,
       error,
       refetchAll,
     }),
     [
-      facturas.data,
-      entregados.data,
-      activos.data,
-      esg.data,
+      facturasData,
+      entregadosData,
+      activosData,
+      esgData,
       loading,
       error,
       refetchAll,

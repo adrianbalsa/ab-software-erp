@@ -8,11 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.services.aeat_qr_service import build_srei_verifactu_url, build_tike_verifactu_url
-from app.services.verifactu_service import (
-    VERIFACTU_CHAIN_SEED_HEX,
-    VERIFACTU_INVOICE_GENESIS_HASH,
-    VerifactuService,
-)
+from app.services.verifactu_service import VerifactuService
+
+TEST_GENESIS_HASH = "11" * 32
 
 
 def test_generar_hash_sin_campos_rect_igual_que_legacy() -> None:
@@ -39,18 +37,17 @@ def test_generar_hash_sin_campos_rect_igual_que_legacy() -> None:
     assert h == h2
 
 
-def test_generate_invoice_hash_usa_genesis_si_prev_vacio() -> None:
+def test_generate_invoice_hash_requiere_previous_hash_resuelto() -> None:
     inv = {
         "num_factura": "FAC-2026-000001",
         "fecha_emision": "2026-03-24",
         "nif_emisor": "B12345678",
         "total_factura": 121.0,
     }
-    h_none = VerifactuService.generate_invoice_hash(inv, None)
-    h_empty = VerifactuService.generate_invoice_hash(inv, "")
-    h_genesis = VerifactuService.generate_invoice_hash(inv, VERIFACTU_INVOICE_GENESIS_HASH)
-    assert h_none == h_empty == h_genesis
-    assert len(h_none) == 64
+    with pytest.raises(ValueError, match="previous_hash VeriFactu vacío"):
+        VerifactuService.generate_invoice_hash(inv, None)
+    h_genesis = VerifactuService.generate_invoice_hash(inv, TEST_GENESIS_HASH)
+    assert len(h_genesis) == 64
 
 
 def test_generar_hash_r1_incluye_tipo_y_rect_distinto() -> None:
@@ -84,6 +81,7 @@ def test_fingerprint_desde_eslabon_primera_factura_prev_none() -> None:
         fecha_emision="2026-03-24",
         total_factura=242.0,
         tipo_factura="F1",
+        genesis_hash=TEST_GENESIS_HASH,
     )
     assert prev is None
     assert len(fp) == 64
@@ -93,7 +91,7 @@ def test_fingerprint_desde_eslabon_primera_factura_prev_none() -> None:
         num_factura="FAC-2026-000099",
         fecha="2026-03-24",
         total=242.0,
-        hash_anterior=VERIFACTU_CHAIN_SEED_HEX,
+        hash_anterior=TEST_GENESIS_HASH,
         tipo_factura=None,
     )
     assert fp == expected

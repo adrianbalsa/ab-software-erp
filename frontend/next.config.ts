@@ -1,11 +1,17 @@
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const isProd = process.env.NODE_ENV === "production";
+const projectRoot = dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   /* Imagen Docker: copiar .next/standalone + .next/static (usuario no-root). */
   output: "standalone",
+  turbopack: {
+    root: projectRoot,
+  },
   compiler: isProd
     ? {
         removeConsole: { exclude: ["error", "warn"] },

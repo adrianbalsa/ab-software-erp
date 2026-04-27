@@ -12,7 +12,7 @@ from typing import Any
 from starlette.requests import Request
 
 from app.db.supabase import SupabaseAsync
-from app.services.audit_logs_service import AuditLogsService
+from app.services.audit_logs_service import AuditLogsService, pseudonymize_audit_payload
 
 _log = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ def log_security_secret_rotation_sync(
         "p_table_name": "security",
         "p_record_id": str(secret_kind).strip(),
         "p_action": ACTION_SECURITY_SECRET_ROTATION,
-        "p_new_data": new_value,
+        "p_new_data": pseudonymize_audit_payload(new_value),
     }
     if actor:
         params["p_changed_by"] = str(actor).strip()

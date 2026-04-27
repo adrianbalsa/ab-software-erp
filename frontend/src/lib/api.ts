@@ -1,4 +1,4 @@
-import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
+import axios, { type AxiosRequestConfig } from "axios";
 import { createBrowserClient } from "@supabase/ssr";
 import { z, type ZodSchema } from "zod";
 import { getAuthToken as getAuthTokenFromStore } from "@/lib/auth";

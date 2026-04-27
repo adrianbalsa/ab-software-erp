@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from app.api import deps
+from app.core.plans import CostMeter
 from app.schemas.advisor import AdvisorAskIn, AdvisorAskOut
 from app.schemas.user import UserOut
 from app.services.advisor_service import (
@@ -27,6 +28,7 @@ from app.services.bi_service import BiService
 from app.services.finance_service import FinanceService
 from app.services.maps_service import MapsService
 from app.services.portes_service import PortesService
+from app.services.usage_quota_service import UsageQuotaService, estimate_ai_tokens
 from app.db.supabase import SupabaseAsync
 
 logger = logging.getLogger(__name__)
@@ -51,6 +53,7 @@ async def advisor_ask(
     audit_logs: AuditLogsService = Depends(deps.get_audit_logs_service),
     maps: MapsService = Depends(deps.get_maps_service),
     bi: BiService = Depends(deps.get_bi_service),
+    quotas: UsageQuotaService = Depends(deps.get_usage_quota_service),
 ):
     """
     Contexto: EBITDA, serie 6m, matriz CIP (y heurística “vampiros”), tesorería/cashflow,
@@ -88,6 +91,11 @@ async def advisor_ask(
 
     if not payload.stream:
         try:
+            await quotas.consume(
+                empresa_id=eid,
+                meter=CostMeter.AI,
+                units=estimate_ai_tokens(payload.message, contexto),
+            )
             reply, model = await get_advisor_response(
                 payload.message,
                 eid,
@@ -96,6 +104,12 @@ async def advisor_ask(
             return AdvisorAskOut(reply=reply, model=model)
         except RuntimeError as e:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+
+    await quotas.consume(
+        empresa_id=eid,
+        meter=CostMeter.AI,
+        units=estimate_ai_tokens(payload.message, contexto),
+    )
 
     async def event_stream():
         try:

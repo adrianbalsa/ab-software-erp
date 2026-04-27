@@ -7,7 +7,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api import deps
-from app.api.v1.bi import require_bi_owner_or_admin
 from app.models.enums import UserRole
 from app.schemas.bi import ProfitMarginAnalyticsOut
 from app.schemas.finance import SimulationInput, SimulationResultOut
@@ -98,7 +97,7 @@ def _margin_range_from_query(
     summary="Serie agregada de ingresos, gastos y margen (HALF_EVEN)",
 )
 async def analytics_profit_margin(
-    current_user: UserOut = Depends(require_bi_owner_or_admin),
+    current_user: UserOut = Depends(deps.require_role("owner")),
     service: BiService = Depends(deps.get_bi_service),
     date_range: tuple[date | None, date | None] = Depends(_margin_range_from_query),
     granularity: Annotated[Literal["month", "week"], Query(description="Agrupación temporal.")] = "month",

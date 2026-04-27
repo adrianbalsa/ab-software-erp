@@ -6,19 +6,20 @@ from typing import Any
 
 from authlib.integrations.base_client.errors import OAuthError
 from authlib.integrations.starlette_client import OAuth
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.api import deps
 from app.core.config import get_settings
 from app.core.http_client_meta import get_client_ip
-from app.core.security import TOKEN_TYPE, create_access_token
+from app.core.security import TOKEN_TYPE, create_access_token, create_password_reset_token
 from app.models.enums import normalize_user_role
 from app.schemas.auth import ActiveSessionOut, OnboardingSetupIn, OnboardingSetupOut, Token
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserOut
-from app.services.auth_service import AuthService
+from app.services.auth_service import AuthService, PasswordResetRequired
+from app.services.email_service import EmailService, _normalize_dest_email, send_email_background_task
 from app.services.refresh_token_service import RefreshTokenService
 
 
@@ -115,10 +116,36 @@ def _clear_auth_cookies(response: Response) -> None:
         )
 
 
+async def _queue_forced_password_reset_email(
+    *,
+    login_id: str,
+    canonical_username: str,
+    background_tasks: BackgroundTasks,
+    auth_service: AuthService,
+) -> None:
+    dest = _normalize_dest_email(login_id)
+    if dest is None:
+        dest = await auth_service.get_usuario_email_for_notifications(username=canonical_username)
+    if dest is None:
+        _log.warning("password reset forzado sin email de entrega (usuario prefix=%s)", canonical_username[:40])
+        return
+    try:
+        token = create_password_reset_token(subject=canonical_username)
+    except Exception as exc:
+        _log.exception("password reset forzado: no se pudo firmar token: %s", exc)
+        return
+
+    def _send_sync() -> bool:
+        return EmailService().send_reset_password(dest, token)
+
+    background_tasks.add_task(send_email_background_task, "forced_password_reset_resend", _send_sync)
+
+
 @router.post("/login")
 @router.post("/login/", include_in_schema=False)
 async def login(
     request: Request,
+    background_tasks: BackgroundTasks,
     form_data: OAuth2PasswordRequestForm = Depends(),
     auth_service: AuthService = Depends(deps.get_auth_service_admin),
     refresh_service: RefreshTokenService = Depends(deps.get_refresh_token_service_admin),
@@ -134,10 +161,25 @@ async def login(
     ch = request.client.host if request.client else None
     print(f"LOGIN ROUTE BODY START: client_host={ch!r} username_field={form_data.username!r}", flush=True)
     _log.info("Login request received for user: %s", form_data.username)
-    user = await auth_service.authenticate(
-        username=form_data.username,
-        password=form_data.password,
-    )
+    try:
+        user = await auth_service.authenticate(
+            username=form_data.username,
+            password=form_data.password,
+        )
+    except PasswordResetRequired as exc:
+        await _queue_forced_password_reset_email(
+            login_id=form_data.username,
+            canonical_username=exc.username,
+            background_tasks=background_tasks,
+            auth_service=auth_service,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "password_reset_required",
+                "message": "Por seguridad debes restablecer tu contraseña antes de iniciar sesión. Te hemos enviado un enlace si la cuenta tiene email configurado.",
+            },
+        ) from exc
     if user is None:
         print(
             "LOGIN 401: authenticate() -> None (usuario/contraseña/contexto empresa; ver AUTH_DEBUG si DEBUG=true)",

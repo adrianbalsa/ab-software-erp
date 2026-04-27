@@ -90,7 +90,7 @@ Status: [DONE]
 Status: [DONE]
 - Chaining: compute_invoice_fingerprint (SHA-256)
   Payload: NIF_Emisor|NIF_Receptor|NumFactura|Fecha|Importe|PrevHash
-- Genesis Hash: "0" * 64
+- Genesis Hash: único por emisor, resuelto desde Secret Manager (`VERIFACTU_GENESIS_HASHES`)
 - Fields: fingerprint_hash, previous_fingerprint, previous_invoice_hash
 - Auto-Chaining: On invoice creation (generar_desde_portes, emitir_rectificativa)
 - Immutability: bloqueado=True, triggers prevent UPDATE/DELETE
@@ -499,7 +499,7 @@ Technical:
 [DONE] XAdES signature
 [DONE] Audit logs
 [ ] Load testing (target: 1000 RPS)
-[ ] Backup automation (Supabase CLI)
+[DONE] Backup automation (Supabase CLI + S3 EU encrypted)
 [ ] Disaster recovery plan
 [ ] Security audit (external)
 [ ] Performance profiling (New Relic/DataDog)

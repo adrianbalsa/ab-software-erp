@@ -32,8 +32,7 @@ def _optional_float(name: str, raw: str | None) -> float | None:
 
 @router.get("/", response_model=list[GastoOut])
 async def list_gastos(
-    current_user: UserOut = Depends(deps.get_current_user),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor", "driver"])),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager", "driver")),
     service: GastosService = Depends(deps.get_gastos_service),
 ) -> list[GastoOut]:
     return await service.list_gastos(empresa_id=current_user.empresa_id)
@@ -52,8 +51,7 @@ async def create_gasto(
     total_eur: str | None = Form(None),
     porte_id: str | None = Form(None),
     evidencia: UploadFile | None = File(None),
-    current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor", "driver"])),
+    current_user: UserOut = Depends(deps.require_write_role("owner", "traffic_manager", "driver")),
     service: GastosService = Depends(deps.get_gastos_service),
 ) -> GastoOut:
     try:
@@ -108,8 +106,7 @@ async def ocr_hint(
     iva: str | None = Form(None),
     total_eur: str | None = Form(None),
     evidencia: UploadFile | None = File(None),
-    current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
+    current_user: UserOut = Depends(deps.require_write_role("owner", "traffic_manager")),
     service: GastosService = Depends(deps.get_gastos_service),
 ) -> GastoOCRHint | JSONResponse:
     """
@@ -169,15 +166,18 @@ async def ocr_hint(
         raise HTTPException(status_code=422, detail="Se requiere evidencia para OCR (confirm=false)")
 
     content = await evidencia.read()
-    hint = await service.ocr_extract_hint(content=content, filename=evidencia.filename or "evidencia")
+    hint = await service.ocr_extract_hint(
+        content=content,
+        filename=evidencia.filename or "evidencia",
+        empresa_id=str(current_user.empresa_id),
+    )
     return hint
 
 
 @router.post("/ocr", response_model=GastoOCRExtractOut)
 async def ocr_extract(
     evidencia: UploadFile = File(...),
-    current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor", "driver"])),
+    current_user: UserOut = Depends(deps.require_write_role("owner", "traffic_manager", "driver")),
     service: GastosService = Depends(deps.get_gastos_service),
 ) -> GastoOCRExtractOut:
     """
@@ -185,7 +185,11 @@ async def ocr_extract(
     proveedor, cif, base_imponible, iva, total y fecha.
     """
     content = await evidencia.read()
-    hint = await service.ocr_extract_hint(content=content, filename=evidencia.filename or "ticket")
+    hint = await service.ocr_extract_hint(
+        content=content,
+        filename=evidencia.filename or "ticket",
+        empresa_id=str(current_user.empresa_id),
+    )
     total = hint.total
     iva = hint.iva
     base_imponible = hint.base_imponible
@@ -208,8 +212,7 @@ async def create_gasto_from_logistics_ticket(
     porte_id: str = Form(...),
     persist_evidence: bool = Form(False),
     ticket: UploadFile = File(...),
-    current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor", "driver"])),
+    current_user: UserOut = Depends(deps.require_write_role("owner", "traffic_manager", "driver")),
     service: GastosService = Depends(deps.get_gastos_service),
 ) -> GastoOut:
     """

@@ -17,6 +17,8 @@ class UserInDB(BaseModel):
     empresa_id: UUID
     rol: str
     password_hash: str
+    password_must_reset: bool = False
+    needs_rehash: bool = False
 
 
 class UserOut(BaseModel):

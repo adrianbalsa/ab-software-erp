@@ -186,7 +186,7 @@ async def test_stripe_handle_webhook_duplicate_claim_short_circuits(monkeypatch:
     db = MagicMock()
     db.execute = AsyncMock()
     out = await stripe_service.handle_webhook(payload=b"{}", sig_header="sig", db=db)
-    assert out == {"received": True, "duplicate": True}
+    assert out == {"received": True, "duplicate": True, "event_id": "evt_dup_test"}
     db.execute.assert_not_awaited()
 
 

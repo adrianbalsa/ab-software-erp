@@ -53,7 +53,9 @@ export function BankConnectionCard({ bank, onReconciled }: Props) {
 
   useEffect(() => {
     if (hydrated && institutionId) {
-      setInstitutionInput(institutionId);
+      queueMicrotask(() => {
+        setInstitutionInput(institutionId);
+      });
     }
   }, [hydrated, institutionId]);
 

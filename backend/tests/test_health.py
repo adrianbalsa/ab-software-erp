@@ -50,6 +50,38 @@ async def test_health_deep_returns_healthy_when_checks_pass(client) -> None:
     assert body["checks"]["finance_service"]["ok"] is True
 
 
+async def test_health_deep_returns_503_when_aeat_mtls_certificate_invalid(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _deep_degraded(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "status": "degraded",
+            "checks": {
+                "aeat_mtls_certificates": {
+                    "ok": False,
+                    "skipped": False,
+                    "detail": "aeat_mtls_certificate_alerts:1",
+                    "certificates": [
+                        {
+                            "ok": False,
+                            "alert_level": "expired",
+                            "detail": "mtls_certificate_expiry_alert",
+                        }
+                    ],
+                }
+            },
+        }
+
+    monkeypatch.setattr("app.core.health_checks.run_deep_health", _deep_degraded)
+
+    res = await client.get("/health/deep")
+
+    assert res.status_code == 503
+    body = res.json()
+    assert body["status"] == "degraded"
+    assert body["checks"]["aeat_mtls_certificates"]["ok"] is False
+
+
 async def test_ready_is_always_ok(client) -> None:
     res = await client.get("/ready")
     assert res.status_code == 200

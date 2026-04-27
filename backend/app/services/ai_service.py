@@ -218,7 +218,11 @@ class LogisAdvisorService:
             route_ref = f"{origin}|{destination}"
             route_key = route_ref[:48]
             try:
-                metrics = await self._maps.get_route_data(origin, destination)
+                metrics = await self._maps.get_route_data(
+                    origin,
+                    destination,
+                    tenant_empresa_id=eid,
+                )
                 km = float(metrics.get("distance_km") or 0.0)
                 op_cost = float(quantize_currency(to_decimal(km * COSTE_OPERATIVO_EUR_KM)))
                 eta = round((income / op_cost), 4) if op_cost > 1e-9 else None

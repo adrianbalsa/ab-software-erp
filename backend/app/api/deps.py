@@ -58,6 +58,7 @@ from app.services.esg_export_service import EsgExportService
 from app.services.audit_logs_service import AuditLogsService
 from app.services.bi_service import BiService
 from app.services.geo_activity_service import GeoActivityService
+from app.services.usage_quota_service import UsageQuotaService
 
 _deps_log = logging.getLogger(__name__)
 
@@ -167,7 +168,7 @@ async def get_refresh_token_service_admin(db: SupabaseAsync = Depends(get_db_adm
 
 
 async def get_maps_service(db: SupabaseAsync = Depends(get_db)) -> MapsService:
-    return MapsService(db)
+    return MapsService(db, UsageQuotaService(db))
 
 
 async def get_esg_service(
@@ -252,6 +253,10 @@ async def get_bi_service(db: SupabaseAsync = Depends(get_db)) -> BiService:
 
 async def get_geo_activity_service(db: SupabaseAsync = Depends(get_db)) -> GeoActivityService:
     return GeoActivityService(db)
+
+
+async def get_usage_quota_service(db: SupabaseAsync = Depends(get_db)) -> UsageQuotaService:
+    return UsageQuotaService(db)
 
 
 async def get_logis_advisor_service(
@@ -434,6 +439,15 @@ class RoleChecker:
         return current_user
 
 
+async def _enforce_role(current_user: UserOut, allowed_roles: frozenset[UserRole]) -> UserOut:
+    if current_user.role not in allowed_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough privileges",
+        )
+    return current_user
+
+
 def require_role(*allowed_roles: str):
     """
     Dependencia RBAC operativa (profiles.role). El JWT solo complementa UX;
@@ -443,6 +457,18 @@ def require_role(*allowed_roles: str):
 
     async def _dep(current_user: UserOut = Depends(get_current_user)) -> UserOut:
         return await checker(current_user)
+
+    return _dep
+
+
+def require_write_role(*allowed_roles: str):
+    """
+    Igual que ``require_role`` pero reafirma el contexto de tenant antes de mutar datos.
+    """
+    normalized_allowed = frozenset(_normalize_role(role) for role in allowed_roles)
+
+    async def _dep(current_user: UserOut = Depends(bind_write_context)) -> UserOut:
+        return await _enforce_role(current_user, normalized_allowed)
 
     return _dep
 

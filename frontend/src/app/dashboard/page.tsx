@@ -115,6 +115,7 @@ export default function Dashboard() {
   );
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [onboarded, setOnboarded] = useState(true);
+  const [todayLabel, setTodayLabel] = useState("");
 
   useEffect(() => {
     if (role === "cliente") router.replace("/portal-cliente/mis-portes");
@@ -240,6 +241,18 @@ export default function Dashboard() {
   }, [router]);
 
   useEffect(() => {
+    queueMicrotask(() => {
+      setTodayLabel(
+        new Date().toLocaleDateString(numLoc, {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        }),
+      );
+    });
+  }, [numLoc]);
+
+  useEffect(() => {
     if (!isOwner || !error) return;
     if (isAuthCredentialErrorMessage(error)) {
       toast.error(p.dashboard.sessionInvalid, { id: "abl-dash-auth" });
@@ -312,13 +325,7 @@ export default function Dashboard() {
             >
               {loadingAny ? p.dashboard.refreshing : p.dashboard.refreshKpis}
             </button>
-            <span className="text-sm font-medium text-zinc-500">
-              {new Date().toLocaleDateString(numLoc, {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
-            </span>
+            {todayLabel && <span className="text-sm font-medium text-zinc-500">{todayLabel}</span>}
             <button
               type="button"
               className="rounded-full bg-zinc-900/80 p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"

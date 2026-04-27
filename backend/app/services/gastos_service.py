@@ -10,6 +10,7 @@ from app.db.soft_delete import filter_not_deleted, soft_delete_payload
 from app.db.supabase import SupabaseAsync
 from app.schemas.gasto import GastoCreate, GastoOCRHint, GastoOut
 from app.services.ocr_service import OCRService
+from app.services.usage_quota_service import UsageQuotaService
 from app.core.crypto import pii_crypto
 
 
@@ -175,12 +176,19 @@ class GastosService:
             requires_manual_review=bool(data.get("requires_manual_review")),
         )
 
-    async def ocr_extract_hint(self, *, content: bytes, filename: str) -> GastoOCRHint:
+    async def ocr_extract_hint(
+        self,
+        *,
+        content: bytes,
+        filename: str,
+        empresa_id: str,
+    ) -> GastoOCRHint:
         """
         Analiza el ticket con visión LLM (LiteLLM) y devuelve `GastoOCRHint`.
         """
         _ = filename
-        ocr = OCRService()
+        eid = self._require_empresa_id(empresa_id)
+        ocr = OCRService(quota_service=UsageQuotaService(self._db), empresa_id=eid)
         raw = await ocr.analizar_ticket(content)
         return self._dict_to_gasto_ocr_hint(raw)
 
@@ -209,7 +217,8 @@ class GastosService:
         except ValueError as e:
             raise ValueError("porte_id debe ser un UUID válido") from e
 
-        ocr = OCRService()
+        eid = self._require_empresa_id(empresa_id)
+        ocr = OCRService(quota_service=UsageQuotaService(self._db), empresa_id=eid)
         legacy = await ocr.analizar_ticket(image_bytes)
         total = legacy.get("total")
         if total is None or float(total) <= 0:

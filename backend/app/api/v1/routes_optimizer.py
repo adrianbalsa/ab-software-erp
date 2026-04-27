@@ -123,6 +123,7 @@ async def optimize_route(
             origin=origen,
             destination=destino,
             emission_type=normativa_euro,
+            tenant_empresa_id=str(current_user.empresa_id),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -162,6 +163,7 @@ async def optimize_route(
                 destination=destino,
                 emission_type=normativa_euro,
                 waypoints=addresses,
+                tenant_empresa_id=str(current_user.empresa_id),
             )
             km_wp = result.get("distancia_km", km)
             dur_wp = result.get("tiempo_estimado_min", duration_min)

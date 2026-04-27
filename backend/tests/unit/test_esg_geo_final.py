@@ -9,7 +9,13 @@ import pytest
 
 from app.core.esg_engine import euro_vi_factor_kg_per_km_for_weight_class, infer_weight_class_from_vehicle_label
 from app.services.esg_service import EsgService
-from app.services.geo_service import geocode_cache_key
+from app.services.geo_service import (
+    GeoService,
+    geocode_cache_key,
+    geocode_redis_key,
+    route_cache_key,
+    route_redis_key,
+)
 
 
 class _MockExecResult:
@@ -28,6 +34,24 @@ class _MockSupabasePortesOnly:
 
     async def execute(self, _query: object) -> _MockExecResult:  # noqa: ARG002
         return _MockExecResult(self._portes_rows)
+
+
+class _FakeRedis:
+    def __init__(self, initial: dict[str, str] | None = None) -> None:
+        self.values = initial or {}
+        self.set_calls: list[tuple[str, str, int | None]] = []
+        self.hashes: dict[str, dict[str, int]] = {}
+
+    async def get(self, key: str) -> str | None:
+        return self.values.get(key)
+
+    async def set(self, key: str, value: str, *, ex: int | None = None) -> None:
+        self.values[key] = value
+        self.set_calls.append((key, value, ex))
+
+    async def hincrby(self, key: str, field: str, amount: int) -> None:
+        bucket = self.hashes.setdefault(key, {})
+        bucket[field] = bucket.get(field, 0) + amount
 
 
 @pytest.mark.parametrize(
@@ -90,6 +114,73 @@ def test_geocode_cache_key_normalizes_address_equivalence() -> None:
     a = "Calle Mayor, 1"
     b = "calle mayor 1 "
     assert geocode_cache_key(a) == geocode_cache_key(b)
+
+
+@pytest.mark.asyncio
+async def test_geocode_uses_redis_cache_and_records_hit(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.services.geo_service as geo
+
+    cache_key = geocode_cache_key("Calle Mayor 1")
+    redis = _FakeRedis({geocode_redis_key(cache_key): '{"lat":40.4168,"lng":-3.7038}'})
+
+    async def _fake_redis_client() -> _FakeRedis:
+        return redis
+
+    geo._LOCAL_GEOCODING_CACHE_METRICS["hits"] = 0
+    geo._LOCAL_GEOCODING_CACHE_METRICS["misses"] = 0
+    monkeypatch.setattr(geo, "_get_redis_client", _fake_redis_client)
+
+    svc = GeoService(db=None)
+    coords = await svc.get_coordinates("Calle Mayor, 1")
+
+    assert coords == pytest.approx((40.4168, -3.7038))
+    assert geo._LOCAL_GEOCODING_CACHE_METRICS["hits"] == 1
+    assert geo._LOCAL_GEOCODING_CACHE_METRICS["misses"] == 0
+
+
+@pytest.mark.asyncio
+async def test_geocode_redis_write_uses_configured_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.services.geo_service as geo
+
+    redis = _FakeRedis()
+
+    async def _fake_redis_client() -> _FakeRedis:
+        return redis
+
+    monkeypatch.setattr(geo, "_get_redis_client", _fake_redis_client)
+    monkeypatch.setattr(geo, "_geo_cache_ttl_seconds", lambda: 123)
+
+    await geo._redis_set_geocode("cache-key", 40.4168, -3.7038)
+
+    assert redis.set_calls
+    assert redis.set_calls[0][0] == geocode_redis_key("cache-key")
+    assert redis.set_calls[0][2] == 123
+
+
+@pytest.mark.asyncio
+async def test_route_uses_redis_cache_hit(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.services.geo_service as geo
+
+    rk = route_cache_key("Origen A", "Destino B")
+    redis = _FakeRedis(
+        {route_redis_key(rk): '{"distance_meters":50000,"duration_seconds":1800}'}
+    )
+
+    async def _fake_redis_client() -> _FakeRedis:
+        return redis
+
+    geo._LOCAL_ROUTE_CACHE_METRICS["hits"] = 0
+    geo._LOCAL_ROUTE_CACHE_METRICS["misses"] = 0
+    monkeypatch.setattr(geo, "_get_redis_client", _fake_redis_client)
+
+    svc = GeoService(db=None)
+    out = await svc.get_route_data("Origen A", "Destino B")
+
+    assert out["distance_meters"] == 50_000
+    assert out["duration_seconds"] == 1800
+    assert out["source"] == "redis"
+    assert geo._LOCAL_ROUTE_CACHE_METRICS["hits"] == 1
+    assert geo._LOCAL_ROUTE_CACHE_METRICS["misses"] == 0
 
 
 def test_co2_kg_decimal_no_precision_loss_large_distance() -> None:

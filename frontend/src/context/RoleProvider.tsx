@@ -38,7 +38,9 @@ export function RoleProvider({ initialRole, children }: Props) {
   }, []);
 
   useEffect(() => {
-    refresh();
+    queueMicrotask(() => {
+      refresh();
+    });
   }, [refresh]);
 
   useEffect(() => {

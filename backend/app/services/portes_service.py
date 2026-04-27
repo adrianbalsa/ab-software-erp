@@ -282,7 +282,11 @@ class PortesService:
             "co2_kg": calculate_co2_emissions(km_val, euro_co2),
         }
         try:
-            geo_extra = await self._maps.try_porte_geo_payload(porte_in.origen, porte_in.destino)
+            geo_extra = await self._maps.try_porte_geo_payload(
+                porte_in.origen,
+                porte_in.destino,
+                tenant_empresa_id=eid,
+            )
             if geo_extra:
                 payload.update(geo_extra)
         except Exception:
@@ -422,6 +426,7 @@ class PortesService:
                 destination=destino,
                 emission_type="EURO_VI",
                 waypoints=waypoints,
+                tenant_empresa_id=eid,
             )
             km = float(ruta["distancia_km"])
             tiempo_min = int(ruta["tiempo_estimado_min"])
@@ -741,6 +746,7 @@ class PortesService:
                     str(row.get("destino")),
                     weight=float(peso_ton_desde_porte_row(dict(row)) * 1000.0),
                     emission_type=euro_entrega,
+                    tenant_empresa_id=eid,
                 )
                 real_km = max(0.0, float(truck.get("distancia_km") or real_km))
                 if truck.get("distance_meters") is not None:

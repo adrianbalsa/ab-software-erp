@@ -2,23 +2,34 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+import time
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
 from app.core.config import get_settings
 from app.core.constants import COSTE_OPERATIVO_EUR_KM
+from app.core.plans import CostMeter
 from app.db.supabase import SupabaseAsync
+from app.services.usage_quota_service import UsageQuotaService
 
 _log = logging.getLogger(__name__)
 
 _GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 _ROUTES_V2_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
 _GEO_CACHE_TABLE = "geo_cache"
-_GEO_CACHE_TTL_DAYS = 30
+_DEFAULT_GEO_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60
+_REDIS_KEY_PREFIX = "scanner:geo:v1"
+_REDIS_METRICS_KEY = f"{_REDIS_KEY_PREFIX}:metrics"
+_LOCAL_GEOCODING_CACHE_METRICS = {"hits": 0, "misses": 0}
+_LOCAL_ROUTE_CACHE_METRICS = {"hits": 0, "misses": 0}
+_LOCAL_MAPS_TRUCK_METRICS = {"hits": 0, "misses": 0}
+_LOCAL_MAPS_DM_METRICS = {"hits": 0, "misses": 0}
+_redis_client: Any | None = None
 
 # Redundant punctuation / whitespace for stable geocode & route cache keys.
 _RE_NORMALIZE_PUNCT = re.compile(r"[,;.]+")
@@ -41,6 +52,249 @@ def geocode_cache_key(address: str) -> str:
     n = GeoService._normalize_address(address)
     raw = f"gc|{n}".encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
+
+
+def geocode_redis_key(cache_key: str) -> str:
+    return f"{_REDIS_KEY_PREFIX}:geocode:{cache_key}"
+
+
+def route_redis_key(route_key: str) -> str:
+    return f"{_REDIS_KEY_PREFIX}:route:{route_key}"
+
+
+def _geo_cache_ttl_seconds() -> int:
+    raw = getattr(get_settings(), "GEO_CACHE_TTL_SECONDS", _DEFAULT_GEO_CACHE_TTL_SECONDS)
+    try:
+        return max(60, int(raw))
+    except (TypeError, ValueError):
+        return _DEFAULT_GEO_CACHE_TTL_SECONDS
+
+
+def _geo_cache_threshold_iso() -> str:
+    return datetime.fromtimestamp(
+        max(0.0, time.time() - float(_geo_cache_ttl_seconds())),
+        tz=timezone.utc,
+    ).isoformat()
+
+
+async def _get_redis_client() -> Any | None:
+    global _redis_client
+
+    url = (get_settings().REDIS_URL or "").strip()
+    if not url:
+        return None
+    if _redis_client is not None:
+        return _redis_client
+    try:
+        from redis import asyncio as redis_asyncio
+
+        _redis_client = redis_asyncio.from_url(
+            url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        return _redis_client
+    except Exception as exc:
+        _log.debug("geo redis client unavailable: %s", exc)
+        return None
+
+
+async def close_geo_redis_cache() -> None:
+    global _redis_client
+
+    client = _redis_client
+    _redis_client = None
+    if client is None:
+        return
+    try:
+        await client.aclose()
+    except Exception:
+        pass
+
+
+async def _redis_get_geocode(cache_key: str) -> tuple[float, float] | None:
+    client = await _get_redis_client()
+    if client is None:
+        return None
+    try:
+        raw = await client.get(geocode_redis_key(cache_key))
+        if not raw:
+            return None
+        data = json.loads(raw)
+        lat = float(data.get("lat"))
+        lng = float(data.get("lng"))
+        if lat == 0.0 and lng == 0.0:
+            return None
+        return lat, lng
+    except Exception as exc:
+        _log.debug("geocode redis cache read skipped: %s", exc)
+        return None
+
+
+async def _redis_set_geocode(cache_key: str, lat: float, lng: float) -> None:
+    client = await _get_redis_client()
+    if client is None:
+        return
+    try:
+        await client.set(
+            geocode_redis_key(cache_key),
+            json.dumps({"lat": float(lat), "lng": float(lng)}, separators=(",", ":")),
+            ex=_geo_cache_ttl_seconds(),
+        )
+    except Exception as exc:
+        _log.debug("geocode redis cache write skipped: %s", exc)
+
+
+async def _redis_get_route(route_key: str) -> dict[str, float | int] | None:
+    client = await _get_redis_client()
+    if client is None:
+        return None
+    try:
+        raw = await client.get(route_redis_key(route_key))
+        if not raw:
+            return None
+        data = json.loads(raw)
+        dm = float(data.get("distance_meters") or 0.0)
+        ds = int(data.get("duration_seconds") or 0)
+        if dm < 0 or ds < 0:
+            return None
+        return {"distance_meters": dm, "duration_seconds": ds}
+    except Exception as exc:
+        _log.debug("route redis cache read skipped: %s", exc)
+        return None
+
+
+async def _redis_set_route(
+    route_key: str, *, distance_meters: float, duration_seconds: int
+) -> None:
+    client = await _get_redis_client()
+    if client is None:
+        return
+    try:
+        await client.set(
+            route_redis_key(route_key),
+            json.dumps(
+                {
+                    "distance_meters": max(0.0, float(distance_meters)),
+                    "duration_seconds": max(0, int(duration_seconds)),
+                },
+                separators=(",", ":"),
+            ),
+            ex=_geo_cache_ttl_seconds(),
+        )
+    except Exception as exc:
+        _log.debug("route redis cache write skipped: %s", exc)
+
+
+async def _record_geocoding_cache_event(*, hit: bool) -> None:
+    field = "geocode_hits" if hit else "geocode_misses"
+    _LOCAL_GEOCODING_CACHE_METRICS["hits" if hit else "misses"] += 1
+    client = await _get_redis_client()
+    if client is None:
+        return
+    try:
+        await client.hincrby(_REDIS_METRICS_KEY, field, 1)
+    except Exception as exc:
+        _log.debug("geocode redis metrics skipped: %s", exc)
+
+
+async def _record_route_cache_event(*, hit: bool) -> None:
+    field = "route_hits" if hit else "route_misses"
+    _LOCAL_ROUTE_CACHE_METRICS["hits" if hit else "misses"] += 1
+    client = await _get_redis_client()
+    if client is None:
+        return
+    try:
+        await client.hincrby(_REDIS_METRICS_KEY, field, 1)
+    except Exception as exc:
+        _log.debug("route redis metrics skipped: %s", exc)
+
+
+async def record_maps_redis_meter(*, kind: str, hit: bool) -> None:
+    """
+    Métricas hit/miss para caché Redis en MapsService (truck, distance matrix).
+    ``kind`` ∈ ``{"truck", "distance_matrix"}``.
+    """
+    if kind == "truck":
+        local = _LOCAL_MAPS_TRUCK_METRICS
+        field = "truck_hits" if hit else "truck_misses"
+    elif kind == "distance_matrix":
+        local = _LOCAL_MAPS_DM_METRICS
+        field = "dm_hits" if hit else "dm_misses"
+    else:
+        return
+    local["hits" if hit else "misses"] += 1
+    client = await _get_redis_client()
+    if client is None:
+        return
+    try:
+        await client.hincrby(_REDIS_METRICS_KEY, field, 1)
+    except Exception as exc:
+        _log.debug("maps redis metrics skipped (%s): %s", kind, exc)
+
+
+def _hit_rate(h: int, m: int) -> float:
+    t = h + m
+    return round(h / t, 4) if t else 0.0
+
+
+async def geocoding_cache_metrics() -> dict[str, Any]:
+    gh = int(_LOCAL_GEOCODING_CACHE_METRICS["hits"])
+    gm = int(_LOCAL_GEOCODING_CACHE_METRICS["misses"])
+    rh = int(_LOCAL_ROUTE_CACHE_METRICS["hits"])
+    rm = int(_LOCAL_ROUTE_CACHE_METRICS["misses"])
+    th = int(_LOCAL_MAPS_TRUCK_METRICS["hits"])
+    tm = int(_LOCAL_MAPS_TRUCK_METRICS["misses"])
+    dh = int(_LOCAL_MAPS_DM_METRICS["hits"])
+    dm = int(_LOCAL_MAPS_DM_METRICS["misses"])
+    source = "process"
+    redis_enabled = bool((get_settings().REDIS_URL or "").strip())
+
+    client = await _get_redis_client()
+    if client is not None:
+        try:
+            data = await client.hgetall(_REDIS_METRICS_KEY)
+            gh = int(data.get("geocode_hits") or 0)
+            gm = int(data.get("geocode_misses") or 0)
+            rh = int(data.get("route_hits") or 0)
+            rm = int(data.get("route_misses") or 0)
+            th = int(data.get("truck_hits") or 0)
+            tm = int(data.get("truck_misses") or 0)
+            dh = int(data.get("dm_hits") or 0)
+            dm = int(data.get("dm_misses") or 0)
+            source = "redis"
+        except Exception as exc:
+            _log.debug("geocode redis metrics read skipped: %s", exc)
+
+    g_total = gh + gm
+    hit_rate = round(gh / g_total, 4) if g_total else 0.0
+    return {
+        "ok": True,
+        "detail": "geo_maps_redis_cache_metrics",
+        "skipped": False,
+        "redis_enabled": redis_enabled,
+        "source": source,
+        "ttl_seconds": _geo_cache_ttl_seconds(),
+        "hits": gh,
+        "misses": gm,
+        "hit_rate": hit_rate,
+        "routes_v2": {
+            "hits": rh,
+            "misses": rm,
+            "hit_rate": _hit_rate(rh, rm),
+        },
+        "truck_routes": {
+            "hits": th,
+            "misses": tm,
+            "hit_rate": _hit_rate(th, tm),
+        },
+        "distance_matrix": {
+            "hits": dh,
+            "misses": dm,
+            "hit_rate": _hit_rate(dh, dm),
+        },
+    }
 
 
 class GeoBatchCache:
@@ -76,11 +330,22 @@ class GeoService:
     Google Geocoding API + Routes API (v2) con persistencia en ``public.geo_cache``.
     """
 
-    def __init__(self, db: SupabaseAsync | None = None) -> None:
+    def __init__(
+        self,
+        db: SupabaseAsync | None = None,
+        quota_service: UsageQuotaService | None = None,
+    ) -> None:
         self._db = db
+        self._quota_service = quota_service
         self._lock = asyncio.Lock()
-        self._mem_coords: dict[str, tuple[float, float]] = {}
+        self._mem_coords: dict[str, tuple[tuple[float, float], float]] = {}
         self._mem_route: dict[str, dict[str, Any]] = {}
+
+    async def _consume_maps_quota(self, tenant_empresa_id: str | None) -> None:
+        eid = str(tenant_empresa_id or "").strip()
+        if not eid or self._quota_service is None:
+            return
+        await self._quota_service.consume(empresa_id=eid, meter=CostMeter.MAPS)
 
     @staticmethod
     def _normalize_address(address: str) -> str:
@@ -104,6 +369,7 @@ class GeoService:
         address: str,
         *,
         batch: GeoBatchCache | None = None,
+        tenant_empresa_id: str | None = None,
     ) -> tuple[float, float] | None:
         """Geocodifica una dirección; resultados cacheados en ``geo_cache`` (kind=geocode)."""
         raw = (address or "").strip()
@@ -114,23 +380,47 @@ class GeoService:
         gkey = geocode_cache_key(raw)
 
         if batch is not None and gkey in batch._coords:
+            await _record_geocoding_cache_event(hit=True)
             return batch._coords[gkey]
 
+        mem_hit: tuple[float, float] | None = None
         async with self._lock:
-            if gkey in self._mem_coords:
-                return self._mem_coords[gkey]
+            mem = self._mem_coords.get(gkey)
+            if mem is not None:
+                coords, expires_at = mem
+                if expires_at > time.time():
+                    mem_hit = coords
+                else:
+                    self._mem_coords.pop(gkey, None)
+        if mem_hit is not None:
+            await _record_geocoding_cache_event(hit=True)
+            return mem_hit
+
+        redis_cached = await _redis_get_geocode(gkey)
+        if redis_cached is not None:
+            async with self._lock:
+                self._mem_coords[gkey] = (redis_cached, time.time() + _geo_cache_ttl_seconds())
+            if batch is not None:
+                batch._coords[gkey] = redis_cached
+            await _record_geocoding_cache_event(hit=True)
+            return redis_cached
 
         cached = await self._load_geocode_cache(gkey, normalized=no)
         if cached is not None:
+            await _redis_set_geocode(gkey, cached[0], cached[1])
             async with self._lock:
-                self._mem_coords[gkey] = cached
+                self._mem_coords[gkey] = (cached, time.time() + _geo_cache_ttl_seconds())
             if batch is not None:
                 batch._coords[gkey] = cached
+            await _record_geocoding_cache_event(hit=True)
             return cached
 
+        await _record_geocoding_cache_event(hit=False)
         api_key = self.maps_api_key()
         if not api_key:
             return None
+
+        await self._consume_maps_quota(tenant_empresa_id)
 
         params = {"address": raw[:500], "key": api_key}
         try:
@@ -173,8 +463,9 @@ class GeoService:
             )
 
         pt = (lat, lng)
+        await _redis_set_geocode(gkey, lat, lng)
         async with self._lock:
-            self._mem_coords[gkey] = pt
+            self._mem_coords[gkey] = (pt, time.time() + _geo_cache_ttl_seconds())
         if batch is not None:
             batch._coords[gkey] = pt
         return pt
@@ -205,6 +496,7 @@ class GeoService:
         destination: str,
         *,
         batch: GeoBatchCache | None = None,
+        tenant_empresa_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Distancia (m) y duración (s) vía Routes API v2 ``computeRoutes``.
@@ -231,12 +523,28 @@ class GeoService:
         rkey = route_cache_key(o, d)
 
         if batch is not None and rkey in batch._routes:
+            await _record_route_cache_event(hit=True)
             return dict(batch._routes[rkey])
 
         async with self._lock:
             mem = self._mem_route.get(rkey)
-            if mem is not None:
-                return dict(mem)
+        if mem is not None:
+            await _record_route_cache_event(hit=True)
+            return dict(mem)
+
+        redis_fwd = await _redis_get_route(rkey)
+        if redis_fwd is not None:
+            built = self._route_response_from_meters(
+                distance_meters=float(redis_fwd["distance_meters"]),
+                duration_seconds=int(redis_fwd["duration_seconds"]),
+                source="redis",
+            )
+            async with self._lock:
+                self._mem_route[rkey] = built
+            if batch is not None:
+                batch._routes[rkey] = dict(built)
+            await _record_route_cache_event(hit=True)
+            return dict(built)
 
         cached = await self._load_route_cache(
             route_key=rkey,
@@ -249,10 +557,16 @@ class GeoService:
                 duration_seconds=int(cached["duration_seconds"]),
                 source="cache",
             )
+            await _redis_set_route(
+                rkey,
+                distance_meters=float(cached["distance_meters"]),
+                duration_seconds=int(cached["duration_seconds"]),
+            )
             async with self._lock:
                 self._mem_route[rkey] = built
             if batch is not None:
                 batch._routes[rkey] = dict(built)
+            await _record_route_cache_event(hit=True)
             return dict(built)
 
         rev_key = route_cache_key(d, o)
@@ -265,10 +579,16 @@ class GeoService:
                 duration_seconds=int(duration_seconds),
                 source=src,
             )
+            await _redis_set_route(
+                rkey,
+                distance_meters=float(built["distance_meters"]),
+                duration_seconds=int(built["duration_seconds"]),
+            )
             async with self._lock:
                 self._mem_route[rkey] = built
             if batch is not None:
                 batch._routes[rkey] = dict(built)
+            await _record_route_cache_event(hit=True)
             return dict(built)
 
         if batch is not None and rev_key in batch._routes:
@@ -288,12 +608,25 @@ class GeoService:
                 src="cache_reversed",
             )
 
+        redis_rev = await _redis_get_route(rev_key)
+        if redis_rev is not None:
+            return await _from_reversed(
+                float(redis_rev["distance_meters"]),
+                int(redis_rev["duration_seconds"]),
+                src="redis_reversed",
+            )
+
         rev = await self._load_route_cache(
             route_key=rev_key,
             normalized_origin=nd,
             normalized_destination=no,
         )
         if rev is not None:
+            await _redis_set_route(
+                rev_key,
+                distance_meters=float(rev["distance_meters"]),
+                duration_seconds=int(rev["duration_seconds"]),
+            )
             return await _from_reversed(
                 float(rev["distance_meters"]),
                 int(rev["duration_seconds"]),
@@ -304,6 +637,8 @@ class GeoService:
         if not api_key:
             raise ValueError("Maps_API_KEY no configurada")
 
+        await _record_route_cache_event(hit=False)
+        await self._consume_maps_quota(tenant_empresa_id)
         distance_meters, duration_seconds = await self._compute_routes_v2(
             origin=o,
             destination=d,
@@ -315,6 +650,11 @@ class GeoService:
             destination=d,
             normalized_origin=no,
             normalized_destination=nd,
+            distance_meters=distance_meters,
+            duration_seconds=duration_seconds,
+        )
+        await _redis_set_route(
+            rkey,
             distance_meters=distance_meters,
             duration_seconds=duration_seconds,
         )
@@ -394,7 +734,7 @@ class GeoService:
     ) -> tuple[float, float] | None:
         if self._db is None:
             return None
-        threshold = (datetime.now(timezone.utc) - timedelta(days=_GEO_CACHE_TTL_DAYS)).isoformat()
+        threshold = _geo_cache_threshold_iso()
         try:
             q = (
                 self._db.table(_GEO_CACHE_TABLE)
@@ -438,7 +778,7 @@ class GeoService:
     ) -> dict[str, float | int] | None:
         if self._db is None:
             return None
-        threshold = (datetime.now(timezone.utc) - timedelta(days=_GEO_CACHE_TTL_DAYS)).isoformat()
+        threshold = _geo_cache_threshold_iso()
         try:
             q = (
                 self._db.table(_GEO_CACHE_TABLE)

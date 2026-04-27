@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, Final
 
 # ─── Planes SaaS (AB Logistics OS) — catálogo Due Diligence 2026 ─────────────
@@ -26,6 +27,14 @@ EUR_MONTHLY_FULL_STACK: Final[int] = 399
 ADDON_OCR_PACK: Final[str] = "ocr_pack"
 ADDON_WEBHOOKS_B2B_PREMIUM: Final[str] = "webhooks_b2b_premium"
 ADDON_LOGISADVISOR_IA_PRO: Final[str] = "logisadvisor_ia_pro"
+
+
+class CostMeter(StrEnum):
+    """Medidores facturables sujetos a hard cap mensual por tenant."""
+
+    MAPS = "maps_calls_month"
+    OCR = "ocr_pages_month"
+    AI = "ai_tokens_month"
 
 # Variables de entorno esperadas para Price IDs (producción / test en Dashboard Stripe)
 ENV_STRIPE_PRICE_STARTER: Final[str] = "STRIPE_PRICE_STARTER"  # alias Due Diligence: STRIPE_PRICE_COMPLIANCE
@@ -67,6 +76,16 @@ class BillingAddon:
     extra_ocr_documents_per_month: int | None
 
 
+@dataclass(frozen=True, slots=True)
+class MonthlyCostQuota:
+    """Límite mensual de consumo para servicios con coste variable externo."""
+
+    meter: CostMeter
+    limit_units: int
+    unit_label: str
+    description: str
+
+
 def billing_addons() -> tuple[BillingAddon, ...]:
     """Catálogo de add-ons; los `price_` / `product_` reales viven en variables de entorno."""
     return (
@@ -98,6 +117,45 @@ def billing_addons() -> tuple[BillingAddon, ...]:
             extra_ocr_documents_per_month=None,
         ),
     )
+
+
+def monthly_cost_quotas(plan_normalized: str) -> tuple[MonthlyCostQuota, ...]:
+    """
+    Cuotas mensuales de coste externo por plan.
+
+    Unidades:
+    - maps: llamadas facturables a Google Maps Platform (Routes/Distance/Geocoding no cacheadas).
+    - ocr: páginas/documentos procesados con visión OCR.
+    - ai: tokens estimados reservados antes de llamar al proveedor LLM.
+    """
+    p = normalize_plan(plan_normalized)
+    if p == PLAN_ENTERPRISE:
+        return (
+            MonthlyCostQuota(CostMeter.MAPS, 10_000, "llamadas", "Google Maps Platform"),
+            MonthlyCostQuota(CostMeter.OCR, 2_000, "páginas", "OCR visión"),
+            MonthlyCostQuota(CostMeter.AI, 5_000_000, "tokens", "IA / LogisAdvisor"),
+        )
+    if p == PLAN_PRO:
+        return (
+            MonthlyCostQuota(CostMeter.MAPS, 1_000, "llamadas", "Google Maps Platform"),
+            MonthlyCostQuota(CostMeter.OCR, 200, "páginas", "OCR visión"),
+            MonthlyCostQuota(CostMeter.AI, 1_000_000, "tokens", "IA / LogisAdvisor"),
+        )
+    return (
+        MonthlyCostQuota(CostMeter.MAPS, 100, "llamadas", "Google Maps Platform"),
+        MonthlyCostQuota(CostMeter.OCR, 20, "páginas", "OCR visión"),
+        MonthlyCostQuota(CostMeter.AI, 100_000, "tokens", "IA / LogisAdvisor"),
+    )
+
+
+def monthly_cost_quota(plan_normalized: str, meter: CostMeter | str) -> MonthlyCostQuota:
+    aliases = {"maps": CostMeter.MAPS, "ocr": CostMeter.OCR, "ai": CostMeter.AI}
+    raw = str(meter)
+    m = aliases[raw] if raw in aliases else CostMeter(raw)
+    for quota in monthly_cost_quotas(plan_normalized):
+        if quota.meter == m:
+            return quota
+    raise ValueError(f"Cost meter desconocido: {meter!r}")
 
 
 def plan_marketing_name(plan_normalized: str) -> str:

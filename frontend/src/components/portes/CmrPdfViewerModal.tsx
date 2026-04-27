@@ -27,7 +27,9 @@ export function CmrPdfViewerModal({ open, title, pdfUrl, fileBaseName, onClose }
     const vw =
       typeof window !== "undefined" ? Math.floor(window.innerWidth * 0.88) : 720;
     const w = typeof window !== "undefined" ? Math.min(800, vw) : 720;
-    setWidth(w);
+    queueMicrotask(() => {
+      setWidth(w);
+    });
   }, [open]);
 
   if (!open) return null;

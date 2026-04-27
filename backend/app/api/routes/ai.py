@@ -5,9 +5,11 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api import deps
+from app.core.plans import CostMeter
 from app.schemas.ai import AiChatRequest, AiChatResponse
 from app.schemas.user import UserOut
 from app.services.ai_service import LogisAdvisorService
+from app.services.usage_quota_service import UsageQuotaService, estimate_ai_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +21,7 @@ async def ai_chat(
     payload: AiChatRequest,
     current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     service: LogisAdvisorService = Depends(deps.get_logis_advisor_service),
+    quotas: UsageQuotaService = Depends(deps.get_usage_quota_service),
 ) -> AiChatResponse:
     """
     LogisAdvisor: chat con herramientas de negocio (finanzas, facturación, flota/ESG).
@@ -40,6 +43,11 @@ async def ai_chat(
     hist = [{"role": m.role, "content": m.content} for m in payload.history]
 
     try:
+        await quotas.consume(
+            empresa_id=eid,
+            meter=CostMeter.AI,
+            units=estimate_ai_tokens(payload.message, hist),
+        )
         reply, model = await service.chat(
             empresa_id=eid,
             user_message=payload.message,
@@ -50,6 +58,8 @@ async def ai_chat(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(e),
         ) from e
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("ai_chat: fallo al invocar al proveedor de IA")
         raise HTTPException(

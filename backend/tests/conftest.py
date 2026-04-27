@@ -9,6 +9,45 @@ import sys
 # Antes de que los tests importen módulos que instancian SlowAPI en import-time
 # (p. ej. ``app.core.rate_limit``), sin depender del fixture ``_test_env``.
 os.environ.setdefault("DEV_MODE", "true")
+
+
+def _install_rapidfuzz_test_stub() -> None:
+    """
+    ``match_fuzzy`` importa ``rapidfuzz.fuzz``; un MagicMock rompe ``max()`` entre ratios.
+    Stub mínimo basado en difflib, suficiente para tests de conciliación / fuzzy.
+    """
+    import difflib
+    import types
+
+    def _ratio(a: object, b: object) -> float:
+        sa = str(a or "").strip().casefold()
+        sb = str(b or "").strip().casefold()
+        if not sa or not sb:
+            return 0.0
+        if sb in sa or sa in sb:
+            return 1.0
+        return float(difflib.SequenceMatcher(None, sa, sb).ratio())
+
+    class _Fuzz:
+        @staticmethod
+        def token_set_ratio(a: object, b: object) -> int:
+            return int(round(_ratio(a, b) * 100))
+
+        @staticmethod
+        def partial_ratio(a: object, b: object) -> int:
+            return int(round(_ratio(a, b) * 100))
+
+        @staticmethod
+        def ratio(a: object, b: object) -> int:
+            return int(round(_ratio(a, b) * 100))
+
+    mod = types.ModuleType("rapidfuzz")
+    mod.fuzz = _Fuzz()
+    sys.modules.setdefault("rapidfuzz", mod)
+
+
+_install_rapidfuzz_test_stub()
+
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -166,6 +205,7 @@ def _test_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_dummy_test_secret")
     # Alineado con CI (`.github/workflows/deploy.yml`): SlowAPI sin Redis en tests.
     monkeypatch.setenv("DEV_MODE", "true")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key-for-pytest")
     monkeypatch.delenv("SENTRY_DSN", raising=False)
 
     from app.core.config import get_settings
@@ -199,7 +239,10 @@ class _FakeQuery:
     def limit(self, *args: object) -> _FakeQuery:
         return self
 
-    def order(self, *args: object) -> _FakeQuery:
+    def range(self, *args: object) -> _FakeQuery:
+        return self
+
+    def order(self, *args: object, **kwargs: object) -> _FakeQuery:
         return self
 
     def is_(self, *args: object) -> _FakeQuery:
@@ -253,7 +296,23 @@ class _FakeSupabaseDb:
     async def execute(self, query: object) -> object:
         return query.execute()
 
-    async def rpc(self, *_a: object, **_k: object) -> None:
+    async def rpc(self, fn: str, params: dict[str, Any] | None = None, **_kwargs: object) -> object:
+        if fn == "consume_tenant_monthly_quota":
+            p = dict(params or {})
+
+            class _RpcQuota:
+                data = [
+                    {
+                        "allowed": True,
+                        "empresa_id": p.get("p_empresa_id"),
+                        "period_yyyymm": p.get("p_period_yyyymm"),
+                        "meter": p.get("p_meter"),
+                        "used_units": int(p.get("p_units") or 0),
+                        "limit_units": max(1, int(p.get("p_limit_units") or 1)),
+                    }
+                ]
+
+            return _RpcQuota()
         return None
 
     async def storage_upload(self, **_k: object) -> None:

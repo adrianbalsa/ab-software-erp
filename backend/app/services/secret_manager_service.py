@@ -16,6 +16,7 @@ import base64
 import json
 import logging
 import os
+import re
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -32,6 +33,7 @@ _vault_backend_warned = False
 _aws_backend_warned = False
 
 _integration_secret_version: int = 0
+_SHA256_HEX_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 def bump_integration_secret_version() -> int:
@@ -149,6 +151,15 @@ class SecretManagerService(ABC):
     def get_esg_external_webhook_secret(self) -> Optional[str]:
         """HMAC para ``POST /api/v1/webhooks/esg-external-verify`` (certificadora externa simulada)."""
 
+    @abstractmethod
+    def get_verifactu_genesis_hash(
+        self,
+        *,
+        issuer_id: str,
+        issuer_nif: str | None = None,
+    ) -> Optional[str]:
+        """Hash génesis VeriFactu por emisor. Nunca debe resolverse desde ``.env``."""
+
 
 def _strip(name: str) -> Optional[str]:
     raw = os.getenv(name)
@@ -188,6 +199,54 @@ def _bool_env(name: str, default: bool = True) -> bool:
     if raw in ("1", "true", "yes", "on"):
         return True
     return default
+
+
+def _normalize_verifactu_issuer_key(value: str | None) -> str:
+    return "".join(str(value or "").strip().upper().split())
+
+
+def _normalize_verifactu_genesis_hash(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    if not _SHA256_HEX_RE.match(s):
+        raise RuntimeError("VERIFACTU_GENESIS_HASHES contiene un valor inválido")
+    return s.lower()
+
+
+def _lookup_verifactu_genesis_hash(
+    payload: dict[str, Any],
+    *,
+    issuer_id: str,
+    issuer_nif: str | None,
+) -> Optional[str]:
+    candidates = [
+        _normalize_verifactu_issuer_key(issuer_id),
+        _normalize_verifactu_issuer_key(issuer_nif),
+    ]
+    candidates = [c for c in candidates if c]
+    if not candidates:
+        return None
+
+    for map_key in (
+        "VERIFACTU_GENESIS_HASHES",
+        "VERIFACTU_GENESIS_HASH_BY_EMISOR",
+        "VERIFACTU_GENESIS_HASH_BY_ISSUER",
+    ):
+        raw_map = payload.get(map_key)
+        if raw_map is None:
+            continue
+        if not isinstance(raw_map, dict):
+            raise RuntimeError(f"{map_key} debe ser un objeto JSON")
+        normalized_map = {
+            _normalize_verifactu_issuer_key(str(k)): v for k, v in raw_map.items()
+        }
+        for key in candidates:
+            if key in normalized_map:
+                return _normalize_verifactu_genesis_hash(normalized_map[key])
+    return None
 
 
 def _vault_auth_method() -> str:
@@ -347,6 +406,28 @@ class EnvSecretManager(SecretManagerService):
     def get_esg_external_webhook_secret(self) -> Optional[str]:
         return _strip("ESG_EXTERNAL_WEBHOOK_SECRET")
 
+    def get_verifactu_genesis_hash(
+        self,
+        *,
+        issuer_id: str,
+        issuer_nif: str | None = None,
+    ) -> Optional[str]:
+        raw_map = _strip("VERIFACTU_GENESIS_HASHES")
+        if raw_map:
+            try:
+                payload = {"VERIFACTU_GENESIS_HASHES": json.loads(raw_map)}
+            except json.JSONDecodeError as exc:
+                raise RuntimeError("VERIFACTU_GENESIS_HASHES debe ser JSON válido") from exc
+            return _lookup_verifactu_genesis_hash(
+                payload,
+                issuer_id=issuer_id,
+                issuer_nif=issuer_nif,
+            )
+        single = _normalize_verifactu_genesis_hash(_strip("VERIFACTU_GENESIS_HASH"))
+        if single:
+            return single
+        return None
+
 
 class JsonMapSecretManager(SecretManagerService, ABC):
     """Lecturas desde un mapa JSON (Vault ``data`` o AWS ``SecretString`` JSON)."""
@@ -495,6 +576,29 @@ class JsonMapSecretManager(SecretManagerService, ABC):
 
     def get_esg_external_webhook_secret(self) -> Optional[str]:
         return self._get("ESG_EXTERNAL_WEBHOOK_SECRET")
+
+    def get_verifactu_genesis_hash(
+        self,
+        *,
+        issuer_id: str,
+        issuer_nif: str | None = None,
+    ) -> Optional[str]:
+        payload = self._payload()
+        mapped = _lookup_verifactu_genesis_hash(
+            payload,
+            issuer_id=issuer_id,
+            issuer_nif=issuer_nif,
+        )
+        if mapped:
+            return mapped
+        for key in ("VERIFACTU_GENESIS_HASH",):
+            raw = payload.get(key)
+            if raw is None:
+                continue
+            single = _normalize_verifactu_genesis_hash(raw)
+            if single:
+                return single
+        return None
 
 
 class VaultKvSecretManager(JsonMapSecretManager):

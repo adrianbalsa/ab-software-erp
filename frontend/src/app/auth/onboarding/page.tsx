@@ -21,7 +21,7 @@ function OnboardingContent() {
       try {
         const data = await fetchPortalMyRisk();
         setRiskData(data);
-      } catch (error) {
+      } catch {
         setFeedback({
           tone: "error",
           message: "Error al cargar la invitación. Contacte con soporte.",
@@ -45,7 +45,7 @@ function OnboardingContent() {
       await postPortalAcceptRisk();
       setFeedback({ tone: "success", message: "Condiciones aceptadas correctamente." });
       router.push(`/auth/set-password?token=${token}`);
-    } catch (error) {
+    } catch {
       setFeedback({ tone: "error", message: "No se pudo procesar la aceptación." });
     } finally {
       setAccepting(false);

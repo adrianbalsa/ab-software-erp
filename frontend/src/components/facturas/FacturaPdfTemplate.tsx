@@ -293,6 +293,7 @@ export function FacturaDocument({ data }: { data: FacturaPdfPayload }) {
         <View style={styles.footer} wrap={false}>
           <View style={styles.qrWrap}>
             {data.verifactu_qr_base64 ? (
+              // eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer Image no expone alt; no renderiza un <img> del DOM.
               <Image
                 src={`data:image/png;base64,${data.verifactu_qr_base64}`}
                 style={styles.qr}

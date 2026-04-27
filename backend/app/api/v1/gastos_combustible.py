@@ -31,8 +31,7 @@ class FuelImportacionResponse(BaseModel):
 )
 async def importar_combustible(
     file: UploadFile = File(...),
-    _: UserOut = Depends(deps.RoleChecker(["admin", "gestor"])),
-    current_user: UserOut = Depends(deps.bind_write_context),
+    current_user: UserOut = Depends(deps.require_write_role("owner", "traffic_manager")),
     gastos_service: GastosService = Depends(deps.get_gastos_service),
     db: SupabaseAsync = Depends(deps.get_db),
 ) -> FuelImportacionResponse:

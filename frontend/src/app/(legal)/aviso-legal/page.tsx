@@ -39,7 +39,7 @@ export default function AvisoLegalPage() {
       <h2>2. Objeto y ámbito</h2>
       <p>
         El presente Aviso Legal regula el acceso, navegación y uso del sitio web corporativo, de las áreas
-        privadas y de los servicios digitales de AB Logistics OS (en adelante, la "Plataforma"), sin
+        privadas y de los servicios digitales de AB Logistics OS (en adelante, la &quot;Plataforma&quot;), sin
         perjuicio de las condiciones contractuales específicas aplicables a clientes de pago.
       </p>
       <p>
@@ -92,7 +92,7 @@ export default function AvisoLegalPage() {
 
       <h2>6. Exclusión de garantías</h2>
       <p>
-        El sitio y la Plataforma se ofrecen "tal cual" y según disponibilidad, dentro de los límites legales.
+        El sitio y la Plataforma se ofrecen &quot;tal cual&quot; y según disponibilidad, dentro de los límites legales.
         [NOMBRE_EMPRESA] no garantiza:
       </p>
       <ul>

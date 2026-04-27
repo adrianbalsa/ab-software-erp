@@ -50,8 +50,7 @@ class FacturaQueueOut(BaseModel):
 async def recalcular_totales_factura(
     factura_id: int,
     payload: FacturaRecalculateIn = FacturaRecalculateIn(),
-    current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
+    current_user: UserOut = Depends(deps.require_write_role("owner", "traffic_manager")),
     service: FacturasService = Depends(deps.get_facturas_service),
 ) -> FacturaRecalculateOut:
     """
@@ -112,8 +111,7 @@ async def generar_factura_desde_portes(
     request: Request,
     payload: FacturaCreateFromPortes,
     background_tasks: BackgroundTasks,
-    current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
+    current_user: UserOut = Depends(deps.require_write_role("owner", "traffic_manager")),
     service: FacturasService = Depends(deps.get_facturas_service),
 ) -> FacturaGenerateResult:
     try:
@@ -174,8 +172,7 @@ async def generar_factura_desde_portes(
 async def rectificar_factura(
     factura_id: int,
     payload: FacturaRectificarIn,
-    current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
+    current_user: UserOut = Depends(deps.require_write_role("owner", "traffic_manager")),
     service: FacturasService = Depends(deps.get_facturas_service),
 ) -> FacturaOut:
     """
@@ -284,8 +281,7 @@ async def enviar_factura_por_email(
 async def finalizar_factura_verifactu(
     factura_id: int,
     background_tasks: BackgroundTasks,
-    current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
+    current_user: UserOut = Depends(deps.require_write_role("owner", "traffic_manager")),
     service: FacturasService = Depends(deps.get_facturas_service),
 ) -> FacturaOut:
     """
@@ -310,8 +306,7 @@ async def finalizar_factura_verifactu(
 )
 async def reenviar_factura_aeat(
     factura_id: int,
-    current_user: UserOut = Depends(deps.bind_write_context),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
+    current_user: UserOut = Depends(deps.require_write_role("owner", "traffic_manager")),
     service: FacturasService = Depends(deps.get_facturas_service),
 ) -> FacturaQueueOut:
     """

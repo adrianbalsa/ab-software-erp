@@ -30,6 +30,7 @@ from app.schemas.finance import (
     GastoBucketMensualOut,
 )
 from app.core.constants import COSTE_OPERATIVO_EUR_KM
+from app.services.audit_logs_service import AuditLogsService
 from app.services.auditoria_service import AuditoriaService
 from app.services.eco_service import EUR_POR_LITRO_DIESEL_REF, KG_CO2_POR_LITRO_DIESEL
 # Opex no combustible (€/km) cuando sí hay reparto de combustible real (neumáticos, estructura, etc.).
@@ -1157,15 +1158,12 @@ class FinanceService:
                 },
             )
             try:
-                await self._db.rpc(
-                    "audit_logs_insert_api_event",
-                    {
-                        "p_empresa_id": eid,
-                        "p_table_name": "portes",
-                        "p_record_id": f"fuel_alloc_{start_date.isoformat()}_{end_date.isoformat()}",
-                        "p_action": "INSERT",
-                        "p_new_data": {"kind": "fuel_allocation", "items": audit_payload[:200]},
-                    },
+                await AuditLogsService(self._db).log_sensitive_action(
+                    empresa_id=eid,
+                    table_name="portes",
+                    record_id=f"fuel_alloc_{start_date.isoformat()}_{end_date.isoformat()}",
+                    action="INSERT",
+                    new_value={"kind": "fuel_allocation", "items": audit_payload[:200]},
                 )
             except Exception:
                 pass

@@ -13,10 +13,12 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
 from app.core.ai_observability import attach_ai_usage_to_span
+from app.core.plans import CostMeter
 from app.db.supabase import SupabaseAsync
 from app.schemas.document_ai import DocumentExtraido, ProcessDocumentResponse
 from app.services.ai_document_cache import cache_get_json, cache_set_json, ocr_cache_key
 from app.services.secret_manager_service import get_secret_manager
+from app.services.usage_quota_service import UsageQuotaService, estimate_ai_tokens
 from app.services.vector_store import VectorStoreService
 
 logger = logging.getLogger(__name__)
@@ -117,7 +119,22 @@ class DocumentProcessorService:
     La imagen se codifica en memoria (data URL); no se escribe a disco local.
     """
 
+    def __init__(
+        self,
+        *,
+        quota_service: UsageQuotaService | None = None,
+        empresa_id: str | None = None,
+    ) -> None:
+        self._quota_service = quota_service
+        self._empresa_id = str(empresa_id or "").strip() or None
+
+    async def _consume_ocr_quota(self) -> None:
+        if self._quota_service is None or not self._empresa_id:
+            return
+        await self._quota_service.consume(empresa_id=self._empresa_id, meter=CostMeter.OCR)
+
     async def process_logistics_ticket(self, image_bytes: bytes) -> dict[str, Any]:
+        await self._consume_ocr_quota()
         return await process_logistics_ticket(image_bytes)
 
     @staticmethod
@@ -462,6 +479,8 @@ async def vampire_radar_process_document(
         except Exception:
             pass
 
+    quota = UsageQuotaService(db)
+    await quota.consume(empresa_id=eid, meter=CostMeter.OCR)
     raw = await _vampire_vision_extract(image_bytes)
     doc = DocumentExtraido.model_validate(raw)
     summary = _build_document_summary(doc)
@@ -476,6 +495,11 @@ async def vampire_radar_process_document(
             sentry_sdk = None  # type: ignore[assignment]
 
         try:
+            await quota.consume(
+                empresa_id=eid,
+                meter=CostMeter.AI,
+                units=estimate_ai_tokens(summary, minimum=500, output_reserve=0),
+            )
             vec = await _litellm_embed_text(text=summary, api_key=openai_key)
             vs = VectorStoreService(db)
             meta: dict[str, Any] = {

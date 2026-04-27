@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) return;
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange((event) => {
       // FastAPI login solo rellena `abl_auth_token` + localStorage; Supabase suele quedar sin sesión.
       // `INITIAL_SESSION` con session=null NO es cierre de sesión: antes borrábamos todo y redirigíamos a /login.
       if (event !== "SIGNED_OUT") {

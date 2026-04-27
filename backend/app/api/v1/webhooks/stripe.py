@@ -17,7 +17,11 @@ router = APIRouter()
 
 
 @router.post("/webhooks/stripe")
-@router.post("/payments/stripe/webhook")
+@router.post(
+    "/payments/stripe/webhook",
+    summary="Alias legacy del webhook Stripe",
+    description="Misma lógica que ``POST /api/v1/webhooks/stripe``. Configurar solo un endpoint en Stripe Dashboard.",
+)
 async def stripe_webhook(
     request: Request,
     db: SupabaseAsync = Depends(deps.get_db_admin),
@@ -63,6 +67,12 @@ async def stripe_webhook(
                 detail="Firma o evento inválido",
             ) from e
         raise
+
+    if isinstance(result, dict) and result.get("duplicate"):
+        logger.info(
+            "stripe webhook idempotent replay ignored event_id=%s",
+            result.get("event_id") or "-",
+        )
 
     if isinstance(result, dict) and result.get("event") == "checkout.session.completed":
         logger.info(

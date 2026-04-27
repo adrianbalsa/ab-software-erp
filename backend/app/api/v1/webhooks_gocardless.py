@@ -13,6 +13,7 @@ from starlette.responses import Response
 
 from app.api import deps
 from app.db.supabase import SupabaseAsync
+from app.services.audit_logs_service import pseudonymize_audit_payload
 from app.services.reconciliation_service import ReconciliationEngine
 from app.services.webhook_idempotency import claim_webhook_event
 
@@ -90,9 +91,9 @@ async def _insert_audit_log_rpc(
         "p_action": action,
     }
     if old_data is not None:
-        params["p_old_data"] = old_data
+        params["p_old_data"] = pseudonymize_audit_payload(old_data)
     if new_data is not None:
-        params["p_new_data"] = new_data
+        params["p_new_data"] = pseudonymize_audit_payload(new_data)
     await db.rpc("audit_logs_insert_api_event", params)
 
 

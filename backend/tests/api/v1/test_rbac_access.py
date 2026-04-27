@@ -85,6 +85,13 @@ async def test_driver_gets_403_for_finance_endpoint(rbac_test_client: AsyncClien
 
 
 @pytest.mark.asyncio
+async def test_legacy_app_metadata_role_is_not_accepted(rbac_test_client: AsyncClient) -> None:
+    token = _build_supabase_style_jwt(app_role="gestor")
+    res = await rbac_test_client.get("/finanzas/resumen", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_admin_can_access_finance_and_role_is_loaded(rbac_test_client: AsyncClient) -> None:
     token = _build_supabase_style_jwt(app_role="admin")
     finance_res = await rbac_test_client.get(

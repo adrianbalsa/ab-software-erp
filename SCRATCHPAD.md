@@ -123,7 +123,7 @@ $$\text{Margen Neto} = \text{Ingresos} - \sum \text{Gastos (ROUND\_HALF\_EVEN)}$
 | **VeriFactu** | 🟢 Estable | Huella XML (`generar_hash_factura`) documentada; auditorías API/Advisor/IA materializan NIFs. |
 | **Banking E2E** | 🟢 | Migración `bank_accounts.access_token_encrypted` + `bank_transactions.status_reconciled`; `banking_service.py` (GoCardless vía ``SecretManagerService``/``SaaSEnvSecretProvider``); conciliación: LogisAdvisor historial cliente + LLM; auditoría `bank_reconciliation` + POST middleware; UI tesorería (conectar + pendientes); tests `tests/e2e/test_banking_flow.py` y `test_banking_reconciliation_flow.py`. |
 | **Portal Cliente** | ✅ Cerrado | Bloques 1–6: riesgo/mandato, i18n, pie, E2E opt-in, help \`/help/portal-cliente\`, vacíos/errores/a11y (tablas, modal riesgo, mandato, facturas). |
-| **Secret Manager** | 🟢 Cierre DD #115 | Ver tabla de cierre formal abajo. |
+| **Secret Manager** | 🟢 Cierre DD #115 + SEC-001 | Ver tabla de cierre formal abajo; génesis VeriFactu por emisor queda fuera de `.env` y se resuelve vía Secret Manager. |
 
 ## ✅ Cierre formal — Secretos / Hallazgo 115 (2026-04-19)
 | Criterio | Evidencia en repo |

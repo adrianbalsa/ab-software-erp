@@ -24,7 +24,7 @@ router = APIRouter(prefix="/esg")
 async def sustainability_report(
     month: int = Query(..., ge=1, le=12, description="Mes calendario (1–12)"),
     year: int = Query(..., ge=2020, le=2100, description="Año (YYYY)"),
-    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager", "gestor")),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     _quota: None = Depends(deps.check_quota_limit("esg")),
     service: EsgService = Depends(deps.get_esg_service),
 ) -> SustainabilityReportOut:
@@ -71,7 +71,7 @@ async def calculate_porte_co2(
 )
 async def get_monthly_report(
     empresa_id: Annotated[UUID, Path(description="UUID de la empresa")],
-    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager", "gestor")),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     _quota: None = Depends(deps.check_quota_limit("esg")),
     service: EsgService = Depends(deps.get_esg_service),
 ) -> EsgMonthlyReportOut:
@@ -97,7 +97,7 @@ async def download_esg_certificate_pdf(
         False,
         description="Enterprise: marca el certificado como pending_external_audit (validación oficial solicitada).",
     ),
-    current_user: UserOut = Depends(deps.bind_write_context),
+    current_user: UserOut = Depends(deps.require_write_role("owner", "traffic_manager")),
     _quota: None = Depends(deps.check_quota_limit("esg")),
     service: EsgCertificateService = Depends(deps.get_esg_certificate_service),
 ) -> StreamingResponse:
@@ -105,11 +105,6 @@ async def download_esg_certificate_pdf(
     Genera el PDF (porte: ReportLab; factura: FPDF), SHA-256 del binario, QR de verificación pública
     y fila en ``esg_certificate_documents`` / vista ``esg_certificates`` (código UUID + estado).
     """
-    if current_user.rbac_role not in ("owner", "traffic_manager", "gestor", "admin"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permiso denegado para certificados ESG.",
-        )
     eid = str(current_user.empresa_id)
     uid = str(current_user.usuario_id) if current_user.usuario_id else None
 

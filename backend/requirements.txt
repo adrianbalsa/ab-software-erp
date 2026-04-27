@@ -70,7 +70,6 @@ openai==2.30.0
 openpyxl==3.1.5
 packaging==26.0
 pandas==3.0.1
-passlib==1.7.4
 pillow==12.2.0
 pluggy==1.6.0
 postgrest

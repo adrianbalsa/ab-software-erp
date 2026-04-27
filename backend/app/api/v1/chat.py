@@ -8,11 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from app.api import deps
+from app.core.plans import CostMeter
 from app.schemas.ai import AiChatRequest
 from app.schemas.user import UserOut
 from app.services.ai_service import LogisAdvisorService
 from app.services.esg_audit_service import EsgAuditService
 from app.services.finance_service import FinanceService
+from app.services.usage_quota_service import UsageQuotaService, estimate_ai_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,7 @@ async def advisor_chat_stream(
     finance: FinanceService = Depends(deps.get_finance_service),
     esg_audit: EsgAuditService = Depends(deps.get_esg_audit_service),
     advisor: LogisAdvisorService = Depends(deps.get_logis_advisor_service),
+    quotas: UsageQuotaService = Depends(deps.get_usage_quota_service),
 ):
     """
     LogisAdvisor con contexto inyectado: ``economic_insights_advanced`` + auditoría ESG del periodo.
@@ -77,6 +80,12 @@ async def advisor_chat_stream(
     contexto_json = json.dumps(contexto, ensure_ascii=False)
 
     hist = [{"role": m.role, "content": m.content} for m in payload.history]
+
+    await quotas.consume(
+        empresa_id=eid,
+        meter=CostMeter.AI,
+        units=estimate_ai_tokens(payload.message, hist, contexto_json),
+    )
 
     async def event_stream():
         try:

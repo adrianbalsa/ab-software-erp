@@ -7,7 +7,6 @@ from uuid import UUID
 
 import pytest
 
-sys.modules.setdefault("rapidfuzz", MagicMock(name="rapidfuzz_test_double"))
 sys.modules.setdefault("litellm", MagicMock(name="litellm_test_double"))
 sys.modules.setdefault("anthropic", MagicMock(name="anthropic_test_double"))
 

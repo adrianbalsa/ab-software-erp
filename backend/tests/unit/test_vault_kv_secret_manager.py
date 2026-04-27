@@ -17,6 +17,9 @@ def vault_hvac_client(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
                 "STRIPE_SECRET_KEY": " sk_test ",
                 "JWT_SECRET_KEY": "jwt-from-vault",
                 "GOCARDLESS_ENV": "live",
+                "VERIFACTU_GENESIS_HASHES": {
+                    "B12345678": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                },
             },
         },
     }
@@ -60,6 +63,10 @@ def test_vault_backend_uses_kv_when_configured(
     assert mgr.get_stripe_secret_key() == "sk_test"
     assert mgr.get_jwt_secret_key() == "jwt-from-vault"
     assert mgr.get_gocardless_env() == "live"
+    assert mgr.get_verifactu_genesis_hash(
+        issuer_id="missing",
+        issuer_nif="b12345678",
+    ) == "b" * 64
 
     vault_hvac_client.secrets.kv.v2.read_secret_version.assert_called_once_with(
         path="scanner/prod",
@@ -154,6 +161,38 @@ def test_vault_approle_auth(
         role_id="role-id-hex",
         secret_id="wrapped-secret-id",
     )
+
+
+def test_vault_backend_verifactu_single_global_hash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``VERIFACTU_GENESIS_HASH`` a nivel raiz del JSON KV (sin mapa por emisor)."""
+    g = "f" * 64
+    client_inst = MagicMock()
+    client_inst.secrets.kv.v2.read_secret_version.return_value = {
+        "data": {
+            "data": {
+                "STRIPE_SECRET_KEY": " sk_test ",
+                "JWT_SECRET_KEY": "jwt-from-vault",
+                "VERIFACTU_GENESIS_HASH": g,
+            },
+        },
+    }
+    monkeypatch.setattr("app.services.secret_manager_service.hvac.Client", lambda **kwargs: client_inst)
+
+    monkeypatch.setenv("SECRET_MANAGER_BACKEND", "vault")
+    monkeypatch.setenv("VAULT_ADDR", "https://vault.example:8200")
+    monkeypatch.setenv("VAULT_KV_PATH", "scanner/prod")
+    monkeypatch.setenv("VAULT_KV_MOUNT", "kv")
+    monkeypatch.setenv("VAULT_TOKEN", "dev-root")
+    monkeypatch.delenv("VAULT_TOKEN_FILE", raising=False)
+
+    from app.services import secret_manager_service as sm
+
+    sm.reset_secret_manager()
+    mgr = sm.get_secret_manager()
+    assert isinstance(mgr, sm.VaultKvSecretManager)
+    assert mgr.get_verifactu_genesis_hash(issuer_id="uuid-sin-entrada-en-mapa") == g
 
 
 def test_vault_kv_retries_on_forbidden(

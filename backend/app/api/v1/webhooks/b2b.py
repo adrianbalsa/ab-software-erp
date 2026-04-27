@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends
 from starlette.responses import Response
 
 from app.api import deps
-from app.models.enums import UserRole
 from app.core.webhook_dispatcher import dispatch_endpoint_test
 from app.schemas.user import UserOut
 from app.schemas.webhook_b2b import (
@@ -34,18 +33,7 @@ from app.services.webhooks_admin_service import WebhooksAdminService
 router = APIRouter()
 
 _owner_or_developer = deps.require_role("owner", "developer")
-
-
-async def _owner_or_developer_write(
-    current_user: UserOut = Depends(deps.bind_write_context),
-) -> UserOut:
-    """Contexto de escritura + rol owner o developer (evita doble ``get_current_user``)."""
-    if current_user.role not in (UserRole.ADMIN, UserRole.DEVELOPER, UserRole.SUPERADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permiso denegado para su rol operativo.",
-        )
-    return current_user
+_owner_or_developer_write = deps.require_write_role("owner", "developer")
 
 
 @router.get(
@@ -54,8 +42,7 @@ async def _owner_or_developer_write(
     summary="Listar webhooks B2B activos",
 )
 async def list_webhooks(
-    _: UserOut = Depends(deps.RoleChecker(["admin"])),
-    current_user: UserOut = Depends(deps.get_current_user),
+    current_user: UserOut = Depends(deps.require_role("owner")),
     service: WebhooksAdminService = Depends(deps.get_webhooks_admin_service),
 ) -> list[WebhookB2BOut]:
     """Lista suscripciones activas de la empresa del token."""
@@ -69,8 +56,7 @@ async def list_webhooks(
 )
 async def create_webhook(
     body: WebhookB2BCreate,
-    _: UserOut = Depends(deps.RoleChecker(["admin"])),
-    current_user: UserOut = Depends(deps.bind_write_context),
+    current_user: UserOut = Depends(deps.require_write_role("owner")),
     service: WebhooksAdminService = Depends(deps.get_webhooks_admin_service),
 ) -> WebhookB2BCreated:
     """Crea un webhook (HTTPS obligatorio); devuelve `secret_key` solo en esta respuesta."""
@@ -84,8 +70,7 @@ async def create_webhook(
 )
 async def get_webhook_secret(
     webhook_id: UUID,
-    _: UserOut = Depends(deps.RoleChecker(["admin"])),
-    current_user: UserOut = Depends(deps.get_current_user),
+    current_user: UserOut = Depends(deps.require_role("owner")),
     service: WebhooksAdminService = Depends(deps.get_webhooks_admin_service),
 ) -> WebhookB2BSecretOut:
     """Revela el secreto HMAC para una suscripción activa."""
@@ -100,8 +85,7 @@ async def get_webhook_secret(
 async def test_webhook(
     webhook_id: UUID,
     background_tasks: BackgroundTasks,
-    _: UserOut = Depends(deps.RoleChecker(["admin"])),
-    current_user: UserOut = Depends(deps.bind_write_context),
+    current_user: UserOut = Depends(deps.require_write_role("owner")),
 ) -> WebhookTestOut:
     """Encola un POST de prueba (ping) firmado hacia la URL configurada."""
     dispatch_webhook_test(
@@ -119,8 +103,7 @@ async def test_webhook(
 )
 async def delete_webhook(
     webhook_id: UUID,
-    _: UserOut = Depends(deps.RoleChecker(["admin"])),
-    current_user: UserOut = Depends(deps.bind_write_context),
+    current_user: UserOut = Depends(deps.require_write_role("owner")),
     service: WebhooksAdminService = Depends(deps.get_webhooks_admin_service),
 ) -> Response:
     """Desactiva la suscripción (no borra el historial de logs)."""

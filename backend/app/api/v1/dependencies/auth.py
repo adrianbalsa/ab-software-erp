@@ -13,20 +13,11 @@ _VALID_APP_ROLES: Final[frozenset[str]] = frozenset(
     {"owner", "admin", "driver", "traffic_manager", "cliente", "developer"}
 )
 
-_LEGACY_ROLE_MAP: Final[dict[str, str]] = {
-    "gestor": "traffic_manager",
-    "conductor": "driver",
-    "transportista": "driver",
-}
-
 
 def _normalize_app_role(raw: object) -> str | None:
     role = str(raw or "").strip().lower()
-    if not role:
-        return None
-    normalized = _LEGACY_ROLE_MAP.get(role, role)
-    if normalized in _VALID_APP_ROLES:
-        return normalized
+    if role in _VALID_APP_ROLES:
+        return role
     return None
 
 

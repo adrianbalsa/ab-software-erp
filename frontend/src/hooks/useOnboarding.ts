@@ -14,12 +14,16 @@ export function useOnboarding() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    let nextCompleted = false;
     try {
-      setCompleted(localStorage.getItem(STORAGE_KEY) === "1");
+      nextCompleted = localStorage.getItem(STORAGE_KEY) === "1";
     } catch {
-      setCompleted(false);
+      nextCompleted = false;
     }
-    setHydrated(true);
+    queueMicrotask(() => {
+      setCompleted(nextCompleted);
+      setHydrated(true);
+    });
   }, []);
 
   const markComplete = useCallback(() => {

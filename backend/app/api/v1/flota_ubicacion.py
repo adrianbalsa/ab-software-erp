@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
 from app.api import deps
+from app.models.enums import UserRole
 from app.schemas.flota import FlotaLiveTrackingOut
 from app.schemas.user import UserOut
 from app.services.flota_service import FlotaService
@@ -37,9 +38,9 @@ class VehiculoUbicacionIn(BaseModel):
 
 
 def _puede_actualizar_ubicacion(user: UserOut, vehiculo_id: UUID) -> bool:
-    if user.rbac_role in ("owner", "traffic_manager"):
+    if user.role in {UserRole.ADMIN, UserRole.GESTOR}:
         return True
-    if user.rbac_role == "driver":
+    if user.role == UserRole.TRANSPORTISTA:
         return user.assigned_vehiculo_id is not None and user.assigned_vehiculo_id == vehiculo_id
     return False
 

@@ -12,7 +12,7 @@ const API_BASE =
   "https://api.ablogistics-os.com";
 
 export type LoginActionState =
-  | { error: string }
+  | { error: string; resetRequired?: boolean }
   | { success: true; accessToken: string }
   | null;
 
@@ -45,13 +45,19 @@ export async function loginAction(
 
   if (!res.ok) {
     let detail = "Credenciales incorrectas";
+    let resetRequired = false;
     try {
       const err = (await res.json()) as { detail?: unknown };
       if (typeof err?.detail === "string") detail = err.detail;
+      if (err?.detail && typeof err.detail === "object") {
+        const payload = err.detail as { code?: unknown; message?: unknown };
+        if (typeof payload.message === "string") detail = payload.message;
+        resetRequired = payload.code === "password_reset_required";
+      }
     } catch {
       /* ignore */
     }
-    return { error: detail };
+    return { error: detail, resetRequired };
   }
 
   let accessToken: string;

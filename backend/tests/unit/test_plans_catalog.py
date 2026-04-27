@@ -9,7 +9,10 @@ from app.core.plans import (
     EUR_MONTHLY_FINANCE,
     EUR_MONTHLY_FULL_STACK,
     ADDON_OCR_PACK,
+    CostMeter,
     billing_addons,
+    monthly_cost_quota,
+    monthly_cost_quotas,
     normalize_plan,
     plan_list_eur_monthly,
     plan_marketing_name,
@@ -38,6 +41,18 @@ def test_billing_addons_catalog() -> None:
     slugs = {a.slug for a in billing_addons()}
     assert ADDON_OCR_PACK in slugs
     assert {a.eur_monthly for a in billing_addons() if a.slug == ADDON_OCR_PACK} == {15}
+
+
+def test_monthly_cost_quotas_increase_by_plan() -> None:
+    starter = {q.meter: q.limit_units for q in monthly_cost_quotas("starter")}
+    pro = {q.meter: q.limit_units for q in monthly_cost_quotas("finance")}
+    enterprise = {q.meter: q.limit_units for q in monthly_cost_quotas("enterprise")}
+
+    assert starter[CostMeter.MAPS] < pro[CostMeter.MAPS] < enterprise[CostMeter.MAPS]
+    assert starter[CostMeter.OCR] < pro[CostMeter.OCR] < enterprise[CostMeter.OCR]
+    assert starter[CostMeter.AI] < pro[CostMeter.AI] < enterprise[CostMeter.AI]
+    assert monthly_cost_quota("starter", CostMeter.OCR).unit_label == "páginas"
+    assert monthly_cost_quota("starter", "ocr").meter == CostMeter.OCR
 
 
 @pytest.mark.parametrize(

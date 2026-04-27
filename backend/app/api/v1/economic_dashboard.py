@@ -22,8 +22,7 @@ router = APIRouter()
     summary="Métricas avanzadas (6 meses)",
 )
 async def advanced_metrics(
-    current_user: UserOut = Depends(deps.get_current_user),
-    _: None = Depends(deps.RoleChecker(["admin", "gestor"])),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
     service: FinanceService = Depends(deps.get_finance_service),
 ) -> AdvancedMetricsOut:
     """
@@ -39,8 +38,7 @@ async def advanced_metrics(
     summary="Insights económicos avanzados",
 )
 async def economic_insights(
-    current_user: UserOut = Depends(deps.get_current_user),
-    _: None = Depends(deps.RoleChecker(["admin"])),
+    current_user: UserOut = Depends(deps.require_role("owner")),
     service: FinanceService = Depends(deps.get_finance_service),
 ) -> EconomicInsightsOut:
     """

@@ -1,7 +1,7 @@
 """
 Business Intelligence (BI) — agregados listos para Recharts.
 
-Acceso: rol operativo **owner** o rol legado de panel **admin** (`profiles.rol` / `UserOut.rol`).
+Acceso: rol operativo **owner** (normalizado desde perfiles legacy admin en `deps.require_role`).
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 
 from app.api import deps
 from app.schemas.bi import BiDashboardSummaryOut, BiEsgImpactChartsOut, BiProfitabilityChartsOut
@@ -37,26 +37,13 @@ def _bi_range_from_query(
     return range_from, range_to
 
 
-async def require_bi_owner_or_admin(
-    current_user: UserOut = Depends(deps.get_current_user),
-) -> UserOut:
-    if current_user.rbac_role == "owner":
-        return current_user
-    if str(current_user.rol or "").strip().lower() == "admin":
-        return current_user
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Permiso denegado: se requiere rol owner o admin.",
-    )
-
-
 @router.get(
     "/dashboard/summary",
     response_model=BiDashboardSummaryOut,
     summary="KPIs de dashboard BI",
 )
 async def bi_dashboard_summary(
-    current_user: UserOut = Depends(require_bi_owner_or_admin),
+    current_user: UserOut = Depends(deps.require_role("owner")),
     service: BiService = Depends(deps.get_bi_service),
     date_range: tuple[date | None, date | None] = Depends(_bi_range_from_query),
 ) -> BiDashboardSummaryOut:
@@ -70,7 +57,7 @@ async def bi_dashboard_summary(
     summary="Scatter: km vs margen estimado",
 )
 async def bi_charts_profitability(
-    current_user: UserOut = Depends(require_bi_owner_or_admin),
+    current_user: UserOut = Depends(deps.require_role("owner")),
     service: BiService = Depends(deps.get_bi_service),
     date_range: tuple[date | None, date | None] = Depends(_bi_range_from_query),
 ) -> BiProfitabilityChartsOut:
@@ -84,7 +71,7 @@ async def bi_charts_profitability(
     summary="Matriz ESG / EBITDA y datos para heatmap o treemap",
 )
 async def bi_charts_esg_impact(
-    current_user: UserOut = Depends(require_bi_owner_or_admin),
+    current_user: UserOut = Depends(deps.require_role("owner")),
     service: BiService = Depends(deps.get_bi_service),
     date_range: tuple[date | None, date | None] = Depends(_bi_range_from_query),
 ) -> BiEsgImpactChartsOut:

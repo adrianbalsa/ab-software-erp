@@ -529,8 +529,8 @@ async def _geo_aware_fleet_context(
             except Exception:
                 km_maps = max(km_decl, 0.01) if km_decl > 0 else 1.0
 
-            o_geo = await maps.geocode_lat_lng(p.origen)
-            d_geo = await maps.geocode_lat_lng(p.destino)
+            o_geo = await maps.geocode_lat_lng(p.origen, tenant_empresa_id=eid)
+            d_geo = await maps.geocode_lat_lng(p.destino, tenant_empresa_id=eid)
 
             co2 = float(p.co2_emitido) if p.co2_emitido is not None else None
             co2_pk = (co2 / km_maps) if (co2 is not None and km_maps > 0) else None

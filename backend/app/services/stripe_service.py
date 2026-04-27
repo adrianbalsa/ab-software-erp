@@ -714,7 +714,7 @@ async def handle_webhook(*, payload: bytes, sig_header: str | None, db: Supabase
     ``db`` debe ser cliente **service role** (bypass RLS) para actualizar ``empresas``.
 
     Idempotencia: si el evento incluye ``id`` (evt_…), se registra en ``webhook_events``;
-    entregas duplicadas de Stripe devuelven ``{"received": True, "duplicate": True}`` sin repetir
+    entregas duplicadas de Stripe devuelven ``{"received": True, "duplicate": True, "event_id": …}`` sin repetir
     efectos en ``empresas``. Si el procesamiento falla, se libera el claim para permitir reintento.
     """
     wh_secret = get_secret_manager().get_stripe_webhook_secret()
@@ -737,7 +737,7 @@ async def handle_webhook(*, payload: bytes, sig_header: str | None, db: Supabase
             status="PROCESSING",
         )
         if not claim_made:
-            return {"received": True, "duplicate": True}
+            return {"received": True, "duplicate": True, "event_id": event_id}
 
     try:
         result = await _dispatch_stripe_webhook_event(db, event)
