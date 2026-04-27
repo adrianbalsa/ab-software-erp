@@ -49,6 +49,12 @@ Orden sugerido por **impacto en ingresos / riesgo / esfuerzo**. Cada ítem indic
 
 **Por qué:** riesgo regulatorio y reputacional; encaja después de que el dinero y la operativa respiren.
 
+### Cierres ejecutados
+
+| ID | Estado | Resultado | Evidencia |
+|----|--------|-----------|-----------|
+| **SEC-001** | ✅ Cerrado | Génesis Hash VeriFactu migrado a Secret Manager por emisor; sin semilla hardcodeada/compartida en runtime, `.env`, código o logs. | `SecretManagerService.get_verifactu_genesis_hash`, `verifactu_genesis.py`, emisión/finalización en `facturas_service.py`; tests enfocados `27 passed`. |
+
 ---
 
 ## Fase 4 — Crecimiento (cuando el núcleo esté estable)

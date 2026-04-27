@@ -52,6 +52,56 @@ stripe trigger customer.subscription.updated
 
 Comprobar logs y fila `empresas` (plan, `stripe_customer_id`, `stripe_subscription_id`).
 
+## Checks operativos de billing
+
+### Diario
+
+- Revisar eventos fallidos en Stripe Dashboard para el endpoint `https://<API_HOST>/api/v1/webhooks/stripe`.
+- Confirmar ausencia de picos de `invoice.payment_failed`, `customer.subscription.deleted` y errores `400/503` en la API.
+- Revisar tenants con `subscription_status` no activo (`past_due`, `unpaid`, `canceled`) y decidir comunicacion o downgrade.
+- Validar que no hay errores de `STRIPE_WEBHOOK_SECRET` o firma en logs.
+
+### Semanal
+
+- Comparar conteo de suscripciones activas en Stripe contra empresas activas con `stripe_subscription_id`.
+- Revisar que los `price_*` configurados siguen apuntando a productos correctos y modo correcto (`test` vs `live`).
+- Ejecutar smoke en test mode tras cambios de checkout, portal, planes o secretos.
+- Revisar cuotas mensuales de coste externo (`maps_calls_month`, `ocr_pages_month`, `ai_tokens_month`) para detectar tenants cerca de limite.
+
+Consulta sugerida para cuotas:
+
+```sql
+select
+  empresa_id,
+  period_yyyymm,
+  meter,
+  used_units,
+  limit_units,
+  round((used_units::numeric / nullif(limit_units, 0)) * 100, 2) as pct_used
+from public.tenant_monthly_usage
+where period_yyyymm = to_char(now(), 'YYYY-MM')
+order by pct_used desc nulls last;
+```
+
+### Cierre mensual
+
+- Confirmar que facturas Stripe del mes se han emitido/cobrado o quedan clasificadas.
+- Revisar tenants con cuota agotada (`monthly_cost_quota_exceeded`) y decidir upsell, add-on o excepcion manual.
+- Exportar evidencia de MRR, churn, add-ons activos y eventos webhook relevantes.
+- Revisar que el catalogo de precios comercial coincide con `backend/app/core/plans.py`.
+
+## Runbook de incidente billing
+
+1. Si Stripe no puede entregar webhooks, revisar firma/secret, disponibilidad API y reintentos pendientes en Dashboard.
+2. Si checkout falla, validar `STRIPE_SECRET_KEY`, `STRIPE_PRICE_*`, `PUBLIC_APP_URL` y URLs de success/cancel.
+3. Si un tenant queda con plan incorrecto, comparar evento Stripe, metadata `empresa_id` y fila `empresas`; corregir con trazabilidad administrativa.
+4. Si se agota una cuota critica por error, revisar `tenant_monthly_usage`, plan normalizado y consumo reciente antes de tocar limites.
+5. Cerrar el incidente con evento Stripe afectado (`evt_*`), empresa, impacto comercial, acciones y necesidad de credito de servicio si aplica.
+
+## Presupuestos en proveedores cloud (Fase 2.4)
+
+Los límites de **Stripe y cuotas por tenant** no sustituyen los **budgets de AWS, GCP (Maps) ni OpenAI**. Umbrales **50 / 80 / 100 %**, owner y respuesta ante sobrecoste: ver **`docs/operations/BILLING_PROVIDER_BUDGETS.md`**.
+
 ## Checklist previo a go-live
 
 - [ ] Precios `price_*` en entorno de despliegue.
@@ -59,3 +109,5 @@ Comprobar logs y fila `empresas` (plan, `stripe_customer_id`, `stripe_subscripti
 - [ ] Portal de facturación revisado (textos, datos de empresa, impuestos si aplica).
 - [ ] `PUBLIC_APP_URL` apunta al dominio real del frontend.
 - [ ] Prueba de checkout + portal en **test mode** antes de alternar claves live.
+- [ ] Dashboard de eventos fallidos y suscripciones `past_due/unpaid` revisado.
+- [ ] Cuotas mensuales `maps_calls_month`, `ocr_pages_month` e `ai_tokens_month` visibles para soporte/producto.

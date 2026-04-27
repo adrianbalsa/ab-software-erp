@@ -67,14 +67,27 @@ El Encargado se compromete a que las personas autorizadas para tratar los Datos 
 ## 8. Subencargados (art. 28.2 RGPD)
 El Encargado podrá contratar **Subencargados** para prestar componentes de infraestructura y/o servicios auxiliares necesarios para el funcionamiento del SaaS.
 
-A efectos de este DPA, el Encargado declara que podrán utilizarse, de forma no exhaustiva:
-- Proveedores de infraestructura/servicios de base de datos y hosting compatibles con el tratamiento de Datos Personales (p. ej., infraestructura europea y/o entornos compatibles con RGPD).
-- Proveedores de mapas y APIs relacionadas (p. ej., Google Cloud) cuando el Cliente active funcionalidades de cartografía/ubicación.
-- Servicios de APIs de inteligencia artificial (p. ej., OpenAI) cuando el Cliente active funcionalidades que requieran IA.
+A fecha de esta versión, la lista concreta de Subencargados técnicos es:
+
+| Categoría | Subencargado | Finalidad / rol | Uso |
+|-----------|--------------|-----------------|-----|
+| Base de datos, autenticación y almacenamiento | Supabase | PostgreSQL gestionado, autenticación JWT, Row Level Security, Storage y Realtime si se activa. | Núcleo de plataforma cuando el entorno contratado usa Supabase. |
+| Hosting de aplicación | Railway | Ejecución de API FastAPI, worker y servicios backend. | Núcleo de plataforma en producción Railway. |
+| Frontend y CDN | Vercel | Hosting de frontend Next.js y distribución web. | Núcleo de plataforma para la aplicación web. |
+| Backups externos | Amazon Web Services S3 | Almacenamiento de backups cifrados en región AWS Europa (`eu-*`). | Continuidad de negocio y disaster recovery. |
+| Mapas y rutas | Google Maps Platform | Geocodificación, mapas, distancias y estimación de rutas. | Solo cuando el Cliente usa funcionalidades de mapas/routing. |
+| Pagos SaaS | Stripe | Cobros, facturación SaaS y gestión de suscripciones. | Solo cuando el Cliente usa o contrata pagos gestionados. |
+| Open Banking / pagos bancarios | GoCardless | Account Data, mandatos y pagos bancarios si se activa la integración. | Solo cuando el Cliente activa módulos bancarios. |
+| IA y OCR | OpenAI | Modelos de lenguaje, visión y OCR vía configuración de IA. | Solo cuando el Cliente usa funcionalidades de IA/OCR. |
+| IA y OCR | Google (Gemini) | Proveedor alternativo de visión, OCR o modelos vía configuración de IA. | Solo si está configurado y se activa IA/OCR. |
+| IA y OCR | Anthropic | Proveedor alternativo de modelos de lenguaje vía configuración de IA. | Solo si está configurado y se activa IA. |
+| IA y OCR | Azure OpenAI | Proveedor alternativo de modelos de lenguaje/OCR vía configuración de IA. | Solo si está configurado y se activa IA/OCR. |
+| Observabilidad | Sentry | Seguimiento de errores y rendimiento; SDK configurado sin PII por defecto. | Producción y diagnóstico técnico. |
+| Email transaccional | Resend | Envío de correos transaccionales. | Solo si está configurado para comunicaciones del servicio. |
 
 El Encargado mantendrá, con sus Subencargados, condiciones contractuales que garanticen, como mínimo, el cumplimiento de las obligaciones del RGPD.
 
-Cuando resulte exigible, el Encargado notificará al Responsable de cambios relevantes en los Subencargados o facilitará información actualizada.
+El inventario técnico actualizable se publica también en `GET /api/v1/public/compliance` (campo `subprocessors`). Cuando resulte exigible, el Encargado notificará al Responsable de cambios relevantes en los Subencargados o facilitará información actualizada.
 
 ## 9. Borrado/retorno y portabilidad (art. 28 y obligaciones al finalizar)
 Al finalizar el contrato SaaS, y tras las solicitudes del Responsable conforme al régimen contractual y legal:
@@ -85,6 +98,8 @@ Al finalizar el contrato SaaS, y tras las solicitudes del Responsable conforme a
 Salvo obligación legal de conservación (incluyendo conservación impuesta por autoridad competente o normativa imperativa), el Encargado procurará que el borrado se realice en un plazo normalmente no superior a **30 días** desde la rescisión o desde la solicitud validada del Responsable, lo que sea posterior.
 
 En relación con copias de seguridad, la eliminación puede quedar sujeta a ciclos de retención técnica, aplicándose medidas de salvaguarda para impedir usos posteriores.
+
+La retención operativa de backups externos S3 queda fijada en **35 días naturales** para objetos actuales bajo el prefijo de backup, con versiones no corrientes durante **7 días naturales** si el bucket tiene versioning activo. Los artifacts temporales de GitHub Actions se conservan **2 días naturales** y las copias locales del script legacy se conservan **3 días naturales** por defecto. Estos plazos están documentados en `docs/operations/BACKUP_S3_POLICY.md`.
 
 ## 10. Notificación de violaciones de seguridad (art. 33 y 34 RGPD)
 El Encargado informará al Responsable sobre cualquier Violación de la Seguridad de los Datos Personales de la que tenga conocimiento, sin demora indebida y, en todo caso, dentro de los plazos exigidos por el RGPD, aportando información razonable para la evaluación y notificación a la autoridad de control y, cuando proceda, a los interesados.

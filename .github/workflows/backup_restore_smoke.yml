@@ -2,7 +2,7 @@ name: Backup Restore Smoke
 
 on:
   schedule:
-    - cron: "15 4 1 * *"
+    - cron: "15 4 * * 0"
   workflow_dispatch:
 
 permissions:
@@ -12,6 +12,8 @@ jobs:
   restore-smoke:
     name: Validate backup restore on ephemeral Postgres
     runs-on: ubuntu-latest
+    env:
+      BACKUP_AWS_REGION: ${{ secrets.BACKUP_AWS_REGION }}
 
     services:
       postgres:
@@ -37,7 +39,16 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.BACKUP_AWS_REGION }}
+          aws-region: ${{ env.BACKUP_AWS_REGION }}
+
+      - name: Validate bucket security (PAB, default encryption, lifecycle 35d)
+        env:
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_S3_PREFIX: ${{ secrets.BACKUP_S3_PREFIX }}
+        run: |
+          set -euo pipefail
+          chmod +x ./scripts/validate_backup_s3_bucket.sh
+          ./scripts/validate_backup_s3_bucket.sh
 
       - name: Download latest backup from S3
         env:
@@ -45,35 +56,72 @@ jobs:
           BACKUP_S3_PREFIX: ${{ secrets.BACKUP_S3_PREFIX }}
         run: |
           set -euo pipefail
+          step_start="$(date +%s)"
+          test -n "${BACKUP_AWS_REGION}" || (echo "Missing BACKUP_AWS_REGION" && exit 1)
           test -n "${BACKUP_S3_BUCKET}" || (echo "Missing BACKUP_S3_BUCKET" && exit 1)
+          case "${BACKUP_AWS_REGION}" in
+            eu-*) ;;
+            *) echo "BACKUP_AWS_REGION must be an AWS Europe region (eu-*), got ${BACKUP_AWS_REGION}" && exit 1 ;;
+          esac
+
+          bucket_region="$(aws s3api get-bucket-location --bucket "${BACKUP_S3_BUCKET}" --query 'LocationConstraint' --output text)"
+          if [[ "${bucket_region}" == "EU" ]]; then
+            bucket_region="eu-west-1"
+          fi
+          case "${bucket_region}" in
+            eu-*) ;;
+            *) echo "Backup bucket must be in an AWS Europe region (eu-*), got ${bucket_region}" && exit 1 ;;
+          esac
+          if [[ "${bucket_region}" != "${BACKUP_AWS_REGION}" ]]; then
+            echo "Backup bucket region (${bucket_region}) must match BACKUP_AWS_REGION (${BACKUP_AWS_REGION})"
+            exit 1
+          fi
+
           PREFIX="${BACKUP_S3_PREFIX:-ab-logistics/daily}"
           mkdir -p restore_artifacts
           LATEST_KEY="$(aws s3 ls "s3://${BACKUP_S3_BUCKET}/${PREFIX}/" | awk '{print $4}' | grep 'supabase_backup_.*\.tar\.gz$' | sort | tail -n 1)"
           test -n "${LATEST_KEY}" || (echo "No backup archives found in s3://${BACKUP_S3_BUCKET}/${PREFIX}/" && exit 1)
+
+          object_sse="$(aws s3api head-object --bucket "${BACKUP_S3_BUCKET}" --key "${PREFIX}/${LATEST_KEY}" --query 'ServerSideEncryption' --output text)"
+          case "${object_sse}" in
+            AES256|aws:kms) echo "Latest backup object is encrypted (${object_sse})." ;;
+            *) echo "Latest backup object is missing server-side encryption: ${object_sse}" && exit 1 ;;
+          esac
+
           aws s3 cp "s3://${BACKUP_S3_BUCKET}/${PREFIX}/${LATEST_KEY}" "restore_artifacts/${LATEST_KEY}"
           echo "BACKUP_FILE=restore_artifacts/${LATEST_KEY}" >> "$GITHUB_ENV"
+          echo "RESTORE_BACKUP_URI=s3://${BACKUP_S3_BUCKET}/${PREFIX}/${LATEST_KEY}" >> "$GITHUB_ENV"
+          step_end="$(date +%s)"
+          echo "RESTORE_DOWNLOAD_SECONDS=$((step_end - step_start))" >> "$GITHUB_ENV"
 
       - name: Extract and validate backup layout
         run: |
           set -euo pipefail
+          step_start="$(date +%s)"
           mkdir -p restore_tmp
           tar -xzf "${BACKUP_FILE}" -C restore_tmp
           test -f restore_tmp/schema.sql || (echo "schema.sql missing in backup" && exit 1)
           test -f restore_tmp/public_data.sql || (echo "public_data.sql missing in backup" && exit 1)
+          step_end="$(date +%s)"
+          echo "RESTORE_EXTRACT_SECONDS=$((step_end - step_start))" >> "$GITHUB_ENV"
 
       - name: Restore schema and data into ephemeral Postgres
         env:
           PGPASSWORD: postgres
         run: |
           set -euo pipefail
+          step_start="$(date +%s)"
           psql "postgresql://postgres:postgres@localhost:5432/restore_smoke" -v ON_ERROR_STOP=1 -f restore_tmp/schema.sql
           psql "postgresql://postgres:postgres@localhost:5432/restore_smoke" -v ON_ERROR_STOP=1 -f restore_tmp/public_data.sql
+          step_end="$(date +%s)"
+          echo "RESTORE_APPLY_SECONDS=$((step_end - step_start))" >> "$GITHUB_ENV"
 
       - name: Integrity Check (structure, data, RLS)
         env:
           PGPASSWORD: postgres
         run: |
           set -euo pipefail
+          step_start="$(date +%s)"
           DB_URL="postgresql://postgres:postgres@localhost:5432/restore_smoke"
           MIN_PUBLIC_TABLES=15
 
@@ -105,3 +153,22 @@ jobs:
           echo "[OK] Estructura de tablas completa."
           echo "[OK] Datos de auditoría presentes."
           echo "[OK] Políticas RLS activas."
+          step_end="$(date +%s)"
+          echo "RESTORE_INTEGRITY_SECONDS=$((step_end - step_start))" >> "$GITHUB_ENV"
+
+      - name: Publish measured restore timings
+        if: always()
+        run: |
+          {
+            echo "## Backup Restore Smoke"
+            echo ""
+            echo "- Backup: ${RESTORE_BACKUP_URI:-not available}"
+            echo "- Schedule: weekly, Sundays 04:15 UTC"
+            echo ""
+            echo "| Phase | Measured seconds |"
+            echo "| --- | ---: |"
+            echo "| Download latest encrypted S3 object | ${RESTORE_DOWNLOAD_SECONDS:-failed} |"
+            echo "| Extract archive and validate layout | ${RESTORE_EXTRACT_SECONDS:-failed} |"
+            echo "| Apply schema and public data | ${RESTORE_APPLY_SECONDS:-failed} |"
+            echo "| Integrity checks: structure, data, RLS | ${RESTORE_INTEGRITY_SECONDS:-failed} |"
+          } >> "$GITHUB_STEP_SUMMARY"

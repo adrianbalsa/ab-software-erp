@@ -14,6 +14,10 @@ Documentos fuente:
 - `docs/operations/ON_CALL_RUNBOOK.md`: guardia, severidades, handoff y checks recurrentes.
 - `docs/operations/DISASTER_RECOVERY.md`: restore de base de datos.
 - `docs/operations/BACKUP_S3_POLICY.md`: politica BCK-001 de backups S3.
+- `docs/operations/GOLIVE_READINESS_CHECKLIST.md`: checklist de go-live (enlaces canonicos y sonda HTTP opcional).
+- `docs/operations/HANDOVER_PACKAGE.md`: Fase 3.4 — indice de transferencia a equipo externo.
+- `docs/operations/DEPLOY_FINAL_TLS_CHECKLIST.md`: Fase 3.2 — DNS, TLS, CORS, Redis TLS y evidencia de despliegue.
+- `docs/operations/MONITORING_OBSERVABILITY.md`: Fase 3.3 — `/health/deep`, Sentry, monitores externos y alertas.
 
 ## Decision productiva oficial
 
@@ -268,3 +272,7 @@ La linea punteada del VPS representa disponibilidad operativa sin trafico produc
 - [ ] Responsables y backups de rol estan asignados.
 - [ ] Runbook `ON_CALL_RUNBOOK.md` revisado y rotacion de guardia vigente.
 - [ ] Los secretos reales no estan documentados en Git.
+
+## Revision handover (Fase 3.4)
+
+Ultima revision documental u operativa del paquete `HANDOVER_PACKAGE.md`: **(fecha UTC)** — **(nombre)**. Completar tras cada handover o cambio material de topología/owners.

@@ -10,7 +10,7 @@ curl -fsS http://127.0.0.1:8000/health
 
 # Health Recovery Runbook (5 min)
 
-Guía breve para restaurar `AB Logistics OS` cuando fallan comprobaciones de salud. Marco DRP de alto nivel: `docs/operations/DISASTER_RECOVERY.md`.
+Guía breve para restaurar `AB Logistics OS` cuando fallan comprobaciones de salud. Marco DRP de alto nivel: `docs/operations/DISASTER_RECOVERY.md`. Guardia transversal: `docs/operations/ON_CALL_RUNBOOK.md`.
 
 ## Scope
 
@@ -78,7 +78,7 @@ docker compose exec backend curl -fsS http://127.0.0.1:8000/health
 
 - Signal: `checks.redis.ok=false`
 - Impact: colas, rate limit distribuido; API puede degradar
-- Action: restaurar Redis; ver §2–3 abajo
+- Action: restaurar Redis; ver §2–3 abajo y `docs/operations/REDIS_001_HA_BILLING_QUEUE.md`
 
 ## 5-Minute Recovery Procedures
 
@@ -101,6 +101,9 @@ docker compose -f docker-compose.prod.yml exec backend curl -sS http://127.0.0.1
 ```
 
 ## 2) Redis recovery path
+
+Para la cola critica de facturacion/VeriFactu, revisar tambien `checks.redis_queue.queue_depth`,
+`checks.redis_queue.blocked_clients` y el runbook `docs/operations/REDIS_001_HA_BILLING_QUEUE.md`.
 
 ```bash
 docker compose restart redis
@@ -199,3 +202,10 @@ Escalate immediately if:
 - Supabase remains down more than 5 minutes after credential/network validation
 - Redis fails to become healthy after restart + backend recycle
 - `/health` stays `unhealthy` while containers are `up` (possible external dependency outage)
+
+## On-Call Handoff
+
+- Registrar severidad, owner, hora de deteccion y endpoints fallidos.
+- Adjuntar salida resumida de `/live`, `/health`, `/health/deep` y logs de los ultimos 15 minutos.
+- Enlazar el runbook especifico usado: Redis, AEAT, backups/DR o billing.
+- Si el incidente queda abierto, documentar siguiente accion, responsable y hora de reevaluacion.

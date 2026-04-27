@@ -6,6 +6,7 @@ import logging
 import time
 from functools import lru_cache
 from os import getenv
+from typing import NamedTuple
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -15,10 +16,18 @@ from slowapi.middleware import SlowAPIMiddleware
 from starlette.responses import Response
 
 from app.core.http_client_meta import get_client_ip
+from app.middleware.request_id import REQUEST_ID_HEADER, resolve_request_id_from_scope
 from app.core.security import decode_access_token_payload
 
 _log = logging.getLogger(__name__)
 _RL_NS = "rl"
+
+
+class RateLimitIdentity(NamedTuple):
+    scope: str
+    identifier: str
+    key: str
+    tenant_id: str | None
 
 
 def _dev_mode_redis_rate_limit_bypass() -> bool:
@@ -68,11 +77,12 @@ class SkipOptionsSlowAPIMiddleware(SlowAPIMiddleware):
         return await super().dispatch(request, call_next)
 
 
-def rate_limit_key(request: Request) -> str:
+def resolve_rate_limit_identity(request: Request, *, namespace: str = "") -> RateLimitIdentity:
     """
     Prioridad: ``empresa_id`` en JWT (multi-tenant) → ``sub``/usuario → IP.
     Rutas /auth/login|refresh usan middleware dedicado (no pasan por esta clave en SlowAPI).
     """
+    prefix = f"{_RL_NS}:{namespace}:" if namespace else f"{_RL_NS}:"
     auth = request.headers.get("authorization") or ""
     if auth.lower().startswith("bearer "):
         token = auth[7:].strip()
@@ -81,17 +91,22 @@ def rate_limit_key(request: Request) -> str:
                 payload = decode_access_token_payload(token)
                 eid = str(payload.get("empresa_id") or "").strip()
                 if eid:
-                    return f"{_RL_NS}:tenant:{eid}"
+                    return RateLimitIdentity("tenant", eid, f"{prefix}tenant:{eid}", eid)
                 ident = str(
                     payload.get("usuario_id") or payload.get("sub") or ""
                 ).strip()
                 if ident:
-                    return f"{_RL_NS}:user:{ident}"
+                    return RateLimitIdentity("user", ident, f"{prefix}user:{ident}", None)
             except Exception:
                 _log.debug("rate_limit: token no decodificable, fallback IP")
 
     ip = get_client_ip(request) or "unknown"
-    return f"{_RL_NS}:ip:{ip}"
+    return RateLimitIdentity("ip", ip, f"{prefix}ip:{ip}", None)
+
+
+def rate_limit_key(request: Request) -> str:
+    """Clave estable para SlowAPI y buckets compartidos."""
+    return resolve_rate_limit_identity(request).key
 
 
 def fiscal_aeat_submission_path(path: str, method: str) -> bool:
@@ -112,22 +127,7 @@ def fiscal_aeat_submission_path(path: str, method: str) -> bool:
 
 def fiscal_rate_limit_key(request: Request) -> str:
     """Límite fiscal por tenant (``empresa_id`` en JWT) o fallback IP."""
-    auth = request.headers.get("authorization") or ""
-    if auth.lower().startswith("bearer "):
-        token = auth[7:].strip()
-        if token:
-            try:
-                payload = decode_access_token_payload(token)
-                eid = str(payload.get("empresa_id") or "").strip()
-                if eid:
-                    return f"{_RL_NS}:fiscal:tenant:{eid}"
-                uid = str(payload.get("sub") or payload.get("usuario_id") or "").strip()
-                if uid:
-                    return f"{_RL_NS}:fiscal:user:{uid}"
-            except Exception:
-                pass
-    ip = get_client_ip(request) or "unknown"
-    return f"{_RL_NS}:fiscal:ip:{ip}"
+    return resolve_rate_limit_identity(request, namespace="fiscal").key
 
 
 def expensive_endpoint_bucket(path: str, method: str) -> str | None:
@@ -158,6 +158,49 @@ def expensive_endpoint_bucket(path: str, method: str) -> str | None:
     return None
 
 
+def ensure_request_id(request: Request) -> str:
+    """Devuelve/crea el request id aunque un rate limiter responda antes del middleware."""
+    rid = getattr(request.state, "request_id", None)
+    if isinstance(rid, str) and rid.strip():
+        return rid.strip()
+    rid = resolve_request_id_from_scope(request.scope)
+    request.state.request_id = rid
+    return rid
+
+
+def rate_limit_response(
+    request: Request,
+    *,
+    retry_after_sec: int,
+    scope: str | None = None,
+    tenant_id: str | None = None,
+    bucket: str | None = None,
+    limit: str | None = None,
+) -> JSONResponse:
+    """Respuesta 429 estándar, clara y trazable para todos los limitadores."""
+    request_id = ensure_request_id(request)
+    content: dict[str, object] = {
+        "code": "rate_limit_exceeded",
+        "error": "Rate limit exceeded",
+        "message": "Demasiadas solicitudes. Reintenta cuando finalice la ventana de rate limit.",
+        "retry_after": f"{max(1, retry_after_sec)} seconds",
+        "request_id": request_id,
+    }
+    if scope:
+        content["scope"] = scope
+    if tenant_id:
+        content["tenant_id"] = tenant_id
+    if bucket:
+        content["bucket"] = bucket
+    if limit:
+        content["limit"] = limit
+
+    response = JSONResponse(status_code=429, content=content)
+    response.headers[REQUEST_ID_HEADER] = request_id
+    response.headers["Retry-After"] = str(max(1, retry_after_sec))
+    return response
+
+
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> Response:
     """
     HTTP 429 con cuerpo estándar; conserva cabeceras Retry-After / X-RateLimit-* de SlowAPI.
@@ -173,12 +216,12 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) 
                 retry_after_sec = max(1, int(reset_ts - time.time()))
     except Exception:
         pass
-    response = JSONResponse(
-        status_code=429,
-        content={
-            "error": "Rate limit exceeded",
-            "retry_after": f"{retry_after_sec} seconds",
-        },
+    identity = resolve_rate_limit_identity(request)
+    response = rate_limit_response(
+        request,
+        retry_after_sec=retry_after_sec,
+        scope=identity.scope,
+        tenant_id=identity.tenant_id,
     )
     lim = getattr(request.app.state, "limiter", None)
     if lim is not None:
@@ -278,10 +321,11 @@ async def warmup_rate_limit_backend() -> None:
         raise RuntimeError("Redis unavailable for shared rate limiting") from exc
 
 
-# Límite global SlowAPI 200/min por clave; Redis en prod, memory:// si DEV_MODE sin REDIS_URL.
+# SlowAPI conserva límites decorados (p. ej. endpoints públicos). El límite global por tenant
+# lo aplica TenantRateLimitMiddleware para poder resolver overrides por empresa en runtime.
 limiter = Limiter(
     key_func=rate_limit_key,
-    default_limits=["200/minute"],
+    default_limits=[],
     storage_uri=get_rate_limit_storage_uri(),
     strategy="moving-window",
 )

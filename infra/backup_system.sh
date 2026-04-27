@@ -24,7 +24,8 @@
 # Upload:
 #  - RCLONE_REMOTE (p. ej. "myrclone") y RCLONE_DEST (p. ej. "backups/ab-logistics")
 #    o
-#  - AWS_S3_BUCKET (p. ej. "mi-bucket") y AWS_S3_PREFIX (default: "ab-logistics/backups")
+#  - AWS_S3_BUCKET (p. ej. "mi-bucket"), AWS_S3_REGION (eu-*), AWS_S3_PREFIX
+#    (default: "ab-logistics/backups") y opcional AWS_S3_KMS_KEY_ID
 #
 # Limpieza:
 #  - RETENTION_DAYS (default: 3)
@@ -162,7 +163,47 @@ if [[ "${UPLOADED}" -eq 0 && -n "${AWS_S3_BUCKET:-}" ]]; then
     exit 1
   fi
   AWS_S3_PREFIX="${AWS_S3_PREFIX:-ab-logistics/backups}"
-  aws s3 cp "${ARCHIVE_PATH}" "s3://${AWS_S3_BUCKET}/${AWS_S3_PREFIX}/${ARCHIVE_NAME}"
+  AWS_S3_REGION="${AWS_S3_REGION:-${AWS_REGION:-${AWS_DEFAULT_REGION:-}}}"
+  if [[ -z "${AWS_S3_REGION}" ]]; then
+    echo "[backup_system] ERROR: define AWS_S3_REGION/AWS_REGION con una región AWS Europa (eu-*)." >&2
+    exit 1
+  fi
+  case "${AWS_S3_REGION}" in
+    eu-*) ;;
+    *) echo "[backup_system] ERROR: AWS_S3_REGION debe ser una región AWS Europa (eu-*), valor: ${AWS_S3_REGION}" >&2; exit 1 ;;
+  esac
+
+  bucket_region="$(aws s3api get-bucket-location --bucket "${AWS_S3_BUCKET}" --query 'LocationConstraint' --output text)"
+  if [[ "${bucket_region}" == "EU" ]]; then
+    bucket_region="eu-west-1"
+  fi
+  case "${bucket_region}" in
+    eu-*) ;;
+    *) echo "[backup_system] ERROR: el bucket S3 debe residir en región AWS Europa (eu-*), valor: ${bucket_region}" >&2; exit 1 ;;
+  esac
+  if [[ "${bucket_region}" != "${AWS_S3_REGION}" ]]; then
+    echo "[backup_system] ERROR: región bucket (${bucket_region}) != AWS_S3_REGION (${AWS_S3_REGION})." >&2
+    exit 1
+  fi
+
+  sse_args=(--sse AES256)
+  if [[ -n "${AWS_S3_KMS_KEY_ID:-}" ]]; then
+    sse_args=(--sse aws:kms --sse-kms-key-id "${AWS_S3_KMS_KEY_ID}")
+  fi
+
+  archive_key="${AWS_S3_PREFIX}/${ARCHIVE_NAME}"
+  aws s3 cp "${ARCHIVE_PATH}" "s3://${AWS_S3_BUCKET}/${archive_key}" "${sse_args[@]}"
+  object_sse="$(aws s3api head-object --bucket "${AWS_S3_BUCKET}" --key "${archive_key}" --query 'ServerSideEncryption' --output text)"
+  case "${object_sse}" in
+    AES256|aws:kms) echo "[backup_system] Backup cifrado en S3 (${object_sse})." ;;
+    *) echo "[backup_system] ERROR: objeto S3 sin cifrado server-side: ${object_sse}" >&2; exit 1 ;;
+  esac
+
+  if [[ -f "${ROOT_DIR}/scripts/validate_backup_s3_bucket.sh" ]]; then
+    echo "[backup_system] Validando postura BCK-001 del bucket (PAB, encryption, lifecycle)…"
+    BACKUP_S3_BUCKET="${AWS_S3_BUCKET}" BACKUP_S3_PREFIX="${AWS_S3_PREFIX}" \
+      "${ROOT_DIR}/scripts/validate_backup_s3_bucket.sh"
+  fi
   UPLOADED=1
 fi
 
