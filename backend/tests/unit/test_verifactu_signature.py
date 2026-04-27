@@ -57,8 +57,12 @@ def test_verifactu_xml_is_well_formed_and_xades_signature_verifies() -> None:
         },
         empresa={"nif": "B12345678", "nombre_comercial": "AB Logistics Test"},
         cliente={"nif": "A11111111", "nombre": "Cliente QA"},
-        previous_fingerprint=None,
-        previous_invoice=None,
+        previous_fingerprint="c" * 64,
+        previous_invoice={
+            "nif_emisor": "B12345678",
+            "num_factura": "VF-2026-0000",
+            "fecha_emision": "2026-04-22",
+        },
     )
     service.validate_against_regfactu_schema(xml_unsigned)
 

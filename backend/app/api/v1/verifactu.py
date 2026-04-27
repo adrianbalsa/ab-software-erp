@@ -38,7 +38,96 @@ class RetryPendingVerifactuOut(BaseModel):
     success: int
     failed: int
 
+
+_ERR_MSG_MAX = 4000
+
+
+class VerifactuDeadJobItem(BaseModel):
+    id: str
+    factura_id: int
+    job_name: str
+    job_try: int
+    max_tries: int
+    error_type: str | None = None
+    error_message: str | None = None
+    status: str
+    resolved_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class VerifactuDeadJobsListOut(BaseModel):
+    items: list[VerifactuDeadJobItem]
+    limit: int
+    offset: int
+
+
 router = APIRouter()
+
+
+@router.get(
+    "/dead-jobs",
+    response_model=VerifactuDeadJobsListOut,
+    summary="Listar jobs VeriFactu/AEAT en dead-letter (solo lectura)",
+)
+async def list_verifactu_dead_jobs(
+    job_status: str | None = Query(
+        default=None,
+        alias="status",
+        description="Filtrar por estado: open | resolved | ignored",
+    ),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=10_000),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
+    db: SupabaseAsync = Depends(deps.get_db),
+) -> VerifactuDeadJobsListOut:
+    """
+    Registros durable de ``verifactu_dead_jobs`` para el tenant actual (RLS en Supabase).
+    """
+    if job_status is not None and job_status not in ("open", "resolved", "ignored"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="status debe ser open, resolved o ignored",
+        )
+    eid = str(current_user.empresa_id)
+    q = (
+        db.table("verifactu_dead_jobs")
+        .select(
+            "id,factura_id,job_name,job_try,max_tries,error_type,error_message,"
+            "status,resolved_at,created_at,updated_at"
+        )
+        .eq("empresa_id", eid)
+        .order("created_at", desc=True)
+    )
+    if job_status is not None:
+        q = q.eq("status", job_status)
+    q = q.range(offset, offset + limit - 1)
+    res = await db.execute(q)
+    raw_rows: list[dict] = list((res.data or []) if hasattr(res, "data") else [])
+    items: list[VerifactuDeadJobItem] = []
+    for row in raw_rows:
+        msg = row.get("error_message")
+        if msg is not None:
+            s = str(msg)
+            if len(s) > _ERR_MSG_MAX:
+                msg = s[:_ERR_MSG_MAX] + "…"
+        items.append(
+            VerifactuDeadJobItem(
+                id=str(row["id"]),
+                factura_id=int(row["factura_id"]),
+                job_name=str(row.get("job_name") or "submit_to_aeat"),
+                job_try=int(row["job_try"]),
+                max_tries=int(row["max_tries"]),
+                error_type=(str(row["error_type"]) if row.get("error_type") is not None else None),
+                error_message=(str(msg) if msg is not None else None),
+                status=str(row.get("status") or "open"),
+                resolved_at=(str(row["resolved_at"]) if row.get("resolved_at") is not None else None),
+                created_at=(str(row["created_at"]) if row.get("created_at") is not None else None),
+                updated_at=(str(row["updated_at"]) if row.get("updated_at") is not None else None),
+            )
+        )
+    return VerifactuDeadJobsListOut(items=items, limit=limit, offset=offset)
+
 
 @router.get(
     "/verificar-cadena",

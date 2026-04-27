@@ -43,6 +43,7 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from app.core.config import Settings
 from app.core.config import get_settings
 from app.core.crypto import pii_crypto
+from app.core.mtls_certificates import inspect_mtls_certificate_expiry
 from app.core.xades_signer import sign_xml_xades
 from app.services.crypto_service import sign_invoice_xml
 from app.services.suministro_lr_xml import FacturaRectificadaRefAEAT
@@ -58,6 +59,7 @@ from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.db.supabase import get_supabase
 from app.models.webhook import WebhookEventType
+from app.services.verifactu_genesis import get_verifactu_genesis_hash_for_issuer
 from app.services.webhook_service import run_webhook_deliveries_for_event
 
 logger = logging.getLogger(__name__)
@@ -662,6 +664,65 @@ def _preparar_certificado_mtls(
     return None, cleanup
 
 
+_BLOCKING_MTLS_ALERT_LEVELS = {"expired", "missing", "read_error"}
+
+
+def _source_certificado_mtls(empresa: Mapping[str, Any]) -> str:
+    empresa_id = str(empresa.get("id") or "").strip()
+    nif = str(empresa.get("nif") or "").strip()
+    if empresa_id:
+        return f"empresa:{empresa_id}:{nif}" if nif else f"empresa:{empresa_id}"
+    return "settings:AEAT_CLIENT_*"
+
+
+def _inspeccionar_certificado_mtls_bloqueante(
+    empresa: Mapping[str, Any], settings: Settings
+) -> dict[str, Any] | None:
+    c, k, p12 = _tls_paths_desde_empresa_y_settings(empresa, settings)
+    source = _source_certificado_mtls(empresa)
+
+    if p12 and (os.path.isfile(p12) or not (c and k)):
+        check = inspect_mtls_certificate_expiry(
+            source=source,
+            p12_path=p12,
+            p12_password=settings.AEAT_CLIENT_P12_PASSWORD or None,
+        )
+    else:
+        check = inspect_mtls_certificate_expiry(source=source, cert_path=c, key_path=k)
+
+    if str(check.get("alert_level") or "") in _BLOCKING_MTLS_ALERT_LEVELS:
+        return check
+    return None
+
+
+def _codigo_error_certificado_mtls(check: Mapping[str, Any]) -> str:
+    level = str(check.get("alert_level") or "")
+    detail = str(check.get("detail") or "")
+    if level == "expired":
+        return "CERT_EXPIRED"
+    if "read_error" in detail or level == "read_error":
+        return "CERT_READ"
+    return "CERT"
+
+
+def _descripcion_error_certificado_mtls(check: Mapping[str, Any]) -> str:
+    detail = str(check.get("detail") or "certificado mTLS no válido")
+    if str(check.get("alert_level") or "") == "expired":
+        expires_at = check.get("expires_at") or "desconocida"
+        return f"Certificado mTLS AEAT caducado (expires_at={expires_at}). Renovar antes de enviar."
+    if detail == "mtls_certificate_key_path_missing":
+        return "Falta AEAT_CLIENT_KEY_PATH para usar certificado mTLS PEM."
+    if detail == "mtls_certificate_key_file_missing":
+        return "No existe la clave privada mTLS configurada para AEAT."
+    if detail == "mtls_certificate_path_missing":
+        return "Falta certificado cliente mTLS AEAT (.pem o .p12)."
+    if detail == "mtls_certificate_file_missing":
+        return "No existe el certificado cliente mTLS AEAT configurado."
+    if detail.startswith("mtls_certificate_read_error"):
+        return f"Certificado mTLS AEAT ilegible ({detail})."
+    return f"Certificado mTLS AEAT no válido ({detail})."
+
+
 def _limpiar_temp(paths: list[str]) -> None:
     for p in paths:
         try:
@@ -882,6 +943,35 @@ async def enviar_registro_y_persistir(
             actualizado_en=now_iso,
         )
         return {**factura_row, "aeat_sif_estado": "omitido"}
+
+    blocking_cert_check = _inspeccionar_certificado_mtls_bloqueante(empresa_row, settings)
+    if blocking_cert_check is not None:
+        codigo_cert = _codigo_error_certificado_mtls(blocking_cert_check)
+        desc_cert = _descripcion_error_certificado_mtls(blocking_cert_check)
+        ins = {
+            "empresa_id": empresa_id,
+            "factura_id": fid,
+            "estado": "Error técnico",
+            "codigo_error": codigo_cert,
+            "descripcion_error": desc_cert,
+            "csv_aeat": None,
+            "http_status": None,
+            "response_snippet": None,
+            "soap_action": None,
+            "created_at": now_iso,
+        }
+        await db.execute(db.table("verifactu_envios").insert(ins))
+        await _patch_factura_aeat(
+            db,
+            empresa_id=empresa_id,
+            factura_id=fid,
+            estado="error_tecnico",
+            codigo=codigo_cert,
+            descripcion=desc_cert,
+            csv=None,
+            actualizado_en=now_iso,
+        )
+        return {**factura_row, "aeat_sif_estado": "error_tecnico"}
 
     cert_tuple, cleanup = _preparar_certificado_mtls(empresa_row, settings)
     if not cert_tuple:
@@ -1339,6 +1429,9 @@ async def enviar_factura_aeat(factura_id: str) -> dict[str, Any]:
     empresa_id = str(factura_row.get("empresa_id") or "").strip()
     if not empresa_id:
         raise ValueError("Factura sin empresa_id")
+
+    if settings.ENVIRONMENT == "production" and settings.AEAT_VERIFACTU_ENABLED:
+        get_verifactu_genesis_hash_for_issuer(issuer_id=empresa_id)
 
     raw_nif = factura_row.get("nif_emisor")
     if isinstance(raw_nif, str) and raw_nif.strip():

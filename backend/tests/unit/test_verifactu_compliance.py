@@ -5,8 +5,10 @@ from __future__ import annotations
 from app.core.config import get_settings
 from app.core.crypto import pii_crypto
 from app.core.verifactu import verify_invoice_chain
-from app.core.verifactu_hashing import VERIFACTU_INVOICE_GENESIS_HASH, VerifactuCadena, generar_hash_factura_oficial
+from app.core.verifactu_hashing import VerifactuCadena, generar_hash_factura_oficial
 from app.services.verifactu_fingerprint_audit import materialize_factura_rows_for_fingerprint_verify
+
+TEST_GENESIS_HASH = "11" * 32
 
 
 def test_settings_exposes_verifactu_series() -> None:
@@ -16,7 +18,7 @@ def test_settings_exposes_verifactu_series() -> None:
 
 
 def test_verify_invoice_chain_valid_two_invoices() -> None:
-    g = VERIFACTU_INVOICE_GENESIS_HASH
+    g = TEST_GENESIS_HASH
     h1 = generar_hash_factura_oficial(
         VerifactuCadena.HUELLA_FINGERPRINT,
         {
@@ -63,7 +65,7 @@ def test_verify_invoice_chain_valid_two_invoices() -> None:
             "previous_fingerprint": h1,
         },
     ]
-    r = verify_invoice_chain(rows)
+    r = verify_invoice_chain(rows, genesis_hash=g)
     assert r["is_valid"] is True
     assert r["total_verified"] == 2
     assert r.get("error") is None
@@ -82,7 +84,7 @@ def test_materialize_decrypts_emisor_and_fills_receptor_from_map() -> None:
             "fecha_emision": "2026-02-01",
             "total_factura": 10.0,
             "fingerprint_hash": "00",
-            "previous_fingerprint": VERIFACTU_INVOICE_GENESIS_HASH,
+            "previous_fingerprint": TEST_GENESIS_HASH,
         }
     ]
     m = materialize_factura_rows_for_fingerprint_verify(

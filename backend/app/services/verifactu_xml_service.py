@@ -4,13 +4,13 @@ import re
 from typing import Any, Mapping
 
 from app.core.verifactu_hashing import (
-    VERIFACTU_INVOICE_GENESIS_HASH,
     VerifactuCadena,
     generar_hash_factura_oficial,
 )
 from app.services.aeat_client_py.xsd_validate import validate_reg_factu_payload_against_suministro_lr_xsd
 from app.services.aeat_client_py.zeep_client import default_aeat_suministro_lr_xsd_url
 from app.services.suministro_lr_xml import RegistroAnteriorAEAT, fecha_iso_u_otra_a_dd_mm_yyyy
+from app.services.verifactu_genesis import get_verifactu_genesis_hash_for_issuer
 from app.services.verifactu_sender import generar_xml_registro_facturacion_alta
 
 
@@ -31,7 +31,12 @@ class VeriFactuXmlService:
         previous_fingerprint: str | None = None,
         previous_invoice: Mapping[str, Any] | None = None,
     ) -> str:
-        previous = str(previous_fingerprint or "").strip() or VERIFACTU_INVOICE_GENESIS_HASH
+        previous = str(previous_fingerprint or "").strip()
+        if not previous:
+            previous = get_verifactu_genesis_hash_for_issuer(
+                issuer_id=str(empresa.get("id") or factura.get("empresa_id") or ""),
+                issuer_nif=str(empresa.get("nif") or factura.get("nif_emisor") or ""),
+            )
         hash_registro = generar_hash_factura_oficial(
             VerifactuCadena.HUELLA_EMISION,
             dict(factura),

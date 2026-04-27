@@ -4,12 +4,10 @@ from typing import Any
 
 from app.core.i18n import get_translator
 from app.core.verifactu_hashing import (
-    VERIFACTU_INVOICE_GENESIS_HASH,
     VerifactuCadena,
     generar_hash_factura_oficial,
 )
-
-GENESIS_HASH = VERIFACTU_INVOICE_GENESIS_HASH
+from app.services.verifactu_genesis import get_verifactu_genesis_hash_for_issuer
 
 ERR_MISSING_FINGERPRINT = "VF_MISSING_FINGERPRINT_HASH"
 ERR_PREV_MISMATCH = "VF_PREVIOUS_FINGERPRINT_MISMATCH"
@@ -20,6 +18,7 @@ def verify_invoice_chain(
     invoices: list[dict[str, Any]],
     *,
     lang: str | None = None,
+    genesis_hash: str | None = None,
 ) -> dict[str, Any]:
     """
     Verifica integridad de cadena ``fingerprint_hash`` en orden cronológico.
@@ -29,13 +28,28 @@ def verify_invoice_chain(
     ``error`` / ``error_message`` dependen de ``lang`` (``es`` | ``en``). ``error_code`` es estable para automatismos.
     """
     t = get_translator(lang)
-    previous = GENESIS_HASH
+    if genesis_hash:
+        previous = str(genesis_hash).strip()
+    elif invoices:
+        first_hashed = next(
+            (inv for inv in invoices if str(inv.get("fingerprint_hash") or "").strip()),
+            None,
+        )
+        if first_hashed is not None:
+            previous = get_verifactu_genesis_hash_for_issuer(
+                issuer_id=str(first_hashed.get("empresa_id") or ""),
+                issuer_nif=str(first_hashed.get("nif_emisor") or ""),
+            )
+        else:
+            previous = ""
+    else:
+        previous = ""
     total_verified = 0
 
     for invoice in invoices:
         factura_id = invoice.get("id")
         stored_hash = str(invoice.get("fingerprint_hash") or "").strip()
-        stored_prev = str(invoice.get("previous_fingerprint") or "").strip() or GENESIS_HASH
+        stored_prev = str(invoice.get("previous_fingerprint") or "").strip() or previous
         if not stored_hash:
             msg = t("VeriFactu chain: invoice has no fingerprint_hash")
             return {

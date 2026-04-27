@@ -9,12 +9,14 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.i18n import get_translator
-from app.core.verifactu import GENESIS_HASH
 from app.core.verifactu_hashing import VerifactuCadena, generar_hash_factura_oficial
+from app.services.verifactu_genesis import get_verifactu_genesis_hash_for_issuer
 
 
 def diagnose_fingerprint_hash_chain(
     rows: list[dict[str, Any]],
+    *,
+    genesis_hash: str | None = None,
 ) -> dict[str, Any]:
     """
     ``rows`` ordenadas cronológicamente (p. ej. ``fecha_emision``, ``numero_secuencial``, ``id``).
@@ -23,14 +25,22 @@ def diagnose_fingerprint_hash_chain(
     y recalcula cada huella con la misma función que al emitir.
     """
     if not rows:
-        return {"ok": True, "issues": [], "previous_expected": GENESIS_HASH}
+        return {"ok": True, "issues": [], "previous_expected": None}
 
     issues: list[dict[str, Any]] = []
-    prev_fp = GENESIS_HASH
+    if genesis_hash:
+        prev_fp = str(genesis_hash).strip()
+    else:
+        first = rows[0]
+        prev_fp = get_verifactu_genesis_hash_for_issuer(
+            issuer_id=str(first.get("empresa_id") or ""),
+            issuer_nif=str(first.get("nif_emisor") or ""),
+        )
+    initial_prev_fp = prev_fp
 
     for row in rows:
         fid = row.get("id")
-        stored_prev = str(row.get("previous_fingerprint") or "").strip() or GENESIS_HASH
+        stored_prev = str(row.get("previous_fingerprint") or "").strip() or prev_fp
         if stored_prev.lower() != prev_fp.lower():
             issues.append(
                 {
@@ -65,7 +75,7 @@ def diagnose_fingerprint_hash_chain(
     return {
         "ok": len(issues) == 0,
         "issues": issues,
-        "previous_expected": GENESIS_HASH,
+        "previous_expected": initial_prev_fp,
     }
 
 

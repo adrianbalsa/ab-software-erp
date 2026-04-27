@@ -12,7 +12,6 @@ from app.db.supabase import SupabaseAsync
 from app.core.crypto import pii_crypto
 from app.core.fiscal_logic import fiscal_amount_string_two_decimals
 from app.core.verifactu_hashing import (
-    VERIFACTU_INVOICE_GENESIS_HASH,
     VerifactuCadena,
     generar_hash_factura_oficial,
 )
@@ -20,12 +19,7 @@ from app.services.aeat_qr_service import (
     build_srei_verifactu_url,
     qr_png_bytes_from_url,
 )
-
-# Semilla de cadena de huellas ``fingerprint`` (primera factura finalizada de la empresa).
-# Distinta del encadenamiento ``hash_registro`` al emitir (allí ``hash_anterior`` vacío en el primero).
-VERIFACTU_CHAIN_SEED_HEX = hashlib.sha256(
-    b"VERIFACTU|FINGERPRINT_CHAIN|GENESIS|AB_SCANNER|v1"
-).hexdigest()
+from app.services.verifactu_genesis import get_verifactu_genesis_hash_for_issuer
 
 @dataclass(frozen=True, slots=True)
 class EslabonFacturaAnterior:
@@ -310,13 +304,14 @@ class VerifactuService:
         except (TypeError, ValueError):
             seq0 = 0
 
+        genesis_hash = get_verifactu_genesis_hash_for_issuer(issuer_id=eid)
         if seq0 <= 1:
-            prev_hash = VERIFACTU_INVOICE_GENESIS_HASH
+            prev_hash = genesis_hash
         else:
             fetched = await self._hash_factura_por_secuencial(
                 empresa_id=eid, numero_secuencial=seq0 - 1
             )
-            prev_hash = fetched if fetched else VERIFACTU_INVOICE_GENESIS_HASH
+            prev_hash = fetched if fetched else genesis_hash
 
         for row in rows:
             ha_raw = row.get("huella_anterior") if row.get("huella_anterior") is not None else row.get("hash_anterior")
@@ -381,13 +376,17 @@ class VerifactuService:
         total_factura: float,
         tipo_factura: str | None = None,
         num_factura_rectificada: str | None = None,
+        genesis_hash: str | None = None,
     ) -> tuple[str, str | None]:
         """
         ``(fingerprint, prev_fingerprint)`` a partir del último eslabón **ya finalizado**
-        (o ``None`` si no hay ninguno → semilla ``VERIFACTU_CHAIN_SEED_HEX`` como hash anterior interno).
+        (o ``None`` si no hay ninguno → ``genesis_hash`` único del emisor como hash anterior interno).
         """
         prev_norm = VerifactuService._norm_hash_anterior(prev_fingerprint_final)
-        hash_anterior = prev_norm if prev_norm else VERIFACTU_CHAIN_SEED_HEX
+        genesis_norm = VerifactuService._norm_hash_anterior(genesis_hash)
+        if not prev_norm and not genesis_norm:
+            raise RuntimeError("verifactu_genesis_hash_missing_for_issuer")
+        hash_anterior = prev_norm if prev_norm else str(genesis_norm)
         tipo = str(tipo_factura).strip().upper() if tipo_factura else None
         tipo_arg = tipo if tipo == "R1" else None
         rect_arg: str | None = None
@@ -453,6 +452,10 @@ class VerifactuService:
         leyendo la última factura finalizada de la empresa.
         """
         prev_fp = await self.ultima_fingerprint_factura_finalizada(empresa_id=empresa_id)
+        genesis_hash = get_verifactu_genesis_hash_for_issuer(
+            issuer_id=empresa_id,
+            issuer_nif=nif_emisor,
+        )
         return self.fingerprint_desde_eslabon_finalizado(
             prev_fingerprint_final=prev_fp,
             nif_emisor=nif_emisor,
@@ -462,6 +465,7 @@ class VerifactuService:
             total_factura=total_factura,
             tipo_factura=tipo_factura,
             num_factura_rectificada=num_factura_rectificada,
+            genesis_hash=genesis_hash,
         )
 
     async def generate_aeat_url(self, invoice_id: int) -> str:
@@ -575,12 +579,14 @@ class VerifactuService:
         Recupera el eslabón anterior para la cadena VeriFactu en `facturas`:
 
         - ``hash_anterior``: ``hash_factura`` de la última factura emitida; si no hay facturas,
-          **génesis** (``VERIFACTU_INVOICE_GENESIS_HASH``).
+          génesis único del emisor resuelto desde Secret Manager.
         - ``siguiente_secuencial``: siguiente entero (1 si no hay facturas previas).
         """
         hash_anterior, siguiente = await self._ultima_factura_cadena_row(empresa_id=empresa_id)
         chain_prev = (
-            VERIFACTU_INVOICE_GENESIS_HASH if hash_anterior is None else hash_anterior
+            get_verifactu_genesis_hash_for_issuer(issuer_id=empresa_id)
+            if hash_anterior is None
+            else hash_anterior
         )
         return EslabonFacturaAnterior(
             hash_anterior=chain_prev,

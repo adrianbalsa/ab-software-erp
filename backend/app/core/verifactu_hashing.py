@@ -15,13 +15,11 @@ from typing import Any
 
 from app.core.fiscal_logic import fiscal_amount_string_two_decimals
 
-VERIFACTU_INVOICE_GENESIS_HASH = "0" * 64
-
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
 
 class VerifactuCadena(StrEnum):
-    """Variante de cadena previa a SHA-256 (misma génesis ``0``×64, distinto payload)."""
+    """Variante de cadena previa a SHA-256 (génesis resuelto por emisor, distinto payload)."""
 
     HUELLA_EMISION = "huella_emision"
     HUELLA_FINGERPRINT = "huella_fingerprint"
@@ -62,11 +60,12 @@ def generar_hash_factura_oficial(
     """
     SHA-256 hexadecimal (64 caracteres) para la cadena VeriFactu indicada.
 
-    ``previous_hash`` vacío o ``None`` implica ``VERIFACTU_INVOICE_GENESIS_HASH``.
+    ``previous_hash`` debe venir resuelto por el caller. Para la primera factura
+    del emisor se usa el génesis único obtenido desde Secret Manager.
     """
     prev = str(previous_hash or "").strip()
     if not prev:
-        prev = VERIFACTU_INVOICE_GENESIS_HASH
+        raise ValueError("previous_hash VeriFactu vacío")
 
     if cadena == VerifactuCadena.HUELLA_EMISION:
         num = _norm_str(invoice_data.get("num_factura") or invoice_data.get("numero_factura"))
