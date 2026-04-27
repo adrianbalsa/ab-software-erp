@@ -1,10 +1,137 @@
 from __future__ import annotations
 
+import hashlib
+import re
 from typing import Any
 from uuid import UUID
 
 from app.db.supabase import SupabaseAsync
 from app.schemas.audit_log import AuditLogOut
+
+_EMAIL_RE = re.compile(r"(?P<local>[A-Z0-9._%+-]+)@(?P<domain>[A-Z0-9.-]+\.[A-Z]{2,})", re.IGNORECASE)
+_NIF_RE = re.compile(
+    r"\b(?:\d{8}[A-HJ-NP-TV-Z]|[XYZ]\d{7}[A-HJ-NP-TV-Z]|[A-HJ-NP-SUVW][0-9]{7}[0-9A-J])\b",
+    re.IGNORECASE,
+)
+_SENSITIVE_KEY_FRAGMENTS = (
+    "email",
+    "correo",
+    "mail",
+    "nif",
+    "dni",
+    "cif",
+    "nie",
+    "phone",
+    "telefono",
+    "movil",
+    "iban",
+    "direccion",
+    "address",
+    "name",
+    "nombre",
+    "apellidos",
+    "full_name",
+    "actor",
+)
+
+
+def _pii_hash(value: str) -> str:
+    normalized = " ".join(str(value or "").strip().split()).lower()
+    return hashlib.sha256(f"audit-log-pii:v1:{normalized}".encode("utf-8")).hexdigest()
+
+
+def _mask_email(value: str) -> str:
+    raw = str(value or "").strip()
+    match = _EMAIL_RE.fullmatch(raw)
+    if not match:
+        return f"[email_sha256:{_pii_hash(raw)[:16]}]"
+    local = match.group("local")
+    domain = match.group("domain").lower()
+    if len(local) <= 2:
+        masked_local = f"{local[:1]}***"
+    else:
+        masked_local = f"{local[:1]}***{local[-1:]}"
+    return f"{masked_local}@{domain}#sha256:{_pii_hash(raw)[:16]}"
+
+
+def _mask_nif(value: str) -> str:
+    raw = str(value or "").strip().upper()
+    if len(raw) <= 4:
+        masked = "***"
+    else:
+        masked = f"{raw[:1]}***{raw[-2:]}"
+    return f"{masked}#sha256:{_pii_hash(raw)[:16]}"
+
+
+def _mask_person_name(value: str) -> str:
+    raw = " ".join(str(value or "").strip().split())
+    if not raw:
+        return value
+    compact = raw.replace(" ", "")
+    if len(compact) <= 2:
+        masked = f"{compact[:1]}***" if compact else "***"
+    else:
+        masked = f"{compact[:1]}***{compact[-3:]}"
+    return f"{masked}#sha256:{_pii_hash(raw)[:16]}"
+
+
+def _key_looks_sensitive(key: str) -> bool:
+    normalized = key.lower().replace("-", "_")
+    return any(fragment in normalized for fragment in _SENSITIVE_KEY_FRAGMENTS)
+
+
+def _pseudonymize_scalar(value: Any, *, force: bool = False) -> Any:
+    if not isinstance(value, str):
+        if force and value is not None and not isinstance(value, bool):
+            return f"[pii_sha256:{_pii_hash(str(value))[:16]}]"
+        return value
+    raw = value.strip()
+    if not raw:
+        return value
+    if force:
+        if _EMAIL_RE.fullmatch(raw):
+            return _mask_email(raw)
+        if _NIF_RE.fullmatch(raw):
+            return _mask_nif(raw)
+        if "@" not in raw and any(ch.isalpha() for ch in raw):
+            return _mask_person_name(raw)
+        return f"[pii_sha256:{_pii_hash(raw)[:16]}]"
+    masked = _EMAIL_RE.sub(lambda m: _mask_email(m.group(0)), value)
+    return _NIF_RE.sub(lambda m: _mask_nif(m.group(0)), masked)
+
+
+def _pseudonymize_audit_payload(value: Any, *, depth: int = 0, force: bool = False) -> Any:
+    if depth > 12:
+        return "[Truncated]"
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for key, item in value.items():
+            key_str = str(key)
+            out[key_str] = _pseudonymize_audit_payload(
+                item,
+                depth=depth + 1,
+                force=force or _key_looks_sensitive(key_str),
+            )
+        return out
+    if isinstance(value, list):
+        return [
+            _pseudonymize_audit_payload(item, depth=depth + 1, force=force)
+            for item in value
+        ]
+    if isinstance(value, tuple):
+        return [
+            _pseudonymize_audit_payload(item, depth=depth + 1, force=force)
+            for item in value
+        ]
+    return _pseudonymize_scalar(value, force=force)
+
+
+def pseudonymize_audit_payload(value: Any) -> Any:
+    """
+    Pseudonimiza un payload antes de persistirlo en ``audit_logs`` cuando el insert
+    no pasa por ``AuditLogsService`` (p. ej. RPC sync desde scripts).
+    """
+    return _pseudonymize_audit_payload(value)
 
 
 class AuditLogsService:
@@ -86,9 +213,9 @@ class AuditLogsService:
                 "p_action": str(action).strip().upper(),
             }
             if old_value is not None:
-                params["p_old_data"] = old_value
+                params["p_old_data"] = _pseudonymize_audit_payload(old_value)
             if new_value is not None:
-                params["p_new_data"] = new_value
+                params["p_new_data"] = _pseudonymize_audit_payload(new_value)
             if user_id:
                 params["p_changed_by"] = str(user_id).strip()
             await self._db.rpc("audit_logs_insert_api_event", params)

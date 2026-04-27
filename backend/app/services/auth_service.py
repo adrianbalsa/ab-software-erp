@@ -9,13 +9,25 @@ from app.core.config import get_settings
 from app.core.i18n import normalize_lang
 from app.core.rbac import normalize_rbac_role
 from app.models.enums import normalize_user_role
-from app.core.security import hash_password_argon2id, verify_password_against_stored
+from app.core.security import (
+    hash_password_argon2id,
+    password_hash_uses_legacy_sha256,
+    verify_password_against_stored,
+)
 
 _NOTIFICATION_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 from app.db.supabase import SupabaseAsync
 from app.schemas.user import UserInDB, UserOut
 
 logger = logging.getLogger(__name__)
+
+
+class PasswordResetRequired(Exception):
+    """Credenciales válidas, pero la cuenta debe cambiar contraseña antes de iniciar sesión."""
+
+    def __init__(self, *, username: str) -> None:
+        self.username = username
+        super().__init__("password_reset_required")
 
 
 def _auth_debug(msg: str, *args: object) -> None:
@@ -95,6 +107,9 @@ class AuthService:
             _auth_debug("authenticate password verification failed for usuario id=%s", user.id)
             return None
         canonical = user.username
+        if user.password_must_reset:
+            _auth_debug("authenticate blocked: password_must_reset activo para usuario id=%s", user.id)
+            raise PasswordResetRequired(username=canonical)
         if needs_argon2_upgrade:
             await self._lazy_upgrade_password_hash(username=canonical, plain_password=password)
         profile = await self.get_profile_by_subject(subject=username)
@@ -132,7 +147,7 @@ class AuthService:
             new_hash = hash_password_argon2id(plain_password)
             await self._db.execute(
                 self._db.table("usuarios")
-                .update({"password_hash": new_hash})
+                .update({"password_hash": new_hash, "password_must_reset": False, "needs_rehash": False})
                 .eq("username", username)
             )
             logger.info("password_hash migrado a Argon2id (usuario=%s)", username[:48])
@@ -211,6 +226,8 @@ class AuthService:
                 empresa_id=UUID(str(row.get("empresa_id") or "").strip()),
                 rol=str(row.get("rol") or "user"),
                 password_hash=str(row.get("password_hash") or ""),
+                password_must_reset=bool(row.get("password_must_reset") or False),
+                needs_rehash=bool(row.get("needs_rehash") or False),
             )
         except Exception:
             return None
@@ -290,6 +307,8 @@ class AuthService:
                 empresa_id=UUID(str(row.get("empresa_id") or "").strip()),
                 rol=str(row.get("rol") or "user"),
                 password_hash=str(row.get("password_hash") or ""),
+                password_must_reset=bool(row.get("password_must_reset") or False),
+                needs_rehash=bool(row.get("needs_rehash") or False),
             )
         except Exception:
             return None
@@ -447,10 +466,55 @@ class AuthService:
             return False
         new_hash = hash_password_argon2id(pwd)
         await self._db.execute(
-            self._db.table("usuarios").update({"password_hash": new_hash}).eq("username", key)
+            self._db.table("usuarios")
+            .update({"password_hash": new_hash, "password_must_reset": False, "needs_rehash": False})
+            .eq("username", key)
         )
         logger.info("password_hash actualizado tras recuperación (usuario prefix=%s)", key[:48])
         return True
+
+    async def mark_legacy_sha256_passwords_for_reset(self, *, limit: int = 1000) -> int:
+        """
+        Marca cuentas con ``password_hash`` SHA-256 legacy para reset obligatorio.
+
+        El job no cambia el hash ni conoce la contraseña: solo activa el bloqueo para
+        que el usuario complete el flujo de recuperación y quede en Argon2id.
+        """
+        batch_limit = max(1, min(int(limit or 1000), 5000))
+        try:
+            res: Any = await self._db.execute(
+                self._db.table("usuarios")
+                .select("id,username,password_hash,password_must_reset")
+                .limit(batch_limit)
+            )
+        except Exception as exc:
+            logger.warning("mark_legacy_sha256_passwords_for_reset: lectura usuarios falló: %s", exc)
+            return 0
+
+        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        marked = 0
+        for row in rows:
+            if bool(row.get("password_must_reset") or False):
+                continue
+            if not password_hash_uses_legacy_sha256(str(row.get("password_hash") or "")):
+                continue
+            update = self._db.table("usuarios").update({"password_must_reset": True})
+            raw_id = row.get("id")
+            if raw_id is not None and str(raw_id).strip():
+                update = update.eq("id", str(raw_id).strip())
+            else:
+                username = str(row.get("username") or "").strip()
+                if not username:
+                    continue
+                update = update.eq("username", username)
+            try:
+                await self._db.execute(update)
+                marked += 1
+            except Exception as exc:
+                logger.warning("mark_legacy_sha256_passwords_for_reset: update omitido: %s", exc)
+        if marked:
+            logger.info("password_must_reset activado para %s cuenta(s) legacy SHA-256", marked)
+        return marked
 
     async def get_usuario_email_for_notifications(self, *, username: str) -> str | None:
         """

@@ -8,9 +8,10 @@ from functools import lru_cache
 from typing import Any, Final
 from urllib.request import Request, urlopen
 
+from argon2 import PasswordHasher, Type
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from cryptography.fernet import Fernet, InvalidToken
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import get_settings
 
@@ -20,15 +21,14 @@ TOKEN_TYPE: Final[str] = "bearer"
 _SUPABASE_JWT_AUDIENCE = "authenticated"
 _DEFAULT_SUPABASE_JWKS_URL = "https://bmdzpbdyvzkycyfgndvd.supabase.co/auth/v1/.well-known/jwks.json"
 
-# Argon2id vía passlib (argon2-cffi); alineado con recomendaciones actuales [OWASP / NIST-aligned].
-_pwd_context = CryptContext(
-    schemes=["argon2"],
-    deprecated="auto",
-    argon2__memory_cost=65536,
-    argon2__time_cost=3,
-    argon2__parallelism=4,
-    argon2__digest_size=32,
-    argon2__salt_len=16,
+# Argon2id vía argon2-cffi; parámetros alineados con el contexto anterior.
+_password_hasher = PasswordHasher(
+    memory_cost=65536,
+    time_cost=3,
+    parallelism=4,
+    hash_len=32,
+    salt_len=16,
+    type=Type.ID,
 )
 
 # 64 hex chars = legacy SHA256(password) sin prefijo Argon2
@@ -120,8 +120,13 @@ def hash_refresh_token(raw_token: str) -> str:
 
 
 def hash_password_argon2id(plain_password: str) -> str:
-    """Hash de contraseña con Argon2id (passlib)."""
-    return _pwd_context.hash(plain_password)
+    """Hash de contraseña con Argon2id."""
+    return _password_hasher.hash(plain_password)
+
+
+def password_hash_uses_legacy_sha256(stored_hash: str) -> bool:
+    """True si ``stored_hash`` parece SHA-256 hex legacy de una contraseña."""
+    return bool(_LEGACY_SHA256_HEX_RE.match((stored_hash or "").strip()))
 
 
 def verify_password_against_stored(plain_password: str, stored_hash: str) -> tuple[bool, bool]:
@@ -138,16 +143,14 @@ def verify_password_against_stored(plain_password: str, stored_hash: str) -> tup
 
     if stored.startswith("$argon2"):
         try:
-            ok = _pwd_context.verify(plain_password, stored)
-            if not ok:
-                return False, False
-            if _pwd_context.needs_update(stored):
-                return True, True
-            return True, False
-        except Exception:
+            _password_hasher.verify(stored, plain_password)
+            return True, _password_hasher.check_needs_rehash(stored)
+        except VerifyMismatchError:
+            return False, False
+        except (InvalidHashError, VerificationError, ValueError):
             return False, False
 
-    if _LEGACY_SHA256_HEX_RE.match(stored):
+    if password_hash_uses_legacy_sha256(stored):
         import hmac
 
         legacy = sha256_hex(plain_password)
@@ -156,13 +159,11 @@ def verify_password_against_stored(plain_password: str, stored_hash: str) -> tup
         return False, False
 
     try:
-        ok = _pwd_context.verify(plain_password, stored)
-        if not ok:
-            return False, False
-        if _pwd_context.needs_update(stored):
-            return True, True
-        return True, False
-    except Exception:
+        _password_hasher.verify(stored, plain_password)
+        return True, _password_hasher.check_needs_rehash(stored)
+    except VerifyMismatchError:
+        return False, False
+    except (InvalidHashError, VerificationError, ValueError):
         return False, False
 
 
