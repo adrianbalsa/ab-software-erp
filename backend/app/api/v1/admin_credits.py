@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.api import deps
+from app.schemas.auth import AuthErrorOut
 from app.schemas.user import UserOut
 from app.services.admin_usage_service import (
     AdminUsageService,
@@ -16,6 +17,10 @@ from app.db.supabase import SupabaseAsync
 from app.models.enums import UserRole
 
 router = APIRouter(prefix="/credits", tags=["Admin - Credits"])
+_COMMON_IAM_RESPONSES = {
+    401: {"description": "No autenticado", "model": AuthErrorOut},
+    403: {"description": "No autorizado", "model": AuthErrorOut},
+}
 
 
 class TopUpIn(BaseModel):
@@ -59,7 +64,7 @@ def _service(db: SupabaseAsync) -> AdminUsageService:
     return AdminUsageService(db)
 
 
-@router.post("/top-up", response_model=TopUpOut)
+@router.post("/top-up", response_model=TopUpOut, responses=_COMMON_IAM_RESPONSES)
 async def top_up_credits(
     payload: TopUpIn,
     _admin: UserOut = Depends(_require_admin_or_superadmin),
@@ -73,7 +78,7 @@ async def top_up_credits(
     return TopUpOut(**result.__dict__)
 
 
-@router.post("/sync", response_model=SyncOut)
+@router.post("/sync", response_model=SyncOut, responses=_COMMON_IAM_RESPONSES)
 async def sync_all_credits(
     _admin: UserOut = Depends(_require_admin_or_superadmin),
     db: SupabaseAsync = Depends(deps.get_db_admin),
@@ -82,7 +87,7 @@ async def sync_all_credits(
     return SyncOut(synced_tenants=int(out.get("synced_tenants") or 0))
 
 
-@router.get("/transactions", response_model=list[CreditTransactionOut])
+@router.get("/transactions", response_model=list[CreditTransactionOut], responses=_COMMON_IAM_RESPONSES)
 async def list_credit_transactions(
     _admin: UserOut = Depends(_require_admin_or_superadmin),
     db: SupabaseAsync = Depends(deps.get_db_admin),

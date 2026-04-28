@@ -25,9 +25,6 @@ _PUBLIC_PREFIXES = (
 )
 _EXCLUDED_LOGIN_PATH_FRAGMENTS = ("/auth/login", "/login")
 
-_MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-
-
 def _extract_access_token(request: Request) -> str | None:
     auth = request.headers.get("Authorization") or request.headers.get("authorization") or ""
     if auth.startswith("Bearer "):
@@ -49,7 +46,6 @@ class TenantRBACContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Any):  # type: ignore[override]
         path = request.url.path.rstrip("/") or "/"
         method = (request.method or "").upper()
-        is_mutating_request = method in _MUTATING_METHODS
         is_excluded_login_path = any(fragment in path for fragment in _EXCLUDED_LOGIN_PATH_FRAGMENTS)
         if path != "/" and any(path.startswith(prefix.rstrip("/")) for prefix in _PUBLIC_PREFIXES):
             return await call_next(request)
@@ -82,22 +78,20 @@ class TenantRBACContextMiddleware(BaseHTTPMiddleware):
             await auth_service.ensure_empresa_context(empresa_id=user.empresa_id)
             await auth_service.ensure_rbac_context(user=user)
         except Exception as exc:
-            if is_mutating_request:
-                _log.error(
-                    "TenantRBACContextMiddleware hard-fail %s %s: %s",
-                    method,
-                    path,
-                    exc,
-                )
-                return JSONResponse(
-                    status_code=403,
-                    content={
-                        "detail": (
-                            "Forbidden: tenant write context validation failed "
-                            "(get_current_user/bind_write_context required)."
-                        )
-                    },
-                )
-            _log.debug("TenantRBACContextMiddleware omitido (solo lectura): %s", exc)
+            _log.error(
+                "TenantRBACContextMiddleware hard-fail %s %s: %s",
+                method,
+                path,
+                exc,
+            )
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "detail": (
+                        "Forbidden: tenant context validation failed "
+                        "(subject must map to an active tenant profile)."
+                    )
+                },
+            )
 
         return await call_next(request)

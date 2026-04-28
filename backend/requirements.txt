@@ -57,7 +57,7 @@ jiter==0.13.0
 jsonschema==4.23.0
 jsonschema-specifications==2025.9.1
 limits==5.8.0
-litellm
+litellm>=1.83.7
 lxml==6.1.0
 markdown-it-py==4.0.0
 MarkupSafe==3.0.3
