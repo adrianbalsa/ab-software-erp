@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api import deps
+from app.api.v1.dependencies.credits import consume_credits
 from app.schemas.user import UserOut
 from app.services.esg_service import EsgService
 from app.services.finance_service import FinanceService
@@ -101,6 +102,7 @@ REGLAS:
 
 
 @router.post("/ask", response_model=ChatMessageOut)
+@consume_credits(20)
 async def ask_logis_advisor(
     payload: ChatMessageIn,
     current_user: UserOut = Depends(deps.get_current_user),

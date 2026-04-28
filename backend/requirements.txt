@@ -57,14 +57,14 @@ jiter==0.13.0
 jsonschema==4.23.0
 jsonschema-specifications==2025.9.1
 limits==5.8.0
-litellm
+litellm>=1.83.7
 lxml==6.1.0
 markdown-it-py==4.0.0
 MarkupSafe==3.0.3
 mdurl==0.1.2
 msrest==0.7.1
 multidict==6.7.1
-numpy==2.4.4
+numpy<2.0.0
 oauthlib==3.3.1
 openai==2.30.0
 openpyxl==3.1.5

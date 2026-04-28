@@ -25,12 +25,12 @@ if ENV_FILE.exists():
         if k and v is not None and not os.getenv(k):
             os.environ[k] = v
 
-from app.core.verifactu import GENESIS_HASH
 from app.core.verifactu_hashing import VerifactuCadena, generar_hash_factura_oficial
 from app.db.supabase import SupabaseAsync, get_supabase
 from app.services.finance_service import FinanceService
 from app.services.maps_service import MapsService
 from app.services.reconciliation_service import ReconciliationService
+from app.services.verifactu_genesis import get_verifactu_genesis_hash_for_issuer
 
 DEMO_EMPRESA_CODE = "DEMO-LOGISTICS-001"
 DEMO_EMPRESA_UUID = str(uuid5(NAMESPACE_URL, DEMO_EMPRESA_CODE))
@@ -235,7 +235,11 @@ async def _validated_routes(
     return valid
 
 
-async def _next_secuencial_and_hash(db: SupabaseAsync, empresa_id: str) -> tuple[int, str]:
+async def _next_secuencial_and_hash(
+    db: SupabaseAsync,
+    empresa_id: str,
+    nif_emisor: str,
+) -> tuple[int, str]:
     res: Any = await db.execute(
         db.table("facturas")
         .select("numero_secuencial,hash_registro")
@@ -244,10 +248,14 @@ async def _next_secuencial_and_hash(db: SupabaseAsync, empresa_id: str) -> tuple
         .limit(1)
     )
     rows = (res.data or []) if hasattr(res, "data") else []
+    genesis_hash = get_verifactu_genesis_hash_for_issuer(
+        issuer_id=empresa_id,
+        issuer_nif=nif_emisor,
+    )
     if not rows:
-        return 1, GENESIS_HASH
+        return 1, genesis_hash
     last_seq = int(rows[0].get("numero_secuencial") or 0)
-    last_hash = str(rows[0].get("hash_registro") or "").strip() or GENESIS_HASH
+    last_hash = str(rows[0].get("hash_registro") or "").strip() or genesis_hash
     return last_seq + 1, last_hash
 
 
@@ -477,7 +485,7 @@ async def main() -> None:
         count=args.routes,
     )
 
-    seq_start, prev_hash = await _next_secuencial_and_hash(db, empresa_id)
+    seq_start, prev_hash = await _next_secuencial_and_hash(db, empresa_id, DEMO_NIF)
     invoice_rows_raw, ingresos_base = _build_invoice_rows(
         empresa_id=empresa_id,
         cliente_id=cliente_id,

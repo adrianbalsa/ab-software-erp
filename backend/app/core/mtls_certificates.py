@@ -1,22 +1,170 @@
 from __future__ import annotations
 
+import base64
+import asyncio
 import math
 import os
+import ssl
+import tempfile
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterator, Mapping
 
 import httpx
 from cryptography import x509
 from cryptography.hazmat.primitives.serialization import pkcs12
 
 from app.core.config import Settings, get_settings
+from app.services.notification_service import send_alert
+from app.services.secret_manager_service import get_secret_manager
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 CERT_EXPIRY_ALERT_THRESHOLDS_DAYS: tuple[int, ...] = (30, 15, 7)
 _MAX_CERTIFICATES_IN_HEALTH = 25
 _ALERT_THROTTLE_SECONDS = 12 * 60 * 60
 _last_alert_sent_by_key: dict[str, float] = {}
+
+
+MTLS_CERT_B64_KEYS: tuple[str, ...] = (
+    "AEAT_CLIENT_CERT_PEM_B64",
+    "MTLS_CLIENT_CERT_PEM_B64",
+)
+MTLS_KEY_B64_KEYS: tuple[str, ...] = (
+    "AEAT_CLIENT_KEY_PEM_B64",
+    "MTLS_CLIENT_KEY_PEM_B64",
+)
+MTLS_P12_B64_KEYS: tuple[str, ...] = (
+    "AEAT_CLIENT_CERT_P12_B64",
+    "MTLS_CLIENT_P12_B64",
+)
+MTLS_P12_PASSWORD_KEYS: tuple[str, ...] = (
+    "AEAT_CLIENT_P12_PASSWORD",
+    "MTLS_CLIENT_P12_PASSWORD",
+)
+
+
+def _secret_or_env(name: str) -> str | None:
+    manager = get_secret_manager()
+    getter = getattr(manager, "_get", None)
+    if callable(getter):
+        try:
+            value = getter(name)
+            if value is not None and str(value).strip():
+                return str(value).strip()
+        except Exception:
+            pass
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    value = str(raw).strip()
+    return value or None
+
+
+def _first_available(names: tuple[str, ...]) -> str | None:
+    for key in names:
+        value = _secret_or_env(key)
+        if value:
+            return value
+    return None
+
+
+def _decode_b64(value: str) -> bytes:
+    cleaned = "".join(str(value).strip().split())
+    return base64.b64decode(cleaned, validate=True)
+
+
+def load_mtls_certificate_material() -> dict[str, Any] | None:
+    cert_b64 = _first_available(MTLS_CERT_B64_KEYS)
+    key_b64 = _first_available(MTLS_KEY_B64_KEYS)
+    p12_b64 = _first_available(MTLS_P12_B64_KEYS)
+    p12_password = _first_available(MTLS_P12_PASSWORD_KEYS)
+
+    if p12_b64:
+        return {
+            "format": "p12",
+            "p12_bytes": _decode_b64(p12_b64),
+            "password": p12_password or "",
+        }
+    if cert_b64 and key_b64:
+        return {
+            "format": "pem",
+            "cert_pem": _decode_b64(cert_b64),
+            "key_pem": _decode_b64(key_b64),
+        }
+    return None
+
+
+def _pkcs12_to_pem(
+    p12_bytes: bytes,
+    password: str | None,
+) -> tuple[bytes, bytes]:
+    pwd = password.encode("utf-8") if password else None
+    private_key, certificate, _chain = pkcs12.load_key_and_certificates(p12_bytes, pwd)
+    if private_key is None or certificate is None:
+        raise ValueError("PKCS#12 sin clave privada o certificado")
+
+    from cryptography.hazmat.primitives import serialization
+
+    cert_pem = certificate.public_bytes(serialization.Encoding.PEM)
+    key_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    return cert_pem, key_pem
+
+
+@contextmanager
+def _ephemeral_pem_files(cert_pem: bytes, key_pem: bytes) -> Iterator[tuple[str, str]]:
+    cert_tmp = tempfile.NamedTemporaryFile(mode="wb", suffix=".pem", delete=False)
+    key_tmp = tempfile.NamedTemporaryFile(mode="wb", suffix=".pem", delete=False)
+    cert_path = cert_tmp.name
+    key_path = key_tmp.name
+    try:
+        cert_tmp.write(cert_pem)
+        cert_tmp.flush()
+        key_tmp.write(key_pem)
+        key_tmp.flush()
+        cert_tmp.close()
+        key_tmp.close()
+        yield cert_path, key_path
+    finally:
+        try:
+            os.unlink(cert_path)
+        except OSError:
+            pass
+        try:
+            os.unlink(key_path)
+        except OSError:
+            pass
+
+
+def build_mtls_ssl_context() -> ssl.SSLContext | None:
+    material = load_mtls_certificate_material()
+    if material is None:
+        return None
+
+    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+
+    if material["format"] == "pem":
+        cert_pem = material["cert_pem"]
+        key_pem = material["key_pem"]
+    else:
+        cert_pem, key_pem = _pkcs12_to_pem(
+            material["p12_bytes"],
+            material.get("password"),
+        )
+
+    with _ephemeral_pem_files(cert_pem, key_pem) as (cert_path, key_path):
+        context.load_cert_chain(certfile=cert_path, keyfile=key_path)
+
+    return context
 
 
 def _certificate_common_name(cert: x509.Certificate) -> str | None:
@@ -255,6 +403,29 @@ async def check_aeat_mtls_certificate_expiry(db: Any | None = None) -> dict[str,
         )
         for config in configs
     ]
+    for cert in certificates:
+        days_remaining = cert.get("days_remaining")
+        if not isinstance(days_remaining, int):
+            continue
+        if days_remaining >= 15:
+            continue
+        asyncio.create_task(
+            send_alert(
+                title="Caducidad inminente certificado AEAT",
+                message=(
+                    "Se detecto un certificado AEAT con expiracion menor a 15 dias. "
+                    "Es necesario renovar para evitar interrupciones en VeriFactu."
+                ),
+                level="CRITICAL",
+                context={
+                    "tenant_id": cert.get("source"),
+                    "days_remaining": days_remaining,
+                    "expires_at": cert.get("expires_at"),
+                    "certificate_source": cert.get("source"),
+                    "certificate_path": cert.get("path_name"),
+                },
+            )
+        )
     failing = [cert for cert in certificates if not cert.get("ok")]
     body = {
         "ok": not failing,

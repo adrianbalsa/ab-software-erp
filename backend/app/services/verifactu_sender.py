@@ -43,6 +43,7 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from app.core.config import Settings
 from app.core.config import get_settings
 from app.core.crypto import pii_crypto
+from app.core.mtls_certificates import build_mtls_ssl_context
 from app.core.mtls_certificates import inspect_mtls_certificate_expiry
 from app.core.xades_signer import sign_xml_xades
 from app.services.crypto_service import sign_invoice_xml
@@ -63,6 +64,45 @@ from app.services.verifactu_genesis import get_verifactu_genesis_hash_for_issuer
 from app.services.webhook_service import run_webhook_deliveries_for_event
 
 logger = logging.getLogger(__name__)
+
+
+async def send_to_aeat(xml_payload: str) -> dict[str, Any]:
+    """
+    Envio simplificado para homologacion VeriFactu (mTLS).
+    Si no existe material de certificado, activa modo mock local.
+    """
+    settings = get_settings()
+    url = url_envio_efectiva(settings)
+    if not url:
+        raise ValueError("No hay URL de envio AEAT configurada")
+
+    ssl_context = build_mtls_ssl_context()
+    if ssl_context is None:
+        logger.warning("MODO_TEST_SIN_FIRMA")
+        return {
+            "ok": True,
+            "mock": True,
+            "mode": "MODO_TEST_SIN_FIRMA",
+            "status_code": None,
+            "response_text": "MODO_TEST_SIN_FIRMA",
+        }
+
+    timeout = httpx.Timeout(30.0, connect=10.0)
+    async with httpx.AsyncClient(verify=ssl_context, timeout=timeout) as client:
+        response = await client.post(
+            url,
+            content=xml_payload.encode("utf-8"),
+            headers={
+                "Content-Type": "application/xml; charset=utf-8",
+            },
+        )
+        response.raise_for_status()
+        return {
+            "ok": True,
+            "mock": False,
+            "status_code": response.status_code,
+            "response_text": response.text[:2000],
+        }
 
 
 def _classify_transport_detail(detail: Any) -> str:

@@ -102,6 +102,15 @@ async def obtener_factura(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
 
+@router.delete("/{factura_id}", status_code=status.HTTP_405_METHOD_NOT_ALLOWED)
+async def eliminar_factura_bloqueado(factura_id: int) -> None:
+    _ = factura_id
+    raise HTTPException(
+        status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+        detail="Inalterabilidad fiscal: las facturas no pueden ser eliminadas",
+    )
+
+
 @router.post(
     "/desde-portes",
     response_model=FacturaGenerateResult,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class ActiveSessionOut(BaseModel):
@@ -73,4 +73,53 @@ class ResetPasswordIn(BaseModel):
 
 class ResetPasswordOut(BaseModel):
     detail: str = Field(default="Contraseña actualizada correctamente.")
+
+
+class AuthErrorOut(BaseModel):
+    detail: str = Field(..., description="Mensaje de error legible para cliente/API.")
+
+
+class ValidationErrorItemOut(BaseModel):
+    loc: list[str | int]
+    msg: str
+    type: str
+
+
+class ValidationErrorOut(BaseModel):
+    detail: list[ValidationErrorItemOut]
+
+
+class InviteUserIn(BaseModel):
+    email: EmailStr
+    role: Literal["admin", "staff"]
+
+
+class InviteUserOut(BaseModel):
+    detail: str = Field(default="Invitación enviada correctamente.")
+    invited_email: EmailStr
+    role: Literal["admin", "staff"]
+    empresa_id: str
+
+
+class ResetPasswordEmailIn(BaseModel):
+    email: EmailStr
+    redirect_to: str | None = Field(
+        default=None,
+        description="URL opcional para redirección tras recuperar contraseña en Supabase.",
+    )
+
+
+class ResetPasswordEmailOut(BaseModel):
+    detail: str = Field(
+        default="Si existe una cuenta asociada, se ha enviado un correo de recuperación.",
+    )
+
+
+class ResetPasswordConfirmIn(BaseModel):
+    token: str = Field(..., min_length=6, max_length=4096)
+    new_password: str = Field(..., min_length=8, max_length=256)
+
+
+class LogoutOut(BaseModel):
+    detail: str = Field(default="Sesión cerrada correctamente.")
 

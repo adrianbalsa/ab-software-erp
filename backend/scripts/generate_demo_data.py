@@ -46,10 +46,10 @@ if _ENV_FILE.exists():
             os.environ[_k] = _v
 
 from app.core.math_engine import negate_fiat_for_rectificativa
-from app.core.verifactu import GENESIS_HASH
 from app.core.verifactu_hashing import VerifactuCadena, generar_hash_factura_oficial
 from app.db.session import get_engine, get_session_factory
 from app.models.vehiculo import EngineClass, FuelType, NormativaEuro
+from app.services.verifactu_genesis import get_verifactu_genesis_hash_for_issuer
 _NORM_TO_ENGINE: dict[str, str] = {
     NormativaEuro.EURO_VI.value: EngineClass.EURO_VI.value,
     NormativaEuro.EURO_V.value: EngineClass.EURO_V.value,
@@ -437,7 +437,7 @@ def _invoice_hash_chain(
     return built
 
 
-def _fetch_next_sequential(session: Session, empresa_id: str) -> tuple[int, str]:
+def _fetch_next_sequential(session: Session, empresa_id: str, nif_emisor: str) -> tuple[int, str]:
     row = session.execute(
         text(
             """
@@ -450,10 +450,14 @@ def _fetch_next_sequential(session: Session, empresa_id: str) -> tuple[int, str]
         ),
         {"eid": empresa_id},
     ).fetchone()
+    genesis_hash = get_verifactu_genesis_hash_for_issuer(
+        issuer_id=empresa_id,
+        issuer_nif=nif_emisor,
+    )
     if not row or row[0] is None:
-        return 1, GENESIS_HASH
+        return 1, genesis_hash
     last_seq = int(row[0] or 0)
-    last_hash = str(row[1] or "").strip() or GENESIS_HASH
+    last_hash = str(row[1] or "").strip() or genesis_hash
     return last_seq + 1, last_hash
 
 
@@ -723,7 +727,7 @@ def main() -> None:
         portes = _build_porte_plan(rng, hoy=hoy, cliente_ids=cliente_ids, vehiculos=vehiculos)
 
         total_rev = sum(Decimal(str(p["precio_pactado"])) for p in portes)
-        seq_start, prev_hash = _fetch_next_sequential(session, empresa_id)
+        seq_start, prev_hash = _fetch_next_sequential(session, empresa_id, DEMO_NIF)
 
         # Pequeña mezcla de estados AEAT en F1 (la mayoría aceptadas).
         nif_clients = ["A11223344", "B22334455", "B33445566"]

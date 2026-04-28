@@ -196,8 +196,13 @@ def create_access_token(
     if empresa_id and str(empresa_id).strip():
         payload["empresa_id"] = str(empresa_id).strip()
     role_value = (role or "").strip().lower()
-    if role_value in ("superadmin", "admin", "gestor", "transportista", "cliente", "developer"):
+    if role_value in ("authenticated", "service_role"):
         payload["role"] = role_value
+    elif role_value in ("superadmin", "admin", "gestor", "transportista", "cliente", "developer"):
+        # Compatibilidad Supabase/PostgREST: claim role debe ser authenticated|service_role.
+        # El rol operativo de negocio viaja en user_role y se valida contra profiles.
+        payload["role"] = "authenticated"
+        payload["user_role"] = role_value
     rr = (rbac_role or "").strip().lower()
     if rr in ("owner", "admin", "traffic_manager", "driver", "cliente", "developer"):
         payload["rbac_role"] = rr

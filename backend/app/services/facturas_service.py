@@ -22,6 +22,7 @@ from app.core.job_queue import enqueue_submit_to_aeat
 from app.core.fiscal_logic import totals_coherent
 from app.core.verifactu_hashing import VerifactuCadena, generar_hash_factura_oficial
 from app.core.math_engine import (
+    FinancialDomainError,
     InvoiceTotalsResult,
     MathEngine,
     as_float_fiat,
@@ -369,10 +370,10 @@ def _pg_emit_f1_desde_portes_tx(
     cliente_row: dict[str, Any],
     inv_tot: InvoiceTotalsResult,
     porte_lineas_snapshot: list[dict[str, Any]],
-    total_km_estimados_snapshot: float,
-    base_imponible: float,
-    cuota_iva: float,
-    total_factura: float,
+    total_km_estimados_snapshot: Decimal,
+    base_imponible: Decimal,
+    cuota_iva: Decimal,
+    total_factura: Decimal,
     enterprise: bool,
     genesis_hash: str,
 ) -> tuple[dict[str, Any], EslabonFacturaAnterior, str, str]:
@@ -525,10 +526,10 @@ def _pg_emit_r1_rectificativa_tx(
     cliente_nombre_r1: str,
     emp_row_r1: dict[str, Any],
     porte_snap: list[dict[str, Any]],
-    km_val: float,
-    base_r: float,
-    cuota_r: float,
-    total_r: float,
+    km_val: Decimal,
+    base_r: Decimal,
+    cuota_r: Decimal,
+    total_r: Decimal,
     genesis_hash: str,
 ) -> dict[str, Any]:
     """Candado PG + cadena + INSERT R1 en una sola transacción."""
@@ -1504,10 +1505,10 @@ class FacturasService:
                 cliente_row=cliente_row,
                 inv_tot=inv_tot,
                 porte_lineas_snapshot=porte_lineas_snapshot,
-                total_km_estimados_snapshot=float(total_km_estimados_snapshot),
-                base_imponible=float(base_imponible),
-                cuota_iva=float(cuota_iva),
-                total_factura=float(total_factura),
+                total_km_estimados_snapshot=total_km_estimados_snapshot,
+                base_imponible=base_imponible,
+                cuota_iva=cuota_iva,
+                total_factura=total_factura,
                 enterprise=enterprise,
                 genesis_hash=genesis_hash,
             )
@@ -1943,9 +1944,9 @@ class FacturasService:
         porte_snap = _clone_snapshot_con_importes_negativos(orig.get("porte_lineas_snapshot"))
         km_snap = orig.get("total_km_estimados_snapshot")
         try:
-            km_val = float(km_snap) if km_snap is not None else 0.0
-        except (TypeError, ValueError):
-            km_val = 0.0
+            km_val = round_fiat(km_snap) if km_snap is not None else Decimal("0.00")
+        except (TypeError, ValueError, FinancialDomainError):
+            km_val = Decimal("0.00")
 
         emp_row_r1: dict[str, Any] = {}
         try:

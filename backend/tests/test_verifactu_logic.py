@@ -148,9 +148,13 @@ async def test_borrar_factura_dispara_trigger_y_es_ignorado_en_compensacion() ->
 
 @pytest.mark.asyncio
 async def test_no_delete_http_facturas(client) -> None:
-    """Sin JWT no hay borrado (403 middleware); con ruta inexistente / método no expuesto, 404/405."""
-    res = await client.delete("/facturas/1")
-    assert res.status_code in (403, 404, 405)
+    """DELETE facturas debe estar explícitamente bloqueado por inalterabilidad fiscal."""
+    res = await client.delete("/facturas/1", headers={"Host": "app.ablogistics-os.com"})
+    assert res.status_code == 405, res.text
+    assert (
+        res.json().get("detail")
+        == "Inalterabilidad fiscal: las facturas no pueden ser eliminadas"
+    )
 
 
 @pytest.mark.asyncio

@@ -37,6 +37,17 @@ async def health_deep() -> JSONResponse:
     return JSONResponse(content=body, status_code=code)
 
 
+@router.get("/health/cache/economics", include_in_schema=True)
+async def health_cache_economics() -> JSONResponse:
+    """
+    Métricas económicas de la caché de rutas externas.
+    """
+    from app.core.health_checks import check_geo_cache_economics
+
+    body = await check_geo_cache_economics()
+    return JSONResponse(content=body, status_code=200)
+
+
 @router.get("/ready", include_in_schema=True)
 async def ready() -> dict[str, str]:
     """Liveness rápido (proceso arriba). Healthchecks de Docker/K8s / Railway suelen usar este endpoint."""
