@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from app.api import deps
+from app.api.v1.dependencies.credits import consume_credits
 from app.core.plans import CostMeter
 from app.schemas.advisor import AdvisorAskIn, AdvisorAskOut
 from app.schemas.user import UserOut
@@ -44,6 +45,7 @@ def _sse(data: dict) -> str:
     "/ask",
     summary="LogisAdvisor: pregunta con contexto ERP (streaming SSE o JSON)",
 )
+@consume_credits(20)
 async def advisor_ask(
     payload: AdvisorAskIn,
     current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager")),

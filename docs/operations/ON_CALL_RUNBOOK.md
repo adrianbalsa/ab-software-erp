@@ -35,6 +35,7 @@ curl -fsS https://<API_HOST>/health/deep
 3. Revisar ultimo deploy de Vercel/Railway y cambios recientes de variables/secrets.
 4. Clasificar severidad y nombrar incident commander si es P1/P2.
 5. Abrir registro de incidente con canal, hora, owner, sistemas afectados y decision inicial.
+6. Si es ventana de verificacion post-despliegue, lanzar smoke-test `POST /api/v1/admin/test-alert` y confirmar recepcion.
 
 ## Decision rapida por area
 

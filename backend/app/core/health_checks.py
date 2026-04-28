@@ -309,6 +309,24 @@ async def check_redis_queue_metrics() -> dict[str, Any]:
         return _check_dict(ok=False, detail=f"redis_queue_metrics_error:{exc!s}", skipped=False)
 
 
+async def check_geo_cache_economics() -> dict[str, Any]:
+    """Métricas económicas de cache-aside para rutas externas."""
+    try:
+        from app.core.redis_cache import GeoCache
+        from app.services.geo_service import _get_redis_client
+
+        redis_client = await _get_redis_client()
+        metrics = await GeoCache(redis_client).economics_metrics()
+        return {
+            "ok": True,
+            "detail": "geo_cache_economics_ok",
+            "skipped": redis_client is None,
+            **metrics,
+        }
+    except Exception as exc:
+        return _check_dict(ok=False, detail=f"geo_cache_economics_error:{exc!s}", skipped=False)
+
+
 async def check_pgbouncer_tcp() -> dict[str, Any]:
     """
     Comprueba que el listener TCP de PgBouncer acepta conexiones.
@@ -379,6 +397,7 @@ async def run_deep_health(*, supabase_url: str, service_key: str, db: SupabaseAs
     checks["postgresql"] = await check_postgresql_select_one()
     checks["redis"] = await check_redis_ping()
     checks["redis_queue"] = await check_redis_queue_metrics()
+    checks["geo_cache_economics"] = await check_geo_cache_economics()
     from app.services.geo_service import geocoding_cache_metrics
 
     checks["geocoding_cache"] = await geocoding_cache_metrics()

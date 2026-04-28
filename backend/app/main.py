@@ -66,6 +66,7 @@ from app.api.v1 import portal_onboarding as portal_onboarding_v1
 from app.api.v1 import portes as portes_v1
 from app.api.v1 import routes_optimizer as routes_optimizer_v1
 from app.api.v1 import admin as admin_v1
+from app.api.v1 import admin_credits as admin_credits_v1
 from app.api.v1 import admin_esg as admin_esg_v1
 from app.api.v1 import admin_compliance as admin_compliance_v1
 from app.api.v1 import public_compliance as public_compliance_v1
@@ -91,7 +92,9 @@ from app.middleware.request_id import RequestIdMiddleware
 from app.middleware.login_debug_print import LoginDebugPrintMiddleware
 from app.middleware.json_access_log import JsonAccessLogMiddleware
 from app.middleware.audit_log_middleware import AuditLogMiddleware
+from app.middleware.exception_handler import GlobalExceptionMiddleware
 from app.middleware.fiscal_rate_limit_middleware import FiscalVerifactuRateLimitMiddleware
+from app.middleware.idempotency_middleware import IdempotencyMiddleware
 from app.middleware.rate_limit_middleware import (
     AuthLoginRateLimitMiddleware,
     EndpointCostRateLimitMiddleware,
@@ -240,6 +243,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Idempotencia debe ejecutarse después de identidad y rate-limit:
+    # se añade antes para que quede más interno en el stack.
+    app.add_middleware(IdempotencyMiddleware)
     app.add_middleware(SlowRequestLogMiddleware)
     app.add_middleware(SkipOptionsSlowAPIMiddleware)
     app.add_middleware(TenantRateLimitMiddleware)
@@ -259,6 +265,8 @@ def create_app() -> FastAPI:
     app.add_middleware(TenantRBACContextMiddleware)
     # Trazabilidad automática de escrituras API en public.audit_logs (no bloqueante).
     app.add_middleware(AuditLogMiddleware)
+    # Captura excepciones no controladas y dispara alerta CRITICAL sin romper la respuesta.
+    app.add_middleware(GlobalExceptionMiddleware)
     # Debe ser el más externo: responde /health antes de TrustedHost y middlewares tenant/RBAC.
     app.add_middleware(HealthCheckBypassMiddleware)
 
@@ -291,11 +299,6 @@ def create_app() -> FastAPI:
             status_code=exc.status_code,
             content={"detail": jsonable_encoder(detail)},
         )
-
-    @app.exception_handler(Exception)
-    async def unhandled_exception_handler(_request: Request, exc: Exception):
-        asyncio.create_task(notify_critical_error(short_traceback_from_exc(exc)))
-        return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
     @app.get("/health", tags=["Salud"], include_in_schema=True)
     async def health(request: Request) -> JSONResponse:
@@ -399,6 +402,11 @@ def create_app() -> FastAPI:
     )
     app.include_router(
         admin_v1.router,
+        prefix="/api/v1/admin",
+        tags=["Administración"],
+    )
+    app.include_router(
+        admin_credits_v1.router,
         prefix="/api/v1/admin",
         tags=["Administración"],
     )

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.api import deps
+from app.api.v1.dependencies.credits import consume_credits
 from app.core.config import get_settings
 from app.core.alerts import schedule_critical_error_alert
 from app.core.verifactu import verify_invoice_chain
@@ -258,6 +259,7 @@ async def audit_chain_repair(
     response_model=RetryPendingVerifactuOut,
     summary="Reintentar envíos VeriFactu pendientes (AEAT)",
 )
+@consume_credits(10)
 async def retry_pending_verifactu(
     current_user: UserOut = Depends(deps.require_role("owner")),
     db: SupabaseAsync = Depends(deps.get_db),

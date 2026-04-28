@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api import deps
+from app.api.v1.dependencies.credits import consume_credits
 from app.core.esg_engine import calculate_co2_emissions, get_co2_factor_kg_per_km
 from app.core.math_engine import MathEngine
 from app.db.supabase import SupabaseAsync
@@ -90,6 +91,7 @@ async def _fetch_vehiculo_normativa(
 
 
 @router.post("/optimize-route", response_model=OptimizeRouteOut)
+@consume_credits(5)
 async def optimize_route(
     payload: OptimizeRouteIn,
     current_user: UserOut = Depends(deps.get_current_user),

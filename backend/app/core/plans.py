@@ -17,6 +17,7 @@ from typing import Any, Final
 PLAN_STARTER: Final[str] = "starter"
 PLAN_PRO: Final[str] = "pro"
 PLAN_ENTERPRISE: Final[str] = "enterprise"
+PLAN_FREE: Final[str] = PLAN_STARTER
 
 # EUR/mes (referencia producto; el cargo real lo define el Price en Stripe Dashboard)
 EUR_MONTHLY_COMPLIANCE: Final[int] = 39
@@ -188,6 +189,33 @@ def normalize_plan(raw: str | None) -> str:
     if s in ("enterprise", "ent", "unlimited", "full_stack", "fullstack"):
         return PLAN_ENTERPRISE
     return PLAN_STARTER
+
+
+def plan_requests_per_minute(plan_normalized: str) -> int:
+    """
+    RPM por plan para rate limiting de tráfico API.
+
+    FREE/STARTER: base conservadora.
+    PRO y ENTERPRISE incrementan capacidad.
+    """
+    p = normalize_plan(plan_normalized)
+    if p == PLAN_ENTERPRISE:
+        return 600
+    if p == PLAN_PRO:
+        return 240
+    return 60
+
+
+def plan_initial_credits(plan_normalized: str) -> int:
+    """
+    Saldo base de créditos para servicios de coste alto (Maps/VeriFactu/AI).
+    """
+    p = normalize_plan(plan_normalized)
+    if p == PLAN_ENTERPRISE:
+        return 50_000
+    if p == PLAN_PRO:
+        return 10_000
+    return 1_000
 
 
 def plan_features(plan_normalized: str) -> PlanFeatures:

@@ -14,6 +14,7 @@ import httpx
 from app.core.config import get_settings
 from app.core.constants import COSTE_OPERATIVO_EUR_KM
 from app.core.plans import CostMeter
+from app.core.redis_cache import GeoCache
 from app.db.supabase import SupabaseAsync
 from app.services.usage_quota_service import UsageQuotaService
 
@@ -521,23 +522,30 @@ class GeoService:
             return dict(z)
 
         rkey = route_cache_key(o, d)
+        cache_key = GeoCache.route_key("drive", o, d)
 
         if batch is not None and rkey in batch._routes:
             await _record_route_cache_event(hit=True)
-            return dict(batch._routes[rkey])
+            out = dict(batch._routes[rkey])
+            out["source"] = "cache"
+            return out
 
         async with self._lock:
             mem = self._mem_route.get(rkey)
         if mem is not None:
             await _record_route_cache_event(hit=True)
-            return dict(mem)
+            out = dict(mem)
+            out["source"] = "cache"
+            return out
 
-        redis_fwd = await _redis_get_route(rkey)
+        redis_client = await _get_redis_client()
+        geo_cache = GeoCache(redis_client)
+        redis_fwd = await geo_cache.get_route(cache_key)
         if redis_fwd is not None:
             built = self._route_response_from_meters(
-                distance_meters=float(redis_fwd["distance_meters"]),
-                duration_seconds=int(redis_fwd["duration_seconds"]),
-                source="redis",
+                distance_meters=float(redis_fwd.get("distance_meters") or 0.0),
+                duration_seconds=int(redis_fwd.get("duration_seconds") or 0),
+                source="cache",
             )
             async with self._lock:
                 self._mem_route[rkey] = built
@@ -557,11 +565,7 @@ class GeoService:
                 duration_seconds=int(cached["duration_seconds"]),
                 source="cache",
             )
-            await _redis_set_route(
-                rkey,
-                distance_meters=float(cached["distance_meters"]),
-                duration_seconds=int(cached["duration_seconds"]),
-            )
+            await geo_cache.set_route(cache_key, built, ttl_seconds=24 * 60 * 60)
             async with self._lock:
                 self._mem_route[rkey] = built
             if batch is not None:
@@ -653,15 +657,25 @@ class GeoService:
             distance_meters=distance_meters,
             duration_seconds=duration_seconds,
         )
-        await _redis_set_route(
-            rkey,
-            distance_meters=distance_meters,
-            duration_seconds=duration_seconds,
+        await geo_cache.set_route(
+            cache_key,
+            {
+                "distance_meters": int(round(distance_meters)),
+                "duration_seconds": int(duration_seconds),
+                "distance_km": round(max(0.0, distance_meters) / 1000.0, 3),
+                "duration_mins": max(0, int(round(max(0, int(duration_seconds)) / 60.0))),
+                "estimated_cost": round(
+                    max(0.0, distance_meters / 1000.0) * float(COSTE_OPERATIVO_EUR_KM),
+                    2,
+                ),
+                "source": "api",
+            },
+            ttl_seconds=24 * 60 * 60,
         )
         built = self._route_response_from_meters(
             distance_meters=distance_meters,
             duration_seconds=duration_seconds,
-            source="google",
+            source="api",
         )
         async with self._lock:
             self._mem_route[rkey] = built

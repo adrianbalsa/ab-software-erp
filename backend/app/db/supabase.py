@@ -126,6 +126,32 @@ class SupabaseAsync:
             return await result
         return result
 
+    async def auth_reset_password_for_email(
+        self,
+        *,
+        email: str,
+        options: dict[str, Any] | None = None,
+    ) -> Any:
+        if options is None:
+            result = self._client.auth.reset_password_email(email)
+        else:
+            result = self._client.auth.reset_password_email(email, options)
+        if inspect.isawaitable(result):
+            return await result
+        return result
+
+    async def auth_verify_otp(self, payload: dict[str, Any]) -> Any:
+        result = self._client.auth.verify_otp(payload)
+        if inspect.isawaitable(result):
+            return await result
+        return result
+
+    async def auth_update_user(self, attributes: dict[str, Any]) -> Any:
+        result = self._client.auth.update_user(attributes)
+        if inspect.isawaitable(result):
+            return await result
+        return result
+
 
 def _extract_action_link(raw: Any) -> str | None:
     if raw is None:

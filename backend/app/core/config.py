@@ -140,6 +140,7 @@ class Settings:
     ESG_VERIFY_API_ORIGIN: Optional[str]
     # Contacto en ``/.well-known/security.txt`` (RFC 9116); si vacío, fallback ``security@ablogistics-os.com``.
     SECURITY_CONTACT_EMAIL: Optional[str]
+    ALERT_WEBHOOK_URL: Optional[str]
 
 
 def _parse_debug_flag(*, environment: str) -> bool:
@@ -643,6 +644,7 @@ def get_settings() -> Settings:
         VERIFACTU_SERIE_RECTIFICATIVA=vf_serie_r,
         ESG_VERIFY_API_ORIGIN=_opt("ESG_VERIFY_API_ORIGIN"),
         SECURITY_CONTACT_EMAIL=_opt("SECURITY_CONTACT_EMAIL"),
+        ALERT_WEBHOOK_URL=_opt("ALERT_WEBHOOK_URL"),
     )
 
 

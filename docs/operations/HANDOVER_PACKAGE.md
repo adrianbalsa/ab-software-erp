@@ -11,7 +11,8 @@ Objetivo: que un **equipo externo** (platform, SRE o MSP) pueda operar incidenci
 5. **`VERIFACTU_OPERATIONS_RUNBOOK.md`** — flujo fiscal VeriFactu / AEAT en producción (lectura técnica).
 6. **`AEAT_VERIFACTU_HOMOLOGACION.md`** + **`MTLS_CERTIFICATE_RENEWAL.md`** — envíos AEAT y certificados.
 7. **`MONITORING_OBSERVABILITY.md`** — `/health/deep`, Sentry, monitores externos.
-8. **`STRIPE_BILLING.md`** + webhooks (`api/v1/webhooks/stripe`) — facturación SaaS.
+8. **`GOLIVE_READINESS_CHECKLIST.md`** — guía de secretos (`ALERT_WEBHOOK_URL`) + protocolo CRITICAL + smoke-test webhook.
+9. **`STRIPE_BILLING.md`** + webhooks (`api/v1/webhooks/stripe`) — facturación SaaS.
 9. **`health_recovery.md`**, **`REDIS_001_HA_BILLING_QUEUE.md`** — degradación y colas.
 
 ## Plantillas de cierre (evidencia fuera del repo público)
@@ -30,6 +31,18 @@ Objetivo: que un **equipo externo** (platform, SRE o MSP) pueda operar incidenci
 | VeriFactu / AEAT | | VERIFACTU_OPERATIONS_RUNBOOK + AEAT_* |
 | Billing Stripe | | STRIPE_BILLING |
 | On-call / escalado | | ON_CALL_RUNBOOK |
+
+## Smoke-test obligatorio post-deploy
+
+Tras cada despliegue inicial (staging/prod), ejecutar:
+
+`POST /api/v1/admin/test-alert`
+
+Criterio de aceptacion:
+
+- mensaje recibido en canal on-call en <60s;
+- campos visibles: Entorno, Tenant ID, Timestamp UTC;
+- evidencia archivada en acta/ticket de cambio (sin exponer tokens).
 
 ## Revision documental (sin sustituir acta firmada)
 

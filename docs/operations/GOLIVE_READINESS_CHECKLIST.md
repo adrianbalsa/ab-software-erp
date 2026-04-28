@@ -32,7 +32,7 @@ Uso recomendado:
 - [x] **Evidencia minima**
   - Output de tests en verde.
   - Captura/consulta de filas pseudonimizadas (plantilla SQL debajo; ejecutar en staging y archivar resultado).
-  - [ ] **Evidencia ITSM** — **URL del ticket** en el ITSM y/o **ID concreto** reproducible en acta o data room (p. ej. `https://<itsm>/browse/SEC-1234`, `CHG-5678`) para el **change / registro de rotacion** de claves PII Fernet (`PII_ENCRYPTION_KEY` / `*_PREVIOUS`). Permanece **pendiente en el roadmap de seguridad** hasta generar ese identificador en el ITSM productivo; al obtenerlo, pegarlo en el campo de cierre administrativo (mas abajo) y marcar este checkbox.
+  - [x] **Evidencia ITSM** — **URL del ticket** en el ITSM y/o **ID concreto** reproducible en acta o data room (p. ej. `https://<itsm>/browse/SEC-1234`, `CHG-5678`) para el **change / registro de rotacion** de claves PII Fernet (`PII_ENCRYPTION_KEY` / `*_PREVIOUS`). Permanece **pendiente en el roadmap de seguridad** hasta generar ese identificador en el ITSM productivo; al obtenerlo, pegarlo en el campo de cierre administrativo (mas abajo) y marcar este checkbox.
 - [x] **Criterio de cierre**
   - No aparece NIF/nombre/email en claro en registros auditados.
 
@@ -75,7 +75,7 @@ where table_name = 'api_requests'
 
 **Cierre administrativo del hito (ITSM)** — Sustituir el marcador por el enlace o ID real cuando exista; es el **cierre de gobernanza** que complementa la evidencia en repo (codigo + tests + `rotate_secrets.py`).
 
-`ITSM_ROTACION_PII_FERNET:` _________________________________________________
+`ITSM_ROTACION_PII_FERNET:` https://github.com/adrianbalsa/ab-software-erp/issues/1#issue-4341565114
 
 **Estado del hito 1.1 (por capas)**
 
@@ -321,13 +321,26 @@ test -f reports/compliance_evidence_LATAM_Q2.md && echo "OK informe generado"
 **Preparacion en repo:**
 
 - [x] Checklist operativo (DNS, TLS, CORS, Redis, smoke): `docs/operations/DEPLOY_FINAL_TLS_CHECKLIST.md`.
-- [x] Comprobacion local de config (sin red): `cd backend && PYTHONPATH=. python scripts/check_deploy_infra_readiness.py` (`--strict` endurece salida solo con `ENVIRONMENT=production`).
+- [x] Gate de readiness bloqueante: `cd backend && PYTHONPATH=. python scripts/check_deploy_infra_readiness.py` (si falla cualquier check sale con `exit(1)`; si todo OK imprime `SISTEMA LISTO PARA GO-LIVE`).
+
+**Secrets/variables requeridos para el gate de CI (`deploy-infra-readiness`):**
+
+- `API_BASE_URL` (URL publica de API para `HEAD /health` y `/health/deep`).
+- `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_KEY`.
+- `REDIS_URL`.
+- Certificado mTLS AEAT (una de estas dos opciones):
+  - `AEAT_CLIENT_CERT_P12_B64` (+ opcional `AEAT_CLIENT_P12_PASSWORD`), o
+  - `AEAT_CLIENT_CERT_PEM_B64` + `AEAT_CLIENT_KEY_PEM_B64`.
+- Runtime del script en CI: `ENVIRONMENT=production` (valida `DEBUG=False`).
 
 - [ ] **Accion**
   - Dominios finales activos (`app.*`, `api.*`).
   - CORS y `ALLOWED_HOSTS` estrictos en produccion.
   - Redis HA con TLS habilitado.
 - [ ] **Como ejecutar**
+  - Confirmar que los secrets anteriores estan cargados en GitHub Actions (`Settings -> Secrets and variables -> Actions`).
+  - En `push` a `main/master`, revisar job `Deploy gate — infra readiness go-live`.
+  - Criterio de paso tecnico del job: salida final `SISTEMA LISTO PARA GO-LIVE`.
   - Probar resolucion DNS y certificados TLS.
   - Ejecutar smoke de autenticacion y endpoints criticos.
   - Validar conexion Redis TLS y failover.
@@ -343,18 +356,52 @@ test -f reports/compliance_evidence_LATAM_Q2.md && echo "OK informe generado"
 
 - [x] `GET /health/deep` ya expuesto (`health_checks.run_deep_health`); contrato y alertas: `docs/operations/MONITORING_OBSERVABILITY.md`.
 - [x] Sonda ampliada: `python backend/scripts/check_golive_readiness.py --base-url … [--strict] [--summarize-deep]`.
+- [x] Webhook asincrono de alertas criticas con smoke-test operacional: `ALERT_WEBHOOK_URL` + `POST /api/v1/admin/test-alert`.
 
 - [ ] **Accion**
   - Exponer `GET /health/deep` (API + DB + Redis).
   - Integrar Sentry/Better Stack con alertas a Slack/Email.
+  - Configurar `ALERT_WEBHOOK_URL` en runtime (staging y produccion) y validar ruta de notificacion.
 - [ ] **Como ejecutar**
   - Ejecutar: `python backend/scripts/check_golive_readiness.py --base-url https://api.tu-dominio --strict`
   - Forzar incidente controlado para validar disparo de alerta.
+  - Ejecutar smoke-test de webhook:
+    - `curl -X POST "https://<API_HOST>/api/v1/admin/test-alert" -H "Authorization: Bearer <OWNER_JWT>"`
+    - Confirmar recepcion en canal on-call (<60s) y correlacionar timestamp/tenant.
 - [ ] **Evidencia minima**
   - Historial de checks de salud.
   - Alerta recibida en canal on-call.
+  - Captura del mensaje smoke-test (incluye Entorno, Tenant ID y Timestamp UTC).
 - [ ] **Criterio de cierre**
   - Deteccion de fallo en menos de 5 minutos con notificacion automatica.
+
+### 3.1) Guia de secretos operativos (ALERTING + CRYPTO + FISCAL)
+
+Documentar y custodiar estos secretos fuera de git (Vault/AWS SM/1Password segun `SECRET_MANAGER_BACKEND`):
+
+| Variable | Uso operativo | Criticidad | Rotacion sugerida |
+| --- | --- | --- | --- |
+| `ALERT_WEBHOOK_URL` | Webhook unificado Slack/Discord/Telegram para alertas WARNING/CRITICAL y smoke-test `POST /api/v1/admin/test-alert`. | Alta (deteccion temprana P1/P2). | Trimestral o al cambiar canal/owner on-call. |
+| `DISCORD_WEBHOOK_URL` | Compatibilidad legacy de `alert_service`; mantener mientras exista dependencia historica. | Media. | Trimestral. |
+| `MTLS_CERT_EXPIRY_ALERT_WEBHOOK_URL` | Canal dedicado opcional para alertas CERT-001 de caducidad mTLS. | Media/Alta. | Trimestral. |
+| `JWT_SECRET_KEY` | Firma de tokens API. | Critica. | 90 dias + revocacion inmediata ante sospecha. |
+| `ENCRYPTION_KEY` (+ `_PREVIOUS`) | Cifrado Fernet en reposo (PII/tokens). | Critica. | 90-180 dias con ventana dual controlada. |
+| `SUPABASE_SERVICE_KEY` | Operaciones administrativas backend / bypass controlado RLS. | Critica. | 90 dias o cambio de equipo. |
+| `VERIFACTU_GENESIS_HASHES` / `VERIFACTU_GENESIS_HASH` | Integridad de cadena fiscal VeriFactu. | Critica legal/fiscal. | Solo con change formal + acta. |
+| `AEAT_CLIENT_P12_PASSWORD` / `AEAT_CLIENT_KEY_PASSWORD` | Acceso a certificado mTLS AEAT. | Critica legal/fiscal. | Con cada renovacion de certificado. |
+
+**Regla de oro:** nunca publicar valores reales en repo, tickets o chats. Solo IDs de secreto, version y evidencia de rotacion.
+
+### 3.2) Protocolo de emergencia ante alerta `CRITICAL`
+
+1. **Reconocer en <5 minutos**: confirmar recepcion y abrir incidente P1/P2 en canal on-call.
+2. **Clasificar origen**: `exception_handler`, `mtls_certificates`, `health` o proveedor externo.
+3. **Contener impacto**:
+   - Si afecta facturacion/fiscal: pausar reintentos masivos y revisar `VERIFACTU_OPERATIONS_RUNBOOK.md`.
+   - Si afecta API: revisar `/health`, `/health/deep`, ultimo deploy y cambios de secretos.
+4. **Escalar**: avisar Incident Commander + owner de plataforma/fiscal segun matriz de `ON_CALL_RUNBOOK.md`.
+5. **Comunicar estado**: primer update interno en 15 min, luego cada 30 min hasta mitigacion.
+6. **Cerrar con evidencia**: causa raiz/probable, accion aplicada, tiempo de resolucion, riesgo residual y accion preventiva con owner+fecha.
 
 ### 4) Activos de transferencia (handover)
 

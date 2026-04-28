@@ -42,10 +42,17 @@ Solo marcar **provisionado / verificado**; las credenciales viven en el gestor a
 |--------|------------------------|
 | `GET /live` y `/health/deep` contra API productiva | |
 | Simulacro de ticket P2 (documentado, sin impacto cliente) | |
+| `POST /api/v1/admin/test-alert` recibido en canal on-call (<60s) | |
 
 ## 4. Aceptación
 
 Declaramos que el equipo receptor puede **clasificar y escalar** incidencias críticas usando los runbooks citados, y que los **owners** de la tabla en `HANDOVER_PACKAGE.md` quedan asignados o explícitamente pendientes con fecha.
+
+Checklist CRITICAL minimo validado:
+
+- protocolo de emergencia revisado en `GOLIVE_READINESS_CHECKLIST.md` (seccion 3.2);
+- owner de primera respuesta definido (P1/P2);
+- ruta de escalado y ventana de comunicacion acordadas.
 
 | Rol | Nombre | Firma / Fecha |
 |-----|--------|----------------|

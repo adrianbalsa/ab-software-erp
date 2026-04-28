@@ -7,15 +7,18 @@ from __future__ import annotations
 
 import logging
 import time
+from uuid import uuid4
 
 import anyio
 from limits import parse
+from redis import asyncio as redis_asyncio
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
 from app.core.config import get_settings
 from app.core.http_client_meta import get_client_ip
+from app.core.plans import PLAN_FREE, normalize_plan, plan_requests_per_minute
 from app.core.rate_limit import (
     AUTH_RATE_LIMIT_PATHS,
     expensive_endpoint_bucket,
@@ -25,6 +28,8 @@ from app.core.rate_limit import (
     rate_limit_response,
     resolve_rate_limit_identity,
 )
+from app.core.security import decode_access_token_payload
+from app.services.usage_service import UsageService
 
 _log = logging.getLogger(__name__)
 
@@ -58,6 +63,82 @@ class TenantRateLimitMiddleware(BaseHTTPMiddleware):
     ``TENANT_RATE_LIMIT_OVERRIDES`` permite límites por ``empresa_id``.
     """
 
+    _redis_client = None
+    _memory_windows: dict[str, list[float]] = {}
+
+    async def _redis(self):
+        if self._redis_client is not None:
+            return self._redis_client
+        settings = get_settings()
+        url = (settings.REDIS_URL or "").strip()
+        if not url:
+            return None
+        self._redis_client = redis_asyncio.from_url(
+            url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+            retry_on_timeout=True,
+        )
+        return self._redis_client
+
+    @staticmethod
+    def _tenant_plan_from_request(request: Request, tenant_id: str) -> str:
+        auth = request.headers.get("authorization") or ""
+        if not auth.lower().startswith("bearer "):
+            return PLAN_FREE
+        token = auth[7:].strip()
+        if not token:
+            return PLAN_FREE
+        try:
+            payload = decode_access_token_payload(token)
+        except Exception:
+            return PLAN_FREE
+        claim_plan = (
+            payload.get("plan")
+            or payload.get("plan_type")
+            or payload.get("app_role")
+            or payload.get("user_role")
+        )
+        return normalize_plan(str(claim_plan or PLAN_FREE))
+
+    async def _hit_tenant_sliding_window(self, *, tenant_id: str, rpm: int) -> tuple[bool, int]:
+        def _memory_fallback() -> tuple[bool, int]:
+            now = time.time()
+            window_start = now - 60.0
+            key = f"{tenant_id}:sliding"
+            bucket = [ts for ts in self._memory_windows.get(key, []) if ts > window_start]
+            bucket.append(now)
+            self._memory_windows[key] = bucket
+            if len(bucket) <= max(1, int(rpm)):
+                return True, 0
+            oldest = min(bucket)
+            return False, max(1, int((oldest + 60.0) - now))
+        redis = await self._redis()
+        if redis is None:
+            return _memory_fallback()
+        now = time.time()
+        window_start = now - 60.0
+        key = f"rl:tenant:{tenant_id}:sliding"
+        member = f"{int(time.time_ns())}-{uuid4().hex}"
+        try:
+            pipeline = redis.pipeline(transaction=True)
+            pipeline.zremrangebyscore(key, "-inf", window_start)
+            pipeline.zadd(key, {member: now})
+            pipeline.zcard(key)
+            pipeline.expire(key, 120)
+            _, _, current, _ = await pipeline.execute()
+            if current <= max(1, int(rpm)):
+                return True, 0
+            oldest_with_score = await redis.zrange(key, 0, 0, withscores=True)
+            if not oldest_with_score:
+                return False, 1
+            oldest_score = float(oldest_with_score[0][1])
+            retry_after = max(1, int((oldest_score + 60.0) - now))
+            return False, retry_after
+        except Exception:
+            return _memory_fallback()
+
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.method == "OPTIONS":
             return await call_next(request)
@@ -68,42 +149,56 @@ class TenantRateLimitMiddleware(BaseHTTPMiddleware):
 
         settings = get_settings()
         identity = resolve_rate_limit_identity(request)
-        limit_raw = settings.TENANT_RATE_LIMIT_DEFAULT
-        if identity.tenant_id:
-            limit_raw = settings.TENANT_RATE_LIMIT_OVERRIDES.get(
-                identity.tenant_id.lower(),
-                limit_raw,
-            )
-        limit_item = _parse_limit_or_default(limit_raw)
-
-        strategy = get_rate_limit_strategy()
-        key = identity.key
-
-        def _hit() -> bool:
-            return strategy.hit(limit_item, key)
+        if not identity.tenant_id:
+            return await call_next(request)
+        tenant_id = str(identity.tenant_id).strip()
+        plan = self._tenant_plan_from_request(request, tenant_id)
+        rpm = plan_requests_per_minute(plan)
+        override = settings.TENANT_RATE_LIMIT_OVERRIDES.get(tenant_id.lower())
+        if override:
+            limit_item = _parse_limit_or_default(override)
+            rpm = int(getattr(limit_item, "amount", rpm))
 
         try:
-            ok = await anyio.to_thread.run_sync(_hit)
+            ok, retry_after = await self._hit_tenant_sliding_window(tenant_id=tenant_id, rpm=rpm)
         except Exception as exc:
-            _log.warning("rate_limit tenant: error comprobando límite (dejamos pasar): %s", exc)
+            _log.warning("rate_limit tenant redis: error comprobando límite (dejamos pasar): %s", exc)
             return await call_next(request)
 
         if not ok:
-            ra = _retry_after_seconds(strategy, limit_item, key)
             _log.warning(
-                "rate_limit tenant exceeded key=%s scope=%s tenant_id=%s limit=%s",
-                key,
+                "rate_limit tenant exceeded scope=%s tenant_id=%s plan=%s rpm=%s",
                 identity.scope,
-                identity.tenant_id or "-",
-                str(limit_item),
+                tenant_id,
+                plan,
+                rpm,
             )
             return rate_limit_response(
                 request,
-                retry_after_sec=ra,
+                retry_after_sec=retry_after,
                 scope=identity.scope,
-                tenant_id=identity.tenant_id,
-                limit=str(limit_item),
+                tenant_id=tenant_id,
+                limit=f"{rpm} per minute",
             )
+
+        bucket = expensive_endpoint_bucket(path, request.method)
+        if bucket in {"maps", "ai", "ocr"}:
+            usage = UsageService()
+            costs = {"maps": 5, "ai": 20, "ocr": 10}
+            has_credits = await usage.check_credits(
+                tenant_id=tenant_id,
+                cost=costs[bucket],
+                plan=plan,
+            )
+            if not has_credits:
+                return Response(
+                    status_code=429,
+                    media_type="application/json",
+                    content=(
+                        '{"detail":"Créditos insuficientes para esta operación. '
+                        'Recarga saldo o sube de plan para continuar."}'
+                    ),
+                )
 
         return await call_next(request)
 

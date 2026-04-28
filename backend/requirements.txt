@@ -64,7 +64,7 @@ MarkupSafe==3.0.3
 mdurl==0.1.2
 msrest==0.7.1
 multidict==6.7.1
-numpy==2.4.4
+numpy<2.0.0
 oauthlib==3.3.1
 openai==2.30.0
 openpyxl==3.1.5

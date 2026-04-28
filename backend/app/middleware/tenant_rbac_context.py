@@ -23,6 +23,7 @@ _PUBLIC_PREFIXES = (
     "/openapi.json",
     "/auth/",
 )
+_EXCLUDED_LOGIN_PATH_FRAGMENTS = ("/auth/login", "/login")
 
 _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -49,7 +50,10 @@ class TenantRBACContextMiddleware(BaseHTTPMiddleware):
         path = request.url.path.rstrip("/") or "/"
         method = (request.method or "").upper()
         is_mutating_request = method in _MUTATING_METHODS
+        is_excluded_login_path = any(fragment in path for fragment in _EXCLUDED_LOGIN_PATH_FRAGMENTS)
         if path != "/" and any(path.startswith(prefix.rstrip("/")) for prefix in _PUBLIC_PREFIXES):
+            return await call_next(request)
+        if is_excluded_login_path:
             return await call_next(request)
 
         token = _extract_access_token(request)
@@ -62,7 +66,13 @@ class TenantRBACContextMiddleware(BaseHTTPMiddleware):
             if not subject:
                 raise PermissionError("missing subject in token payload")
 
-            db = await get_supabase(jwt_token=token)
+            # Lookup de perfil con service role para evitar bloqueos por claims JWT
+            # inválidos para roles Postgres (p. ej. role=admin) antes de fijar contexto.
+            db = await get_supabase(
+                jwt_token=None,
+                allow_service_role_bypass=True,
+                log_service_bypass_warning=False,
+            )
             auth_service = AuthService(db)
             user = await auth_service.get_profile_by_subject(subject=subject)
             if user is None:
