@@ -19,6 +19,7 @@ class AuditoriaService:
         tabla: str,
         registro_id: str,
         cambios: dict[str, Any],
+        strict: bool = False,
     ) -> None:
         """
         Best-effort audit logging.
@@ -39,5 +40,7 @@ class AuditoriaService:
         try:
             await self._db.execute(self._db.table("auditoria").insert(payload))
         except Exception:
+            if strict:
+                raise
             return
 

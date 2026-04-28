@@ -103,6 +103,17 @@ BEGIN
     RETURN;
   END IF;
 
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'factores_emision'
+      AND column_name = 'empresa_id'
+  ) THEN
+    RAISE NOTICE 'factores_emision sin empresa_id: se omiten políticas consolidadas tenant-aware.';
+    RETURN;
+  END IF;
+
   ALTER TABLE public.factores_emision ENABLE ROW LEVEL SECURITY;
   ALTER TABLE public.factores_emision FORCE ROW LEVEL SECURITY;
 

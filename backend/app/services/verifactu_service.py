@@ -672,6 +672,7 @@ class VerifactuService:
         detalles: dict[str, Any],
         empresa_id: str,
         usuario_id: str | None = None,
+        strict: bool = False,
     ) -> None:
         """
         Best-effort: evento VeriFactu en ``auditoria`` (trazabilidad: acción, registro, detalles, usuario).
@@ -694,6 +695,8 @@ class VerifactuService:
             }
             await self._db.execute(self._db.table("auditoria").insert(payload))
         except Exception:
+            if strict:
+                raise
             return
 
     async def registrar_auditoria(

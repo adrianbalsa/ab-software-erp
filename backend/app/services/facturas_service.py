@@ -398,7 +398,7 @@ def _pg_emit_f1_desde_portes_tx(
                 "num_factura": num_fact,
                 "fecha_emision": fecha_iso,
                 "nif_emisor": nif_emisor,
-                "total_factura": float(total_factura),
+                "total_factura": str(round_fiat(total_factura)),
             },
             eslabon.hash_anterior,
         )
@@ -414,7 +414,7 @@ def _pg_emit_f1_desde_portes_tx(
                 "nif_receptor": nif_cliente,
                 "numero_factura": num_fact,
                 "fecha_emision": fecha_iso,
-                "total_factura": float(total_factura),
+                "total_factura": str(round_fiat(total_factura)),
             },
             previous_fingerprint,
         )
@@ -548,7 +548,7 @@ def _pg_emit_r1_rectificativa_tx(
                 "num_factura": num_fact_r,
                 "fecha_emision": fecha_iso,
                 "nif_emisor": nif_emisor,
-                "total_factura": float(total_r),
+                "total_factura": str(round_fiat(total_r)),
             },
             eslabon.hash_anterior,
         )
@@ -564,7 +564,7 @@ def _pg_emit_r1_rectificativa_tx(
                 "nif_receptor": nif_cliente,
                 "numero_factura": num_fact_r,
                 "fecha_emision": fecha_iso,
-                "total_factura": float(total_r),
+                "total_factura": str(round_fiat(total_r)),
             },
             previous_fingerprint,
         )
@@ -1044,6 +1044,7 @@ class FacturasService:
             },
             empresa_id=eid,
             usuario_id=usuario_id,
+            strict=True,
         )
         await self._audit.try_log(
             empresa_id=eid,
@@ -1055,6 +1056,7 @@ class FacturasService:
                 if row_out.get("fingerprint")
                 else None,
             },
+            strict=True,
         )
 
         cid = str(row_out.get("cliente") or "").strip()
@@ -1130,6 +1132,7 @@ class FacturasService:
                 tabla="facturas",
                 registro_id=str(fid),
                 cambios={"job_id": job_id, "source": "finalizar_factura_verifactu"},
+                strict=True,
             )
             factura_row["aeat_sif_estado"] = "pendiente_envio"
             factura_row["aeat_queue_job_id"] = job_id
@@ -1188,6 +1191,7 @@ class FacturasService:
                 "aeat_sif_estado": "pendiente_envio",
                 "job_id": job_id,
             },
+            strict=True,
         )
         return {
             "status": "queued",
@@ -1341,9 +1345,16 @@ class FacturasService:
         return zip_buf.getvalue(), zip_name, len(rows)
 
     async def _eliminar_factura_compensacion(self, *, factura_id: int) -> None:
-        """Best-effort: elimina factura insertada si falla el cierre del proceso (portes)."""
+        """Compensación sin borrado físico: deja la factura anulada para trazabilidad."""
         try:
-            await self._db.execute(self._db.table("facturas").delete().eq("id", factura_id))
+            await self._db.execute(
+                self._db.table("facturas").update(
+                    {
+                        "estado_cobro": "anulada_compensacion",
+                        "payment_status": "CANCELLED",
+                    }
+                ).eq("id", factura_id)
+            )
         except Exception:
             pass
 
@@ -1522,6 +1533,7 @@ class FacturasService:
                 },
                 empresa_id=eid,
                 usuario_id=usuario_id,
+                strict=True,
             )
         else:
             # Desarrollo / tests sin ``DATABASE_URL``: sin candado transaccional (no apto producción).
@@ -1542,7 +1554,7 @@ class FacturasService:
                         "num_factura": num_fact,
                         "fecha_emision": fecha_iso,
                         "nif_emisor": nif_emisor,
-                        "total_factura": float(total_factura),
+                        "total_factura": str(round_fiat(total_factura)),
                     },
                     eslabon.hash_anterior,
                 )
@@ -1559,7 +1571,7 @@ class FacturasService:
                     "nif_receptor": nif_cliente,
                     "numero_factura": num_fact,
                     "fecha_emision": fecha_iso,
-                    "total_factura": float(total_factura),
+                    "total_factura": str(round_fiat(total_factura)),
                 },
                 previous_fingerprint,
             )
@@ -1654,6 +1666,7 @@ class FacturasService:
                     },
                     empresa_id=eid,
                     usuario_id=usuario_id,
+                    strict=True,
                 )
 
                 for pr in portes_rows:
@@ -1714,6 +1727,7 @@ class FacturasService:
                 "numero_secuencial": eslabon.siguiente_secuencial,
                 "hash_registro": hash_registro[:32] + "…",
             },
+            strict=True,
         )
 
         if background_tasks is not None:
@@ -1998,7 +2012,7 @@ class FacturasService:
                     "num_factura": num_fact_r,
                     "fecha_emision": fecha_iso,
                     "nif_emisor": nif_emisor,
-                    "total_factura": float(total_r),
+                    "total_factura": str(round_fiat(total_r)),
                 },
                 eslabon.hash_anterior,
             )
@@ -2011,7 +2025,7 @@ class FacturasService:
                     "nif_receptor": nif_cliente,
                     "numero_factura": num_fact_r,
                     "fecha_emision": fecha_iso,
-                    "total_factura": float(total_r),
+                    "total_factura": str(round_fiat(total_r)),
                 },
                 previous_fingerprint,
             )
@@ -2098,6 +2112,7 @@ class FacturasService:
             },
             empresa_id=eid,
             usuario_id=usuario_id,
+            strict=True,
         )
 
         await self._audit.try_log(
@@ -2111,6 +2126,7 @@ class FacturasService:
                 "total_factura": total_r,
                 "motivo": str(motivo).strip()[:500],
             },
+            strict=True,
         )
 
         # Si la rectificación afecta una factura de un mes anterior, fuerza recálculo del snapshot

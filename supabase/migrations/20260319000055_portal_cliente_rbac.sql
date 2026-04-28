@@ -31,6 +31,21 @@ BEGIN
 END $$;
 
 -- ─── Sesión: app.cliente_id + set_rbac_session extendido ───
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname = 'app_current_cliente_id'
+      AND p.pronargs = 0
+      AND p.prorettype <> 'text'::regtype
+  ) THEN
+    DROP FUNCTION public.app_current_cliente_id() CASCADE;
+  END IF;
+END $$;
+
 CREATE OR REPLACE FUNCTION public.app_current_cliente_id()
 RETURNS text
 LANGUAGE sql

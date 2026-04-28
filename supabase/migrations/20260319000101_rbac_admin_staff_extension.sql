@@ -45,10 +45,10 @@ BEGIN
   ) THEN
     -- Añadir columna role_rbac si no existe (para distinguir del rol operativo)
     ALTER TABLE public.usuarios
-      ADD COLUMN IF NOT EXISTS role_rbac public.user_role NOT NULL DEFAULT 'staff'::public.user_role;
+      ADD COLUMN IF NOT EXISTS role_rbac public.user_role NOT NULL DEFAULT 'owner'::public.user_role;
     
     COMMENT ON COLUMN public.usuarios.role_rbac IS
-      'Rol RBAC de seguridad (superadmin/admin/staff). Controla acceso a secciones sensibles: finanzas, administración.';
+      'Rol RBAC de seguridad. Default conservador owner para compatibilidad transaccional en alta de enum.';
   END IF;
 END $$;
 
@@ -61,17 +61,10 @@ BEGIN
   ) THEN
     -- Añadir columna role_rbac también en profiles para consistencia
     ALTER TABLE public.profiles
-      ADD COLUMN IF NOT EXISTS role_rbac public.user_role NOT NULL DEFAULT 'staff'::public.user_role;
+      ADD COLUMN IF NOT EXISTS role_rbac public.user_role NOT NULL DEFAULT 'owner'::public.user_role;
     
     COMMENT ON COLUMN public.profiles.role_rbac IS
-      'Rol RBAC de seguridad (superadmin/admin/staff). Independiente del rol operativo (role).';
-    
-    -- Migración de datos: owner legado → admin, resto → staff
-    -- Esta es una migración conservadora que puede ajustarse según necesidades
-    UPDATE public.profiles 
-    SET role_rbac = 'admin'::public.user_role 
-    WHERE role = 'owner'::public.user_role 
-      AND role_rbac = 'staff'::public.user_role;
+      'Rol RBAC de seguridad. Default conservador owner para compatibilidad transaccional en alta de enum.';
   END IF;
 END $$;
 

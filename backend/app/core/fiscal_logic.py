@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 # Re-export del Math Engine: importes agregados (dashboard, tesorería, etc.) alineados con ROUND_HALF_EVEN / céntimos.
@@ -10,16 +10,16 @@ from app.core.math_engine import round_fiat, to_decimal
 
 def fiscal_amount_string_two_decimals(value: Any) -> str:
     """
-    Cadena de importe con exactamente dos decimales (ROUND_HALF_EVEN), sin pasar por ``float``,
-    para huellas VeriFactu y nodos ``Importe*`` / ``Cuota*`` en XML AEAT (coherencia con XAdES).
+    Cadena de importe con exactamente dos decimales (ROUND_HALF_UP), sin pasar por ``float``,
+    para huellas VeriFactu y nodos ``Importe*`` / ``Cuota*`` en XML AEAT.
     """
     try:
         if value is None:
             d = Decimal("0.00")
         elif isinstance(value, Decimal):
-            d = value.quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+            d = value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         else:
-            d = Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+            d = Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     except (InvalidOperation, ValueError, TypeError):
         d = Decimal("0.00")
     return f"{d:.2f}"

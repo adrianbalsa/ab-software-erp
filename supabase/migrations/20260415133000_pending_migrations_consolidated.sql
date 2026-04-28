@@ -1282,9 +1282,20 @@ COMMENT ON COLUMN public.empresas.limite_vehiculos IS
 COMMENT ON COLUMN public.empresas.stripe_customer_id IS 'cus_… (Stripe Customer)';
 COMMENT ON COLUMN public.empresas.stripe_subscription_id IS 'sub_… (Stripe Subscription)';
 
-UPDATE public.empresas
-SET plan_type = COALESCE(plan_type, plan)
-WHERE plan_type IS NULL AND plan IS NOT NULL;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'empresas'
+      AND column_name = 'plan'
+  ) THEN
+    UPDATE public.empresas
+    SET plan_type = COALESCE(plan_type, plan)
+    WHERE plan_type IS NULL AND plan IS NOT NULL;
+  END IF;
+END $$;
 
 
 -- ============================================================================
