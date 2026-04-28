@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
 
 from app.db.supabase import SupabaseAsync
@@ -30,6 +31,7 @@ class EslabonFacturaAnterior:
 
 
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
+_VERIFACTU_NULL_CHAIN_HASH = "0" * 64
 
 
 class VerifactuService:
@@ -48,6 +50,11 @@ class VerifactuService:
     # -------------------------------------------------------------------------
     # Normalización determinista (misma entrada canónica → mismo hash)
     # -------------------------------------------------------------------------
+
+    @staticmethod
+    def null_chain_hash() -> str:
+        """Valor nulo estandarizado para primer eslabón de cadena VeriFactu."""
+        return _VERIFACTU_NULL_CHAIN_HASH
 
     @staticmethod
     def _norm_str(value: Any) -> str:
@@ -87,6 +94,29 @@ class VerifactuService:
             return None
         t = str(value).strip()
         return t if t else None
+
+    @staticmethod
+    def generar_huella_verifactu(
+        *,
+        nif_emisor: str,
+        numero_serie_factura: str,
+        fecha_expedicion: str,
+        importe_total: Decimal | str | int | float,
+        huella_hash_anterior: str,
+    ) -> str:
+        """
+        Huella encadenada VeriFactu (SHA-256 HEX en MAYÚSCULAS) con orden estricto:
+        NIF + NúmeroSerie + FechaISO + Importe(2d ROUND_HALF_UP) + HuellaAnterior.
+        """
+        nif = VerifactuService._norm_nif(nif_emisor)
+        numero_serie = VerifactuService._norm_str(numero_serie_factura)
+        fecha = VerifactuService._norm_fecha_iso(fecha_expedicion)
+        importe = fiscal_amount_string_two_decimals(importe_total)
+        prev = VerifactuService._norm_hash_anterior(huella_hash_anterior)
+        if not prev:
+            raise ValueError("huella_hash_anterior vacío")
+        payload = f"{nif}{numero_serie}{fecha}{importe}{prev}"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest().upper()
 
     @staticmethod
     def generate_invoice_hash(invoice_data: dict[str, Any], previous_hash: str | None) -> str:
@@ -168,6 +198,98 @@ class VerifactuService:
             num_factura_rectificada=num_factura_rectificada,
         )
         return hashlib.sha256(cadena.encode("utf-8")).hexdigest()
+
+    async def obtener_huella_anterior_por_serie(
+        self,
+        *,
+        empresa_id: str,
+        serie: str,
+    ) -> str:
+        """
+        Recupera la huella de la última factura emitida de la misma empresa y serie.
+        Si no existe, devuelve valor nulo estandarizado (64 ceros).
+        """
+        eid = str(empresa_id or "").strip()
+        serie_norm = str(serie or "").strip()
+        if not eid:
+            raise ValueError("empresa_id vacío")
+        if not serie_norm:
+            raise ValueError("serie vacía")
+        try:
+            q = (
+                self._db.table("facturas")
+                .select("huella_hash, hash_factura, hash_registro, numero_secuencial, fecha_emision, id")
+                .eq("empresa_id", eid)
+                .eq("bloqueado", True)
+                .like("num_factura", f"{serie_norm}-%")
+                .order("numero_secuencial", desc=True)
+                .order("fecha_emision", desc=True)
+                .order("id", desc=True)
+                .limit(1)
+            )
+            res: Any = await self._db.execute(q)
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+            if not rows:
+                return self.null_chain_hash()
+            raw = rows[0].get("huella_hash") or rows[0].get("hash_factura") or rows[0].get("hash_registro")
+            prev = VerifactuService._norm_hash_anterior(str(raw) if raw is not None else None)
+            return (prev or self.null_chain_hash()).upper()
+        except Exception as exc:
+            raise RuntimeError(
+                "No se pudo recuperar la huella anterior VeriFactu por serie"
+            ) from exc
+
+    async def obtener_eslabon_anterior_por_serie(
+        self,
+        *,
+        empresa_id: str,
+        serie: str,
+    ) -> EslabonFacturaAnterior:
+        """
+        Recupera hash previo y siguiente secuencial de la última factura emitida
+        por ``empresa_id + serie``. Si no existe, inicia con 64 ceros y secuencial 1.
+        """
+        eid = str(empresa_id or "").strip()
+        serie_norm = str(serie or "").strip()
+        if not eid:
+            raise ValueError("empresa_id vacío")
+        if not serie_norm:
+            raise ValueError("serie vacía")
+        try:
+            q = (
+                self._db.table("facturas")
+                .select("huella_hash, hash_factura, hash_registro, numero_secuencial, fecha_emision, id")
+                .eq("empresa_id", eid)
+                .eq("bloqueado", True)
+                .like("num_factura", f"{serie_norm}-%")
+                .order("numero_secuencial", desc=True)
+                .order("fecha_emision", desc=True)
+                .order("id", desc=True)
+                .limit(1)
+            )
+            res: Any = await self._db.execute(q)
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+            if not rows:
+                return EslabonFacturaAnterior(
+                    hash_anterior=self.null_chain_hash(),
+                    siguiente_secuencial=1,
+                )
+            row = rows[0]
+            raw = row.get("huella_hash") or row.get("hash_factura") or row.get("hash_registro")
+            prev = VerifactuService._norm_hash_anterior(str(raw) if raw is not None else None)
+            try:
+                last_seq = int(row.get("numero_secuencial") or 0)
+            except (TypeError, ValueError):
+                last_seq = 0
+            next_seq = last_seq + 1 if last_seq > 0 else 1
+            return EslabonFacturaAnterior(
+                hash_anterior=(prev or self.null_chain_hash()).upper(),
+                siguiente_secuencial=next_seq,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "No se pudo recuperar el eslabón anterior VeriFactu por serie"
+            ) from exc
 
     async def try_obtener_hash_anterior(self, *, empresa_id: str) -> str | None:
         """

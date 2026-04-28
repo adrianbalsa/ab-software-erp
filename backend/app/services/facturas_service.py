@@ -172,6 +172,64 @@ def _pg_read_invoice_chain_eslabon(
     return chain_prev, siguiente
 
 
+def _pg_read_invoice_chain_eslabon_by_serie(
+    conn: Any,
+    *,
+    empresa_id: str,
+    serie: str,
+    null_chain_hash: str,
+) -> tuple[str, int]:
+    """
+    Cadena de emisión por ``empresa_id + serie`` con bloqueo explícito de la fila previa.
+    Devuelve ``(huella_hash_anterior, siguiente_numero_secuencial_global)``.
+    """
+    from sqlalchemy import text
+
+    seq_m = conn.execute(
+        text(
+            """
+            SELECT COALESCE(MAX(f.numero_secuencial), 0) AS last_seq
+            FROM public.facturas f
+            WHERE f.empresa_id = CAST(:eid AS uuid)
+            """
+        ),
+        {"eid": str(empresa_id).strip()},
+    ).mappings().first()
+    try:
+        last_seq = int((seq_m or {}).get("last_seq") or 0)
+    except (TypeError, ValueError):
+        last_seq = 0
+    siguiente = last_seq + 1 if last_seq > 0 else 1
+
+    prev_m = conn.execute(
+        text(
+            """
+            SELECT
+              f.id,
+              COALESCE(
+                NULLIF(trim(COALESCE(f.huella_hash, f.hash_factura, f.hash_registro)::text), ''),
+                NULL
+              ) AS chain_hash
+            FROM public.facturas f
+            WHERE f.empresa_id = CAST(:eid AS uuid)
+              AND f.bloqueado = true
+              AND f.num_factura LIKE :serie_prefix
+            ORDER BY f.numero_secuencial DESC NULLS LAST,
+                     f.fecha_emision DESC NULLS LAST,
+                     f.id DESC
+            LIMIT 1
+            FOR UPDATE
+            """
+        ),
+        {"eid": str(empresa_id).strip(), "serie_prefix": f"{str(serie).strip()}-%"},
+    ).mappings().first()
+    if prev_m is None:
+        return null_chain_hash, siguiente
+    raw_prev = prev_m.get("chain_hash")
+    prev = str(raw_prev).strip() if raw_prev is not None else ""
+    return (prev or null_chain_hash), siguiente
+
+
 def _pg_read_last_fingerprint_hash(
     conn: Any,
     *,
@@ -386,21 +444,20 @@ def _pg_emit_f1_desde_portes_tx(
     serie = get_settings().VERIFACTU_SERIE_FACTURA
     with engine.begin() as conn:
         _pg_advisory_xact_lock_empresa(conn, eid)
-        chain_h, next_seq = _pg_read_invoice_chain_eslabon(
+        chain_h, next_seq = _pg_read_invoice_chain_eslabon_by_serie(
             conn,
             empresa_id=eid,
-            genesis_hash=genesis_hash,
+            serie=serie,
+            null_chain_hash=VerifactuService.null_chain_hash(),
         )
         eslabon = EslabonFacturaAnterior(hash_anterior=chain_h, siguiente_secuencial=next_seq)
         num_fact = f"{serie}-{anio}-{eslabon.siguiente_secuencial:06d}"
-        hash_registro = VerifactuService.generate_invoice_hash(
-            {
-                "num_factura": num_fact,
-                "fecha_emision": fecha_iso,
-                "nif_emisor": nif_emisor,
-                "total_factura": str(round_fiat(total_factura)),
-            },
-            eslabon.hash_anterior,
+        hash_registro = VerifactuService.generar_huella_verifactu(
+            nif_emisor=nif_emisor,
+            numero_serie_factura=num_fact,
+            fecha_expedicion=fecha_iso,
+            importe_total=total_factura,
+            huella_hash_anterior=eslabon.hash_anterior or "",
         )
         previous_fingerprint = _pg_read_last_fingerprint_hash(
             conn,
@@ -536,21 +593,20 @@ def _pg_emit_r1_rectificativa_tx(
     serie_r = get_settings().VERIFACTU_SERIE_RECTIFICATIVA
     with engine.begin() as conn:
         _pg_advisory_xact_lock_empresa(conn, eid)
-        chain_h, siguiente_seq = _pg_read_invoice_chain_eslabon(
+        chain_h, siguiente_seq = _pg_read_invoice_chain_eslabon_by_serie(
             conn,
             empresa_id=eid,
-            genesis_hash=genesis_hash,
+            serie=serie_r,
+            null_chain_hash=VerifactuService.null_chain_hash(),
         )
         eslabon = EslabonFacturaAnterior(hash_anterior=chain_h, siguiente_secuencial=siguiente_seq)
         num_fact_r = f"{serie_r}-{anio}-{siguiente_seq:06d}"
-        hash_registro = VerifactuService.generate_invoice_hash(
-            {
-                "num_factura": num_fact_r,
-                "fecha_emision": fecha_iso,
-                "nif_emisor": nif_emisor,
-                "total_factura": str(round_fiat(total_r)),
-            },
-            eslabon.hash_anterior,
+        hash_registro = VerifactuService.generar_huella_verifactu(
+            nif_emisor=nif_emisor,
+            numero_serie_factura=num_fact_r,
+            fecha_expedicion=fecha_iso,
+            importe_total=total_r,
+            huella_hash_anterior=eslabon.hash_anterior or "",
         )
         previous_fingerprint = _pg_read_last_fingerprint_hash(
             conn,
@@ -1344,14 +1400,16 @@ class FacturasService:
         zip_buf.seek(0)
         return zip_buf.getvalue(), zip_name, len(rows)
 
-    async def _eliminar_factura_compensacion(self, *, factura_id: int) -> None:
-        """Compensación sin borrado físico: deja la factura anulada para trazabilidad."""
+    async def _anular_logicamente_factura_compensacion(self, *, factura_id: int) -> None:
+        """Compensación sin DELETE: anulación lógica para trazabilidad e inmutabilidad legal."""
         try:
             await self._db.execute(
                 self._db.table("facturas").update(
                     {
+                        "estado": "anulada_compensacion",
                         "estado_cobro": "anulada_compensacion",
                         "payment_status": "CANCELLED",
+                        "bloqueado": True,
                     }
                 ).eq("id", factura_id)
             )
@@ -1538,25 +1596,25 @@ class FacturasService:
         else:
             # Desarrollo / tests sin ``DATABASE_URL``: sin candado transaccional (no apto producción).
             try:
-                eslabon = await self._verifactu.obtener_ultimo_hash_y_secuencial(empresa_id=eid)
+                serie = get_settings().VERIFACTU_SERIE_FACTURA
+                eslabon = await self._verifactu.obtener_eslabon_anterior_por_serie(
+                    empresa_id=eid, serie=serie
+                )
             except Exception as e:
                 raise RuntimeError(
                     f"No se pudo obtener el eslabón anterior VeriFactu para la empresa: {e}"
                 ) from e
 
-            serie = get_settings().VERIFACTU_SERIE_FACTURA
             anio = fecha_emision.year
             num_fact = f"{serie}-{anio}-{eslabon.siguiente_secuencial:06d}"
 
             try:
-                hash_registro = VerifactuService.generate_invoice_hash(
-                    {
-                        "num_factura": num_fact,
-                        "fecha_emision": fecha_iso,
-                        "nif_emisor": nif_emisor,
-                        "total_factura": str(round_fiat(total_factura)),
-                    },
-                    eslabon.hash_anterior,
+                hash_registro = VerifactuService.generar_huella_verifactu(
+                    nif_emisor=nif_emisor,
+                    numero_serie_factura=num_fact,
+                    fecha_expedicion=fecha_iso,
+                    importe_total=total_factura,
+                    huella_hash_anterior=eslabon.hash_anterior or "",
                 )
             except Exception as e:
                 raise ValueError(
@@ -1682,7 +1740,7 @@ class FacturasService:
 
             except Exception:
                 if factura_id is not None:
-                    await self._eliminar_factura_compensacion(factura_id=factura_id)
+                    await self._anular_logicamente_factura_compensacion(factura_id=factura_id)
                 raise
 
         assert factura_row is not None
@@ -2001,21 +2059,31 @@ class FacturasService:
                 genesis_hash=genesis_hash,
             )
         else:
-            eslabon = await self._verifactu.obtener_ultimo_hash_y_secuencial(empresa_id=eid)
-            siguiente_seq = eslabon.siguiente_secuencial
             serie_r = get_settings().VERIFACTU_SERIE_RECTIFICATIVA
+            try:
+                eslabon = await self._verifactu.obtener_eslabon_anterior_por_serie(
+                    empresa_id=eid, serie=serie_r
+                )
+            except Exception as e:
+                raise RuntimeError(
+                    f"No se pudo obtener el eslabón anterior VeriFactu para la empresa: {e}"
+                ) from e
+            siguiente_seq = eslabon.siguiente_secuencial
             anio = fecha_emision.year
             num_fact_r = f"{serie_r}-{anio}-{siguiente_seq:06d}"
 
-            hash_registro = VerifactuService.generate_invoice_hash(
-                {
-                    "num_factura": num_fact_r,
-                    "fecha_emision": fecha_iso,
-                    "nif_emisor": nif_emisor,
-                    "total_factura": str(round_fiat(total_r)),
-                },
-                eslabon.hash_anterior,
-            )
+            try:
+                hash_registro = VerifactuService.generar_huella_verifactu(
+                    nif_emisor=nif_emisor,
+                    numero_serie_factura=num_fact_r,
+                    fecha_expedicion=fecha_iso,
+                    importe_total=total_r_dec,
+                    huella_hash_anterior=eslabon.hash_anterior or "",
+                )
+            except Exception as e:
+                raise ValueError(
+                    f"Encadenamiento criptográfico VeriFactu: no se pudo generar el hash de registro R1: {e}"
+                ) from e
 
             previous_fingerprint = await self._get_last_fingerprint_hash(empresa_id=eid)
             fingerprint_hash = generar_hash_factura_oficial(
