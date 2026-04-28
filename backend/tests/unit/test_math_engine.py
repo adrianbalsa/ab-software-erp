@@ -39,28 +39,28 @@ from app.core.math_engine import (
 
 
 # ---------------------------------------------------------------------------
-# 1. Precisión decimal y ROUND_HALF_EVEN (Banker's) en cuantías de moneda
+# 1. Precisión decimal y ROUND_HALF_UP en cuantías de moneda
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
     "raw,expected",
     [
-        (Decimal("0.005"), Decimal("0.00")),
+        (Decimal("0.005"), Decimal("0.01")),
         (Decimal("0.015"), Decimal("0.02")),
-        (Decimal("0.025"), Decimal("0.02")),
+        (Decimal("0.025"), Decimal("0.03")),
         (Decimal("0.035"), Decimal("0.04")),
-        (Decimal("1.005"), Decimal("1.00")),
+        (Decimal("1.005"), Decimal("1.01")),
         (Decimal("1.015"), Decimal("1.02")),
         (Decimal("2.5"), Decimal("2.50")),
-        (Decimal("2.225"), Decimal("2.22")),
+        (Decimal("2.225"), Decimal("2.23")),
         (Decimal("2.235"), Decimal("2.24")),
-        (Decimal("-0.005"), Decimal("0.00")),
+        (Decimal("-0.005"), Decimal("-0.01")),
         (Decimal("-0.015"), Decimal("-0.02")),
-        (Decimal("-1.005"), Decimal("-1.00")),
+        (Decimal("-1.005"), Decimal("-1.01")),
     ],
 )
-def test_quantize_currency_bankers_rounding(raw: Decimal, expected: Decimal) -> None:
+def test_quantize_currency_half_up_rounding(raw: Decimal, expected: Decimal) -> None:
     assert quantize_currency(raw) == expected
     assert quantize_financial(raw) == expected
     assert round_fiat(raw) == expected
@@ -68,7 +68,7 @@ def test_quantize_currency_bankers_rounding(raw: Decimal, expected: Decimal) -> 
 
 
 def test_round_fiat_from_string_preserves_no_float_binary() -> None:
-    assert round_fiat("10.005") == Decimal("10.00")
+    assert round_fiat("10.005") == Decimal("10.01")
     assert round_fiat("10.015") == Decimal("10.02")
 
 
@@ -79,7 +79,7 @@ def test_to_decimal_float_uses_str_convention() -> None:
     assert quantize_currency(d) == Decimal("2.68")
 
 
-def test_compute_f1_totals_each_step_quantized_half_even() -> None:
+def test_compute_f1_totals_each_step_quantized_half_up() -> None:
     base, cuota, total = compute_f1_totals(base_imponible=Decimal("33.335"), iva_porcentaje=21)
     assert base == Decimal("33.34")
     assert cuota == Decimal("7.00")

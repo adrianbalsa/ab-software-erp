@@ -1,4 +1,4 @@
-"""Motor financiero: redondeo bancario, división segura, dominio."""
+"""Motor financiero: redondeo HALF_UP, división segura, dominio."""
 
 from decimal import Decimal
 
@@ -17,10 +17,10 @@ from app.core.math_engine import (
 )
 
 
-def test_round_fiat_banker() -> None:
-    # Redondeo contable ROUND_HALF_EVEN a 2 decimales (véase math_engine.round_fiat)
+def test_round_fiat_half_up() -> None:
+    # Redondeo contable ROUND_HALF_UP a 2 decimales (véase math_engine.round_fiat)
     assert round_fiat("2.675") == Decimal("2.68")
-    assert round_fiat(Decimal("2.685")) == Decimal("2.68")
+    assert round_fiat(Decimal("2.685")) == Decimal("2.69")
     assert round_fiat(10.0) == Decimal("10.00")
 
 
@@ -128,7 +128,7 @@ def test_calculate_invoice_totals_rectificativa_negative_base_half_even() -> Non
 def test_net_margin_precision_with_many_decimal_expenses() -> None:
     """
     Verifica integridad decimal del beneficio neto tras múltiples gastos con decimales complejos.
-    Beneficio neto = ingresos - suma(gastos) con ROUND_HALF_EVEN a céntimo.
+    Beneficio neto = ingresos - suma(gastos) con ROUND_HALF_UP a céntimo.
     """
     ingresos = Decimal("12345.67")
     gastos = [
@@ -147,8 +147,8 @@ def test_net_margin_precision_with_many_decimal_expenses() -> None:
     total_gastos = sum(round_fiat(g) for g in gastos)
     beneficio_neto = round_fiat(ingresos - total_gastos)
 
-    # Valor esperado calculado manualmente con HALF_EVEN línea a línea.
-    assert total_gastos == Decimal("1899.25")
-    assert beneficio_neto == Decimal("10446.42")
+    # Valor esperado calculado manualmente con HALF_UP línea a línea.
+    assert total_gastos == Decimal("1899.29")
+    assert beneficio_neto == Decimal("10446.38")
     # Identidad de control: ingresos = gastos + beneficio
     assert round_fiat(total_gastos + beneficio_neto) == round_fiat(ingresos)

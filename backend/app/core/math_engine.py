@@ -1,8 +1,8 @@
 """
-Motor de precisión financiera: ``decimal`` exclusivo, redondeo contable (HALF_EVEN)
+Motor de precisión financiera: ``decimal`` exclusivo, redondeo contable (HALF_UP)
 a 2 decimales (EUR), división segura y validaciones de dominio.
 
-La clase :class:`MathEngine` usa **ROUND_HALF_EVEN** (redondeo bancario) y cuantía **0,01 €**,
+La clase :class:`MathEngine` usa **ROUND_HALF_UP** para importes monetarios y cuantía **0,01 €**,
 alineada con ``numeric(12,2)`` en PostgreSQL/Supabase.
 """
 
@@ -13,6 +13,7 @@ from datetime import datetime
 from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import (
+    ROUND_HALF_UP,
     ROUND_HALF_EVEN,
     Context,
     Decimal,
@@ -36,8 +37,8 @@ def _math_engine_sentry_span(description: str) -> Iterator[None]:
     with sentry_sdk.start_span(op="math_engine", name=description):
         yield
 
-# Contexto financiero: precisión amplia y redondeo HALF_EVEN al cuantificar a céntimos.
-_MATH_CTX = Context(prec=28, rounding=ROUND_HALF_EVEN)
+# Contexto financiero: precisión amplia y redondeo HALF_UP al cuantificar a céntimos.
+_MATH_CTX = Context(prec=28, rounding=ROUND_HALF_UP)
 
 
 class FinancialDomainError(ValueError):
@@ -84,15 +85,15 @@ def to_decimal(value: float | str | Decimal | None) -> Decimal:
 
 def quantize_currency(value: Decimal) -> Decimal:
     """
-    Cuantiza un Decimal a **2 decimales** exactos (EUR) con ``ROUND_HALF_EVEN``.
+    Cuantiza un Decimal a **2 decimales** exactos (EUR) con ``ROUND_HALF_UP``.
     """
     with localcontext(_MATH_CTX):
-        return value.quantize(FIAT_QUANT, rounding=ROUND_HALF_EVEN)
+        return value.quantize(FIAT_QUANT, rounding=ROUND_HALF_UP)
 
 
 def round_fiat(value: float | str | Decimal | None) -> Decimal:
     """
-    Redondeo contable a **2 decimales** exactos (EUR) con ``ROUND_HALF_EVEN``.
+    Redondeo contable a **2 decimales** exactos (EUR) con ``ROUND_HALF_UP``.
     """
     try:
         d = to_decimal(value)
@@ -226,7 +227,7 @@ def negate_fiat_for_rectificativa(value: Any) -> Decimal:
 
 
 def quantize_financial(value: float | str | Decimal | None) -> Decimal:
-    """Cuantía a 2 decimales con **ROUND_HALF_EVEN** (contabilidad / MathEngine)."""
+    """Cuantía a 2 decimales con **ROUND_HALF_UP** (contabilidad / MathEngine)."""
     try:
         d = to_decimal(value)
     except FinancialDomainError:
@@ -238,7 +239,7 @@ def quantize_financial(value: float | str | Decimal | None) -> Decimal:
 
 def decimal_to_db_numeric(value: Decimal) -> Decimal:
     """
-    Salida estable para columnas ``numeric(12,2)``: siempre 2 decimales (**ROUND_HALF_EVEN**,
+    Salida estable para columnas ``numeric(12,2)``: siempre 2 decimales (**ROUND_HALF_UP**,
     misma cuantía que ``round_fiat`` / ``quantize_financial``).
     """
     return quantize_currency(value)
@@ -310,7 +311,7 @@ class InvoiceTotalsResult:
 
 class MathEngine:
     """
-    Cálculos **exclusivamente** con :class:`decimal.Decimal` y redondeo **ROUND_HALF_EVEN**
+    Cálculos **exclusivamente** con :class:`decimal.Decimal` y redondeo **ROUND_HALF_UP**
     a céntimos, para cuadrar base, IVA y total sin deriva.
     """
 
@@ -506,7 +507,7 @@ class MathEngine:
                 iva_pct, d_line, re_f, irpf_pct, qty_disp, p_disp = meta[i]
                 key = _iva_rate_key(iva_pct)
                 buckets[key] = buckets.get(key, Decimal("0")) + adj
-                # IVA por línea (ROUND_HALF_EVEN) y agregado por tipo.
+                # IVA por línea (ROUND_HALF_UP) y agregado por tipo.
                 line_vat = quantize_financial(adj * (iva_pct / Decimal("100")))
                 cuotas_buckets[key] = cuotas_buckets.get(key, Decimal("0")) + line_vat
                 line_irpf = quantize_financial(adj * (irpf_pct / Decimal("100")))
@@ -726,7 +727,7 @@ def validate_logistics_ticket_amounts(
 ) -> tuple[bool, str | None]:
     """
     Comprueba que el total del ticket sea positivo y, si hay base e IVA,
-    que ``base + IVA`` cuadre con el total en céntimos (HALF_EVEN).
+    que ``base + IVA`` cuadre con el total en céntimos (HALF_UP).
 
     Retorna ``(True, None)`` si es coherente o si no hay base para contrastar;
     ``(False, motivo)`` si el total es inválido o hay descuadre material.
