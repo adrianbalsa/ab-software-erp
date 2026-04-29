@@ -34,6 +34,16 @@ def _dev_mode_redis_rate_limit_bypass() -> bool:
     """Local-only: permitir rate limiting en memoria sin REDIS_URL."""
     return getenv("DEV_MODE", "").strip().lower() == "true"
 
+
+def is_rate_limit_testing_bypass_enabled() -> bool:
+    """Bypass explícito para tests: no aplicar límites ni dependencia Redis."""
+    try:
+        from app.core.config import get_settings
+
+        return bool(get_settings().TESTING)
+    except Exception:
+        return getenv("TESTING", "").strip().lower() in ("1", "true", "yes", "on")
+
 # Endpoints sin límite (health, documentación, webhooks entrantes de terceros).
 RATE_LIMIT_EXEMPT_PATHS: frozenset[str] = frozenset(
     {
@@ -50,7 +60,6 @@ RATE_LIMIT_EXEMPT_PATHS: frozenset[str] = frozenset(
 RATE_LIMIT_EXEMPT_PREFIXES: tuple[str, ...] = (
     "/api/v1/webhooks/stripe",
     "/api/v1/routes",
-    "/api/v1/chatbot",
 )
 
 # Login / refresh: fuerza bruta por IP.
@@ -69,6 +78,8 @@ class SkipOptionsSlowAPIMiddleware(SlowAPIMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        if is_rate_limit_testing_bypass_enabled():
+            return await call_next(request)
         if request.method == "OPTIONS":
             return await call_next(request)
         path = request.scope.get("path") or ""
@@ -140,7 +151,7 @@ def expensive_endpoint_bucket(path: str, method: str) -> str | None:
     m = (method or "").upper()
     p = (path or "").rstrip("/")
 
-    if m == "POST" and p in {"/ai/chat", "/api/v1/advisor/ask", "/api/v1/chatbot/ask"}:
+    if m == "POST" and p == "/api/v1/advisor/ask":
         return "ai"
 
     if (m == "GET" and p == "/maps/distance") or (
@@ -245,6 +256,8 @@ def get_rate_limit_strategy():
     from app.core.config import get_settings
 
     settings = get_settings()
+    if settings.TESTING:
+        return MovingWindowRateLimiter(MemoryStorage())
     url = (settings.REDIS_URL or "").strip()
     if not url:
         if _dev_mode_redis_rate_limit_bypass():
@@ -257,11 +270,25 @@ def get_rate_limit_strategy():
             "REDIS_URL no configurada: rate limiting no determinista entre réplicas; "
             "se aborta el arranque para proteger AEAT."
         )
+        from app.core.observability_p1 import notify_redis_shared_rate_limit_fatal
+
+        notify_redis_shared_rate_limit_fatal(
+            "Missing REDIS_URL for shared rate limiting",
+            None,
+            reason="missing_redis_url_strategy",
+        )
         raise RuntimeError("Missing REDIS_URL for shared rate limiting")
     try:
         storage = RedisStorage(url)
     except Exception as exc:
         _log.critical("REDIS_URL inválida para rate limiting compartido: %s", exc)
+        from app.core.observability_p1 import notify_redis_shared_rate_limit_fatal
+
+        notify_redis_shared_rate_limit_fatal(
+            "Invalid REDIS_URL for shared rate limiting",
+            exc,
+            reason="invalid_redis_url_strategy",
+        )
         raise RuntimeError("Invalid REDIS_URL for shared rate limiting") from exc
     return MovingWindowRateLimiter(storage)
 
@@ -272,6 +299,8 @@ def get_rate_limit_storage_uri() -> str:
     from app.core.config import get_settings
 
     settings = get_settings()
+    if settings.TESTING:
+        return "memory://"
     url = (settings.REDIS_URL or "").strip()
     if not url:
         if _dev_mode_redis_rate_limit_bypass():
@@ -284,6 +313,13 @@ def get_rate_limit_storage_uri() -> str:
             "REDIS_URL no configurada: SlowAPI no puede usar almacenamiento compartido; "
             "se aborta el arranque para evitar saturación AEAT."
         )
+        from app.core.observability_p1 import notify_redis_shared_rate_limit_fatal
+
+        notify_redis_shared_rate_limit_fatal(
+            "Missing REDIS_URL for SlowAPI storage",
+            None,
+            reason="missing_redis_url_slowapi",
+        )
         raise RuntimeError("Missing REDIS_URL for SlowAPI storage")
     return url
 
@@ -295,6 +331,9 @@ async def warmup_rate_limit_backend() -> None:
     from app.core.config import get_settings
 
     settings = get_settings()
+    if settings.TESTING:
+        _log.info("TESTING=true: se omite warmup de Redis para rate limiting.")
+        return
     url = (settings.REDIS_URL or "").strip()
     if not url:
         if _dev_mode_redis_rate_limit_bypass():
@@ -307,6 +346,13 @@ async def warmup_rate_limit_backend() -> None:
             "REDIS_URL no configurada: rate limiting distribuido no disponible; "
             "se aborta el arranque."
         )
+        from app.core.observability_p1 import notify_redis_shared_rate_limit_fatal
+
+        notify_redis_shared_rate_limit_fatal(
+            "Missing REDIS_URL for rate limiting backend",
+            None,
+            reason="missing_redis_url_warmup",
+        )
         raise RuntimeError("Missing REDIS_URL for rate limiting backend")
     try:
         from redis import asyncio as redis_asyncio
@@ -318,6 +364,13 @@ async def warmup_rate_limit_backend() -> None:
             await client.aclose()
     except Exception as exc:
         _log.critical("rate_limit: no se pudo validar Redis en startup: %s", exc)
+        from app.core.observability_p1 import notify_redis_shared_rate_limit_fatal
+
+        notify_redis_shared_rate_limit_fatal(
+            "Redis unavailable for shared rate limiting",
+            exc,
+            reason="warmup_ping_failed",
+        )
         raise RuntimeError("Redis unavailable for shared rate limiting") from exc
 
 

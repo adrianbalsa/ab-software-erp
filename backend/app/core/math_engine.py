@@ -4,6 +4,9 @@ a 2 decimales (EUR), división segura y validaciones de dominio.
 
 La clase :class:`MathEngine` usa **ROUND_HALF_UP** para importes monetarios y cuantía **0,01 €**,
 alineada con ``numeric(12,2)`` en PostgreSQL/Supabase.
+
+El proceso debe llamar a :func:`initialize_global_decimal_context` al arranque (véase ``app.main``)
+para que ``decimal.getcontext()`` coincida con VeriFactu y active la trampa ``FloatOperation``.
 """
 
 from __future__ import annotations
@@ -17,13 +20,33 @@ from decimal import (
     ROUND_HALF_EVEN,
     Context,
     Decimal,
+    FloatOperation,
     InvalidOperation,
+    getcontext,
     localcontext,
 )
 from os import getenv
 from typing import Any, Iterator
 
 FIAT_QUANT = Decimal("0.01")
+ESG_SNAPSHOT_KM_QUANT = Decimal("0.001")
+ESG_SNAPSHOT_CO2_KG_QUANT = Decimal("0.000001")
+
+
+def initialize_global_decimal_context() -> None:
+    """
+    Ajusta ``decimal.getcontext()`` al mismo criterio que VeriFactu / motor financiero:
+
+    - **prec** ``28``
+    - **rounding** ``ROUND_HALF_UP``
+    - **FloatOperation** en trampas: un ``Decimal(solo_float)`` directo lanza (salvo uso de ``str``/``Decimal``).
+
+    Idempotente. Invocar al inicio del proceso antes de operaciones financieras amplias.
+    """
+    ctx = getcontext()
+    ctx.prec = 28
+    ctx.rounding = ROUND_HALF_UP
+    ctx.traps[FloatOperation] = True
 
 
 @contextmanager
@@ -129,6 +152,34 @@ def quantize_operational_km(value: float | str | Decimal | None) -> Decimal:
         return d.quantize(KM_OPERATIONAL_QUANT, rounding=ROUND_HALF_EVEN)
 
 
+def quantize_esg_snapshot_km(value: float | str | Decimal | None) -> Decimal:
+    """
+    Km agregados para snapshots en PDF factura (p. ej. ESG): **3 decimales**, ``ROUND_HALF_UP``.
+    """
+    try:
+        d = to_decimal(value)
+    except FinancialDomainError:
+        raise
+    except Exception as e:
+        raise FinancialDomainError(f"Valor km no numérico: {value!r}") from e
+    with localcontext(_MATH_CTX):
+        return d.quantize(ESG_SNAPSHOT_KM_QUANT, rounding=ROUND_HALF_UP)
+
+
+def quantize_esg_snapshot_co2_kg(value: float | str | Decimal | None) -> Decimal:
+    """
+    Masa CO₂ en kg para snapshots PDF: **6 decimales**, ``ROUND_HALF_UP``.
+    """
+    try:
+        d = to_decimal(value)
+    except FinancialDomainError:
+        raise
+    except Exception as e:
+        raise FinancialDomainError(f"Valor masa CO₂ no numérico: {value!r}") from e
+    with localcontext(_MATH_CTX):
+        return d.quantize(ESG_SNAPSHOT_CO2_KG_QUANT, rounding=ROUND_HALF_UP)
+
+
 def aggregate_portes_km_bultos(rows: list[dict[str, Any]]) -> tuple[Decimal, int]:
     """
     Suma ``km_estimados`` y ``bultos`` desde filas de portes (ventana mensual típica del dashboard).
@@ -214,6 +265,89 @@ def compute_f1_totals(*, base_imponible: Decimal, iva_porcentaje: float | Decima
     cuota = quantize_currency(base * (pct / Decimal("100")))
     total = quantize_currency(base + cuota)
     return base, cuota, total
+
+
+def calculate_invoice_totals(
+    *, base_imponible: Decimal, tipo_iva: Decimal
+) -> dict[str, Decimal]:
+    """
+    Totales fiscales AEAT para una factura simple (base + IVA).
+
+    Reglas:
+    - ``cuota = base * (tipo_iva / 100)``
+    - La cuota de IVA se redondea a 2 decimales (**ROUND_HALF_UP**) antes de sumar al total.
+    - Devuelve ``{"base": Decimal, "cuota": Decimal, "total": Decimal}``.
+    """
+    base = quantize_currency(to_decimal(base_imponible))
+    iva_pct = to_decimal(tipo_iva)
+    cuota = quantize_currency(base * (iva_pct / Decimal("100")))
+    total = quantize_currency(base + cuota)
+    return {"base": base, "cuota": cuota, "total": total}
+
+
+def should_recalculate_unsealed_invoice(
+    *,
+    invoice_is_finalized: bool,
+    invoice_hash_registro: str | None,
+    invoice_hash_factura: str | None,
+    previous_route_km: float | str | Decimal | None,
+    new_route_km: float | str | Decimal | None,
+    previous_weight_ton: float | str | Decimal | None,
+    new_weight_ton: float | str | Decimal | None,
+) -> bool:
+    """
+    Detecta si una factura **no sellada** debe recalcular costes/margen tras cambios ESG.
+    """
+    if invoice_is_finalized:
+        return False
+    if str(invoice_hash_registro or "").strip() or str(invoice_hash_factura or "").strip():
+        return False
+    old_km = quantize_operational_km(previous_route_km or 0)
+    new_km = quantize_operational_km(new_route_km or 0)
+    old_weight = quantize_operational_km(previous_weight_ton or 0)
+    new_weight = quantize_operational_km(new_weight_ton or 0)
+    return old_km != new_km or old_weight != new_weight
+
+
+def recalculate_unsealed_invoice_operational_metrics(
+    *,
+    invoice_is_finalized: bool,
+    invoice_hash_registro: str | None,
+    invoice_hash_factura: str | None,
+    previous_route_km: float | str | Decimal | None,
+    new_route_km: float | str | Decimal | None,
+    previous_weight_ton: float | str | Decimal | None,
+    new_weight_ton: float | str | Decimal | None,
+    coste_operativo_eur_km: float | str | Decimal,
+    precio_factura_base: float | str | Decimal,
+) -> dict[str, Decimal | bool]:
+    """
+    Recalcula costes operativos y margen bruto si hay cambios de ruta/peso en factura no sellada.
+    """
+    should_recalc = should_recalculate_unsealed_invoice(
+        invoice_is_finalized=invoice_is_finalized,
+        invoice_hash_registro=invoice_hash_registro,
+        invoice_hash_factura=invoice_hash_factura,
+        previous_route_km=previous_route_km,
+        new_route_km=new_route_km,
+        previous_weight_ton=previous_weight_ton,
+        new_weight_ton=new_weight_ton,
+    )
+    km_new = quantize_operational_km(new_route_km or 0)
+    weight_new = quantize_operational_km(new_weight_ton or 0)
+    coste_km = quantize_currency(to_decimal(coste_operativo_eur_km))
+    ingreso_base = quantize_currency(to_decimal(precio_factura_base))
+    # Ajuste simple ESG: incremento proporcional por peso respecto a 1 tonelada.
+    weight_factor = Decimal("1") if weight_new <= 0 else quantize_operational_km(weight_new)
+    coste_operativo = quantize_currency(km_new * coste_km * weight_factor)
+    margen_bruto = quantize_currency(ingreso_base - coste_operativo)
+    return {
+        "recalculated": should_recalc,
+        "coste_operativo": coste_operativo,
+        "margen_bruto": margen_bruto,
+        "route_km": km_new,
+        "peso_ton": weight_new,
+    }
 
 
 def negate_fiat_for_rectificativa(value: Any) -> Decimal:
@@ -716,6 +850,51 @@ class MathEngine:
                     used_invoice_ids.add(int(selected["factura_id"]))
                     out.append(selected)
             return out
+
+
+class FinancialAggregator:
+    """Agregador financiero para KPIs de BI (EBITDA, margen y caja)."""
+
+    @staticmethod
+    def calculate_ebitda_bruto(
+        *,
+        ingresos_operativos: float | str | Decimal | None,
+        costes_operativos: float | str | Decimal | None,
+    ) -> Decimal:
+        """
+        EBITDA bruto = ingresos operativos - costes operativos.
+        """
+        ingresos = to_decimal(ingresos_operativos)
+        costes = to_decimal(costes_operativos)
+        return quantize_currency(ingresos - costes)
+
+    @staticmethod
+    def calculate_margen_operativo(
+        *,
+        ebitda_bruto: float | str | Decimal | None,
+        ventas: float | str | Decimal | None,
+    ) -> Decimal:
+        """
+        Margen operativo (%) sobre ventas.
+        """
+        ebitda = to_decimal(ebitda_bruto)
+        total_ventas = to_decimal(ventas)
+        if total_ventas == 0:
+            return Decimal("0.00")
+        return quantize_currency((ebitda / total_ventas) * Decimal("100"))
+
+    @staticmethod
+    def calculate_cash_flow_estimado(
+        *,
+        saldo_facturas_emitidas: float | str | Decimal | None,
+        gastos_registrados: float | str | Decimal | None,
+    ) -> Decimal:
+        """
+        Cash flow estimado = saldo de facturas emitidas - gastos registrados.
+        """
+        saldo = to_decimal(saldo_facturas_emitidas)
+        gastos = to_decimal(gastos_registrados)
+        return quantize_currency(saldo - gastos)
 
 
 def validate_logistics_ticket_amounts(
