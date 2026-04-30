@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from app.core.math_engine import initialize_global_decimal_context
+
+initialize_global_decimal_context()
+
 import asyncio
 import os
 from contextlib import asynccontextmanager
@@ -17,7 +21,7 @@ from starlette import status as starlette_status
 
 from app.api.routes import (
     admin,
-    ai,
+    advisor_legacy_deprecation,
     audit_logs,
     auth,
     clientes,
@@ -37,7 +41,6 @@ from app.api.routes import (
     reports,
     utils,
 )
-from app.api.endpoints import ai as ai_endpoints
 from app.api.v1 import auth as auth_password_v1
 from app.api.v1 import advisor as advisor_v1
 from app.api.v1 import bi as bi_v1
@@ -45,8 +48,6 @@ from app.api.v1 import product_config as product_config_v1
 from app.api.v1 import analytics as analytics_v1
 from app.api.v1 import banking as banking_v1
 from app.api.v1 import ai_documents as ai_documents_v1
-from app.api.v1 import chat as chat_v1
-from app.api.v1 import chatbot as chatbot_v1
 from app.api.v1 import clientes as clientes_v1
 from app.api.v1 import economic_dashboard as economic_dashboard_v1
 from app.api.v1 import esg as esg_v1
@@ -88,6 +89,7 @@ from app.core.rate_limit import (
     warmup_rate_limit_backend,
 )
 from app.middleware.health_bypass import HealthCheckBypassMiddleware
+from app.middleware.critical_path_sentry import CriticalPathSentryTagsMiddleware
 from app.middleware.request_id import RequestIdMiddleware
 from app.middleware.login_debug_print import LoginDebugPrintMiddleware
 from app.middleware.json_access_log import JsonAccessLogMiddleware
@@ -97,7 +99,9 @@ from app.middleware.fiscal_rate_limit_middleware import FiscalVerifactuRateLimit
 from app.middleware.idempotency_middleware import IdempotencyMiddleware
 from app.middleware.rate_limit_middleware import (
     AuthLoginRateLimitMiddleware,
+    BIRateLimitMiddleware,
     EndpointCostRateLimitMiddleware,
+    GlobalIPRateLimitMiddleware,
     TenantRateLimitMiddleware,
 )
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -223,6 +227,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(JsonAccessLogMiddleware)
     app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(CriticalPathSentryTagsMiddleware)
     app.add_middleware(
         SecurityHeadersMiddleware,
         enable_hsts=settings.ENVIRONMENT == "production",
@@ -248,7 +253,9 @@ def create_app() -> FastAPI:
     app.add_middleware(IdempotencyMiddleware)
     app.add_middleware(SlowRequestLogMiddleware)
     app.add_middleware(SkipOptionsSlowAPIMiddleware)
+    app.add_middleware(GlobalIPRateLimitMiddleware)
     app.add_middleware(TenantRateLimitMiddleware)
+    app.add_middleware(BIRateLimitMiddleware)
     app.add_middleware(AuthLoginRateLimitMiddleware)
     app.add_middleware(EndpointCostRateLimitMiddleware)
     # Debe ejecutarse antes que el resto de middlewares de rate limit para envolver
@@ -371,8 +378,11 @@ def create_app() -> FastAPI:
     app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
     app.include_router(empresa.router, prefix="/empresa", tags=["Empresa"])
     app.include_router(finance.router, prefix="/finance", tags=["Finanzas"])
-    app.include_router(ai.router, prefix="/ai", tags=["IA y chat"])
-    app.include_router(ai_endpoints.router, prefix="/ai", tags=["IA y chat"])
+    app.include_router(
+        advisor_legacy_deprecation.router,
+        prefix="/ai",
+        tags=["IA y chat (deprecado — usar /api/v1/advisor/ask)"],
+    )
     app.include_router(maps.router, prefix="/maps", tags=["Mapas"])
     app.include_router(reports.router, prefix="/reports", tags=["Informes"])
     app.include_router(admin.router, prefix="/admin", tags=["Administración"])
@@ -419,13 +429,11 @@ def create_app() -> FastAPI:
     app.include_router(esg_reports_v1.router, prefix="/api/v1", tags=["ESG"])
     app.include_router(esg_v1.router, prefix="/api/v1", tags=["ESG"])
     app.include_router(esg_auditoria_v1.router, prefix="/api/v1", tags=["ESG - Auditoría"])
-    app.include_router(chat_v1.router, prefix="/api/v1/chat", tags=["IA y chat"])
     app.include_router(
         ai_documents_v1.router,
         prefix="/api/v1/ai",
         tags=["IA — Vampire Radar / Economic Advisor"],
     )
-    app.include_router(chatbot_v1.router, prefix="/api/v1/chatbot", tags=["IA y chat"])
     app.include_router(banking_v1.router, prefix="/api/v1/banking", tags=["Banking"])
     app.include_router(treasury_v1.router, prefix="/api/v1/treasury", tags=["Tesorería"])
     app.include_router(export_v1.router, prefix="/api/v1/export", tags=["Exportación"])
@@ -457,6 +465,11 @@ def create_app() -> FastAPI:
     app.include_router(bi_v1.router, prefix="/api/v1", tags=["Business Intelligence"])
     app.include_router(usage_v1.router, prefix="/api/v1")
     app.include_router(product_config_v1.router, prefix="/api/v1")
+
+    @app.get("/api/v1/openapi.json", include_in_schema=False)
+    async def openapi_v1_alias() -> JSONResponse:
+        """Compatibilidad histórica: alias versionado del esquema OpenAPI."""
+        return JSONResponse(app.openapi())
 
     return app
 

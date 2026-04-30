@@ -9,6 +9,18 @@ import sys
 # Antes de que los tests importen módulos que instancian SlowAPI en import-time
 # (p. ej. ``app.core.rate_limit``), sin depender del fixture ``_test_env``.
 os.environ.setdefault("DEV_MODE", "true")
+os.environ.setdefault("SUPABASE_URL", "https://test-project.supabase.co")
+os.environ.setdefault("SUPABASE_KEY", "test-anon-key")
+os.environ.setdefault("SUPABASE_SERVICE_KEY", "test-service-role-key")
+os.environ.setdefault("SUPABASE_JWT_SECRET", "unit-test-jwt-secret-at-least-32-chars")
+os.environ.setdefault("JWT_SECRET_KEY", "unit-test-app-jwt-secret-32-characters!")
+os.environ.setdefault("ENCRYPTION_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+os.environ.setdefault("SESSION_SECRET_KEY", "unit-test-session-secret-32-characters")
+os.environ.setdefault("ENVIRONMENT", "development")
+
+from app.core.math_engine import initialize_global_decimal_context
+
+initialize_global_decimal_context()
 
 
 def _install_rapidfuzz_test_stub() -> None:
@@ -416,6 +428,7 @@ async def client(monkeypatch: pytest.MonkeyPatch):
                 "checks": {
                     "supabase": {"ok": True, "detail": "supabase_ok"},
                     "finance_service": {"ok": True, "detail": "finance_ok"},
+                    "sentry": {"ok": True, "detail": "sentry_check_skipped_non_production", "skipped": True},
                 },
             },
         ),
@@ -441,6 +454,16 @@ async def client(monkeypatch: pytest.MonkeyPatch):
         headers={"Authorization": f"Bearer {default_bearer}"},
     ) as ac:
         yield ac
+
+
+@pytest.fixture(autouse=True)
+def _tenant_rate_limit_sliding_window_clean() -> None:
+    """Limpia ventanas en memoria / cliente Redis del middleware tenant entre tests."""
+    from app.middleware.rate_limit_middleware import TenantRateLimitMiddleware
+
+    TenantRateLimitMiddleware._memory_windows.clear()
+    TenantRateLimitMiddleware._redis_client = None
+    yield
 
 
 @pytest.fixture

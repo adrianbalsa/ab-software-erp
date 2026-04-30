@@ -4,22 +4,31 @@ import base64
 import datetime
 import hashlib
 import json
-import re
 from dataclasses import dataclass
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
+from uuid import UUID
+
+from jinja2 import Environment, FileSystemLoader
 
 from app.db.supabase import SupabaseAsync
+from app.core.config import get_settings
 from app.core.crypto import pii_crypto
 from app.core.fiscal_logic import fiscal_amount_string_two_decimals
 from app.core.verifactu_hashing import (
+    CanonicalHashService,
     VerifactuCadena,
     generar_hash_factura_oficial,
+    norm_fecha_expedicion_verifactu,
+    norm_nif_emisor_verifactu,
 )
+from app.services.aeat_soap_client import AeatSoapClient, AeatSubmissionStatus
 from app.services.aeat_qr_service import (
     build_srei_verifactu_url,
     qr_png_bytes_from_url,
 )
+from app.services.verifactu_sender import envolver_soap12, url_envio_efectiva
 from app.services.verifactu_genesis import get_verifactu_genesis_hash_for_issuer
 
 @dataclass(frozen=True, slots=True)
@@ -30,7 +39,6 @@ class EslabonFacturaAnterior:
     siguiente_secuencial: int
 
 
-_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
 _VERIFACTU_NULL_CHAIN_HASH = "0" * 64
 
 
@@ -46,6 +54,13 @@ class VerifactuService:
 
     def __init__(self, db: SupabaseAsync) -> None:
         self._db = db
+        templates_dir = Path(__file__).resolve().parents[1] / "templates"
+        self._jinja = Environment(
+            loader=FileSystemLoader(str(templates_dir)),
+            autoescape=False,
+            trim_blocks=True,
+            lstrip_blocks=True,
+        )
 
     # -------------------------------------------------------------------------
     # Normalización determinista (misma entrada canónica → mismo hash)
@@ -63,29 +78,14 @@ class VerifactuService:
     @staticmethod
     def _norm_nif(value: Any) -> str:
         """NIF/CIF: sin espacios, mayúsculas (determinista frente a espacios/caja)."""
-        return "".join(VerifactuService._norm_str(value).split()).upper()
+        return norm_nif_emisor_verifactu(value)
 
     @staticmethod
     def _norm_fecha_iso(value: Any) -> str:
         """
         Fecha de factura en ``YYYY-MM-DD`` (primeros 10 caracteres si ya viene en ISO).
         """
-        raw = VerifactuService._norm_str(value)
-        if len(raw) >= 10 and _ISO_DATE_RE.match(raw):
-            return raw[:10]
-        try:
-            if isinstance(value, datetime.datetime):
-                return value.date().isoformat()
-            if isinstance(value, datetime.date):
-                return value.isoformat()
-        except Exception:
-            pass
-        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
-            try:
-                return datetime.datetime.strptime(raw[:10], fmt).date().isoformat()
-            except ValueError:
-                continue
-        return raw[:10] if len(raw) >= 10 else raw
+        return norm_fecha_expedicion_verifactu(value)
 
     @staticmethod
     def _norm_hash_anterior(value: str | None) -> str | None:
@@ -100,23 +100,24 @@ class VerifactuService:
         *,
         nif_emisor: str,
         numero_serie_factura: str,
-        fecha_expedicion: str,
-        importe_total: Decimal | str | int | float,
+        fecha_expedicion: str | datetime.date,
+        importe_total: Decimal | str | int,
         huella_hash_anterior: str,
     ) -> str:
         """
-        Huella encadenada VeriFactu (SHA-256 HEX en MAYÚSCULAS) con orden estricto:
-        NIF + NúmeroSerie + FechaISO + Importe(2d ROUND_HALF_UP) + HuellaAnterior.
+        Huella encadenada VeriFactu (SHA-256 HEX en MAYÚSCULAS). Delegación única en
+        ``CanonicalHashService.generate_verifactu_hash``.
         """
-        nif = VerifactuService._norm_nif(nif_emisor)
-        numero_serie = VerifactuService._norm_str(numero_serie_factura)
-        fecha = VerifactuService._norm_fecha_iso(fecha_expedicion)
-        importe = fiscal_amount_string_two_decimals(importe_total)
         prev = VerifactuService._norm_hash_anterior(huella_hash_anterior)
         if not prev:
             raise ValueError("huella_hash_anterior vacío")
-        payload = f"{nif}{numero_serie}{fecha}{importe}{prev}"
-        return hashlib.sha256(payload.encode("utf-8")).hexdigest().upper()
+        return CanonicalHashService.generate_verifactu_hash(
+            nif_emisor=nif_emisor,
+            num_serie_factura=numero_serie_factura,
+            fecha_expedicion=fecha_expedicion,
+            importe_total=importe_total,
+            huella_anterior=prev,
+        )
 
     @staticmethod
     def generate_invoice_hash(invoice_data: dict[str, Any], previous_hash: str | None) -> str:
@@ -844,6 +845,202 @@ class VerifactuService:
             await self._db.execute(self._db.table("auditoria").insert(payload))
         except Exception:
             return
+
+    async def prepare_xml_payload(
+        self,
+        *,
+        factura_row: dict[str, Any],
+        empresa_row: dict[str, Any],
+        cliente_row: dict[str, Any],
+    ) -> dict[str, str]:
+        """
+        Prepara el payload XML VeriFactu (fragmento interior + SOAP 1.2) con huella canónica.
+        """
+        nif_emisor = str(factura_row.get("nif_emisor") or empresa_row.get("nif") or "").strip()
+        if not nif_emisor:
+            raise ValueError("NIF emisor vacío para XML VeriFactu.")
+        num_serie = str(factura_row.get("num_factura") or factura_row.get("numero_factura") or "").strip()
+        if not num_serie:
+            raise ValueError("Número de factura vacío para XML VeriFactu.")
+        fecha_raw = str(factura_row.get("fecha_emision") or factura_row.get("fecha") or "").strip()
+        fecha_exp = self._norm_fecha_iso(fecha_raw)
+        if not fecha_exp:
+            raise ValueError("Fecha de expedición inválida para XML VeriFactu.")
+
+        prev_huella = str(
+            factura_row.get("huella_anterior")
+            or factura_row.get("hash_anterior")
+            or ""
+        ).strip().upper()
+        if not prev_huella:
+            empresa_id = str(factura_row.get("empresa_id") or empresa_row.get("id") or "").strip()
+            prev_huella = get_verifactu_genesis_hash_for_issuer(
+                issuer_id=empresa_id,
+                issuer_nif=nif_emisor,
+            )
+
+        importe_total = Decimal(str(factura_row.get("total_factura") or "0"))
+        huella = CanonicalHashService.generate_verifactu_hash(
+            nif_emisor=nif_emisor,
+            num_serie_factura=num_serie,
+            fecha_expedicion=fecha_exp,
+            importe_total=importe_total,
+            huella_anterior=prev_huella,
+        )
+
+        template = self._jinja.get_template("verifactu_request.xml")
+        xml_inner = template.render(
+            nif_emisor=nif_emisor,
+            num_serie_factura=num_serie,
+            fecha_expedicion=fecha_exp,
+            importe_total=fiscal_amount_string_two_decimals(importe_total),
+            huella=huella,
+            nombre_razon_emisor=str(
+                empresa_row.get("nombre_comercial") or empresa_row.get("nombre_legal") or nif_emisor
+            ).strip(),
+            nombre_destinatario=str(cliente_row.get("nombre") or "").strip(),
+            nif_destinatario=str(cliente_row.get("nif") or "").strip(),
+            timestamp_utc=datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
+            tipo_factura=str(factura_row.get("tipo_factura") or "F1").strip().upper() or "F1",
+        ).strip()
+        soap_payload = envolver_soap12(xml_inner)
+        return {"xml_inner": xml_inner, "soap_payload": soap_payload, "huella": huella}
+
+    async def submit_invoice_to_aeat(self, factura_id: UUID) -> dict[str, Any]:
+        """
+        Orquesta el envío final a AEAT por mTLS para una factura:
+        DB -> XML -> SOAP -> AEAT -> persistencia estado + auditoría.
+        """
+        settings = get_settings()
+        cert_path = (settings.AEAT_CLIENT_CERT_PATH or "").strip()
+        key_path = (settings.AEAT_CLIENT_KEY_PATH or "").strip()
+        if not cert_path or not key_path:
+            raise RuntimeError(
+                "Faltan AEAT_CLIENT_CERT_PATH / AEAT_CLIENT_KEY_PATH (.pem). "
+                "Use make aeat-prepare-certs y configure .env."
+            )
+
+        endpoint = url_envio_efectiva(settings)
+        if not endpoint:
+            raise RuntimeError("No hay endpoint AEAT configurado (AEAT_VERIFACTU_SUBMIT_URL_TEST/PROD).")
+
+        fid = str(factura_id)
+        rf: Any = await self._db.execute(
+            self._db.table("facturas").select("*").eq("id", fid).limit(1)
+        )
+        rows = (rf.data or []) if hasattr(rf, "data") else []
+        if not rows:
+            raise ValueError("Factura no encontrada.")
+        factura = dict(rows[0])
+
+        empresa_id = str(factura.get("empresa_id") or "").strip()
+        if not empresa_id:
+            raise ValueError("Factura sin empresa_id.")
+
+        re: Any = await self._db.execute(
+            self._db.table("empresas").select("*").eq("id", empresa_id).limit(1)
+        )
+        erows = (re.data or []) if hasattr(re, "data") else []
+        if not erows:
+            raise ValueError("Empresa no encontrada.")
+        empresa = dict(erows[0])
+
+        raw_emp_nif = empresa.get("nif")
+        if isinstance(raw_emp_nif, str) and raw_emp_nif.strip():
+            empresa["nif"] = pii_crypto.decrypt_pii(raw_emp_nif) or raw_emp_nif
+        raw_fac_nif = factura.get("nif_emisor")
+        if isinstance(raw_fac_nif, str) and raw_fac_nif.strip():
+            factura["nif_emisor"] = pii_crypto.decrypt_pii(raw_fac_nif) or raw_fac_nif
+
+        cliente: dict[str, Any] = {"nif": "", "nombre": ""}
+        cid = str(factura.get("cliente") or factura.get("cliente_id") or "").strip()
+        if cid:
+            rc: Any = await self._db.execute(
+                self._db.table("clientes")
+                .select("*")
+                .eq("id", cid)
+                .eq("empresa_id", empresa_id)
+                .limit(1)
+            )
+            crows = (rc.data or []) if hasattr(rc, "data") else []
+            if crows:
+                cliente = dict(crows[0])
+                raw_cli_nif = cliente.get("nif")
+                if isinstance(raw_cli_nif, str) and raw_cli_nif.strip():
+                    cliente["nif"] = pii_crypto.decrypt_pii(raw_cli_nif) or raw_cli_nif
+
+        payload = await self.prepare_xml_payload(
+            factura_row=factura, empresa_row=empresa, cliente_row=cliente
+        )
+        soap = AeatSoapClient(cert_file=cert_path, key_file=key_path, settings=settings)
+        try:
+            result = soap.submit_signed_soap(
+                service_url=endpoint,
+                soap12_body=payload["soap_payload"],
+                signed_inner_xml=payload["xml_inner"],
+            )
+        finally:
+            soap.close()
+
+        mapping = {
+            AeatSubmissionStatus.ACCEPTED: ("aceptado", "ENVIADA", None),
+            AeatSubmissionStatus.ACCEPTED_WITH_ERRORS: ("aceptado_con_errores", "ENVIADA_CON_ERRORES", None),
+            AeatSubmissionStatus.REJECTED: ("rechazado", "PENDIENTE_CORRECCION", "AEAT_RECHAZO"),
+            AeatSubmissionStatus.TECHNICAL_ERROR: ("error_tecnico", "PENDIENTE_CORRECCION", "AEAT_TECNICO"),
+        }
+        aeat_sif_estado, estado_verifactu, accion_auditoria = mapping[result.status]
+        now_iso = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+
+        update_payload: dict[str, Any] = {
+            "aeat_sif_estado": aeat_sif_estado,
+            "aeat_sif_csv": result.csv,
+            "aeat_sif_codigo": result.error_code,
+            "aeat_sif_descripcion": result.error_description,
+            "aeat_sif_actualizado_en": now_iso,
+        }
+        try:
+            await self._db.execute(
+                self._db.table("facturas")
+                .update({**update_payload, "estado_verifactu": estado_verifactu})
+                .eq("id", fid)
+                .eq("empresa_id", empresa_id)
+            )
+        except Exception:
+            await self._db.execute(
+                self._db.table("facturas")
+                .update(update_payload)
+                .eq("id", fid)
+                .eq("empresa_id", empresa_id)
+            )
+
+        if accion_auditoria is not None:
+            await self.registrar_evento(
+                accion=accion_auditoria,
+                registro_id=fid,
+                empresa_id=empresa_id,
+                detalles={
+                    "factura_id": fid,
+                    "num_factura": factura.get("num_factura") or factura.get("numero_factura"),
+                    "estado_verifactu": estado_verifactu,
+                    "aeat_sif_estado": aeat_sif_estado,
+                    "codigo_error": result.error_code,
+                    "descripcion_error": result.error_description,
+                    "csv": result.csv,
+                    "http_status": result.http_status,
+                    "huella": payload["huella"],
+                },
+            )
+
+        return {
+            "factura_id": fid,
+            "aeat_sif_estado": aeat_sif_estado,
+            "estado_verifactu": estado_verifactu,
+            "csv": result.csv,
+            "codigo_error": result.error_code,
+            "descripcion_error": result.error_description,
+            "http_status": result.http_status,
+            "huella": payload["huella"],
+        }
 
     async def emitir_factura_desde_presupuesto(
         self,

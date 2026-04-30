@@ -9,7 +9,7 @@ Ejecutar desde el directorio ``backend`` (``pythonpath`` en ``pytest.ini``)::
 from __future__ import annotations
 
 import sys
-from decimal import ROUND_HALF_EVEN, Decimal, getcontext
+from decimal import ROUND_HALF_UP, Decimal, FloatOperation, getcontext
 from pathlib import Path
 
 import pytest
@@ -27,12 +27,16 @@ from app.core.math_engine import (
     InvoiceLineInput,
     MathEngine,
     as_float_fiat,
+    calculate_invoice_totals,
     compute_f1_totals,
     decimal_to_db_numeric,
+    initialize_global_decimal_context,
     quantize_currency,
     quantize_financial,
+    recalculate_unsealed_invoice_operational_metrics,
     round_fiat,
     safe_divide,
+    should_recalculate_unsealed_invoice,
     sum_precios_pactados,
     to_decimal,
 )
@@ -87,11 +91,90 @@ def test_compute_f1_totals_each_step_quantized_half_up() -> None:
     assert total == quantize_currency(base + cuota)
 
 
+@pytest.mark.parametrize(
+    "base,iva,expected_cuota,expected_total",
+    [
+        (Decimal("10.05"), Decimal("21"), Decimal("2.11"), Decimal("12.16")),
+        (Decimal("0.05"), Decimal("10"), Decimal("0.01"), Decimal("0.06")),
+        (Decimal("0.005"), Decimal("21"), Decimal("0.00"), Decimal("0.01")),
+    ],
+)
+def test_calculate_invoice_totals_aeat_rounding_vectors(
+    base: Decimal,
+    iva: Decimal,
+    expected_cuota: Decimal,
+    expected_total: Decimal,
+) -> None:
+    got = calculate_invoice_totals(base_imponible=base, tipo_iva=iva)
+    assert got["base"] == quantize_currency(base)
+    assert got["cuota"] == expected_cuota
+    assert got["total"] == expected_total
+
+
 def test_as_float_fiat_matches_round_fiat_semantics() -> None:
     v = as_float_fiat("10.015")
     assert v == 10.02
     assert isinstance(v, float)
     assert Decimal(str(v)) == Decimal("10.02")
+
+
+def test_should_recalculate_unsealed_invoice_detects_route_or_weight_change() -> None:
+    assert (
+        should_recalculate_unsealed_invoice(
+            invoice_is_finalized=False,
+            invoice_hash_registro="",
+            invoice_hash_factura="",
+            previous_route_km=Decimal("100.000"),
+            new_route_km=Decimal("100.001"),
+            previous_weight_ton=Decimal("8.000"),
+            new_weight_ton=Decimal("8.000"),
+        )
+        is True
+    )
+    assert (
+        should_recalculate_unsealed_invoice(
+            invoice_is_finalized=True,
+            invoice_hash_registro="",
+            invoice_hash_factura="",
+            previous_route_km=Decimal("100"),
+            new_route_km=Decimal("120"),
+            previous_weight_ton=Decimal("8"),
+            new_weight_ton=Decimal("9"),
+        )
+        is False
+    )
+
+
+def test_recalculate_unsealed_invoice_operational_metrics_returns_decimal_outputs() -> None:
+    out = recalculate_unsealed_invoice_operational_metrics(
+        invoice_is_finalized=False,
+        invoice_hash_registro=None,
+        invoice_hash_factura=None,
+        previous_route_km=Decimal("100"),
+        new_route_km=Decimal("120.5"),
+        previous_weight_ton=Decimal("1.000"),
+        new_weight_ton=Decimal("1.250"),
+        coste_operativo_eur_km=Decimal("0.62"),
+        precio_factura_base=Decimal("150.00"),
+    )
+    assert out["recalculated"] is True
+    assert out["coste_operativo"] == Decimal("93.39")
+    assert out["margen_bruto"] == Decimal("56.61")
+
+
+def test_recalculate_unsealed_invoice_operational_metrics_does_not_trigger_for_sealed_invoice() -> None:
+    out = recalculate_unsealed_invoice_operational_metrics(
+        invoice_is_finalized=True,
+        invoice_hash_registro="abc123",
+        invoice_hash_factura="",
+        previous_route_km=Decimal("100"),
+        new_route_km=Decimal("140"),
+        previous_weight_ton=Decimal("1.0"),
+        new_weight_ton=Decimal("1.8"),
+        coste_operativo_eur_km=Decimal("0.62"),
+        precio_factura_base=Decimal("150.00"),
+    )
+    assert out["recalculated"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -316,9 +399,23 @@ def test_calculate_totals_raises_rounding_integrity_on_pathological_mock() -> No
     assert check < Decimal("0.001")
 
 
-def test_default_decimal_context_rounding_is_half_even_for_reference() -> None:
-    """Documentación: ``totals_coherent`` usa ``quantize`` con contexto por defecto."""
-    assert getcontext().rounding == ROUND_HALF_EVEN
+def test_global_decimal_context_verifactu_half_up_and_float_trap() -> None:
+    """Tras ``initialize_global_decimal_context`` (main/conftest): HALF_UP, prec 28, trampa FloatOperation."""
+    initialize_global_decimal_context()
+    ctx = getcontext()
+    assert ctx.rounding == ROUND_HALF_UP
+    assert ctx.prec == 28
+    assert ctx.traps.get(FloatOperation) is True
+    # Sin ``rounding=`` explícito: usa el contexto global (HALF_UP, no banquero HALF_EVEN).
+    assert Decimal("1.005").quantize(Decimal("0.01")) == Decimal("1.01")
+    assert Decimal("1.015").quantize(Decimal("0.01")) == Decimal("1.02")
+
+
+def test_decimal_constructor_from_binary_float_raises_float_operation_trap() -> None:
+    """Con la trampa activa: ``Decimal(1.1)`` (IEEE binario) no debe pasar inadvertido."""
+    initialize_global_decimal_context()
+    with pytest.raises(FloatOperation):
+        Decimal(1.1)
 
 
 def test_fiat_quant_is_one_cent() -> None:

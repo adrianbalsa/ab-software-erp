@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import calendar
 import csv
+import json
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -16,8 +17,12 @@ from app.db.supabase import SupabaseAsync
 from app.schemas.esg import (
     EsgAuditReadyOut,
     EsgAuditReadyRow,
+    EsgKmCoverageBlockOut,
     EsgMonthlyReportOut,
     EsgMonthlyReportRowOut,
+    EsgPeriodSnapshotOut,
+    EsgQualityGapOut,
+    EsgQualityReportOut,
     HuellaCarbonoMensualOut,
     PorteEmissionsCalculatedOut,
     RechartsBarPoint,
@@ -30,6 +35,12 @@ from app.core.esg_engine import (
     calculate_nox_emissions,
     esg_certificate_co2_vs_euro_iii,
     get_co2_factor_kg_per_km,
+)
+from app.core.esg_km_quality import (
+    build_esg_quality_report,
+    esg_snapshot_content_sha256,
+    infer_esg_km_source,
+    km_coverage_breakdown,
 )
 from app.services.eco_service import (
     factor_emision_huella_porte_default,
@@ -730,6 +741,7 @@ class EsgService:
                         "co2_kg": str(co2_kg),
                         "co2_emitido": str(co2_kg),
                         "factor_emision_aplicado": str(self._q6(factor)),
+                        "esg_km_source": "route_api_meters",
                     }
                 )
                 .eq("id", pid)
@@ -879,6 +891,282 @@ class EsgService:
             chart_by_vehicle=chart_by_vehicle,
         )
 
+    async def get_esg_quality_report(
+        self,
+        *,
+        empresa_id: str,
+        year: int,
+        month: int,
+    ) -> EsgQualityReportOut:
+        """Portes facturados del mes: KPI cobertura km, medido vs estimado y gaps (DD §2.2)."""
+        eid = str(empresa_id or "").strip()
+        if not eid:
+            raise ValueError("empresa_id inválido")
+        if year < 2000 or year > 2100 or month < 1 or month > 12:
+            raise ValueError("Año o mes inválido")
+
+        ultimo = calendar.monthrange(year, month)[1]
+        fecha_ini = date(year, month, 1)
+        fecha_fin = date(year, month, ultimo)
+        fi = fecha_ini.isoformat()
+        ff = fecha_fin.isoformat()
+
+        try:
+            q = filter_not_deleted(
+                self._db.table("portes")
+                .select(
+                    "id,fecha,estado,co2_emitido,co2_kg,km_estimados,km_reales,real_distance_meters,"
+                    "telemetry_distance_km,esg_km_source,esg_data_locked"
+                )
+                .eq("empresa_id", eid)
+                .eq("estado", "facturado")
+                .gte("fecha", fi)
+                .lte("fecha", ff)
+            )
+            res: Any = await self._db.execute(q)
+            porte_rows: list[dict[str, Any]] = [
+                dict(x) for x in ((res.data or []) if hasattr(res, "data") else [])
+            ]
+        except Exception as exc:
+            raise ValueError(f"No se pudieron cargar portes del periodo: {exc}") from exc
+
+        core = build_esg_quality_report(porte_rows)
+        cov = core["km_coverage"]
+        return EsgQualityReportOut(
+            empresa_id=eid,
+            year=year,
+            month=month,
+            num_portes_facturados=len(porte_rows),
+            km_coverage=EsgKmCoverageBlockOut(
+                total_km_activity=float(cov["total_km_activity"]),
+                pct_km_route_api_meters=float(cov["pct_km_route_api_meters"]),
+                pct_km_recorded_road_km=float(cov["pct_km_recorded_road_km"]),
+                pct_km_telemetry=float(cov["pct_km_telemetry"]),
+                pct_km_estimated=float(cov["pct_km_estimated"]),
+            ),
+            pct_measured_km_activity=float(core["pct_measured_km_activity"]),
+            pct_estimated_km_activity=float(core["pct_estimated_km_activity"]),
+            portes_by_source=dict(core["portes_by_source"]),
+            gaps=[EsgQualityGapOut(**g) for g in core["gaps"]],
+        )
+
+    async def list_esg_period_snapshots(
+        self,
+        *,
+        empresa_id: str,
+        limit: int = 36,
+    ) -> list[EsgPeriodSnapshotOut]:
+        eid = str(empresa_id or "").strip()
+        if not eid:
+            return []
+        lim = max(1, min(int(limit or 36), 120))
+        try:
+            res: Any = await self._db.execute(
+                self._db.table("esg_period_snapshots")
+                .select(
+                    "id,empresa_id,period_year,period_month,closed_at,"
+                    "num_portes_facturados,total_co2_kg,total_km_activity,"
+                    "pct_km_route_api_meters,pct_km_recorded_road_km,pct_km_telemetry,pct_km_estimated,"
+                    "content_sha256"
+                )
+                .eq("empresa_id", eid)
+                .order("closed_at", desc=True)
+                .limit(lim)
+            )
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        except Exception:
+            return []
+        out: list[EsgPeriodSnapshotOut] = []
+        for r in rows:
+            cid = r.get("id")
+            if cid is None:
+                continue
+            ca = r.get("closed_at")
+            out.append(
+                EsgPeriodSnapshotOut(
+                    id=str(cid),
+                    empresa_id=str(r.get("empresa_id") or eid),
+                    period_year=int(r.get("period_year") or 0),
+                    period_month=int(r.get("period_month") or 0),
+                    closed_at=str(ca) if ca is not None else "",
+                    num_portes_facturados=int(r.get("num_portes_facturados") or 0),
+                    total_co2_kg=float(r.get("total_co2_kg") or 0.0),
+                    total_km_activity=float(r.get("total_km_activity") or 0.0),
+                    pct_km_route_api_meters=float(r.get("pct_km_route_api_meters") or 0.0),
+                    pct_km_recorded_road_km=float(r.get("pct_km_recorded_road_km") or 0.0),
+                    pct_km_telemetry=float(r.get("pct_km_telemetry") or 0.0),
+                    pct_km_estimated=float(r.get("pct_km_estimated") or 0.0),
+                    content_sha256=str(r.get("content_sha256") or ""),
+                )
+            )
+        return out
+
+    async def close_esg_period_snapshot(
+        self,
+        *,
+        empresa_id: str,
+        year: int,
+        month: int,
+        usuario_id: str | None,
+    ) -> EsgPeriodSnapshotOut:
+        """
+        Cierra el mes calendario: persiste ``esg_km_source`` donde falte, inserta snapshot inmutable
+        y bloquea mutación CO2/distancia en portes del periodo (``esg_data_locked``).
+        """
+        eid = str(empresa_id or "").strip()
+        if not eid:
+            raise ValueError("empresa_id inválido")
+        if year < 2000 or year > 2100 or month < 1 or month > 12:
+            raise ValueError("Año o mes inválido")
+
+        ultimo = calendar.monthrange(year, month)[1]
+        fecha_ini = date(year, month, 1)
+        fecha_fin = date(year, month, ultimo)
+        fi = fecha_ini.isoformat()
+        ff = fecha_fin.isoformat()
+
+        try:
+            q = filter_not_deleted(
+                self._db.table("portes")
+                .select(
+                    "id,fecha,estado,co2_emitido,co2_kg,km_estimados,km_reales,real_distance_meters,"
+                    "telemetry_distance_km,esg_km_source,esg_data_locked"
+                )
+                .eq("empresa_id", eid)
+                .eq("estado", "facturado")
+                .gte("fecha", fi)
+                .lte("fecha", ff)
+            )
+            res: Any = await self._db.execute(q)
+            porte_rows: list[dict[str, Any]] = [dict(x) for x in ((res.data or []) if hasattr(res, "data") else [])]
+        except Exception as exc:
+            raise ValueError(f"No se pudieron cargar portes del periodo: {exc}") from exc
+
+        for r in porte_rows:
+            if bool(r.get("esg_data_locked")):
+                raise ValueError(
+                    "El periodo contiene portes ya bloqueados por ESG; no se puede recalcular el cierre."
+                )
+
+        for r in porte_rows:
+            pid = str(r.get("id") or "").strip()
+            if not pid:
+                continue
+            if r.get("esg_km_source") is None or str(r.get("esg_km_source") or "").strip() == "":
+                src = infer_esg_km_source(r)
+                try:
+                    await self._db.execute(
+                        self._db.table("portes")
+                        .update({"esg_km_source": src})
+                        .eq("id", pid)
+                        .eq("empresa_id", eid)
+                    )
+                except Exception as exc:
+                    raise ValueError(f"No se pudo persistir esg_km_source (porte {pid[:8]}…): {exc}") from exc
+                r["esg_km_source"] = src
+
+        cov = km_coverage_breakdown(porte_rows)
+        total_co2 = 0.0
+        for r in porte_rows:
+            raw_c = r.get("co2_kg")
+            if raw_c is not None:
+                try:
+                    total_co2 += max(0.0, float(raw_c))
+                    continue
+                except (TypeError, ValueError):
+                    pass
+            raw_e = r.get("co2_emitido")
+            if raw_e is not None:
+                try:
+                    total_co2 += max(0.0, float(raw_e))
+                except (TypeError, ValueError):
+                    pass
+
+        payload = {
+            "schema": "esg_period_snapshot_v1",
+            "empresa_id": eid,
+            "period_year": year,
+            "period_month": month,
+            "num_portes_facturados": len(porte_rows),
+            "total_co2_kg": round(total_co2, 6),
+            "km_coverage": {k: cov[k] for k in sorted(cov.keys())},
+        }
+        content_sha = esg_snapshot_content_sha256(payload)
+
+        insert_row = {
+            "empresa_id": eid,
+            "period_year": year,
+            "period_month": month,
+            "closed_by": usuario_id,
+            "num_portes_facturados": len(porte_rows),
+            "total_co2_kg": str(round(total_co2, 6)),
+            "total_km_activity": str(cov["total_km_activity"]),
+            "pct_km_route_api_meters": str(cov["pct_km_route_api_meters"]),
+            "pct_km_recorded_road_km": str(cov["pct_km_recorded_road_km"]),
+            "pct_km_telemetry": str(cov["pct_km_telemetry"]),
+            "pct_km_estimated": str(cov["pct_km_estimated"]),
+            "content_sha256": content_sha,
+            "snapshot_payload": payload,
+        }
+        try:
+            ins: Any = await self._db.execute(self._db.table("esg_period_snapshots").insert(insert_row))
+            ins_rows = (ins.data or []) if hasattr(ins, "data") else []
+        except Exception as exc:
+            msg = str(exc).lower()
+            if "unique" in msg or "duplicate" in msg:
+                raise ValueError("Ya existe un cierre ESG para este mes (snapshot único por empresa y periodo).") from exc
+            raise ValueError(f"No se pudo insertar el snapshot ESG: {exc}") from exc
+
+        if not ins_rows:
+            try:
+                res_fb: Any = await self._db.execute(
+                    self._db.table("esg_period_snapshots")
+                    .select("*")
+                    .eq("empresa_id", eid)
+                    .eq("period_year", year)
+                    .eq("period_month", month)
+                    .limit(1)
+                )
+                ins_rows = (res_fb.data or []) if hasattr(res_fb, "data") else []
+            except Exception:
+                ins_rows = []
+
+        if not ins_rows:
+            raise ValueError("Inserción de snapshot sin fila devuelta")
+
+        snap = ins_rows[0]
+
+        for r in porte_rows:
+            pid = str(r.get("id") or "").strip()
+            if not pid:
+                continue
+            try:
+                await self._db.execute(
+                    self._db.table("portes")
+                    .update({"esg_data_locked": True})
+                    .eq("id", pid)
+                    .eq("empresa_id", eid)
+                )
+            except Exception as exc:
+                raise ValueError(f"No se pudo bloquear porte {pid[:8]}… tras el cierre: {exc}") from exc
+
+        ca = snap.get("closed_at")
+        return EsgPeriodSnapshotOut(
+            id=str(snap.get("id") or ""),
+            empresa_id=str(snap.get("empresa_id") or eid),
+            period_year=int(snap.get("period_year") or year),
+            period_month=int(snap.get("period_month") or month),
+            closed_at=str(ca) if ca is not None else "",
+            num_portes_facturados=int(snap.get("num_portes_facturados") or len(porte_rows)),
+            total_co2_kg=float(snap.get("total_co2_kg") or total_co2),
+            total_km_activity=float(snap.get("total_km_activity") or cov["total_km_activity"]),
+            pct_km_route_api_meters=float(snap.get("pct_km_route_api_meters") or cov["pct_km_route_api_meters"]),
+            pct_km_recorded_road_km=float(snap.get("pct_km_recorded_road_km") or cov["pct_km_recorded_road_km"]),
+            pct_km_telemetry=float(snap.get("pct_km_telemetry") or cov["pct_km_telemetry"]),
+            pct_km_estimated=float(snap.get("pct_km_estimated") or cov["pct_km_estimated"]),
+            content_sha256=str(snap.get("content_sha256") or content_sha),
+        )
+
 
 # ---------------------------------------------------------------------------
 # Certificación comercial ISO 14083 + export CSV portal (misma lógica GLEC
@@ -978,6 +1266,10 @@ def generate_porte_certificate_pdf_reportlab(
         (t("Vehicle"), model.vehiculo_label or "—"),
         (t("Operational date"), model.fecha),
         (t("Origin → Destination"), f"{model.origen} → {model.destino}"),
+        (
+            t("GLEC activity distance (km)"),
+            f"{float(getattr(model, 'km_glec_activity_km', model.km_estimados) or 0.0):.6f}",
+        ),
         (t("CO2 service (GLEC, kg CO2eq)"), f"{model.co2_total_kg:.6f}"),
         (t("Euro III baseline (kg CO2eq)"), f"{model.euro_iii_baseline_kg:.6f}"),
         (t("Savings vs Euro III (kg CO2eq)"), f"{model.ahorro_kg:.6f}"),

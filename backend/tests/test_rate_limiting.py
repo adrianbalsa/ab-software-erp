@@ -34,9 +34,7 @@ def test_fiscal_aeat_paths_match_verifactu_and_facturas() -> None:
 
 
 def test_expensive_endpoint_bucket_matching() -> None:
-    assert expensive_endpoint_bucket("/ai/chat", "POST") == "ai"
     assert expensive_endpoint_bucket("/api/v1/advisor/ask", "POST") == "ai"
-    assert expensive_endpoint_bucket("/api/v1/chatbot/ask", "POST") == "ai"
     assert expensive_endpoint_bucket("/maps/distance", "GET") == "maps"
     assert expensive_endpoint_bucket("/api/v1/routes/optimize-route", "POST") == "maps"
     assert expensive_endpoint_bucket("/gastos/ocr", "POST") == "ocr"
@@ -65,6 +63,22 @@ async def test_tenant_rate_limit_override_is_isolated_and_traceable(
     get_settings.cache_clear()
     get_rate_limit_strategy.cache_clear()
 
+    from limits.storage.memory import MemoryStorage
+    from limits.strategies import MovingWindowRateLimiter
+
+    import app.middleware.rate_limit_middleware as rlm
+
+    isolated_strategy = MovingWindowRateLimiter(MemoryStorage())
+    monkeypatch.setattr(rlm, "get_rate_limit_strategy", lambda: isolated_strategy)
+
+    # ``TenantRateLimitMiddleware`` usa estado de clase (_memory_windows, Redis); aislar del suite.
+    TenantRateLimitMiddleware._memory_windows.clear()
+
+    async def _redis_disabled(_self: object) -> None:
+        return None
+
+    monkeypatch.setattr(TenantRateLimitMiddleware, "_redis", _redis_disabled)
+
     app = Starlette(routes=[Route("/api/v1/facturas", ok)])
     app.add_middleware(TenantRateLimitMiddleware)
 
@@ -81,6 +95,9 @@ async def test_tenant_rate_limit_override_is_isolated_and_traceable(
             second = await client.get("/api/v1/facturas", headers=headers_a)
             other_tenant = await client.get("/api/v1/facturas", headers=headers_b)
     finally:
+        TenantRateLimitMiddleware._memory_windows.clear()
+        TenantRateLimitMiddleware._redis_client = None
+        monkeypatch.setattr(rlm, "get_rate_limit_strategy", get_rate_limit_strategy)
         get_rate_limit_strategy.cache_clear()
         get_settings.cache_clear()
 

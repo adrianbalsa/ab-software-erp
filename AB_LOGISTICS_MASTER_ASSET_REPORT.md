@@ -64,7 +64,7 @@ Cada ítem se clasifica según **evidencia en código**, no según intención do
 | **Google Maps** | Distance Matrix, Routes API v2, Geocoding | `maps_service.py`, `geo_service.py` |
 | **OpenAI / LiteLLM** | OCR visión, embeddings, modelos configurables | `ocr_service.py`, variables `OPENAI_*`, LiteLLM |
 | **Google Gemini** | Alternativa OCR / visión | `ocr_service.py` |
-| **Anthropic** | Chat / asistente según ruta | `api/v1/chatbot.py` |
+| **Anthropic** | Chat / asistente (endpoint canónico) | `api/v1/advisor.py` |
 | **Stripe** | Checkout, portal, webhooks, suscripciones | `stripe_service.py`, `api/v1/webhooks/stripe.py` |
 | **GoCardless** | Open banking / pagos, webhooks | `payment_service.py`, webhooks GoCardless |
 | **Resend / SMTP** | Email facturas / estrategia configurable | `email_service`, `facturas.py` (comentarios Resend) |

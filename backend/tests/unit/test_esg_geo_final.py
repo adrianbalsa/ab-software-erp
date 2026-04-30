@@ -9,12 +9,13 @@ import pytest
 
 from app.core.esg_engine import euro_vi_factor_kg_per_km_for_weight_class, infer_weight_class_from_vehicle_label
 from app.services.esg_service import EsgService
+from app.core.redis_cache import GeoCache
+
 from app.services.geo_service import (
     GeoService,
     geocode_cache_key,
     geocode_redis_key,
     route_cache_key,
-    route_redis_key,
 )
 
 
@@ -161,10 +162,8 @@ async def test_geocode_redis_write_uses_configured_ttl(monkeypatch: pytest.Monke
 async def test_route_uses_redis_cache_hit(monkeypatch: pytest.MonkeyPatch) -> None:
     import app.services.geo_service as geo
 
-    rk = route_cache_key("Origen A", "Destino B")
-    redis = _FakeRedis(
-        {route_redis_key(rk): '{"distance_meters":50000,"duration_seconds":1800}'}
-    )
+    cache_key = GeoCache.route_key("drive", "Origen A", "Destino B")
+    redis = _FakeRedis({cache_key: '{"distance_meters":50000,"duration_seconds":1800}'})
 
     async def _fake_redis_client() -> _FakeRedis:
         return redis
@@ -178,7 +177,7 @@ async def test_route_uses_redis_cache_hit(monkeypatch: pytest.MonkeyPatch) -> No
 
     assert out["distance_meters"] == 50_000
     assert out["duration_seconds"] == 1800
-    assert out["source"] == "redis"
+    assert out["source"] == "cache"
     assert geo._LOCAL_ROUTE_CACHE_METRICS["hits"] == 1
     assert geo._LOCAL_ROUTE_CACHE_METRICS["misses"] == 0
 

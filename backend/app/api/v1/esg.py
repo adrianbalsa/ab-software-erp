@@ -8,7 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from fastapi.responses import StreamingResponse
 
 from app.api import deps
-from app.schemas.esg import EsgMonthlyReportOut, PorteEmissionsCalculatedOut, SustainabilityReportOut
+from app.schemas.esg import (
+    EsgMonthlyReportOut,
+    EsgPeriodSnapshotOut,
+    EsgQualityReportOut,
+    PorteEmissionsCalculatedOut,
+    SustainabilityReportOut,
+)
 from app.schemas.user import UserOut
 from app.services.esg_certificate_service import EsgCertificateService, parse_subject_uuid
 from app.services.esg_service import EsgService
@@ -138,3 +144,76 @@ async def download_esg_certificate_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
+
+
+@router.get(
+    "/quality-report",
+    response_model=EsgQualityReportOut,
+    summary="Reporte calidad km ESG (cobertura por fuente, medido vs estimado, gaps)",
+)
+async def esg_quality_report(
+    month: int = Query(..., ge=1, le=12, description="Mes calendario (1–12)"),
+    year: int = Query(..., ge=2000, le=2100, description="Año (YYYY)"),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager", "admin")),
+    _quota: None = Depends(deps.check_quota_limit("esg")),
+    service: EsgService = Depends(deps.get_esg_service),
+) -> EsgQualityReportOut:
+    """
+    Agrega portes **facturados** del mes con la misma lógica que el cierre ESG:
+    ``infer_esg_km_source``, peso por ``operational_km_for_row``, gaps de calidad.
+    """
+    try:
+        return await service.get_esg_quality_report(
+            empresa_id=str(current_user.empresa_id),
+            year=year,
+            month=month,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get(
+    "/period-snapshots",
+    response_model=list[EsgPeriodSnapshotOut],
+    summary="Listar cierres ESG mensuales (snapshots inmutables)",
+)
+async def list_esg_period_snapshots(
+    limit: int = Query(36, ge=1, le=120),
+    current_user: UserOut = Depends(deps.require_role("owner", "traffic_manager", "admin")),
+    _quota: None = Depends(deps.check_quota_limit("esg")),
+    service: EsgService = Depends(deps.get_esg_service),
+) -> list[EsgPeriodSnapshotOut]:
+    return await service.list_esg_period_snapshots(
+        empresa_id=str(current_user.empresa_id),
+        limit=limit,
+    )
+
+
+@router.post(
+    "/period-snapshots/close",
+    response_model=EsgPeriodSnapshotOut,
+    summary="Cerrar mes ESG: snapshot + KPI cobertura km + bloqueo CO2/distancia en portes",
+    dependencies=[
+        Depends(deps.bind_write_context),
+        Depends(deps.check_quota_limit("esg")),
+    ],
+)
+async def close_esg_period_snapshot(
+    year: int = Query(..., ge=2000, le=2100),
+    month: int = Query(..., ge=1, le=12),
+    current_user: UserOut = Depends(deps.require_write_role("owner", "admin")),
+    service: EsgService = Depends(deps.get_esg_service),
+) -> EsgPeriodSnapshotOut:
+    uid = str(current_user.usuario_id) if current_user.usuario_id else None
+    try:
+        return await service.close_esg_period_snapshot(
+            empresa_id=str(current_user.empresa_id),
+            year=year,
+            month=month,
+            usuario_id=uid,
+        )
+    except ValueError as exc:
+        d = str(exc).lower()
+        if "ya existe" in d or "único" in d:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

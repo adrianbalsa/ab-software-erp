@@ -60,8 +60,22 @@ Errores críticos puntuales pueden notificarse vía `docs/operations` / `app/cor
 | Captura de alerta recibida en Slack/email | |
 | Salida de `check_golive_readiness.py --base-url … --strict --summarize-deep` con fecha | |
 
+## 7. Hito 1 GO-live (monitorización P1 en código)
+
+| Objetivo | Implementación |
+|----------|------------------|
+| **Sentry en producción** | `GET /health/deep` incluye `checks.sentry`: en `ENVIRONMENT=production` exige `SENTRY_DSN` no vacío (sin exponer el valor). Si falta, `status=degraded` y HTTP **503**. |
+| **Latencia / triage en rutas críticas** | Middleware `CriticalPathSentryTagsMiddleware` añade tag **`p1_critical_route`** en Sentry Performance: `verifactu_submit_final`, `advisor_ask`, `health_readiness`, `bi_financial_health`. En Discover / Performance filtrar por ese tag. |
+| **Redis caído (arranque)** | Antes de cada `RuntimeError` por Redis en `warmup_rate_limit_backend` y en fallos de configuración de `get_rate_limit_strategy` / `get_rate_limit_storage_uri`, se emite **mensaje Sentry nivel fatal** (`notify_redis_shared_rate_limit_fatal`). |
+| **Redis intermitente (runtime)** | Si `strategy.hit` falla en middlewares de rate limit (fail-open), **Sentry error** acotado a 1 evento / 5 min por canal (`notify_redis_rate_limit_runtime_degraded`). |
+| **Cadena VeriFactu rota** | Tras el webhook existente: `GET /verificar-cadena` con discrepancias y `GET /audit/verify-chain` con `is_valid=false` disparan **Sentry error** (`notify_verifactu_chain_integrity_failure`). |
+
+**Cierre operativo sugerido (evidencia):** (1) monitor M2 con `checks.sentry` OK en prod; (2) en Sentry, filtrar transacciones con `p1_critical_route` y comprobar latencias; (3) tres alertas de prueba: *Send test alert* en Sentry, `POST /api/v1/admin/test-alert` (owner), y simulacro Redis en staging documentado en `ALERT_RULES_P1_V1.md` §5.
+
 ## Referencias
 
+- `docs/operations/ALERT_RULES_P1_V1.md` — reglas de alertas P1 (auth, VeriFactu, DB, Redis) + plantilla de evidencia.
+- `docs/operations/SLO_MINIMAL_V1.md` — SLI/SLO mínimos v1 (DD Fase 1.3): disponibilidad, error rate, p95.
 - `docs/operations/ON_CALL_RUNBOOK.md` — guardia y severidades.
 - `docs/operations/health_recovery.md` — interpretación de estados.
 - `docs/operations/REDIS_001_HA_BILLING_QUEUE.md` — métricas en `/health/deep`.

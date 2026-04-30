@@ -4,6 +4,8 @@
 
 Dar a la persona de guardia una ruta unica para clasificar, mitigar y cerrar incidentes en AB Logistics OS. Este runbook no sustituye los runbooks especificos; sirve como indice operativo y checklist de handoff. **Transferencia a equipo externo:** `docs/operations/HANDOVER_PACKAGE.md`.
 
+**Flujo P1 (DD / detección–contención–comunicación–RCA):** `docs/operations/runbook_v1.md`.
+
 ## Sistemas cubiertos
 
 - Frontend Vercel y API/worker Railway.

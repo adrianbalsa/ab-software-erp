@@ -104,6 +104,182 @@ def _redact_leaks(text: str) -> str:
     return text
 
 
+def _advisor_tools() -> list[dict[str, Any]]:
+    """
+    Tools de solo lectura para consultas estructuradas del contexto ya aislado por tenant.
+    """
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_financial_kpis",
+                "description": "Devuelve EBITDA e indicadores financieros del contexto del tenant.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_esg_kpis",
+                "description": "Devuelve señales ESG y CO2 desde el contexto ya calculado.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_bi_liquidity_kpis",
+                "description": "Devuelve DSO y presión de cobro por cliente en el contexto BI.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"top_n": {"type": "integer", "minimum": 1, "maximum": 15}},
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_cip_vampires",
+                "description": "Lista rutas tipo vampiro CIP detectadas en el contexto actual.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 15}},
+                    "additionalProperties": False,
+                },
+            },
+        },
+    ]
+
+
+def _extract_tool_calls(response: Any) -> list[dict[str, str]]:
+    choices = getattr(response, "choices", None) or []
+    if not choices:
+        return []
+    c0 = choices[0]
+    msg = getattr(c0, "message", None)
+    if msg is None:
+        return []
+    raw_calls = getattr(msg, "tool_calls", None) or (msg.get("tool_calls") if isinstance(msg, dict) else None) or []
+    out: list[dict[str, str]] = []
+    for c in raw_calls:
+        if isinstance(c, dict):
+            cid = str(c.get("id") or "").strip()
+            fn = c.get("function") or {}
+            name = str(fn.get("name") or "").strip()
+            args = str(fn.get("arguments") or "{}")
+        else:
+            cid = str(getattr(c, "id", "") or "").strip()
+            fn = getattr(c, "function", None)
+            name = str(getattr(fn, "name", "") or "").strip() if fn is not None else ""
+            args = str(getattr(fn, "arguments", "{}") or "{}") if fn is not None else "{}"
+        if cid and name:
+            out.append({"id": cid, "name": name, "arguments": args})
+    return out
+
+
+def _execute_advisor_tool(*, name: str, args: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    if name == "get_financial_kpis":
+        return {
+            "ebitda_snapshot": context.get("ebitda_snapshot") or {},
+            "cashflow_tesoreria": context.get("cashflow_tesoreria") or {},
+            "advanced_metrics_6m": context.get("advanced_metrics_6m") or {},
+        }
+    if name == "get_esg_kpis":
+        return {
+            "flota_normativa": context.get("flota_normativa") or {},
+            "geo_intel": context.get("geo_intel") or {},
+            "cip_matrix_count": len(context.get("cip_matrix") or []),
+            "cip_vampiros_count": len(context.get("cip_vampiros") or []),
+        }
+    if name == "get_bi_liquidity_kpis":
+        top_n = max(1, min(int(args.get("top_n") or 5), 15))
+        bi_intel = context.get("bi_intelligence") or {}
+        clientes = bi_intel.get("clientes_presion_cobro") if isinstance(bi_intel, dict) else []
+        rows = clientes if isinstance(clientes, list) else []
+        return {
+            "dashboard_summary": bi_intel.get("dashboard_summary") if isinstance(bi_intel, dict) else {},
+            "clientes_presion_cobro_top": rows[:top_n],
+        }
+    if name == "list_cip_vampires":
+        lim = max(1, min(int(args.get("limit") or 8), 15))
+        rows = context.get("cip_vampiros") if isinstance(context.get("cip_vampiros"), list) else []
+        return {"cip_vampiros": rows[:lim], "total": len(rows)}
+    return {"error": f"tool_not_allowed:{name}"}
+
+
+async def _resolve_tool_calls_for_messages(
+    *,
+    model: str,
+    api_key: str,
+    base_messages: list[dict[str, Any]],
+    context: dict[str, Any],
+    max_rounds: int = 3,
+) -> tuple[list[dict[str, Any]], Any | None]:
+    """
+    Ejecuta rondas de tool-calling y devuelve los mensajes enriquecidos + última respuesta.
+    """
+    tools = _advisor_tools()
+    work_messages: list[dict[str, Any]] = list(base_messages)
+    response: Any | None = None
+    rounds = max(1, min(int(max_rounds or 3), 4))
+    for _ in range(rounds):
+        response = await litellm.acompletion(
+            model=model,
+            messages=work_messages,
+            temperature=0.25,
+            api_key=api_key,
+            tools=tools,
+            tool_choice="auto",
+        )
+        tool_calls = _extract_tool_calls(response)
+        if not tool_calls:
+            break
+        msg = getattr((getattr(response, "choices", [None])[0]), "message", None)
+        assistant_content = str(getattr(msg, "content", "") or "") if msg is not None else ""
+        picked = tool_calls[:4]
+        work_messages.append(
+            {
+                "role": "assistant",
+                "content": assistant_content,
+                "tool_calls": [
+                    {
+                        "id": c["id"],
+                        "type": "function",
+                        "function": {"name": c["name"], "arguments": c["arguments"]},
+                    }
+                    for c in picked
+                ],
+            }
+        )
+        for c in picked:
+            try:
+                args = json.loads(c["arguments"] or "{}")
+                if not isinstance(args, dict):
+                    args = {}
+            except Exception:
+                args = {}
+            result = _execute_advisor_tool(name=c["name"], args=args, context=context)
+            logger.info("advisor_tool_call name=%s ok=%s", c["name"], "error" not in result)
+            work_messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": c["id"],
+                    "name": c["name"],
+                    "content": json.dumps(result, ensure_ascii=False, default=str),
+                }
+            )
+    return work_messages, response
+
+
 def primary_model() -> str:
     """Modelo principal (formato LiteLLM, p. ej. ``openai/gpt-4o``)."""
     m = (os.getenv("ADVISOR_MODEL") or os.getenv("ADVISOR_LLM_MODEL") or "").strip()
@@ -1009,6 +1185,7 @@ async def get_advisor_response(
     empresa_id: UUID | str,
     *,
     context: dict[str, Any],
+    history: list[dict[str, str]] | None = None,
 ) -> tuple[str, str]:
     """Respuesta completa (no streaming). Devuelve (texto, model_id efectivo)."""
     if not advisor_llm_configured():
@@ -1021,8 +1198,16 @@ async def get_advisor_response(
             "role": "system",
             "content": f"Contexto JSON del tenant (empresa_id interno {str(empresa_id)[:8]}…):\n```json\n{ctx}\n```",
         },
-        {"role": "user", "content": query.strip()},
     ]
+    if history:
+        for item in history:
+            role = str(item.get("role") or "user").strip().lower()
+            if role not in {"system", "user", "assistant"}:
+                role = "user"
+            content = str(item.get("content") or "").strip()
+            if content:
+                messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": query.strip()})
 
     last_exc: Exception | None = None
     for model in _model_chain():
@@ -1032,12 +1217,15 @@ async def get_advisor_response(
             last_exc = RuntimeError(f"Sin credenciales LLM para model={model!r}")
             continue
         try:
-            response = await litellm.acompletion(
+            _work_messages, response = await _resolve_tool_calls_for_messages(
                 model=model,
-                messages=messages,
-                temperature=0.25,
                 api_key=api_key,
+                base_messages=messages,
+                context=context,
+                max_rounds=3,
             )
+            if response is None:
+                raise RuntimeError("Respuesta LLM vacía tras tool-calling")
             try:
                 import sentry_sdk
 
@@ -1065,6 +1253,7 @@ async def stream_advisor_response(
     empresa_id: UUID | str,
     *,
     context: dict[str, Any],
+    history: list[dict[str, str]] | None = None,
 ) -> AsyncIterator[tuple[str, str | None]]:
     """Emite (fragmento, None) y al final ("", model_id efectivo). Chunks estilo OpenAI."""
     if not advisor_llm_configured():
@@ -1077,8 +1266,16 @@ async def stream_advisor_response(
             "role": "system",
             "content": f"Contexto JSON del tenant (empresa_id interno {str(empresa_id)[:8]}…):\n```json\n{ctx}\n```",
         },
-        {"role": "user", "content": query.strip()},
     ]
+    if history:
+        for item in history:
+            role = str(item.get("role") or "user").strip().lower()
+            if role not in {"system", "user", "assistant"}:
+                role = "user"
+            content = str(item.get("content") or "").strip()
+            if content:
+                messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": query.strip()})
 
     last_exc: Exception | None = None
     for model in _model_chain():
@@ -1089,9 +1286,20 @@ async def stream_advisor_response(
             continue
         usage_accum: dict[str, Any] | None = None
         try:
+            work_messages, preflight_response = await _resolve_tool_calls_for_messages(
+                model=model,
+                api_key=api_key,
+                base_messages=messages,
+                context=context,
+                max_rounds=2,
+            )
+            if preflight_response is not None:
+                preflight_usage = _usage_to_dict(getattr(preflight_response, "usage", None))
+                if preflight_usage is not None:
+                    usage_accum = preflight_usage
             stream_kwargs: dict[str, Any] = {
                 "model": model,
-                "messages": messages,
+                "messages": work_messages,
                 "stream": True,
                 "temperature": 0.25,
                 "api_key": api_key,

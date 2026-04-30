@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import logging
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
@@ -10,6 +11,7 @@ from app.api import deps
 from app.api.v1.dependencies.credits import consume_credits
 from app.core.config import get_settings
 from app.core.alerts import schedule_critical_error_alert
+from app.core.observability_p1 import notify_verifactu_chain_integrity_failure
 from app.core.verifactu import verify_invoice_chain
 from app.core.verifactu_chain_repair import diagnose_fingerprint_hash_chain, repair_recommendations
 from app.core.verifactu_qr import generate_verifactu_qr_with_url
@@ -40,6 +42,17 @@ class RetryPendingVerifactuOut(BaseModel):
     failed: int
 
 
+class VerifactuSubmitFinalOut(BaseModel):
+    factura_id: str
+    aeat_sif_estado: str
+    estado_verifactu: str
+    csv: str | None = None
+    codigo_error: str | None = None
+    descripcion_error: str | None = None
+    http_status: int | None = None
+    huella: str
+
+
 _ERR_MSG_MAX = 4000
 
 
@@ -64,6 +77,43 @@ class VerifactuDeadJobsListOut(BaseModel):
 
 
 router = APIRouter()
+
+
+@router.post(
+    "/submit-final/{factura_id}",
+    response_model=VerifactuSubmitFinalOut,
+    summary="Enviar factura final a AEAT (mTLS)",
+    responses={
+        400: {"description": "Petición inválida", "model": HTTPError},
+        404: {"description": "Factura no encontrada o sin acceso", "model": HTTPError},
+        503: {"description": "AEAT desactivado/configuración incompleta", "model": HTTPError},
+    },
+)
+async def submit_final_verifactu_invoice(
+    factura_id: UUID,
+    _: UserOut = Depends(deps.require_role("owner", "traffic_manager")),
+    _tenant_guard: None = Depends(
+        deps.require_tenant_resource(table_name="facturas", path_param="factura_id")
+    ),
+    db: SupabaseAsync = Depends(deps.get_db),
+) -> VerifactuSubmitFinalOut:
+    svc = VerifactuService(db)
+    try:
+        out = await svc.submit_invoice_to_aeat(factura_id=factura_id)
+        return VerifactuSubmitFinalOut(**out)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except Exception:
+        logger.exception("submit-final: error no clasificado enviando factura a AEAT")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno durante el envío final a AEAT.",
+        )
 
 
 @router.get(
@@ -156,6 +206,12 @@ async def verificar_cadena(
                 f"discrepancias={len(discrepancies)})"
             ),
         )
+        notify_verifactu_chain_integrity_failure(
+            empresa_id=eid,
+            source="GET /verificar-cadena",
+            error_code="HASH_DISCREPANCY",
+            summary=f"discrepancies={len(discrepancies)} sample={discrepancies[:3]!r}",
+        )
     return result
 
 
@@ -165,6 +221,7 @@ async def verificar_cadena(
     responses={404: {"description": "No encontrado", "model": HTTPError}, 400: {"description": "Parámetros inválidos", "model": HTTPError}}
 )
 async def audit_verify_chain(
+    request: Request,
     ejercicio: int | None = Query(default=None, ge=2000, le=2100),
     lang: str | None = Query(
         default=None,
@@ -195,6 +252,21 @@ async def audit_verify_chain(
     rows_m = materialize_factura_rows_for_fingerprint_verify(rows, cliente_nif_map=nif_map)
     eff_lang = lang or getattr(current_user, "preferred_language", None) or "es"
     report = verify_invoice_chain(rows_m, lang=eff_lang)
+    if not bool(report.get("is_valid", False)):
+        code = str(report.get("error_code") or "")
+        schedule_critical_error_alert(
+            request=request,
+            error_detail=(
+                f"VeriFactu audit verify-chain invalid (empresa_id={eid}, "
+                f"error_code={code}, factura_id={report.get('factura_id')})"
+            ),
+        )
+        notify_verifactu_chain_integrity_failure(
+            empresa_id=eid,
+            source="GET /audit/verify-chain",
+            error_code=code or None,
+            summary=str(report.get("error_message") or report.get("error") or ""),
+        )
     return {
         "ejercicio": ejercicio,
         "lang": eff_lang,

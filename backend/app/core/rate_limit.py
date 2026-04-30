@@ -40,7 +40,7 @@ def is_rate_limit_testing_bypass_enabled() -> bool:
     try:
         from app.core.config import get_settings
 
-        return bool(get_settings().TESTING)
+        return bool(getattr(get_settings(), "TESTING", False))
     except Exception:
         return getenv("TESTING", "").strip().lower() in ("1", "true", "yes", "on")
 
@@ -256,7 +256,7 @@ def get_rate_limit_strategy():
     from app.core.config import get_settings
 
     settings = get_settings()
-    if settings.TESTING:
+    if bool(getattr(settings, "TESTING", False)):
         return MovingWindowRateLimiter(MemoryStorage())
     url = (settings.REDIS_URL or "").strip()
     if not url:
@@ -299,7 +299,7 @@ def get_rate_limit_storage_uri() -> str:
     from app.core.config import get_settings
 
     settings = get_settings()
-    if settings.TESTING:
+    if bool(getattr(settings, "TESTING", False)):
         return "memory://"
     url = (settings.REDIS_URL or "").strip()
     if not url:
@@ -331,7 +331,7 @@ async def warmup_rate_limit_backend() -> None:
     from app.core.config import get_settings
 
     settings = get_settings()
-    if settings.TESTING:
+    if bool(getattr(settings, "TESTING", False)):
         _log.info("TESTING=true: se omite warmup de Redis para rate limiting.")
         return
     url = (settings.REDIS_URL or "").strip()

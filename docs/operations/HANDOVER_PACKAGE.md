@@ -18,6 +18,9 @@ Objetivo: que un **equipo externo** (platform, SRE o MSP) pueda operar incidenci
 ## Plantillas de cierre (evidencia fuera del repo público)
 
 - **`HANDOVER_ACTA_TEMPLATE.md`** — acta de sesión / lista de accesos revisados (sin secretos).
+- **DD Fase 3.1 (SSL, backup/restore, DR, dependencias):** `docs/dd/PHASE3_3_1_EXTERNAL_EVIDENCE.md` + script `scripts/collect_tls_evidence.sh`.
+- **DD Fase 3.2 (governance):** retención/borrado `docs/legal/DATA_RETENTION_AND_DELETION_POLICY.md`; incidentes `docs/operations/INCIDENT_REGISTER.md`; rotación secretos `docs/security/SECRET_ROTATION_POLICY.md`.
+- **DD Fase 3.3 (decisión GO):** `docs/dd/PHASE3_3_3_GO_COMMITTEE_PACKAGE.md` (matriz, informe ejecutivo, plantilla de firma); índice data room `docs/dd/EVIDENCE_VAULT_INDEX.md`; runbook archivo comité `docs/dd/RUNBOOK_3_4_DATA_ROOM_ARCHIVE.md`; borradores locales `docs/dd/local-evidence/`.
 - Evidencias AEAT / compliance: plantillas en `AEAT_HOMOLOGACION_EVIDENCE_TEMPLATE.md`, informes `generate_compliance_report.py` (ver `backend/scripts/README.md`).
 
 ## Responsabilidades post-handover

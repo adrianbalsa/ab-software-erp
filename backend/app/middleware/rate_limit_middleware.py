@@ -22,18 +22,29 @@ from app.core.plans import PLAN_FREE, normalize_plan, plan_requests_per_minute
 from app.core.rate_limit import (
     AUTH_RATE_LIMIT_PATHS,
     expensive_endpoint_bucket,
+    fiscal_aeat_submission_path,
     get_rate_limit_strategy,
+    is_rate_limit_testing_bypass_enabled,
     is_rate_limit_exempt_path,
     rate_limit_key,
     rate_limit_response,
     resolve_rate_limit_identity,
 )
 from app.core.security import decode_access_token_payload
+from app.core.observability_p1 import notify_redis_rate_limit_runtime_degraded
 from app.services.usage_service import UsageService
 
 _log = logging.getLogger(__name__)
 
 _limit_auth = parse("10 per minute")
+_limit_general_ip = parse("100 per minute")
+_limit_bi = parse("30 per minute")
+
+
+def _is_bi_path(path: str, method: str) -> bool:
+    if (method or "").upper() != "GET":
+        return False
+    return (path or "").rstrip("/").startswith("/api/v1/bi")
 
 
 def _retry_after_seconds(strategy, limit_item, key: str) -> int:
@@ -140,6 +151,8 @@ class TenantRateLimitMiddleware(BaseHTTPMiddleware):
             return _memory_fallback()
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        if is_rate_limit_testing_bypass_enabled():
+            return await call_next(request)
         if request.method == "OPTIONS":
             return await call_next(request)
 
@@ -163,6 +176,7 @@ class TenantRateLimitMiddleware(BaseHTTPMiddleware):
             ok, retry_after = await self._hit_tenant_sliding_window(tenant_id=tenant_id, rpm=rpm)
         except Exception as exc:
             _log.warning("rate_limit tenant redis: error comprobando límite (dejamos pasar): %s", exc)
+            notify_redis_rate_limit_runtime_degraded(exc, channel="tenant_sliding")
             return await call_next(request)
 
         if not ok:
@@ -185,11 +199,19 @@ class TenantRateLimitMiddleware(BaseHTTPMiddleware):
         if bucket in {"maps", "ai", "ocr"}:
             usage = UsageService()
             costs = {"maps": 5, "ai": 20, "ocr": 10}
-            has_credits = await usage.check_credits(
-                tenant_id=tenant_id,
-                cost=costs[bucket],
-                plan=plan,
-            )
+            try:
+                has_credits = await usage.check_credits(
+                    tenant_id=tenant_id,
+                    cost=costs[bucket],
+                    plan=plan,
+                )
+            except Exception as exc:
+                _log.warning(
+                    "rate_limit expensive bucket credit check (dejamos pasar): %s",
+                    exc,
+                )
+                notify_redis_rate_limit_runtime_degraded(exc, channel="usage_credits")
+                has_credits = True
             if not has_credits:
                 return Response(
                     status_code=429,
@@ -207,6 +229,8 @@ class AuthLoginRateLimitMiddleware(BaseHTTPMiddleware):
     """Solo rutas de autenticación; el resto lo cubre SlowAPI (200/min por clave)."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        if is_rate_limit_testing_bypass_enabled():
+            return await call_next(request)
         if request.method == "OPTIONS":
             return await call_next(request)
 
@@ -225,6 +249,7 @@ class AuthLoginRateLimitMiddleware(BaseHTTPMiddleware):
             ok = await anyio.to_thread.run_sync(_hit)
         except Exception as exc:
             _log.warning("rate_limit auth: error comprobando límite (dejamos pasar): %s", exc)
+            notify_redis_rate_limit_runtime_degraded(exc, channel="auth_login")
             return await call_next(request)
 
         if not ok:
@@ -257,6 +282,8 @@ class EndpointCostRateLimitMiddleware(BaseHTTPMiddleware):
         return _parse_limit_or_default(s.OCR_RATE_LIMIT, "20 per minute")
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        if is_rate_limit_testing_bypass_enabled():
+            return await call_next(request)
         if request.method == "OPTIONS":
             return await call_next(request)
 
@@ -277,6 +304,7 @@ class EndpointCostRateLimitMiddleware(BaseHTTPMiddleware):
             ok = await anyio.to_thread.run_sync(_hit)
         except Exception as exc:
             _log.warning("rate_limit %s: error comprobando límite (dejamos pasar): %s", bucket, exc)
+            notify_redis_rate_limit_runtime_degraded(exc, channel=f"endpoint_cost:{bucket}")
             return await call_next(request)
 
         if not ok:
@@ -299,4 +327,86 @@ class EndpointCostRateLimitMiddleware(BaseHTTPMiddleware):
                 limit=str(limit_item),
             )
 
+        return await call_next(request)
+
+
+class BIRateLimitMiddleware(BaseHTTPMiddleware):
+    """Cuota para endpoints BI pesados por tenant (fallback a usuario/IP)."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        if is_rate_limit_testing_bypass_enabled():
+            return await call_next(request)
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        path = request.scope.get("path") or ""
+        if not _is_bi_path(path, request.method):
+            return await call_next(request)
+
+        strategy = get_rate_limit_strategy()
+        base_key = rate_limit_key(request)
+        key = f"{base_key}:bucket:bi"
+
+        def _hit() -> bool:
+            return strategy.hit(_limit_bi, key)
+
+        try:
+            ok = await anyio.to_thread.run_sync(_hit)
+        except Exception as exc:
+            _log.warning("rate_limit bi: error comprobando límite (dejamos pasar): %s", exc)
+            notify_redis_rate_limit_runtime_degraded(exc, channel="bi")
+            return await call_next(request)
+
+        if not ok:
+            ra = _retry_after_seconds(strategy, _limit_bi, key)
+            identity = resolve_rate_limit_identity(request)
+            return rate_limit_response(
+                request,
+                retry_after_sec=ra,
+                scope=identity.scope,
+                tenant_id=identity.tenant_id,
+                bucket="bi",
+                limit=str(_limit_bi),
+            )
+        return await call_next(request)
+
+
+class GlobalIPRateLimitMiddleware(BaseHTTPMiddleware):
+    """Límite general por IP para tráfico API."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        if is_rate_limit_testing_bypass_enabled():
+            return await call_next(request)
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        path = request.scope.get("path") or ""
+        if is_rate_limit_exempt_path(path):
+            return await call_next(request)
+        if fiscal_aeat_submission_path(path, request.method):
+            return await call_next(request)
+        if _is_bi_path(path, request.method):
+            return await call_next(request)
+
+        strategy = get_rate_limit_strategy()
+        ip = get_client_ip(request) or "unknown"
+        key = f"rl:general:ip:{ip}"
+
+        def _hit() -> bool:
+            return strategy.hit(_limit_general_ip, key)
+
+        try:
+            ok = await anyio.to_thread.run_sync(_hit)
+        except Exception as exc:
+            _log.warning("rate_limit global_ip: error comprobando límite (dejamos pasar): %s", exc)
+            notify_redis_rate_limit_runtime_degraded(exc, channel="global_ip")
+            return await call_next(request)
+
+        if not ok:
+            ra = _retry_after_seconds(strategy, _limit_general_ip, key)
+            return rate_limit_response(
+                request,
+                retry_after_sec=ra,
+                scope="ip",
+                bucket="general",
+                limit=str(_limit_general_ip),
+            )
         return await call_next(request)

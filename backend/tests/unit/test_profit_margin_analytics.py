@@ -23,10 +23,11 @@ def test_period_key_month_week() -> None:
     assert "sem." in lab
 
 
-def test_profit_margin_totals_half_even_roundtrip() -> None:
-    """Los totales del servicio deben cuantizar en EUR con HALF_EVEN (vía ``quantize_currency``)."""
+def test_profit_margin_totals_currency_quantization_half_up() -> None:
+    """Los totales del servicio cuantizan en EUR con ROUND_HALF_UP (vía ``quantize_currency``)."""
     ing = quantize_currency(Decimal("100.005"))
     gas = quantize_currency(Decimal("40.005"))
-    assert float(ing) == 100.0  # HALF_EVEN at 0.01
+    assert ing == Decimal("100.01")
+    assert gas == Decimal("40.01")
     m = quantize_currency(ing - gas)
     assert m == Decimal("60.00")

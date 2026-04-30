@@ -140,6 +140,123 @@ jobs:
           print("Guardrail OK: no direct audit_logs mutations found.")
           PY
 
+      - name: Guardrail — forbid direct secret getenv in backend/app
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          root = Path("backend/app")
+          if not root.exists():
+              print("Guardrail skipped: backend/app not found.")
+              raise SystemExit(0)
+
+          # Solo secretos críticos. Config operativa no sensible puede seguir en settings.
+          secret_env_names = [
+              "OPENAI_API_KEY",
+              "ANTHROPIC_API_KEY",
+              "CLAUDE_API_KEY",
+              "GEMINI_API_KEY",
+              "GOOGLE_API_KEY",
+              "AZURE_API_KEY",
+              "AZURE_OPENAI_API_KEY",
+              "JWT_SECRET_KEY",
+              "JWT_SECRET",
+              "SUPABASE_SERVICE_KEY",
+              "SUPABASE_SERVICE_ROLE_KEY",
+              "STRIPE_SECRET_KEY",
+              "STRIPE_WEBHOOK_SECRET",
+              "GOCARDLESS_SECRET_ID",
+              "GOCARDLESS_SECRET_KEY",
+              "GOCARDLESS_ACCESS_TOKEN",
+              "GOCARDLESS_WEBHOOK_SECRET",
+              "FERNET_KEY",
+              "PII_ENCRYPTION_KEY",
+              "ENCRYPTION_KEY",
+              "AEAT_CERT_PFX",
+              "AEAT_CERT_PASSPHRASE",
+              "AEAT_CLIENT_P12_PASSWORD",
+              "ALERT_WEBHOOK_URL",
+              "DISCORD_WEBHOOK_URL",
+              "MTLS_CERT_EXPIRY_ALERT_WEBHOOK_URL",
+          ]
+          names_regex = "|".join(re.escape(n) for n in secret_env_names)
+          # Captura os.getenv("NAME") y os.getenv('NAME')
+          pattern = re.compile(r"os\.getenv\(\s*['\"](" + names_regex + r")['\"]")
+
+          violations = []
+          for path in root.rglob("*.py"):
+              text = path.read_text(encoding="utf-8", errors="ignore")
+              for line_no, line in enumerate(text.splitlines(), start=1):
+                  if pattern.search(line):
+                      violations.append((path, line_no, line.strip()))
+
+          if violations:
+              print("Direct os.getenv() for critical secrets is forbidden in backend/app.")
+              print("Use get_secret_manager() instead.")
+              for path, line_no, line in violations:
+                  print(f"{path}:{line_no}: {line}")
+              raise SystemExit(1)
+
+          print("Guardrail OK: no direct getenv() for critical secrets in backend/app.")
+          PY
+
+      - name: Advisory — critical secret getenv in scripts (warning only)
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          roots = [Path("backend/scripts"), Path("scripts")]
+          secret_env_names = [
+              "OPENAI_API_KEY",
+              "ANTHROPIC_API_KEY",
+              "CLAUDE_API_KEY",
+              "GEMINI_API_KEY",
+              "GOOGLE_API_KEY",
+              "AZURE_API_KEY",
+              "AZURE_OPENAI_API_KEY",
+              "JWT_SECRET_KEY",
+              "JWT_SECRET",
+              "SUPABASE_SERVICE_KEY",
+              "SUPABASE_SERVICE_ROLE_KEY",
+              "STRIPE_SECRET_KEY",
+              "STRIPE_WEBHOOK_SECRET",
+              "GOCARDLESS_SECRET_ID",
+              "GOCARDLESS_SECRET_KEY",
+              "GOCARDLESS_ACCESS_TOKEN",
+              "GOCARDLESS_WEBHOOK_SECRET",
+              "FERNET_KEY",
+              "PII_ENCRYPTION_KEY",
+              "ENCRYPTION_KEY",
+              "AEAT_CERT_PFX",
+              "AEAT_CERT_PASSPHRASE",
+              "AEAT_CLIENT_P12_PASSWORD",
+              "ALERT_WEBHOOK_URL",
+              "DISCORD_WEBHOOK_URL",
+              "MTLS_CERT_EXPIRY_ALERT_WEBHOOK_URL",
+          ]
+          names_regex = "|".join(re.escape(n) for n in secret_env_names)
+          pattern = re.compile(r"os\.getenv\(\s*['\"](" + names_regex + r")['\"]")
+
+          warnings = []
+          for root in roots:
+              if not root.exists():
+                  continue
+              for path in root.rglob("*.py"):
+                  text = path.read_text(encoding="utf-8", errors="ignore")
+                  for line_no, line in enumerate(text.splitlines(), start=1):
+                      if pattern.search(line):
+                          warnings.append((path, line_no, line.strip()))
+
+          if warnings:
+              print("::warning::Scripts con os.getenv() de secretos críticos (revisar migración a SecretManagerService).")
+              for path, line_no, line in warnings:
+                  print(f"::warning title=secret-getenv::{path}:{line_no}: {line}")
+          else:
+              print("Advisory OK: no direct getenv() for listed critical secrets en scripts monitoreados.")
+          PY
+
       - name: Run pytest (backend/tests; incluye routes optimizer Truck API)
         working-directory: backend
         env:

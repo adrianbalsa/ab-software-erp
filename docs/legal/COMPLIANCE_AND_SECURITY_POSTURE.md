@@ -1,7 +1,7 @@
 # Postura de cumplimiento y ciberseguridad (Due Diligence)
 
 **Versión:** 1.0  
-**Última revisión:** 2026-04-19  
+**Última revisión:** 2026-04-29  
 **Alcance:** AB Logistics OS (API FastAPI + Supabase + front Vercel)
 
 Este documento agrupa la **evidencia técnica y legal** que suele solicitarse en auditorías B2B, RGPD y ciberseguridad, enlazando artefactos ya versionados en el repositorio y endpoints públicos de transparencia.
@@ -15,6 +15,9 @@ Este documento agrupa la **evidencia técnica y legal** que suele solicitarse en
 | Condiciones de servicio | `docs/legal/TERMS_OF_SERVICE.md` |
 | Lista de subencargados (categorías y proveedores) | `GET /api/v1/public/compliance` → campo `subprocessors` (JSON) |
 | Derecho al olvido / anonimización técnica | `POST /api/v1/admin/compliance/anonymize/{user_id}` (admin empresa); servicio `backend/app/services/compliance.py` |
+| Retención y borrado (governance) | `docs/legal/DATA_RETENTION_AND_DELETION_POLICY.md` |
+| Rotación de secretos y evidencia | `docs/security/SECRET_ROTATION_POLICY.md`, `docs/security/SECRET_ROTATION_LOG_2026-04-29.md` |
+| Registro de incidentes (12 meses) | `docs/operations/INCIDENT_REGISTER.md` |
 | Cifrado y secretos | `README_SECURITY.md`, `SecretManagerService` (`backend/app/services/secret_manager_service.py`) |
 
 El ejercicio de derechos de **interesados finales** del Cliente se canaliza, contractualmente, a través del **Responsable** (el Cliente); la plataforma asiste técnicamente según capacidades documentadas.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -42,7 +43,7 @@ def test_generate_invoice_hash_requiere_previous_hash_resuelto() -> None:
         "num_factura": "FAC-2026-000001",
         "fecha_emision": "2026-03-24",
         "nif_emisor": "B12345678",
-        "total_factura": 121.0,
+        "total_factura": Decimal("121.00"),
     }
     with pytest.raises(ValueError, match="previous_hash VeriFactu vacío"):
         VerifactuService.generate_invoice_hash(inv, None)

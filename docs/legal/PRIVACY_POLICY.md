@@ -54,6 +54,8 @@ Asimismo, AB Logistics OS garantiza que, tras la rescisión y sujeto a obligacio
 
 En todo caso, el borrado se realizará sin demora indebida, y en un plazo normalmente **no superior a 30 días** desde la rescisión, salvo que la normativa exija un plazo mayor o existan retenciones obligatorias.
 
+Política operativa ampliada por categorías de dato y backups: **`docs/legal/DATA_RETENTION_AND_DELETION_POLICY.md`**.
+
 ## 8. Derechos de los interesados
 El ejercicio de los derechos de los interesados (acceso, rectificación, supresión, limitación, oposición y portabilidad) se canaliza a través del Responsable del Tratamiento. AB Logistics OS asistirá al Cliente en la atención de dichos derechos, dentro de sus posibilidades técnicas y con costes que se ajustarán conforme al contrato.
 

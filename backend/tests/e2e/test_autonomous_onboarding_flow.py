@@ -25,7 +25,10 @@ sys.modules.setdefault("litellm", MagicMock(name="litellm_test_double"))
 sys.modules.setdefault("anthropic", MagicMock(name="anthropic_test_double"))
 
 from app.api import deps
+from app.core.plans import CostMeter
 from app.core.security import create_access_token
+from app.services.usage_quota_service import QuotaConsumption
+from app.services.usage_service import UsageResult, UsageService
 
 
 # --- Identidades fijas (JWT sub = profiles.id, como Supabase Auth) -----------------
@@ -247,37 +250,51 @@ class OnboardingFakeSupabase:
         return MagicMock()
 
 
-class _ConsultServiceStub:
-    """Sustituye LogisAdvisorService en /ai/consult: sin LLM real (solo valida RBAC + tenant)."""
+class _AdvisorChatPersistenceStub:
+    """Evita tablas ``chat_*`` en el fake Supabase del onboarding."""
 
-    @staticmethod
-    def openai_configured() -> bool:
-        return True
+    _sid = str(uuid4())
 
-    async def build_data_context(self, *, empresa_id: str) -> dict[str, Any]:
-        assert str(empresa_id).strip()
-        return {
-            "current_portes": [],
-            "financial_summary": {},
-            "maps_data": {},
-        }
+    async def archive_inactive_sessions(self, **_kwargs: Any) -> None:
+        return None
 
-    async def generate_diagnostic(
+    async def apply_retention_policy(self, **_kwargs: Any) -> None:
+        return None
+
+    async def create_session(self, **_kwargs: Any) -> dict[str, Any]:
+        return {"id": self._sid}
+
+    async def get_context_history(self, **_kwargs: Any) -> list[dict[str, str]]:
+        return []
+
+    async def append_message(self, **_kwargs: Any) -> dict[str, Any]:
+        return {"id": str(uuid4())}
+
+
+class _AdvisorAuditStub:
+    async def log_sensitive_action(self, **_kwargs: Any) -> None:
+        return None
+
+
+class _AdvisorQuotaStub:
+    async def consume(
         self,
         *,
-        data_context: dict[str, Any],
-        user_query: str,
-    ) -> dict[str, Any]:
-        _ = (data_context, user_query)
-        return {
-            "summary_headline": "OK QA",
-            "profitability": {"status": "ok", "findings": [], "actions": []},
-            "fiscal_safety": {"status": "ok", "findings": [], "actions": []},
-            "liquidity": {"status": "ok", "findings": [], "actions": []},
-            "risk_flags": [],
-            "recommended_actions": [],
-            "model": "e2e-stub",
-        }
+        empresa_id: str,
+        meter: CostMeter | str,
+        units: int = 1,
+        plan_type: str | None = None,
+    ) -> QuotaConsumption:
+        _ = (self, meter, units, plan_type)
+        return QuotaConsumption(
+            empresa_id=str(empresa_id),
+            plan_type="free",
+            period_yyyymm="202604",
+            meter=CostMeter.AI,
+            used_units=1,
+            limit_units=1_000_000,
+            remaining_units=999_999,
+        )
 
 
 @pytest.fixture
@@ -335,6 +352,7 @@ async def onboarding_client(monkeypatch: pytest.MonkeyPatch):
 @pytest.mark.asyncio
 async def test_e2e_autonomous_onboarding_porte_ai_and_idempotency(
     onboarding_client: tuple[AsyncClient, OnboardingFakeSupabase],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client, fake = onboarding_client
 
@@ -380,13 +398,41 @@ async def test_e2e_autonomous_onboarding_porte_ai_and_idempotency(
     assert res_porte.status_code == 201, res_porte.text
     assert res_porte.json().get("empresa_id") == empresa_id
 
+    async def _noop_consume_credits(
+        self: UsageService,
+        *,
+        tenant_id: str,
+        amount: int,
+        plan: str = "starter",
+    ) -> UsageResult:
+        _ = (self, tenant_id, amount, plan)
+        return UsageResult(allowed=True, remaining_credits=999)
+
+    monkeypatch.setattr(UsageService, "consume_credits", _noop_consume_credits)
+
+    async def _fake_gather(**_kwargs: Any) -> dict[str, Any]:
+        return {}
+
+    async def _fake_get_advisor_response(*_args: Any, **_kwargs: Any) -> tuple[str, str]:
+        return ("OK QA", "e2e-stub")
+
+    monkeypatch.setattr("app.api.v1.advisor.openai_configured", lambda: True)
+    monkeypatch.setattr("app.api.v1.advisor.gather_advisor_context", _fake_gather)
+    monkeypatch.setattr("app.api.v1.advisor.get_advisor_response", _fake_get_advisor_response)
+
     app = client._transport.app  # type: ignore[attr-defined]
-    app.dependency_overrides[deps.get_logis_advisor_service] = lambda: _ConsultServiceStub()
+    app.dependency_overrides[deps.get_chat_persistence_service] = lambda: _AdvisorChatPersistenceStub()
+    app.dependency_overrides[deps.get_audit_logs_service] = lambda: _AdvisorAuditStub()
+    app.dependency_overrides[deps.get_usage_quota_service] = lambda: _AdvisorQuotaStub()
 
     try:
-        res_ai = await client.post("/ai/consult", json={"query": "Diagnóstico post-onboarding"}, headers=headers)
+        res_ai = await client.post(
+            "/api/v1/advisor/ask",
+            json={"message": "Diagnóstico post-onboarding", "stream": False},
+            headers=headers,
+        )
         assert res_ai.status_code == 200, res_ai.text
-        assert res_ai.json().get("summary_headline") == "OK QA"
+        assert res_ai.json().get("reply") == "OK QA"
     finally:
         app.dependency_overrides.clear()
 

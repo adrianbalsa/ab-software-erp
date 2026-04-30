@@ -406,6 +406,10 @@ async def run_deep_health(*, supabase_url: str, service_key: str, db: SupabaseAs
 
     checks["aeat_mtls_certificates"] = await check_aeat_mtls_certificate_expiry(db)
 
+    from app.core.observability_p1 import check_sentry_p1_configuration
+
+    checks["sentry"] = await check_sentry_p1_configuration()
+
     status = _overall_status(checks)
     return {
         "status": status,

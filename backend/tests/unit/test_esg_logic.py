@@ -72,6 +72,7 @@ def test_certificate_pdf_bytes_non_empty() -> None:
         nox_total_kg=0.4,
         subcontratado=False,
         scope_note="Scope 1 — prueba unitaria.",
+        km_glec_activity_km=620.0,
     )
     pdf = generate_porte_certificate_pdf_reportlab(model)
     assert pdf.startswith(b"%PDF")

@@ -28,6 +28,7 @@ import statistics
 import sys
 import time
 from dataclasses import dataclass, field
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -271,9 +272,9 @@ def _verify_verifactu_chain(
                 fe = row.get("fecha_emision")
                 fecha = str(fe)[:10] if fe else ""
                 try:
-                    tot = float(row.get("total_factura") or 0.0)
-                except (TypeError, ValueError):
-                    tot = 0.0
+                    tot = Decimal(str(row.get("total_factura") or 0))
+                except Exception:
+                    tot = Decimal("0")
                 h_prev_col = row.get("hash_anterior")
                 h_prev = str(h_prev_col).strip() if h_prev_col else None
                 if h_prev == "":

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { API_BASE, apiFetch } from "@/lib/api";
+import { streamAdvisorAsk } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type ChatMessage = {
@@ -65,33 +65,37 @@ export function LogisAdvisor() {
     setIsLoading(true);
 
     try {
-      const response = await apiFetch(`${API_BASE}/api/v1/chatbot/ask`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      let reply = "";
+      let failed: string | null = null;
+      await streamAdvisorAsk(
+        { message: text.trim(), stream: false },
+        {
+          onDelta: (chunk) => {
+            reply += chunk;
+          },
+          onError: (msg) => {
+            failed = msg;
+          },
         },
-        body: JSON.stringify({ message: text.trim() }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error: ${response.status}`);
+      );
+      if (failed) {
+        throw new Error(failed);
       }
-
-      const data = await response.json();
-
       const assistantMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        content: data.response || "No se pudo generar una respuesta.",
+        content: reply.trim() || "No se pudo generar una respuesta.",
         timestamp: new Date(),
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch {
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Error desconocido";
       const errorMessage: ChatMessage = {
         id: `error-${Date.now()}`,
         role: "assistant",
         content:
+          detail.trim() ||
           "Lo siento, ocurrió un error al procesar tu solicitud. Verifica tu conexión e intenta de nuevo.",
         timestamp: new Date(),
       };

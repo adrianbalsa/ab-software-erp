@@ -48,6 +48,9 @@ async def test_health_deep_returns_healthy_when_checks_pass(client) -> None:
     assert body["status"] == "healthy"
     assert body["checks"]["supabase"]["ok"] is True
     assert body["checks"]["finance_service"]["ok"] is True
+    sentry = body["checks"].get("sentry") or {}
+    assert sentry.get("skipped") is True
+    assert sentry.get("ok") is True
 
 
 async def test_health_deep_returns_503_when_aeat_mtls_certificate_invalid(

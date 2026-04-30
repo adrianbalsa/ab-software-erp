@@ -103,9 +103,32 @@ def attach_custom_openapi(app: FastAPI) -> None:
 
         components = openapi_schema.setdefault("components", {})
         schemes = components.setdefault("securitySchemes", {})
+        schemas = components.setdefault("schemas", {})
+
+        schemas.setdefault(
+            "RateLimitError",
+            {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "example": "rate_limit_exceeded"},
+                    "error": {"type": "string", "example": "Rate limit exceeded"},
+                    "message": {
+                        "type": "string",
+                        "example": "Demasiadas solicitudes. Reintenta cuando finalice la ventana de rate limit.",
+                    },
+                    "retry_after": {"type": "string", "example": "60 seconds"},
+                    "request_id": {"type": "string", "example": "req_123456"},
+                    "scope": {"type": "string", "example": "tenant"},
+                    "tenant_id": {"type": "string", "example": "empresa_abc"},
+                    "bucket": {"type": "string", "example": "fiscal"},
+                    "limit": {"type": "string", "example": "10 per minute"},
+                },
+                "required": ["code", "error", "message", "retry_after", "request_id"],
+            },
+        )
 
         # Documentación explícita: JWT Bearer (alineado con OAuth2 password de /auth/login)
-        schemes["HTTPBearer"] = {
+        bearer_scheme = {
             "type": "http",
             "scheme": "bearer",
             "bearerFormat": "JWT",
@@ -115,6 +138,9 @@ def attach_custom_openapi(app: FastAPI) -> None:
                 "por defecto `abl_auth_token`) en el mismo sitio que la API."
             ),
         }
+        schemes["HTTPBearer"] = bearer_scheme
+        # Alias explícito para integraciones que esperan nombre clásico BearerAuth.
+        schemes["BearerAuth"] = bearer_scheme
 
         # Webhooks salientes: el integrador valida el cuerpo con HMAC (no aplica a llamadas entrantes a esta API REST)
         schemes["WebhookHMAC"] = {
@@ -134,6 +160,28 @@ def attach_custom_openapi(app: FastAPI) -> None:
                 "OAuth2 password flow contra `POST /auth/login`. La respuesta incluye `access_token` "
                 "(JWT) y cookies HttpOnly de acceso/refresh en el dominio de la API."
             )
+
+        default_429_response = {
+            "description": "Too Many Requests - rate limit exceeded",
+            "headers": {
+                "Retry-After": {
+                    "description": "Segundos restantes para reintentar",
+                    "schema": {"type": "integer"},
+                }
+            },
+            "content": {
+                "application/json": {"schema": {"$ref": "#/components/schemas/RateLimitError"}}
+            },
+        }
+        paths = openapi_schema.get("paths", {})
+        for path_item in paths.values():
+            if not isinstance(path_item, dict):
+                continue
+            for operation in path_item.values():
+                if not isinstance(operation, dict):
+                    continue
+                responses = operation.setdefault("responses", {})
+                responses.setdefault("429", default_429_response)
 
         app.openapi_schema = openapi_schema
         return app.openapi_schema

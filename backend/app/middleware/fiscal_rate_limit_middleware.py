@@ -11,17 +11,19 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.core.observability_p1 import notify_redis_rate_limit_runtime_degraded
 from app.core.rate_limit import (
     fiscal_aeat_submission_path,
     fiscal_rate_limit_key,
     get_rate_limit_strategy,
+    is_rate_limit_testing_bypass_enabled,
     rate_limit_response,
     resolve_rate_limit_identity,
 )
 
 _log = logging.getLogger(__name__)
 
-_limit_fiscal = parse("300 per minute")
+_limit_fiscal = parse("10 per minute")
 
 
 def _retry_after_seconds(strategy, limit_item, key: str) -> int:
@@ -41,6 +43,8 @@ class FiscalVerifactuRateLimitMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        if is_rate_limit_testing_bypass_enabled():
+            return await call_next(request)
         if request.method == "OPTIONS":
             return await call_next(request)
         path = request.scope.get("path") or ""
@@ -57,6 +61,7 @@ class FiscalVerifactuRateLimitMiddleware(BaseHTTPMiddleware):
             ok = await anyio.to_thread.run_sync(_hit)
         except Exception as exc:
             _log.warning("rate_limit fiscal: error comprobando límite (dejamos pasar): %s", exc)
+            notify_redis_rate_limit_runtime_degraded(exc, channel="fiscal_verifactu")
             return await call_next(request)
 
         if not ok:

@@ -5,6 +5,7 @@ Suite crítica VeriFactu: F1 (hash), inmutabilidad (sin borrado), R1 (rectificat
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
@@ -35,7 +36,7 @@ async def test_emitir_f1_genera_hash_registro_correcto() -> None:
             "num_factura": "FAC-2026-000001",
             "fecha_emision": fixed.isoformat(),
             "nif_emisor": "B12345678",
-            "total_factura": 121.0,
+            "total_factura": Decimal("121.00"),
         },
         TEST_GENESIS_HASH,
     )
@@ -142,7 +143,7 @@ async def test_borrar_factura_dispara_trigger_y_es_ignorado_en_compensacion() ->
 
     db.execute = AsyncMock(side_effect=boom)
     svc = FacturasService(db)
-    await svc._eliminar_factura_compensacion(factura_id=99)
+    await svc._anular_logicamente_factura_compensacion(factura_id=99)
     db.execute.assert_awaited()
 
 

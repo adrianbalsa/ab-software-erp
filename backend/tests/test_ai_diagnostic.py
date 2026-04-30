@@ -5,7 +5,6 @@ import sys
 from datetime import date
 from types import SimpleNamespace
 from unittest.mock import MagicMock
-from uuid import UUID
 
 import pytest
 
@@ -13,9 +12,7 @@ import pytest
 sys.modules.setdefault("litellm", MagicMock(name="litellm_test_double"))
 sys.modules.setdefault("anthropic", MagicMock(name="anthropic_test_double"))
 
-from app.api import deps
 from app.core.constants import COSTE_OPERATIVO_EUR_KM
-from app.schemas.user import UserOut
 from app.services.ai_service import LogisAdvisorService
 
 
@@ -121,8 +118,7 @@ async def test_prepare_ai_context_eta_and_vampire_flag(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
-async def test_api_consult_returns_structured_json_and_redacts_sensitive_context(
-    client,
+async def test_generate_diagnostic_returns_structured_json_and_redacts_sensitive_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service = _make_service()
@@ -167,25 +163,11 @@ async def test_api_consult_returns_structured_json_and_redacts_sensitive_context
 
     monkeypatch.setattr("app.services.ai_service.litellm.acompletion", _fake_litellm_completion)
 
-    app = client._transport.app  # type: ignore[attr-defined]
-    app.dependency_overrides[deps.get_logis_advisor_service] = lambda: service
-    app.dependency_overrides[deps.get_current_user] = lambda: UserOut(
-        username="qa@test.local",
-        empresa_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-        rol="user",
-        rbac_role="owner",
-        usuario_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
-    )
-
-    try:
-        res = await client.post("/ai/consult", json={"query": "Diagnóstico rápido"})
-        assert res.status_code == 200
-        body = res.json()
-        assert body["profitability"]["status"] == "warning"
-        assert "liquidity" in body
-        assert "fiscal_safety" in body
-        assert "recommended_actions" in body
-        # Privacy: the data context sent to AI must not leak identifiable customer fields.
-        assert "cliente_nombre" not in captured_prompt.get("prompt", "")
-    finally:
-        app.dependency_overrides.clear()
+    eid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    data_context = await service.build_data_context(empresa_id=eid)
+    body = await service.generate_diagnostic(data_context=data_context, user_query="Diagnóstico rápido")
+    assert body["profitability"]["status"] == "warning"
+    assert "liquidity" in body
+    assert "fiscal_safety" in body
+    assert "recommended_actions" in body
+    assert "cliente_nombre" not in captured_prompt.get("prompt", "")

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.api.v1.public_compliance import _security_contact_mailto
+
 
 async def test_public_compliance_pack(client) -> None:
     res = await client.get("/api/v1/public/compliance")
@@ -10,7 +12,8 @@ async def test_public_compliance_pack(client) -> None:
     assert len(body["subprocessors"]) >= 1
     assert body.get("sla", {}).get("uptime_target_monthly_percent") == 99.9
     assert body.get("gdpr", {}).get("right_to_erasure", {}).get("path_template")
-    assert body.get("security_contact_email") == "security@ablogistics-os.com"
+    contact = _security_contact_mailto()
+    assert body.get("security_contact_email") == contact
 
 
 async def test_security_txt_rfc9116(client) -> None:
@@ -18,6 +21,7 @@ async def test_security_txt_rfc9116(client) -> None:
     assert res.status_code == 200
     assert res.headers.get("content-type", "").startswith("text/plain")
     text = res.text
-    assert "Contact: mailto:security@ablogistics-os.com" in text
+    contact = _security_contact_mailto()
+    assert f"Contact: mailto:{contact}" in text
     assert "Preferred-Languages:" in text
     assert "Expires:" in text

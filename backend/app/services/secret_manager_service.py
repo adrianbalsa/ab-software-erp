@@ -152,6 +152,18 @@ class SecretManagerService(ABC):
         """HMAC para ``POST /api/v1/webhooks/esg-external-verify`` (certificadora externa simulada)."""
 
     @abstractmethod
+    def get_alert_webhook_url(self) -> Optional[str]:
+        """Webhook general de alertas operativas (Discord/Telegram/etc.)."""
+
+    @abstractmethod
+    def get_mtls_cert_expiry_alert_webhook_url(self) -> Optional[str]:
+        """Webhook dedicado para alertas de expiración de certificado mTLS."""
+
+    @abstractmethod
+    def get_aeat_cert_pfx(self) -> Optional[str]:
+        """Material PFX para AEAT cuando se inyecta como secreto."""
+
+    @abstractmethod
     def get_verifactu_genesis_hash(
         self,
         *,
@@ -406,6 +418,18 @@ class EnvSecretManager(SecretManagerService):
     def get_esg_external_webhook_secret(self) -> Optional[str]:
         return _strip("ESG_EXTERNAL_WEBHOOK_SECRET")
 
+    def get_alert_webhook_url(self) -> Optional[str]:
+        return _strip("ALERT_WEBHOOK_URL") or _strip("DISCORD_WEBHOOK_URL")
+
+    def get_mtls_cert_expiry_alert_webhook_url(self) -> Optional[str]:
+        return (
+            _strip("MTLS_CERT_EXPIRY_ALERT_WEBHOOK_URL")
+            or self.get_alert_webhook_url()
+        )
+
+    def get_aeat_cert_pfx(self) -> Optional[str]:
+        return _strip("AEAT_CERT_PFX")
+
     def get_verifactu_genesis_hash(
         self,
         *,
@@ -576,6 +600,18 @@ class JsonMapSecretManager(SecretManagerService, ABC):
 
     def get_esg_external_webhook_secret(self) -> Optional[str]:
         return self._get("ESG_EXTERNAL_WEBHOOK_SECRET")
+
+    def get_alert_webhook_url(self) -> Optional[str]:
+        return self._get("ALERT_WEBHOOK_URL") or self._get("DISCORD_WEBHOOK_URL")
+
+    def get_mtls_cert_expiry_alert_webhook_url(self) -> Optional[str]:
+        return (
+            self._get("MTLS_CERT_EXPIRY_ALERT_WEBHOOK_URL")
+            or self.get_alert_webhook_url()
+        )
+
+    def get_aeat_cert_pfx(self) -> Optional[str]:
+        return self._get("AEAT_CERT_PFX")
 
     def get_verifactu_genesis_hash(
         self,

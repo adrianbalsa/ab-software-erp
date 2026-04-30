@@ -22,6 +22,7 @@ class ConfigError(ValueError):
 @dataclass(frozen=True, slots=True)
 class Settings:
     PROJECT_NAME: str
+    TESTING: bool
     # development | production — CORS estricto, HSTS, etc.
     ENVIRONMENT: str
     # FastAPI/Starlette: en producción debe ser False (sin trazas de error detalladas al cliente).
@@ -346,6 +347,7 @@ def get_settings() -> Settings:
         environment = "development"
 
     debug = _parse_debug_flag(environment=environment)
+    testing = (getenv("TESTING") or "").strip().lower() in ("1", "true", "yes", "on")
     allowed_hosts = _parse_allowed_hosts(environment=environment)
 
     cookie_secure_env = getenv("COOKIE_SECURE")
@@ -560,6 +562,7 @@ def get_settings() -> Settings:
 
     return Settings(
         PROJECT_NAME=getenv("PROJECT_NAME") or "AB Logistics OS API",
+        TESTING=testing,
         ENVIRONMENT=environment,
         DEBUG=debug,
         ALLOWED_HOSTS=allowed_hosts,

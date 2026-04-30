@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
+
 from app.core.fiscal_logic import fiscal_amount_string_two_decimals
 from app.core.verifactu_hashing import VerifactuCadena, generar_hash_factura_oficial
 from app.services.aeat_client_py.xsd_validate import validate_reg_factu_payload_against_suministro_lr_xsd
@@ -36,6 +38,20 @@ def test_generar_hash_factura_oficial_emision_decimal_coherente() -> None:
         "0" * 64,
     )
     assert h1 == h2
+
+
+def test_generar_hash_factura_oficial_emision_rechaza_float_total() -> None:
+    with pytest.raises(TypeError, match="float"):
+        generar_hash_factura_oficial(
+            VerifactuCadena.HUELLA_EMISION,
+            {
+                "num_factura": "A",
+                "fecha_emision": "2026-01-01",
+                "nif_emisor": "B12345678",
+                "total_factura": 121.0,
+            },
+            "0" * 64,
+        )
 
 
 def test_xsd_re_multii_va() -> None:

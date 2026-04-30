@@ -444,12 +444,7 @@ async def check_aeat_mtls_certificate_expiry(db: Any | None = None) -> dict[str,
 async def maybe_send_mtls_certificate_expiry_alert(check: Mapping[str, Any]) -> None:
     if check.get("ok") or check.get("skipped"):
         return
-    webhook_url = (
-        os.getenv("MTLS_CERT_EXPIRY_ALERT_WEBHOOK_URL")
-        or os.getenv("ALERT_WEBHOOK_URL")
-        or os.getenv("DISCORD_WEBHOOK_URL")
-        or ""
-    ).strip()
+    webhook_url = (get_secret_manager().get_mtls_cert_expiry_alert_webhook_url() or "").strip()
     if not webhook_url:
         return
 

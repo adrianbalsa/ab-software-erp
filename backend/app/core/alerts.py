@@ -7,7 +7,6 @@ sin bloquear el request del cliente.
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 import traceback
 from typing import Any
@@ -17,8 +16,9 @@ from fastapi import Request
 
 from app.core.config import get_settings
 from app.core.security import decode_access_token_payload
+from app.services.secret_manager_service import get_secret_manager
 
-ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL") or ""
+ALERT_WEBHOOK_URL = get_secret_manager().get_alert_webhook_url() or ""
 
 _THROTTLE_SECONDS = 60
 

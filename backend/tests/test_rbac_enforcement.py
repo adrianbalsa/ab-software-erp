@@ -63,20 +63,6 @@ class _RlsMockDb:
         return query.execute()
 
 
-class _RlsDenyDb:
-    def table(self, _table_name: str) -> "_RlsDenyDb":
-        return self
-
-    def select(self, *_args: object) -> "_RlsDenyDb":
-        return self
-
-    def eq(self, *_args: object) -> "_RlsDenyDb":
-        return self
-
-    async def execute(self, _query: object) -> _QueryResult:
-        raise PermissionError("new row violates row-level security policy for table portes")
-
-
 def _transportista_user() -> UserOut:
     return UserOut(
         username="transportista@qa.local",
@@ -94,8 +80,11 @@ async def test_transportista_gets_403_on_ai_and_reports_endpoints(client) -> Non
     app.dependency_overrides[deps.get_current_user] = _transportista_user
 
     try:
-        # En esta API /ai/consult es POST; así validamos el RoleChecker real.
-        consult_res = await client.post("/ai/consult", json={"query": "Diagnóstico de prueba"})
+        # Flujo canónico LogisAdvisor: mismo RoleChecker que el legacy retirado.
+        consult_res = await client.post(
+            "/api/v1/advisor/ask",
+            json={"message": "Diagnóstico de prueba", "stream": False},
+        )
         assert consult_res.status_code == 403
         detail_ai = str(consult_res.json().get("detail", ""))
         assert "Acceso denegado" in detail_ai or "Not enough privileges" in detail_ai
@@ -130,104 +119,3 @@ async def test_mock_session_rls_blocks_manual_portes_queries_cross_tenant() -> N
     visible_rows = await db.execute(db.table("portes").select("*"))
     assert len(visible_rows.data) == 1
     assert all(str(row.get("empresa_id")) == EMPRESA_A for row in visible_rows.data)
-
-
-@pytest.mark.asyncio
-async def test_gold_bypass_rolechecker_but_rls_still_blocks_data(client, monkeypatch: pytest.MonkeyPatch) -> None:
-    db = _RlsMockDb(
-        session_empresa_id=EMPRESA_A,
-        rows_by_table={
-            "portes": [
-                {"id": "porte-b-99", "empresa_id": EMPRESA_B, "origen": "Sevilla", "destino": "Bilbao"},
-            ]
-        },
-    )
-
-    class _FakeAdvisorService:
-        def openai_configured(self) -> bool:
-            return True
-
-        async def build_data_context(self, *, empresa_id: str) -> dict[str, Any]:
-            res = await db.execute(
-                db.table("portes").select("*").eq("empresa_id", empresa_id),
-            )
-            return {"current_portes": res.data}
-
-        async def generate_diagnostic(self, *, data_context: dict[str, Any], user_query: str) -> dict[str, Any]:
-            _ = user_query
-            return {
-                "summary_headline": "RLS enforced",
-                "profitability": {"status": "ok", "findings": [], "actions": []},
-                "fiscal_safety": {"status": "ok", "findings": [], "actions": []},
-                "liquidity": {"status": "ok", "findings": [], "actions": []},
-                "risk_flags": [],
-                "recommended_actions": [],
-                "model": "test-double",
-                "data_context": data_context,
-            }
-
-    async def _allow_all_rolechecker(self, current_user: UserOut) -> UserOut:
-        _ = self
-        return current_user
-
-    monkeypatch.setattr(deps.RoleChecker, "__call__", _allow_all_rolechecker)
-
-    app = client._transport.app  # type: ignore[attr-defined]
-    app.dependency_overrides[deps.get_current_user] = _transportista_user
-    app.dependency_overrides[deps.get_logis_advisor_service] = lambda: _FakeAdvisorService()
-
-    try:
-        res = await client.post("/ai/consult", json={"query": "Intento de extracción masiva"})
-        assert res.status_code == 200
-        body = res.json()
-
-        # Gold test: aunque el checker de API se haya saltado, RLS mantiene cero filas visibles.
-        assert body["data_context"]["current_portes"] == []
-    finally:
-        app.dependency_overrides.clear()
-
-
-@pytest.mark.asyncio
-async def test_gold_bypass_rolechecker_rls_permission_error_is_still_enforced(
-    client,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    db = _RlsDenyDb()
-
-    class _FakeAdvisorService:
-        def openai_configured(self) -> bool:
-            return True
-
-        async def build_data_context(self, *, empresa_id: str) -> dict[str, Any]:
-            _ = empresa_id
-            await db.execute(db.table("portes").select("*").eq("empresa_id", EMPRESA_A))
-            return {"current_portes": []}
-
-        async def generate_diagnostic(self, *, data_context: dict[str, Any], user_query: str) -> dict[str, Any]:
-            _ = (data_context, user_query)
-            return {
-                "summary_headline": "Should not reach diagnostic generation",
-                "profitability": {"status": "ok", "findings": [], "actions": []},
-                "fiscal_safety": {"status": "ok", "findings": [], "actions": []},
-                "liquidity": {"status": "ok", "findings": [], "actions": []},
-                "risk_flags": [],
-                "recommended_actions": [],
-            }
-
-    async def _allow_all_rolechecker(self, current_user: UserOut) -> UserOut:
-        _ = self
-        return current_user
-
-    monkeypatch.setattr(deps.RoleChecker, "__call__", _allow_all_rolechecker)
-
-    app = client._transport.app  # type: ignore[attr-defined]
-    app.dependency_overrides[deps.get_current_user] = _transportista_user
-    app.dependency_overrides[deps.get_logis_advisor_service] = lambda: _FakeAdvisorService()
-
-    try:
-        res = await client.post("/ai/consult", json={"query": "Intento de extracción con error RLS"})
-        # El bypass de RoleChecker no evita que el fallo de capa de datos rompa la operación.
-        assert res.status_code == 502
-        assert "No se pudo generar el diagnóstico IA." in res.json().get("detail", "")
-    finally:
-        app.dependency_overrides.clear()
