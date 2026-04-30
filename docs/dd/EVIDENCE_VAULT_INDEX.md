@@ -12,14 +12,18 @@
 |-----------|-----------------------------------|--------------|---------------|--------|
 | Acta decisión GO / GO con reservas (PDF firmado) | Data room / DD-2026-04-evidence / DD-2026-04-001_acta-GO_2026-04-30.pdf | `DD-2026-04-001` | 2026-04-30 | Plantilla: `PHASE3_3_3_GO_COMMITTEE_PACKAGE.md` §C |
 | TLS producción — **API** (SSL Labs + salida `collect_tls_evidence.sh`) | Data room / DD-2026-04-evidence / DD-2026-04-002_tls-api-prod_2026-04-30.pdf | `DD-2026-04-002` | 2026-04-30 | Host API público; criterios: `PHASE3_3_1_EXTERNAL_EVIDENCE.md` §1 |
-| TLS producción — **APP** (SSL Labs + salida `collect_tls_evidence.sh`) | Data room / DD-2026-04-evidence / DD-2026-04-003_tls-app-prod_2026-04-30.pdf | `DD-2026-04-003` | 2026-04-30 | Host app/frontend público; mismo procedimiento que API |
+| TLS producción — **APP** (SSL Labs + salida `collect_tls_evidence.sh`) | Data room / DD-2026-04-evidence / DD-2026-04-003_tls-app-prod_2026-04-30.pdf | `DD-2026-04-003` | 2026-04-30 | Excepción controlada: SSL Labs devolvió `Assessment failed` / `Unexpected failure` en múltiples intentos (host `app.ablogistics-os.com` y raíz). Se adjunta evidencia local válida (`collect_tls_evidence.sh`: cert + vigencia + HSTS) y capturas del fallo del escáner externo. Reintento SSL Labs comprometido en 24-48h y actualización de expediente. |
 | Acta backup/restore firmada + enlace run smoke (o restore ensayo) | Data room / DD-2026-04-evidence / DD-2026-04-004_backup-restore-acta_2026-04-30.pdf | `DD-2026-04-004` | 2026-04-30 | Plantilla: `PHASE3_3_1_EXTERNAL_EVIDENCE.md` §2; workflow `backup_restore_smoke.yml` |
 | Informe DR (RTO/RPO medidos) | Data room / DD-2026-04-evidence / DD-2026-04-005_dr-informe-rto-rpo_2026-04-30.pdf | `DD-2026-04-005` | 2026-04-30 | Plantilla: `PHASE3_3_1_EXTERNAL_EVIDENCE.md` §3; `DISASTER_RECOVERY.md` |
-| Export dependencias / Trivy / SBOM / pentest (si aplica) | Data room / DD-2026-04-evidence / DD-2026-04-006_deps-trivy-sbom_2026-04-30.pdf | `DD-2026-04-006` | 2026-04-30 | `PHASE3_3_1_EXTERNAL_EVIDENCE.md` §4; logs `deploy.yml`; pentest externo en PDF aparte si aplica |
+| Export dependencias / Trivy / SBOM / pentest (si aplica) | Data room / DD-2026-04-evidence / DD-2026-04-006_deps-trivy-sbom_2026-04-30.pdf | `DD-2026-04-006` | 2026-04-30 | Paquete listo para firma: `docs/dd/DD-2026-04-006_SECURITY_EVIDENCE_PACK.md` (fuentes: `deploy.yml` + pentest si aplica). Al archivar, adjuntar evidencia de `pip-audit`, `npm audit`, Trivy y SBOM. |
 
 ## Convención sugerida para nombres en data room
 
 `DD-2026-04-00N_<tema>_<YYYY-MM-DD>.pdf` (o `.md` si solo texto), alineado con **Ref. interna** de la tabla.
+
+## Nota de excepción (DD-2026-04-003)
+
+Se registra excepción documental temporal para TLS de APP por indisponibilidad del escáner externo SSL Labs en la fecha de corte (`Assessment failed: Unexpected failure` / `Failed to communicate with the secure server`). No se observan indicadores de fallo TLS en la verificación local: certificado válido para `app.ablogistics-os.com`, cadena emitida por Let's Encrypt y cabecera HSTS activa. El expediente incluye: (1) salida local del script de captura TLS, (2) capturas de fallo SSL Labs, y (3) compromiso de reintento en 24-48h para anexar rating externo cuando el servicio estabilice.
 
 ## Borrador local en el clon
 

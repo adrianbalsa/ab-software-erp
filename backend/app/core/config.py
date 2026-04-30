@@ -222,6 +222,21 @@ def _strip_pgbouncer_incompatible_query_params(url: str) -> str:
     return urlunparse(parts._replace(query=new_query))
 
 
+def _normalize_sqlalchemy_postgres_driver(url: str, *, default_driver: str) -> str:
+    """
+    Si ``DATABASE_URL`` llega como ``postgresql://`` (sin ``+driver``), SQLAlchemy
+    intenta ``psycopg2`` por defecto. El runtime de la app usa psycopg3, por lo que
+    normalizamos a ``default_driver://`` para evitar dependencias implícitas no
+    instaladas en producción.
+    """
+    parts = urlparse(url)
+    scheme = (parts.scheme or "").strip().lower()
+    if scheme in {"postgres", "postgresql"}:
+        normalized_driver = (default_driver or "postgresql+psycopg").strip()
+        return urlunparse(parts._replace(scheme=normalized_driver))
+    return url
+
+
 def _build_database_url(*, environment: str) -> Optional[str]:
     """
     - ``DATABASE_URL`` explícita: se respeta (se limpian parámetros incompatibles con psycopg en URI).
@@ -234,9 +249,11 @@ def _build_database_url(*, environment: str) -> Optional[str]:
     Nota PgBouncer ``pool_mode=transaction``: no usar sentencias preparadas persistentes entre
     transacciones; con psycopg3 se fuerza ``prepare_threshold=0`` en ``create_engine(..., connect_args)``.
     """
+    driver = (getenv("SQLALCHEMY_DATABASE_DRIVER") or "postgresql+psycopg").strip()
     explicit = getenv("DATABASE_URL")
     if explicit and explicit.strip():
-        return _strip_pgbouncer_incompatible_query_params(explicit.strip())
+        cleaned = _strip_pgbouncer_incompatible_query_params(explicit.strip())
+        return _normalize_sqlalchemy_postgres_driver(cleaned, default_driver=driver)
 
     user = getenv("POSTGRES_USER")
     password = getenv("POSTGRES_PASSWORD")
@@ -260,8 +277,6 @@ def _build_database_url(*, environment: str) -> Optional[str]:
     else:
         host = (host_raw or "localhost").strip()
         port = (port_raw or "5432").strip()
-
-    driver = (getenv("SQLALCHEMY_DATABASE_DRIVER") or "postgresql+psycopg").strip()
 
     user_enc = quote_plus(user)
     password_enc = quote_plus(password)
