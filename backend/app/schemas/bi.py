@@ -177,3 +177,31 @@ class ProfitMarginAnalyticsOut(BaseModel):
         default_factory=dict,
         description="Incluye `webhook_event_type` para informes automáticos y filtros aplicados.",
     )
+
+
+class FinancialHealthSummaryOut(BaseModel):
+    ebitda: float = Field(..., description="EBITDA bruto: ingresos operativos - costes operativos.")
+    operating_margin_pct: float = Field(..., description="Margen operativo sobre ventas en porcentaje.")
+    cash_flow: float = Field(..., description="Cash flow estimado: saldo de facturas emitidas - gastos registrados.")
+
+
+class FinancialHealthSeriesPointOut(BaseModel):
+    name: str = Field(..., description="Etiqueta temporal para Recharts (p. ej. 2026-01 o 2026-W05).")
+    ingresos: float = Field(..., description="Ingresos operativos agregados del período (EUR neto).")
+    gastos: float = Field(..., description="Gastos operativos agregados del período (EUR).")
+    co2_cost: float = Field(
+        ...,
+        description=(
+            "Coste de carbono ETS del período (EUR), calculado como "
+            "(CO2 emitido en kg / 1000) x precio ETS por tonelada."
+        ),
+    )
+
+
+class FinancialHealthOut(BaseModel):
+    summary: FinancialHealthSummaryOut
+    series: list[FinancialHealthSeriesPointOut]
+    meta: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Metadatos de cálculo (filtros aplicados, granularidad, precios de referencia).",
+    )

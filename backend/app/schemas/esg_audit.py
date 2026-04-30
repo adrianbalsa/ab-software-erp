@@ -22,6 +22,36 @@ class ESGAuditCertificacionPie(BaseModel):
     porcentaje: float = Field(..., ge=0, le=100)
 
 
+class EsgKmCoverageOut(BaseModel):
+    """KPI de cobertura: % de km de actividad por fuente de dato (0–100)."""
+
+    total_km_activity: float = Field(..., ge=0, description="Suma de km operativos en el periodo")
+    pct_km_route_api_meters: float = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="% km con distancia carretera persistida (Routes API, metros)",
+    )
+    pct_km_recorded_road_km: float = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="% km desde km_reales u operativo persistido",
+    )
+    pct_km_telemetry: float = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="% km telemetría (reservado; hoy suele ser 0)",
+    )
+    pct_km_estimated: float = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="% km solo estimados (km_estimados sin medición)",
+    )
+
+
 class ESGAuditOut(BaseModel):
     fecha_inicio: date
     fecha_fin: date
@@ -48,3 +78,7 @@ class ESGAuditOut(BaseModel):
         description="% de portes Euro V considerados en el escenario de optimización",
     )
     co2_ahorro_escenario_kg: float = Field(..., ge=0)
+    km_coverage: EsgKmCoverageOut | None = Field(
+        default=None,
+        description="Cobertura de datos de distancia (auditoría); null si no hay portes en el periodo.",
+    )

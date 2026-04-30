@@ -505,40 +505,129 @@ export async function postEsgCertificateExternallyVerify(verificationCode: strin
   return res.json();
 }
 
-export type AiChatMessage = { role: "user" | "assistant" | "system"; content: string };
+/** Respuesta ``GET /api/v1/esg/quality-report`` (cobertura km, medido vs estimado, gaps). */
+export type EsgKmCoverageBlock = {
+  total_km_activity: number;
+  pct_km_route_api_meters: number;
+  pct_km_recorded_road_km: number;
+  pct_km_telemetry: number;
+  pct_km_estimated: number;
+};
 
-export async function streamAdvisorChat(
-  body: { message: string; history?: AiChatMessage[] },
-  handlers: { onDelta: (chunk: string) => void; onError?: (msg: string) => void },
-): Promise<void> {
-  const res = await apiFetch(`${API_BASE}/api/v1/chat/advisor`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+export type EsgQualityGap = {
+  kind: string;
+  detail: string;
+};
+
+export type EsgQualityReport = {
+  empresa_id: string;
+  year: number;
+  month: number;
+  num_portes_facturados: number;
+  km_coverage: EsgKmCoverageBlock;
+  pct_measured_km_activity: number;
+  pct_estimated_km_activity: number;
+  portes_by_source: Record<string, number>;
+  gaps: EsgQualityGap[];
+};
+
+export async function fetchEsgQualityReport(year: number, month: number): Promise<EsgQualityReport> {
+  const qs = new URLSearchParams({ year: String(year), month: String(month) });
+  return getJson<EsgQualityReport>(`${API_BASE}/api/v1/esg/quality-report?${qs.toString()}`, {
+    credentials: "include",
   });
-  if (!res.ok) {
-    handlers.onError?.(await parseApiError(res));
-    return;
-  }
-  const text = await res.text();
-  handlers.onDelta(text);
+}
+
+export type MonthlyUsageMeterOut = {
+  meter: string;
+  used_units: number;
+  limit_units: number;
+  remaining_units: number;
+  unit_label: string;
+  description: string;
+  capped: boolean;
+};
+
+export type MonthlyUsageOut = {
+  empresa_id: string;
+  plan_type: string;
+  period_yyyymm: string;
+  meters: MonthlyUsageMeterOut[];
+};
+export type AdvisorChatSession = {
+  id: string;
+  empresa_id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdvisorChatMessage = {
+  id: string;
+  session_id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  model?: string | null;
+  created_at: string;
+};
+
+export async function listAdvisorSessions(limit = 30): Promise<AdvisorChatSession[]> {
+  const qs = new URLSearchParams({ limit: String(limit) });
+  const res = await apiFetch(`${API_BASE}/api/v1/advisor/sessions?${qs.toString()}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as AdvisorChatSession[];
+}
+
+export async function listAdvisorSessionMessages(
+  sessionId: string,
+  limit = 200,
+): Promise<AdvisorChatMessage[]> {
+  const qs = new URLSearchParams({ limit: String(limit) });
+  const res = await apiFetch(
+    `${API_BASE}/api/v1/advisor/sessions/${encodeURIComponent(sessionId)}/messages?${qs.toString()}`,
+    {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    },
+  );
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as AdvisorChatMessage[];
+}
+
+export async function getAdvisorUsage(): Promise<MonthlyUsageOut> {
+  const res = await apiFetch(`${API_BASE}/api/v1/advisor/usage`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as MonthlyUsageOut;
 }
 
 /**
- * LogisAdvisor (`POST /api/v1/advisor/ask`) con SSE real: chunks `data: {"text":"..."}` y cierre `{"done":true,"model":"..."}`.
+ * Cliente canónico de LogisAdvisor: ``POST /api/v1/advisor/ask``.
+ * Con ``stream: true`` (defecto): SSE (`data: {"text"}` / `{"done":true,...}`).
+ * Con ``stream: false``: JSON ``{ reply, model, session_id }``.
+ * Para UI con dos mensajes (user + assistant vacío) reutiliza ``streamAdvisorAskIntoMessages`` en ``logis-advisor-client.ts``.
  */
 export async function streamAdvisorAsk(
-  body: { message: string; stream?: boolean },
+  body: { message: string; stream?: boolean; session_id?: string },
   handlers: {
     onDelta: (chunk: string) => void;
-    onDone?: (model?: string | null) => void;
+    onDone?: (model?: string | null, sessionId?: string | null) => void;
     onError?: (msg: string) => void;
   },
 ): Promise<void> {
   const res = await apiFetch(`${API_BASE}/api/v1/advisor/ask`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream, application/json" },
-    body: JSON.stringify({ message: body.message, stream: body.stream ?? true }),
+    body: JSON.stringify({
+      message: body.message,
+      stream: body.stream ?? true,
+      session_id: body.session_id,
+    }),
   });
   if (!res.ok) {
     handlers.onError?.(await parseApiError(res));
@@ -547,9 +636,13 @@ export async function streamAdvisorAsk(
 
   const ct = res.headers.get("content-type") ?? "";
   if (ct.includes("application/json")) {
-    const data = (await res.json()) as { reply?: string; model?: string | null };
+    const data = (await res.json()) as {
+      reply?: string;
+      model?: string | null;
+      session_id?: string | null;
+    };
     if (typeof data.reply === "string") handlers.onDelta(data.reply);
-    handlers.onDone?.(data.model);
+    handlers.onDone?.(data.model, data.session_id);
     return;
   }
 
@@ -581,13 +674,14 @@ export async function streamAdvisorAsk(
             error?: string;
             done?: boolean;
             model?: string | null;
+            session_id?: string | null;
           };
           if (json.error) {
             handlers.onError?.(json.error);
             return;
           }
           if (json.text) handlers.onDelta(json.text);
-          if (json.done) handlers.onDone?.(json.model);
+          if (json.done) handlers.onDone?.(json.model, json.session_id);
         } catch {
           // línea SSE malformada: ignorar
         }

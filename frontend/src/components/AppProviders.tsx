@@ -1,7 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Toaster } from "sonner";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { TourGuide } from "@/components/onboarding/TourGuide";
 import { AuthProvider } from "@/context/AuthProvider";
@@ -30,31 +31,35 @@ export function AppProviders({
   children: ReactNode;
   initialRole?: AppRbacRole;
 }) {
+  const [queryClient] = useState(() => new QueryClient());
+
   return (
     <LocaleProvider>
       {!isSupabaseConfigured() ? (
         <ConfiguracionPendienteScreen />
       ) : (
-        <AuthProvider>
-          <RoleProvider initialRole={initialRole}>
-            {children}
-            <TourGuide />
-            <Toaster
-              position="bottom-right"
-              theme="dark"
-              richColors
-              closeButton
-              toastOptions={{
-                classNames: {
-                  toast:
-                    "group border border-zinc-800/80 bg-zinc-950/95 text-zinc-100 shadow-2xl backdrop-blur-md",
-                  title: "text-zinc-100",
-                  description: "text-zinc-400",
-                },
-              }}
-            />
-          </RoleProvider>
-        </AuthProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <RoleProvider initialRole={initialRole}>
+              {children}
+              <TourGuide />
+              <Toaster
+                position="bottom-right"
+                theme="dark"
+                richColors
+                closeButton
+                toastOptions={{
+                  classNames: {
+                    toast:
+                      "group border border-zinc-800/80 bg-zinc-950/95 text-zinc-100 shadow-2xl backdrop-blur-md",
+                    title: "text-zinc-100",
+                    description: "text-zinc-400",
+                  },
+                }}
+              />
+            </RoleProvider>
+          </AuthProvider>
+        </QueryClientProvider>
       )}
     </LocaleProvider>
   );

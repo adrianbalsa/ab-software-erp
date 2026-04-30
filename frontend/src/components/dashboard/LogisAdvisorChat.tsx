@@ -15,9 +15,11 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { jwtPayload, streamAdvisorAsk } from "@/lib/api";
+import { getAdvisorUsage, jwtPayload, listAdvisorSessionMessages, listAdvisorSessions } from "@/lib/api";
+import { streamAdvisorAskIntoMessages } from "@/lib/logis-advisor-client";
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
+type SessionItem = { id: string; title: string | null; updated_at: string };
 
 const QUICK_ACTIONS: { label: string; prompt: string }[] = [
   {
@@ -264,6 +266,13 @@ function ResponseQuickLinks({ content }: { content: string }) {
 export function LogisAdvisorChat() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [aiUsagePct, setAiUsagePct] = useState<number | null>(null);
+  const [aiUsageLabel, setAiUsageLabel] = useState<string | null>(null);
+  const [aiCapped, setAiCapped] = useState(false);
   const payload = jwtPayload();
   const empresaClaim = String(
     payload?.empresa_id ??
@@ -307,6 +316,67 @@ export function LogisAdvisorChat() {
     requestAnimationFrame(() => scrollToBottom("auto"));
   }, [open, scrollToBottom]);
 
+  const refreshSessions = useCallback(async () => {
+    setLoadingSessions(true);
+    try {
+      const rows = await listAdvisorSessions(30);
+      setSessions(rows.map((r) => ({ id: r.id, title: r.title, updated_at: r.updated_at })));
+    } catch {
+      // No bloquear el chat por fallos de listado de sesiones.
+    } finally {
+      setLoadingSessions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    void refreshSessions();
+  }, [open, refreshSessions]);
+
+  const refreshUsage = useCallback(async () => {
+    try {
+      const usage = await getAdvisorUsage();
+      const ai = usage.meters.find((m) => m.meter === "ai_tokens_month");
+      if (!ai) {
+        setAiUsagePct(null);
+        setAiUsageLabel(null);
+        setAiCapped(false);
+        return;
+      }
+      const pct = ai.limit_units > 0 ? Math.min(100, Math.round((ai.used_units / ai.limit_units) * 100)) : 0;
+      setAiUsagePct(pct);
+      setAiUsageLabel(`${ai.used_units.toLocaleString()} / ${ai.limit_units.toLocaleString()} ${ai.unit_label}`);
+      setAiCapped(Boolean(ai.capped));
+    } catch {
+      setAiUsagePct(null);
+      setAiUsageLabel(null);
+      setAiCapped(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    void refreshUsage();
+  }, [open, refreshUsage]);
+
+  const loadSessionHistory = useCallback(async (sid: string) => {
+    setLoadingHistory(true);
+    setError(null);
+    try {
+      const rows = await listAdvisorSessionMessages(sid, 200);
+      const turns: ChatTurn[] = rows
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role as ChatTurn["role"], content: m.content }));
+      setSessionId(sid);
+      setMessages(turns);
+      stickToBottomRef.current = true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo cargar el historial");
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!stickToBottomRef.current) return;
     scrollToBottom(streaming ? "auto" : "smooth");
@@ -322,22 +392,17 @@ export function LogisAdvisorChat() {
     stickToBottomRef.current = true;
 
     try {
-      await streamAdvisorAsk(
-        { message: trimmed, stream: true },
+      await streamAdvisorAskIntoMessages(
+        { message: trimmed, stream: true, session_id: sessionId ?? undefined },
         {
-          onDelta: (chunk) => {
-            setMessages((prev) => {
-              const next = [...prev];
-              const last = next[next.length - 1];
-              if (last?.role === "assistant") {
-                next[next.length - 1] = { role: "assistant", content: last.content + chunk };
-              }
-              return next;
-            });
-          },
-          onError: (msg) => {
-            setError(msg);
-            setMessages((prev) => (prev.length < 2 ? prev : prev.slice(0, -2)));
+          setMessages,
+          onStreamError: setError,
+          onDone: (_model, returnedSessionId) => {
+            if (returnedSessionId && !sessionId) {
+              setSessionId(returnedSessionId);
+              void refreshSessions();
+            }
+            void refreshUsage();
           },
         },
       );
@@ -388,11 +453,70 @@ export function LogisAdvisorChat() {
 
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <div className="px-3 pt-3 pb-2 flex flex-wrap gap-2 border-b border-zinc-800/90 bg-zinc-950/80">
+              <div className="w-full flex items-center gap-2">
+                <select
+                  value={sessionId ?? ""}
+                  disabled={streaming || loadingHistory || aiCapped}
+                  onChange={(e) => {
+                    const sid = e.target.value.trim();
+                    if (!sid) return;
+                    void loadSessionHistory(sid);
+                  }}
+                  className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-200"
+                  aria-label="Sesiones de chat"
+                >
+                  <option value="">
+                    {loadingSessions ? "Cargando sesiones..." : "Seleccionar sesión"}
+                  </option>
+                  {sessions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {(s.title || "Sesión sin título").slice(0, 40)}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={streaming || loadingHistory || aiCapped}
+                  onClick={() => {
+                    setSessionId(null);
+                    setMessages([]);
+                    setError(null);
+                    setInput("");
+                  }}
+                  className="rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-medium text-zinc-300 hover:border-emerald-500/50 hover:text-emerald-400 disabled:opacity-40"
+                >
+                  Nueva sesión
+                </button>
+              </div>
+              {aiUsagePct !== null && (
+                <div className="w-full rounded-lg border border-zinc-700/80 bg-zinc-900/70 px-2.5 py-2">
+                  <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-400">
+                    <span>Cuota IA mensual</span>
+                    <span className={aiUsagePct >= 85 ? "text-amber-400" : "text-zinc-400"}>
+                      {aiUsagePct}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded bg-zinc-800">
+                    <div
+                      className={`h-full rounded transition-all ${
+                        aiUsagePct >= 95 ? "bg-red-500" : aiUsagePct >= 85 ? "bg-amber-500" : "bg-emerald-500"
+                      }`}
+                      style={{ width: `${aiUsagePct}%` }}
+                    />
+                  </div>
+                  {aiUsageLabel && <p className="mt-1 text-[10px] text-zinc-500">{aiUsageLabel}</p>}
+                  {aiCapped && (
+                    <p className="mt-1 text-[10px] font-medium text-red-400">
+                      Cuota IA agotada: el envío de mensajes está bloqueado temporalmente.
+                    </p>
+                  )}
+                </div>
+              )}
               {QUICK_ACTIONS.map((a) => (
                 <button
                   key={a.label}
                   type="button"
-                  disabled={streaming}
+                  disabled={streaming || loadingHistory || aiCapped}
                   onClick={() => void runPrompt(a.prompt)}
                   className="rounded-lg border border-zinc-700 bg-zinc-900/90 px-2.5 py-1.5 text-[11px] font-medium text-zinc-300 transition-colors hover:border-emerald-500/50 hover:text-emerald-400 disabled:opacity-40"
                 >
@@ -410,6 +534,9 @@ export function LogisAdvisorChat() {
                   Pregunta en lenguaje natural: equilibrio operativo, margen por km, huella de carbono o
                   rentabilidad por cliente. Los datos provienen de tu empresa (sesión actual).
                 </p>
+              )}
+              {loadingHistory && (
+                <p className="text-xs text-zinc-500 px-1 leading-relaxed">Cargando historial de sesión…</p>
               )}
               {messages.map((m, i) => {
                 const isLastAssistant = m.role === "assistant" && i === messages.length - 1;
@@ -480,13 +607,13 @@ export function LogisAdvisorChat() {
                 }}
                 placeholder="Escribe tu pregunta…"
                 className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900/90 px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
-                disabled={streaming}
+                disabled={streaming || aiCapped}
                 aria-label="Mensaje para LogisAdvisor"
               />
               <button
                 type="button"
                 onClick={() => send()}
-                disabled={streaming || !input.trim()}
+                disabled={streaming || aiCapped || !input.trim()}
                 className="shrink-0 rounded-xl border border-emerald-500/30 bg-emerald-600 p-2.5 text-white transition-colors hover:bg-emerald-500 disabled:opacity-40"
                 aria-label="Enviar"
               >

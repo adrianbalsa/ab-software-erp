@@ -286,7 +286,7 @@ def _build_invoice_rows(
                 "num_factura": num,
                 "fecha_emision": fecha,
                 "nif_emisor": nif_emisor,
-                "total_factura": float(total),
+                "total_factura": total,
             },
             chain_prev,
         )

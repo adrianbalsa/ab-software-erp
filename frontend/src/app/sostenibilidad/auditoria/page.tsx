@@ -236,6 +236,17 @@ export default function EsgAuditoriaPage() {
               <p className="text-sm text-slate-500 mt-1">
                 Portes facturados · certificación de flota · escenario de optimización
               </p>
+              <nav className="mt-3 flex flex-wrap gap-2 text-sm">
+                <span className="rounded-lg border border-emerald-800/60 bg-emerald-950/30 px-3 py-1.5 text-emerald-200">
+                  Auditoría
+                </span>
+                <Link
+                  href="/sostenibilidad/calidad-km"
+                  className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300 transition hover:border-emerald-700 hover:text-white"
+                >
+                  Calidad km (mes)
+                </Link>
+              </nav>
             </div>
             <div className="flex flex-wrap gap-3 items-end">
               <div>

@@ -170,3 +170,58 @@ class SustainabilityReportOut(BaseModel):
         default_factory=list,
         description="Desglose por vehículo: keys name, co2_kg, km (Recharts)",
     )
+
+
+class EsgPeriodSnapshotOut(BaseModel):
+    """Cierre mensual ESG (fila ``esg_period_snapshots``)."""
+
+    id: str
+    empresa_id: str
+    period_year: int = Field(..., ge=2000, le=2100)
+    period_month: int = Field(..., ge=1, le=12)
+    closed_at: str
+    num_portes_facturados: int = Field(..., ge=0)
+    total_co2_kg: float = Field(..., ge=0)
+    total_km_activity: float = Field(..., ge=0)
+    pct_km_route_api_meters: float = Field(..., ge=0, le=100)
+    pct_km_recorded_road_km: float = Field(..., ge=0, le=100)
+    pct_km_telemetry: float = Field(..., ge=0, le=100)
+    pct_km_estimated: float = Field(..., ge=0, le=100)
+    content_sha256: str = Field(..., min_length=64, max_length=64)
+
+
+class EsgKmCoverageBlockOut(BaseModel):
+    """Mismo shape que ``km_coverage_breakdown`` (core)."""
+
+    total_km_activity: float = Field(..., ge=0)
+    pct_km_route_api_meters: float = Field(..., ge=0, le=100)
+    pct_km_recorded_road_km: float = Field(..., ge=0, le=100)
+    pct_km_telemetry: float = Field(..., ge=0, le=100)
+    pct_km_estimated: float = Field(..., ge=0, le=100)
+
+
+class EsgQualityGapOut(BaseModel):
+    kind: str = Field(..., description="Código estable del gap (p. ej. high_estimated_km_share)")
+    detail: str = Field(..., description="Texto legible para auditoría")
+
+
+class EsgQualityReportOut(BaseModel):
+    """Reporte de calidad km ESG (cobertura, medido vs estimado, gaps)."""
+
+    empresa_id: str
+    year: int = Field(..., ge=2000, le=2100)
+    month: int = Field(..., ge=1, le=12)
+    num_portes_facturados: int = Field(..., ge=0)
+    km_coverage: EsgKmCoverageBlockOut
+    pct_measured_km_activity: float = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="% km actividad no-estimated (route + recorded + telemetry).",
+    )
+    pct_estimated_km_activity: float = Field(..., ge=0, le=100)
+    portes_by_source: dict[str, int] = Field(
+        default_factory=dict,
+        description="Conteo de portes por infer_esg_km_source",
+    )
+    gaps: list[EsgQualityGapOut] = Field(default_factory=list)

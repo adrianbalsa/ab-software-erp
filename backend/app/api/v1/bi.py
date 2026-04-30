@@ -6,13 +6,13 @@ Acceso: rol operativo **owner** (normalizado desde perfiles legacy admin en `dep
 
 from __future__ import annotations
 
-from datetime import date
-from typing import Annotated
+from datetime import date, timedelta
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api import deps
-from app.schemas.bi import BiDashboardSummaryOut, BiEsgImpactChartsOut, BiProfitabilityChartsOut
+from app.schemas.bi import BiDashboardSummaryOut, BiEsgImpactChartsOut, BiProfitabilityChartsOut, FinancialHealthOut
 from app.schemas.user import UserOut
 from app.services.bi_service import BiService
 
@@ -77,3 +77,43 @@ async def bi_charts_esg_impact(
 ) -> BiEsgImpactChartsOut:
     df, dt = date_range
     return await service.esg_impact_charts(empresa_id=str(current_user.empresa_id), date_from=df, date_to=dt)
+
+
+@router.get(
+    "/financial-health",
+    response_model=FinancialHealthOut,
+    summary="Salud financiera (EBITDA, margen, cash flow y coste carbono)",
+    description=(
+        "Agregado financiero por período con series para Recharts. "
+        "El coste de carbono se calcula con la fórmula: (CO2_kg / 1000) x precio ETS por tonelada."
+    ),
+)
+async def bi_financial_health(
+    start_date: date | None = Query(
+        default=None,
+        description="Fecha inicial ISO (YYYY-MM-DD). Por defecto: últimos 6 meses.",
+    ),
+    end_date: date | None = Query(
+        default=None,
+        description="Fecha final ISO (YYYY-MM-DD). Por defecto: hoy.",
+    ),
+    granularity: Literal["day", "week", "month"] = Query(
+        default="month",
+        description="Granularidad temporal de la serie: day, week o month.",
+    ),
+    current_user: UserOut = Depends(deps.require_role("owner")),
+    service: BiService = Depends(deps.get_bi_service),
+) -> FinancialHealthOut:
+    dt = end_date or date.today()
+    df = start_date or (dt - timedelta(days=180))
+    if df > dt:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="start_date no puede ser posterior a end_date.",
+        )
+    return await service.get_company_financial_health(
+        empresa_id=str(current_user.empresa_id),
+        start_date=df,
+        end_date=dt,
+        granularity=granularity,
+    )

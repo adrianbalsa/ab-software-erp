@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from calendar import monthrange
 from collections import defaultdict
 from datetime import date, datetime, timedelta
@@ -8,8 +9,11 @@ from decimal import ROUND_HALF_EVEN, Context, Decimal, localcontext
 from typing import Any, Literal
 from uuid import UUID
 
+from sqlalchemy import text
+
 from app.core.constants import COSTE_OPERATIVO_EUR_KM, ISO_14083_DIESEL_CO2_KG_PER_LITRE
-from app.core.math_engine import quantize_currency
+from app.core.math_engine import FinancialAggregator, quantize_currency
+from app.db.session import get_engine
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.services.eco_service import EUR_POR_LITRO_DIESEL_REF
@@ -31,6 +35,9 @@ from app.schemas.bi import (
     ProfitMarginPeriodRowOut,
     ProfitMarginTotalsOut,
     ProfitabilityScatterPoint,
+    FinancialHealthOut,
+    FinancialHealthSeriesPointOut,
+    FinancialHealthSummaryOut,
     TreemapNodeOut,
 )
 from app.schemas.finance import RutaMargenNegativoLogisOut
@@ -40,6 +47,8 @@ EFFICIENCY_DENOM_KM_FACTOR: float = COSTE_OPERATIVO_EUR_KM
 
 # LogisAdvisor / Due Diligence: umbral de coste combustible €/km (configurable; default alineado con Gap 6.1).
 LOGISADVISOR_COMBUSTIBLE_EUR_PER_KM: float = float(os.getenv("LOGISADVISOR_COMBUSTIBLE_EUR_PER_KM", "2.67"))
+ETS_PRICE_EUR_PER_TON_CO2: float = float(os.getenv("ETS_PRICE_EUR_PER_TON_CO2", "85.00"))
+FINANCIAL_HEALTH_CACHE_TTL_SECONDS: int = int(os.getenv("BI_FINANCIAL_HEALTH_CACHE_TTL_SECONDS", "300"))
 
 _COMPLETED_ESTADOS = frozenset({"entregado", "facturado"})
 
@@ -219,6 +228,7 @@ class BiService:
 
     def __init__(self, db: SupabaseAsync) -> None:
         self._db = db
+        self._financial_health_cache: dict[str, tuple[float, FinancialHealthOut]] = {}
 
     async def logisadvisor_rutas_margen_negativo(
         self,
@@ -977,3 +987,198 @@ class BiService:
             esg_month_over_month=esg_mom,
             meta=meta,
         )
+
+    async def get_company_financial_health(
+        self,
+        *,
+        empresa_id: str,
+        start_date: date,
+        end_date: date,
+        granularity: Literal["day", "week", "month"] = "month",
+    ) -> FinancialHealthOut:
+        """
+        Agrega salud financiera para BI con SQL directo (PostgreSQL):
+        - Ingresos netos desde `facturas`.
+        - Gastos operativos de combustible desde `esg_auditoria` (litros × precio/litro).
+        - Coste de carbono (ETS) desde CO2 emitido.
+        """
+        eid = str(empresa_id or "").strip()
+        if not eid:
+            return FinancialHealthOut(
+                summary=FinancialHealthSummaryOut(ebitda=0.0, operating_margin_pct=0.0, cash_flow=0.0),
+                series=[],
+                meta={
+                    "fuel_price_eur_per_litre": float(EUR_POR_LITRO_DIESEL_REF),
+                    "ets_price_eur_per_ton": float(ETS_PRICE_EUR_PER_TON_CO2),
+                    "source": "sqlalchemy-postgresql",
+                },
+            )
+
+        if start_date > end_date:
+            start_date, end_date = end_date, start_date
+
+        cache_key = f"{eid}:{start_date.isoformat()}:{end_date.isoformat()}:{granularity}"
+        now_ts = time.monotonic()
+        cached = self._financial_health_cache.get(cache_key)
+        if cached is not None and now_ts < cached[0]:
+            return cached[1]
+
+        engine = get_engine()
+        if engine is None:
+            raise RuntimeError("DATABASE_URL no configurada para agregaciones SQLAlchemy.")
+
+        q_series = text(
+            """
+            WITH ingresos AS (
+              SELECT
+                date_trunc(:granularity, f.fecha_emision::date)::date AS bucket_date,
+                SUM(
+                  CASE
+                    WHEN f.base_imponible IS NOT NULL THEN CAST(f.base_imponible AS numeric(20,4))
+                    ELSE GREATEST(
+                      CAST(0 AS numeric(20,4)),
+                      COALESCE(CAST(f.total_factura AS numeric(20,4)), CAST(0 AS numeric(20,4)))
+                      - COALESCE(CAST(f.cuota_iva AS numeric(20,4)), CAST(0 AS numeric(20,4)))
+                    )
+                  END
+                ) AS ingresos
+              FROM public.facturas f
+              WHERE f.empresa_id = CAST(:eid AS uuid)
+                AND f.fecha_emision IS NOT NULL
+                AND f.fecha_emision::date >= CAST(:start_date AS date)
+                AND f.fecha_emision::date <= CAST(:end_date AS date)
+              GROUP BY 1
+            ),
+            costes AS (
+              SELECT
+                date_trunc(:granularity, ea.fecha::date)::date AS bucket_date,
+                SUM(COALESCE(ea.litros_consumidos, 0) * CAST(:fuel_price AS numeric(20,6))) AS gastos_operativos,
+                SUM(COALESCE(ea.co2_emitido_kg, 0)) AS co2_kg
+              FROM public.esg_auditoria ea
+              WHERE ea.empresa_id = CAST(:eid AS uuid)
+                AND ea.deleted_at IS NULL
+                AND ea.fecha >= CAST(:start_date AS date)
+                AND ea.fecha <= CAST(:end_date AS date)
+              GROUP BY 1
+            )
+            SELECT
+              COALESCE(i.bucket_date, c.bucket_date) AS bucket_date,
+              COALESCE(i.ingresos, 0) AS ingresos,
+              COALESCE(c.gastos_operativos, 0) AS gastos_operativos,
+              COALESCE(c.co2_kg, 0) AS co2_kg
+            FROM ingresos i
+            FULL OUTER JOIN costes c ON i.bucket_date = c.bucket_date
+            ORDER BY 1 ASC
+            """
+        )
+        q_outstanding = text(
+            """
+            SELECT COALESCE(
+              SUM(
+                CASE
+                  WHEN f.base_imponible IS NOT NULL THEN CAST(f.base_imponible AS numeric(20,4))
+                  ELSE GREATEST(
+                    CAST(0 AS numeric(20,4)),
+                    COALESCE(CAST(f.total_factura AS numeric(20,4)), CAST(0 AS numeric(20,4)))
+                    - COALESCE(CAST(f.cuota_iva AS numeric(20,4)), CAST(0 AS numeric(20,4)))
+                  )
+                END
+              ),
+              0
+            ) AS saldo_facturas_emitidas
+            FROM public.facturas f
+            WHERE f.empresa_id = CAST(:eid AS uuid)
+              AND f.fecha_emision IS NOT NULL
+              AND lower(COALESCE(f.estado_cobro, 'emitida')) <> 'cobrada'
+              AND f.fecha_emision::date >= CAST(:start_date AS date)
+              AND f.fecha_emision::date <= CAST(:end_date AS date)
+            """
+        )
+
+        params = {
+            "eid": eid,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "granularity": granularity,
+            "fuel_price": Decimal(str(EUR_POR_LITRO_DIESEL_REF)),
+        }
+
+        with engine.begin() as conn:
+            series_rows = list(conn.execute(q_series, params).mappings())
+            outstanding_row = conn.execute(q_outstanding, params).mappings().first()
+
+        series: list[FinancialHealthSeriesPointOut] = []
+        total_ingresos = Decimal("0")
+        total_gastos = Decimal("0")
+        total_co2_kg = Decimal("0")
+
+        def _label_for_bucket(raw: Any) -> str:
+            s = str(raw or "")
+            if granularity == "month":
+                return s[:7]
+            if granularity == "week":
+                try:
+                    d = date.fromisoformat(s[:10])
+                    y, w, _ = d.isocalendar()
+                    return f"{y}-W{w:02d}"
+                except ValueError:
+                    return s[:10]
+            return s[:10]
+
+        for row in series_rows:
+            ingresos = Decimal(str(row.get("ingresos") or 0))
+            gastos = Decimal(str(row.get("gastos_operativos") or 0))
+            co2_kg = Decimal(str(row.get("co2_kg") or 0))
+            coste_carbono = (co2_kg / Decimal("1000")) * Decimal(str(ETS_PRICE_EUR_PER_TON_CO2))
+            total_ingresos += ingresos
+            total_gastos += gastos
+            total_co2_kg += co2_kg
+            series.append(
+                FinancialHealthSeriesPointOut(
+                    name=_label_for_bucket(row.get("bucket_date")),
+                    ingresos=float(quantize_currency(ingresos)),
+                    gastos=float(quantize_currency(gastos)),
+                    co2_cost=float(quantize_currency(coste_carbono)),
+                )
+            )
+
+        saldo_emitidas = Decimal(str((outstanding_row or {}).get("saldo_facturas_emitidas") or 0))
+        ebitda_bruto = FinancialAggregator.calculate_ebitda_bruto(
+            ingresos_operativos=total_ingresos,
+            costes_operativos=total_gastos,
+        )
+        margen_operativo = FinancialAggregator.calculate_margen_operativo(
+            ebitda_bruto=ebitda_bruto,
+            ventas=total_ingresos,
+        )
+        cash_flow_estimado = FinancialAggregator.calculate_cash_flow_estimado(
+            saldo_facturas_emitidas=saldo_emitidas,
+            gastos_registrados=total_gastos,
+        )
+        costo_carbono_total = quantize_currency(
+            (total_co2_kg / Decimal("1000")) * Decimal(str(ETS_PRICE_EUR_PER_TON_CO2))
+        )
+
+        out = FinancialHealthOut(
+            summary=FinancialHealthSummaryOut(
+                ebitda=float(ebitda_bruto),
+                operating_margin_pct=float(margen_operativo),
+                cash_flow=float(cash_flow_estimado),
+            ),
+            series=series,
+            meta={
+                "granularity": granularity,
+                "ingresos_operativos": float(quantize_currency(total_ingresos)),
+                "costes_operativos": float(quantize_currency(total_gastos)),
+                "costo_carbono_total": float(costo_carbono_total),
+                "saldo_facturas_emitidas_eur": float(quantize_currency(saldo_emitidas)),
+                "carbon_cost_formula": "(co2_kg / 1000) * ets_price_eur_per_ton",
+                "fuel_price_eur_per_litre": float(EUR_POR_LITRO_DIESEL_REF),
+                "ets_price_eur_per_ton": float(ETS_PRICE_EUR_PER_TON_CO2),
+                "source": "sqlalchemy-postgresql",
+                "window_start": start_date.isoformat(),
+                "window_end": end_date.isoformat(),
+            },
+        )
+        self._financial_health_cache[cache_key] = (now_ts + max(30, FINANCIAL_HEALTH_CACHE_TTL_SECONDS), out)
+        return out

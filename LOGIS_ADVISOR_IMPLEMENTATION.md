@@ -2,37 +2,37 @@
 
 ## Backend
 
-### 1. chatbot.py [DONE]
+### 1. advisor.py [DONE]
 ```python
-POST /api/v1/chatbot/ask
-- Context injection: financial_summary + esg_summary
-- System prompt: Financial/ESG data-driven responses
-- Model: Claude 3.5 Sonnet (anthropic>=0.45.0)
-- Security: Uses deps.get_current_user (JWT + RLS)
+POST /api/v1/advisor/ask
+- Context injection: ERP aggregate context (finance, ESG, BI, compliance)
+- Modes: SSE streaming (default) or JSON (`stream=false`)
+- Multi-provider LLM orchestration (LiteLLM)
+- Security: Uses tenant-bound auth + RLS
 ```
 
 #### Context Functions:
-- `_fetch_financial_context`: EBITDA, ingresos, gastos
-- `_fetch_esg_context`: CO₂, km, portes facturados, ahorro estimado
-- `_build_system_prompt`: Dynamic prompt with real-time data
+- `gather_advisor_context`: EBITDA, tesorería, CIP, flota, compliance, BI
+- `mask_advisor_context_for_rbac`: minimización por rol
+- `stream_advisor_response` / `get_advisor_response`: respuesta IA
 
 ### 2. Main Router [DONE]
 ```python
 app.include_router(
-    chatbot_v1.router,
-    prefix="/api/v1/chatbot",
+    advisor_v1.router,
+    prefix="/api/v1/advisor",
     tags=["IA y chat"]
 )
 ```
 
 ### 3. Rate Limiting [DONE]
 ```python
-RATE_LIMIT_EXEMPT_PREFIXES += "/api/v1/chatbot"
+expensive_endpoint_bucket("/api/v1/advisor/ask", "POST") == "ai"
 ```
 
 ### 4. Requirements [DONE]
 ```txt
-anthropic>=0.45.0 (added to requirements.txt)
+LiteLLM + provider keys via SecretManager (OpenAI/Anthropic/Gemini/Azure)
 ```
 
 ## Frontend
@@ -90,21 +90,8 @@ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY (frontend, for FleetMap integration)
 ## Response Schema
 ```json
 {
-  "response": "Tu EBITDA actual es de 45,230.50 EUR...",
-  "context_used": {
-    "financial": {
-      "ingresos_eur": 123450.00,
-      "gastos_eur": 78219.50,
-      "ebitda_eur": 45230.50
-    },
-    "esg": {
-      "total_co2_kg": 4521.30,
-      "total_km_reales": 12450.00,
-      "num_portes_facturados": 89,
-      "media_co2_por_porte_kg": 50.80,
-      "ahorro_estimado_kg": 226.07
-    }
-  }
+  "reply": "Tu EBITDA actual es de 45,230.50 EUR...",
+  "model": "openai/gpt-4o"
 }
 ```
 

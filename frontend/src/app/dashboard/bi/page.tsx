@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
@@ -594,6 +595,13 @@ export default function BiDashboardPage() {
                 DSO real, eficiencia por trayecto (η = precio / (km × {fmtDec(costeKm, 2)} €)) y huella vs margen —
                 filtrado por periodo.
               </p>
+              <Link
+                href="/bi/financial"
+                className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-emerald-400 hover:text-emerald-300"
+              >
+                Command Center financiero
+                <span aria-hidden>→</span>
+              </Link>
             </div>
             <BiDateRangePicker dateRange={dateRange} onChange={setDateRange} isSyncing={isSyncing} />
           </header>

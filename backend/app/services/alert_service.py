@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import traceback
 from datetime import datetime, timezone
 from typing import Any
@@ -9,6 +8,7 @@ from typing import Any
 import httpx
 
 from app.core.config import get_settings
+from app.services.secret_manager_service import get_secret_manager
 
 DISCORD_COLOR_CRITICAL = 0xED4245
 
@@ -22,7 +22,7 @@ def short_traceback_from_exc(exc: BaseException, *, limit_lines: int = 12) -> st
 class AlertService:
     def __init__(self) -> None:
         self._settings = get_settings()
-        self._webhook_url = (os.getenv("DISCORD_WEBHOOK_URL") or "").strip()
+        self._webhook_url = (get_secret_manager().get_alert_webhook_url() or "").strip()
 
     async def send_critical_alert(self, message: str, details: dict[str, Any] | None = None) -> None:
         if not self._webhook_url:

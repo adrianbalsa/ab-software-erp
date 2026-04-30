@@ -69,3 +69,25 @@ PYTHONPATH=. python scripts/check_aeat_homologacion_readiness.py
 ```
 
 Plantilla para archivar evidencia tras un envío real: `docs/operations/AEAT_HOMOLOGACION_EVIDENCE_TEMPLATE.md`. Procedimiento completo: `docs/operations/AEAT_VERIFACTU_HOMOLOGACION.md`.
+
+### Handshake AEAT (mTLS, sin datos reales)
+
+Flujo rápido en 4 comandos (desde la raíz del repo):
+
+```bash
+# 1) Ver opciones
+make help
+
+# 2) Extraer PEM desde PKCS#12 (FNMT)
+make aeat-prepare-certs P12=/ruta/certificate.p12 P12_PASSWORD='tu_password'
+
+# 3) Configurar .env con rutas PEM y endpoint de pruebas
+#    AEAT_CLIENT_CERT_PATH=.../backend/certs/aeat_client_cert.pem
+#    AEAT_CLIENT_KEY_PATH=.../backend/certs/aeat_client_key.pem
+#    AEAT_VERIFACTU_SUBMIT_URL_TEST=...
+
+# 4) Ejecutar prueba de conectividad mTLS
+make aeat-handshake
+```
+
+Resultado esperado: HTTP `200` o `SOAP Fault` manejable (por ejemplo, certificado no válido), pero **no** `Connection Timeout`.

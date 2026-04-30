@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_EVEN
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, TypeVar
 
 import httpx
 
@@ -19,6 +21,8 @@ from app.services.reconciliation_service import ReconciliationService, match_inv
 from app.services.math_engine import BankingMathEngineService
 
 _log = logging.getLogger(__name__)
+
+_T = TypeVar("_T")
 
 # GoCardless Bank Account Data API v2 (ex-Nordigen)
 _GOCARDLESS_API_V2 = "https://bankaccountdata.gocardless.com/api/v2"
@@ -36,6 +40,34 @@ class BankSyncResult:
 def _gocardless_configured() -> bool:
     m = get_secret_manager()
     return bool(m.get_gocardless_secret_id() and m.get_gocardless_secret_key())
+
+
+async def _async_retry_transient_read(
+    factory: Callable[[], Awaitable[_T]],
+    *,
+    attempts: int = 3,
+    base_delay_s: float = 0.45,
+) -> _T:
+    """Reintentos breves ante 5xx GoCardless o errores de transporte (DD §2.3 banking)."""
+    last: BaseException | None = None
+    for i in range(max(1, attempts)):
+        try:
+            return await factory()
+        except httpx.HTTPStatusError as exc:
+            last = exc
+            if exc.response.status_code < 500 or i >= attempts - 1:
+                raise
+        except httpx.RequestError as exc:
+            last = exc
+            if i >= attempts - 1:
+                raise
+        except RuntimeError as exc:
+            last = exc
+            msg = str(exc)
+            if "HTTP 5" not in msg or i >= attempts - 1:
+                raise
+        await asyncio.sleep(base_delay_s * (2**i))
+    raise last  # pragma: no cover
 
 
 def _encrypt_bank_token(plain: str | None) -> str | None:
@@ -468,6 +500,8 @@ class BankService:
                     headers={"Authorization": f"Bearer {access}", "accept": "application/json"},
                     params=params,
                 )
+                if tr.status_code >= 500:
+                    tr.raise_for_status()
                 if tr.status_code != 200:
                     _log.warning("GoCardless transactions cuenta HTTP %s", tr.status_code)
                     continue
@@ -599,19 +633,18 @@ class BankService:
         except Exception:  # pragma: no cover
             sentry_sdk = None  # type: ignore[assignment]
 
-        if sentry_sdk is not None:
-            with sentry_sdk.start_span(op="banking.sync", name="fetch_bank_transactions"):
-                movs = await self.get_transactions(
-                    requisition_id=req_plain,
-                    date_from=date_from,
-                    date_to=date_to,
-                )
-        else:
-            movs = await self.get_transactions(
+        async def _fetch_tx() -> list[dict[str, Any]]:
+            return await self.get_transactions(
                 requisition_id=req_plain,
                 date_from=date_from,
                 date_to=date_to,
             )
+
+        if sentry_sdk is not None:
+            with sentry_sdk.start_span(op="banking.sync", name="fetch_bank_transactions"):
+                movs = await _async_retry_transient_read(_fetch_tx)
+        else:
+            movs = await _async_retry_transient_read(_fetch_tx)
 
         rows: list[dict[str, Any]] = []
         normalized: list[dict[str, Any]] = []
@@ -788,6 +821,13 @@ class BankService:
         if not _gocardless_configured():
             raise RuntimeError("Integraci?n GoCardless no configurada en el servidor")
 
+        _log.info(
+            "banking.sync.start empresa_id=%s date_from=%s date_to=%s",
+            empresa_id,
+            date_from.isoformat() if date_from else None,
+            date_to.isoformat() if date_to else None,
+        )
+
         n_written, _ = await self._fetch_and_store_transactions(
             empresa_id=empresa_id,
             date_from=date_from,
@@ -831,6 +871,13 @@ class BankService:
         if coincidencias == 0:
             recon = ReconciliationService(self._db)
             coincidencias, detalle = await recon.auto_reconcile_invoices(empresa_id)
+
+        _log.info(
+            "banking.sync.done empresa_id=%s transacciones_procesadas=%s coincidencias=%s",
+            empresa_id,
+            max(n_written, 0),
+            coincidencias,
+        )
 
         return BankSyncResult(
             transacciones_procesadas=max(n_written, 0),

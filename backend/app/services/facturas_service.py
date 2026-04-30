@@ -17,6 +17,7 @@ from starlette.background import BackgroundTasks
 from supabase.client import AsyncClient
 
 from app.core.config import get_settings
+from app.core.constants import COSTE_OPERATIVO_EUR_KM
 from app.core.i18n import get_translator, normalize_lang
 from app.core.job_queue import enqueue_submit_to_aeat
 from app.core.fiscal_logic import totals_coherent
@@ -28,7 +29,10 @@ from app.core.math_engine import (
     as_float_fiat,
     decimal_to_db_numeric,
     negate_fiat_for_rectificativa,
+    quantize_esg_snapshot_co2_kg,
+    quantize_esg_snapshot_km,
     quantize_financial,
+    recalculate_unsealed_invoice_operational_metrics,
     require_non_negative_precio_pactado,
     round_fiat,
     safe_divide,
@@ -1430,8 +1434,8 @@ class FacturasService:
         1. **Encadenamiento**: ``obtener_ultimo_hash_y_secuencial(empresa_id)`` → ``hash_anterior``,
            ``siguiente_secuencial``.
         2. **Identidad**: ``nif_emisor`` desde ``empresas.nif``; NIF cliente desde ``clientes``.
-        3. **Huella**: ``generar_hash_factura_oficial`` (``HUELLA_EMISION``) vía ``VerifactuService.generate_invoice_hash``
-           → ``hash_registro`` / ``hash_factura``.
+        3. **Huella**: ``CanonicalHashService.generate_verifactu_hash`` (vía ``VerifactuService.generar_huella_verifactu``)
+           → ``hash_registro`` / ``hash_factura`` / ``huella_hash`` (misma cadena que ``generate_invoice_hash``).
         4. **Persistencia** en ``facturas`` (``tipo_factura='F1'``, ``num_factura``, etc.).
         5. **Portes** (``schemas/porte.py``): tras insert OK, ``estado='facturado'`` y ``factura_id``.
         """
@@ -1498,12 +1502,14 @@ class FacturasService:
         for r in portes_rows:
             km = round_fiat(r.get("km_estimados") or 0)
             precio = round_fiat(r.get("precio_pactado") or 0)
+            peso_ton = round_fiat(r.get("peso_ton") or 0)
             km_acum += km
             porte_lineas_snapshot.append(
                 {
                     "porte_id": str(r.get("id") or ""),
                     "precio_pactado": str(decimal_to_db_numeric(precio)),
                     "km_estimados": str(decimal_to_db_numeric(km)),
+                    "peso_ton": str(decimal_to_db_numeric(peso_ton)),
                     "tipo_iva_porcentaje": str(quantize_financial(payload.iva_porcentaje)),
                     "aplicar_recargo_equivalencia": False,
                     "retencion_irpf_porcentaje": str(Decimal("0.00")),
@@ -2397,11 +2403,15 @@ class FacturasService:
                         fk = str(frf.get("id") or "").strip()
                         if fk:
                             flota_map[fk] = dict(frf)
-                sum_km = 0.0
-                sum_act = 0.0
-                sum_base = 0.0
+                sum_km = Decimal("0")
+                sum_act = Decimal("0")
+                sum_base = Decimal("0")
                 for p in prows:
-                    sum_km += max(0.0, float(p.get("km_estimados") or 0.0))
+                    try:
+                        km_step = max(Decimal("0"), to_decimal(p.get("km_estimados") or 0))
+                    except FinancialDomainError:
+                        km_step = Decimal("0")
+                    sum_km += km_step
                     vidp = str(p.get("vehiculo_id") or "").strip()
                     frow = flota_map.get(vidp, {})
                     ec_p = str(frow.get("engine_class") or "").strip() or None
@@ -2413,13 +2423,23 @@ class FacturasService:
                         fuel_type=ft_p,
                         subcontratado=bool(p.get("subcontratado")),
                     )
-                    sum_act += float(cert_p["actual_total_kg"])
-                    sum_base += float(cert_p["euro_iii_baseline_kg"])
+                    try:
+                        sum_act += to_decimal(cert_p["actual_total_kg"])
+                        sum_base += to_decimal(cert_p["euro_iii_baseline_kg"])
+                    except FinancialDomainError:
+                        pass
                 esg_portes_count = len(prows)
-                esg_total_km = round(sum_km, 3)
-                esg_total_co2_kg = round(sum_act, 6)
-                esg_euro_iii_baseline_kg = round(sum_base, 6)
-                esg_ahorro_vs_euro_iii_kg = max(0.0, round(sum_base - sum_act, 6))
+                esg_total_km = float(quantize_esg_snapshot_km(sum_km))
+                esg_total_co2_kg = float(quantize_esg_snapshot_co2_kg(sum_act))
+                esg_euro_iii_baseline_kg = float(quantize_esg_snapshot_co2_kg(sum_base))
+                try:
+                    delta_co2 = sum_base - sum_act
+                    esg_ahorro_vs_euro_iii_kg = max(
+                        0.0,
+                        float(quantize_esg_snapshot_co2_kg(delta_co2)),
+                    )
+                except FinancialDomainError:
+                    esg_ahorro_vs_euro_iii_kg = 0.0
         except Exception:
             pass
 
@@ -2615,6 +2635,64 @@ class FacturasService:
             aplicar_recargo_equivalencia=aplicar_recargo_equivalencia,
         )
 
+        recalculate_triggered = False
+        coste_operativo_recalculado: Decimal | None = None
+        margen_bruto_recalculado: Decimal | None = None
+        snapshot_rows = fr.get("porte_lineas_snapshot")
+        if isinstance(snapshot_rows, list) and snapshot_rows:
+            old_km_total = Decimal("0")
+            old_weight_total = Decimal("0")
+            porte_ids: list[str] = []
+            for line in snapshot_rows:
+                if not isinstance(line, dict):
+                    continue
+                pid = str(line.get("porte_id") or "").strip()
+                if pid:
+                    porte_ids.append(pid)
+                old_km_total += to_decimal(line.get("km_estimados") or 0)
+                old_weight_total += to_decimal(line.get("peso_ton") or 0)
+
+            new_km_total = old_km_total
+            new_weight_total = old_weight_total
+            if porte_ids:
+                try:
+                    res_p: Any = await self._db.execute(
+                        self._db.table("portes")
+                        .select("id,km_estimados,peso_ton")
+                        .eq("empresa_id", eid)
+                        .in_("id", porte_ids)  # type: ignore[attr-defined]
+                    )
+                    porte_rows: list[dict[str, Any]] = (res_p.data or []) if hasattr(res_p, "data") else []
+                    if porte_rows:
+                        new_km_total = Decimal("0")
+                        new_weight_total = Decimal("0")
+                        for pr in porte_rows:
+                            new_km_total += to_decimal(pr.get("km_estimados") or 0)
+                            new_weight_total += to_decimal(pr.get("peso_ton") or 0)
+                except Exception:
+                    # Si falla la lectura de portes, mantenemos el recálculo fiscal sin bloquear la API.
+                    pass
+
+            op = recalculate_unsealed_invoice_operational_metrics(
+                invoice_is_finalized=bool(fr.get("is_finalized")),
+                invoice_hash_registro=str(fr.get("hash_registro") or ""),
+                invoice_hash_factura=str(fr.get("hash_factura") or ""),
+                previous_route_km=old_km_total,
+                new_route_km=new_km_total,
+                previous_weight_ton=old_weight_total,
+                new_weight_ton=new_weight_total,
+                coste_operativo_eur_km=Decimal(str(COSTE_OPERATIVO_EUR_KM)),
+                precio_factura_base=tot.base_imponible_total,
+            )
+            recalculate_triggered = bool(op.get("recalculated"))
+            if recalculate_triggered:
+                raw_cost = op.get("coste_operativo")
+                raw_margin = op.get("margen_bruto")
+                if isinstance(raw_cost, Decimal):
+                    coste_operativo_recalculado = decimal_to_db_numeric(raw_cost)
+                if isinstance(raw_margin, Decimal):
+                    margen_bruto_recalculado = decimal_to_db_numeric(raw_margin)
+
         desglose = [
             {
                 "tipo_iva_porcentaje": decimal_to_db_numeric(d.tipo_iva_porcentaje),
@@ -2649,6 +2727,9 @@ class FacturasService:
             lineas=lineas_out,
             ajuste_centimos=decimal_to_db_numeric(tot.ajuste_centimos),
             importe_descuento_global_aplicado=decimal_to_db_numeric(tot.importe_descuento_global_aplicado),
+            recalculate_triggered=recalculate_triggered,
+            coste_operativo_recalculado=coste_operativo_recalculado,
+            margen_bruto_recalculado=margen_bruto_recalculado,
         )
 
 

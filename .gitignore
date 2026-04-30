@@ -45,3 +45,8 @@ PROJECT_SNAPSHOT_AUDIT.txt
 terraform.tfvars
 .vercel
 .env*.local
+backend/certs/
+
+# DD: borradores PDF/capturas en el clon (índice canónico: docs/dd/EVIDENCE_VAULT_INDEX.md)
+docs/dd/local-evidence/*
+!docs/dd/local-evidence/.gitkeep

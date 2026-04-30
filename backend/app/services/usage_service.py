@@ -6,6 +6,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from redis.exceptions import RedisError
+
 from app.core.config import get_settings
 from app.core.plans import normalize_plan, plan_initial_credits
 from app.db.supabase import SupabaseAsync
@@ -81,19 +83,26 @@ class UsageService:
         redis = await self._get_redis()
         if redis is None:
             return
-        key = self._credits_key(tenant_id)
-        exists = await redis.exists(key)
-        if exists:
-            return
-        await redis.set(key, int(plan_initial_credits(plan)), nx=True)
+        try:
+            key = self._credits_key(tenant_id)
+            exists = await redis.exists(key)
+            if exists:
+                return
+            await redis.set(key, int(plan_initial_credits(plan)), nx=True)
+        except RedisError as exc:
+            _log.warning("ensure_credit_bucket redis unavailable (omit init): %s", exc)
 
     async def get_remaining_credits(self, *, tenant_id: str, plan: str) -> int:
         redis = await self._get_redis()
         if redis is None:
             return plan_initial_credits(plan)
-        await self.ensure_credit_bucket(tenant_id=tenant_id, plan=plan)
-        raw = await redis.get(self._credits_key(tenant_id))
-        return max(0, int(raw or 0))
+        try:
+            await self.ensure_credit_bucket(tenant_id=tenant_id, plan=plan)
+            raw = await redis.get(self._credits_key(tenant_id))
+            return max(0, int(raw or 0))
+        except RedisError as exc:
+            _log.warning("get_remaining_credits redis unavailable (fail-open): %s", exc)
+            return plan_initial_credits(plan)
 
     async def check_credits(self, tenant_id: str, cost: int, *, plan: str = "starter") -> bool:
         remaining = await self.get_remaining_credits(tenant_id=tenant_id, plan=plan)
@@ -106,14 +115,19 @@ class UsageService:
         if redis is None:
             return UsageResult(allowed=True, remaining_credits=plan_initial_credits(normalized_plan))
 
-        await self.ensure_credit_bucket(tenant_id=tenant_id, plan=normalized_plan)
-        allowed_raw, remaining_raw = await redis.eval(
-            _USAGE_LUA,
-            2,
-            self._credits_key(tenant_id),
-            self._pending_key(tenant_id),
-            n,
-        )
+        try:
+            await self.ensure_credit_bucket(tenant_id=tenant_id, plan=normalized_plan)
+            allowed_raw, remaining_raw = await redis.eval(
+                _USAGE_LUA,
+                2,
+                self._credits_key(tenant_id),
+                self._pending_key(tenant_id),
+                n,
+            )
+        except RedisError as exc:
+            _log.warning("consume_credits redis unavailable (fail-open): %s", exc)
+            return UsageResult(allowed=True, remaining_credits=plan_initial_credits(normalized_plan))
+
         allowed = bool(int(allowed_raw))
         remaining = max(0, int(remaining_raw or 0))
         if allowed:

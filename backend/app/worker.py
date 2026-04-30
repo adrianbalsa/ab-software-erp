@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from datetime import datetime, timezone
 from typing import Any
 import logging
@@ -20,6 +19,7 @@ from app.db.supabase import get_supabase
 from app.services.aeat_client_py import VeriFactuException
 from app.services.audit_logs_service import AuditLogsService
 from app.services.auth_service import AuthService
+from app.services.secret_manager_service import get_secret_manager
 from app.services.verifactu_sender import enviar_factura_aeat
 
 _CURRENT_DIR = Path.cwd()
@@ -160,7 +160,7 @@ async def _acquire_aeat_egress_slot(ctx: dict[str, Any]) -> None:
 
 def _is_mock_mode_enabled() -> bool:
     settings = get_settings()
-    cert_pfx = (os.getenv("AEAT_CERT_PFX") or "").strip()
+    cert_pfx = (get_secret_manager().get_aeat_cert_pfx() or "").strip()
     return cert_pfx == "DUMMY_CERT_BASE64_PLACEHOLDER" or settings.ENVIRONMENT != "production"
 
 

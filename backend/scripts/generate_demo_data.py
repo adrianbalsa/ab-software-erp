@@ -405,7 +405,7 @@ def _invoice_hash_chain(
                 "num_factura": num,
                 "fecha_emision": fecha,
                 "nif_emisor": nif_emisor,
-                "total_factura": float(total),
+                "total_factura": total,
             },
             chain_prev,
         )
@@ -511,7 +511,7 @@ def _insert_r1_pair(
     num_r = f"R-{date.today().year}-{seq:06d}"
     base_r = float(negate_fiat_for_rectificativa(orig_row["base_imponible"]))
     cuota_r = float(negate_fiat_for_rectificativa(orig_row["cuota_iva"]))
-    total_r = float(negate_fiat_for_rectificativa(orig_row["total_factura"]))
+    total_r = negate_fiat_for_rectificativa(orig_row["total_factura"])
 
     if not str(orig_row.get("hash_registro") or orig_row.get("hash_factura") or "").strip():
         raise RuntimeError("F1 original sin hash_registro; no se puede generar R1 demo")
@@ -523,7 +523,7 @@ def _insert_r1_pair(
             "num_factura": num_r,
             "fecha_emision": fecha_iso,
             "nif_emisor": nif_emisor,
-            "total_factura": float(total_r),
+            "total_factura": total_r,
         },
         hash_prev_chain,
     )

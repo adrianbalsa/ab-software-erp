@@ -29,6 +29,9 @@ from app.services.aeat_client_py.xsd_validate import validate_reg_factu_payload_
 
 logger = logging.getLogger(__name__)
 
+# SOAP 1.2 ``Content-Type`` action (Sistema de Información de Facturación / VeriFactu).
+AEAT_VERIFACTU_SOAP_ACTION: Final = "RegistroFactura"
+
 _NS_RESPUESTA: Final = (
     "https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/"
     "es/aeat/tike/cont/ws/RespuestaSuministro.xsd"
@@ -174,7 +177,9 @@ class AEATZeepClient:
 
         url = service_url.strip()
         headers = {
-            "Content-Type": 'application/soap+xml; charset=utf-8; action="RegistroFactura"',
+            "Content-Type": (
+                f'application/soap+xml; charset=utf-8; action="{AEAT_VERIFACTU_SOAP_ACTION}"'
+            ),
             "Accept": "application/soap+xml, text/xml",
         }
         try:

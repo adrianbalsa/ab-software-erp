@@ -1,0 +1,29 @@
+<sf:Cabecera xmlns:sf="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroLR.xsd" xmlns:sj="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroInformacion.xsd">
+  <sj:ObligadoEmision>
+    <sj:NombreRazon>{{ nombre_razon_emisor }}</sj:NombreRazon>
+    <sj:NIF>{{ nif_emisor }}</sj:NIF>
+  </sj:ObligadoEmision>
+</sf:Cabecera>
+<sf:RegistroFactura xmlns:sf="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroLR.xsd" xmlns:sj="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroInformacion.xsd">
+  <sj:RegistroAlta>
+    <sj:IDVersion>1.1</sj:IDVersion>
+    <sj:IDFactura>
+      <sj:IDEmisorFactura>{{ nif_emisor }}</sj:IDEmisorFactura>
+      <sj:NumSerieFactura>{{ num_serie_factura }}</sj:NumSerieFactura>
+      <sj:FechaExpedicionFactura>{{ fecha_expedicion }}</sj:FechaExpedicionFactura>
+    </sj:IDFactura>
+    <sj:NombreRazonEmisor>{{ nombre_razon_emisor }}</sj:NombreRazonEmisor>
+    <sj:TipoFactura>{{ tipo_factura }}</sj:TipoFactura>
+    <sj:DescripcionOperacion>Envio VeriFactu AB Logistics OS</sj:DescripcionOperacion>
+    <sj:Destinatarios>
+      <sj:IDDestinatario>
+        <sj:NombreRazon>{{ nombre_destinatario }}</sj:NombreRazon>
+        <sj:NIF>{{ nif_destinatario }}</sj:NIF>
+      </sj:IDDestinatario>
+    </sj:Destinatarios>
+    <sj:ImporteTotal>{{ importe_total }}</sj:ImporteTotal>
+    <sj:FechaHoraHusoGenRegistro>{{ timestamp_utc }}</sj:FechaHoraHusoGenRegistro>
+    <sj:TipoHuella>01</sj:TipoHuella>
+    <sj:Huella>{{ huella }}</sj:Huella>
+  </sj:RegistroAlta>
+</sf:RegistroFactura>

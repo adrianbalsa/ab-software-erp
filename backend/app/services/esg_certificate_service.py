@@ -23,6 +23,7 @@ from app.core.esg_engine import (
     esg_certificate_co2_vs_euro_iii,
     glec_emission_factors_gco2_per_km,
 )
+from app.core.esg_km_quality import resolve_total_km_for_glec_certificate
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.services.facturas_service import FacturasService
@@ -169,6 +170,11 @@ class EsgCertificateService:
 
         km_reales: float | None = None
         real_distance_km: float | None = None
+        row_km: dict[str, Any] = {
+            "km_estimados": float(porte.km_estimados or 0.0),
+            "km_reales": None,
+            "real_distance_meters": None,
+        }
         try:
             res_p: Any = await self._db.execute(
                 filter_not_deleted(
@@ -181,6 +187,8 @@ class EsgCertificateService:
             )
             pr = (res_p.data or []) if hasattr(res_p, "data") else []
             if pr:
+                row_km["km_reales"] = pr[0].get("km_reales")
+                row_km["real_distance_meters"] = pr[0].get("real_distance_meters")
                 raw_km = pr[0].get("km_reales")
                 if raw_km is not None:
                     km_reales = max(0.0, float(raw_km))
@@ -200,8 +208,10 @@ class EsgCertificateService:
         ft = porte.vehiculo_fuel_type
         g_full, g_empty = glec_emission_factors_gco2_per_km(engine_class=ec, fuel_type=ft)
 
+        km_for_glec = resolve_total_km_for_glec_certificate(row_km)
+
         cert_vals = esg_certificate_co2_vs_euro_iii(
-            km_estimados=float(porte.km_estimados or 0.0),
+            km_estimados=km_for_glec,
             km_vacio=porte.km_vacio,
             engine_class=ec,
             fuel_type=ft,
@@ -212,7 +222,7 @@ class EsgCertificateService:
         ahorro = float(cert_vals["ahorro_kg"])
 
         norma = str(porte.vehiculo_normativa_euro or "Euro VI")
-        nox_kg = calculate_nox_emissions(float(porte.km_estimados or 0.0), norma)
+        nox_kg = calculate_nox_emissions(km_for_glec, norma)
 
         mat = str(porte.vehiculo_matricula or "").strip()
         mod = str(porte.vehiculo_modelo or "").strip()
@@ -226,6 +236,7 @@ class EsgCertificateService:
             "euro_iii_baseline_kg": round(euro_iii, 6),
             "ahorro_kg": round(ahorro, 6),
             "km_estimados": float(porte.km_estimados or 0.0),
+            "km_glec_total": round(km_for_glec, 6),
             "nox_kg": round(nox_kg, 6),
             "subcontratado": bool(porte.subcontratado),
         }
@@ -268,6 +279,7 @@ class EsgCertificateService:
             nox_total_kg=nox_kg,
             subcontratado=bool(porte.subcontratado),
             scope_note=scope_note,
+            km_glec_activity_km=km_for_glec,
             verify_url=verify_url,
         )
 

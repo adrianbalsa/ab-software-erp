@@ -9,10 +9,12 @@ from uuid import UUID
 
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
+from app.core.esg_km_quality import km_coverage_breakdown
 from app.schemas.esg_audit import (
     CertificacionEmisiones,
     ESGAuditCertificacionPie,
     ESGAuditClienteItem,
+    EsgKmCoverageOut,
     ESGAuditOut,
 )
 
@@ -78,13 +80,15 @@ def _norm_cert(raw: str | None) -> CertificacionEmisiones:
 
 
 def _co2_val(row: dict[str, Any]) -> float:
-    v = row.get("co2_emitido")
-    if v is None:
-        return 0.0
-    try:
-        return max(0.0, float(v))
-    except (TypeError, ValueError):
-        return 0.0
+    for key in ("co2_kg", "co2_emitido"):
+        v = row.get(key)
+        if v is None:
+            continue
+        try:
+            return max(0.0, float(v))
+        except (TypeError, ValueError):
+            continue
+    return 0.0
 
 
 class EsgAuditService:
@@ -114,6 +118,7 @@ class EsgAuditService:
                 insight_optimizacion="Sin datos de período.",
                 escenario_optimizacion_pct=min(100.0, max(0.0, escenario_pct)),
                 co2_ahorro_escenario_kg=0.0,
+                km_coverage=None,
             )
 
         fi = fecha_inicio.isoformat()
@@ -122,7 +127,10 @@ class EsgAuditService:
         try:
             qp = filter_not_deleted(
                 self._db.table("portes")
-                .select("id,cliente_id,vehiculo_id,co2_emitido,fecha")
+                .select(
+                    "id,cliente_id,vehiculo_id,co2_emitido,co2_kg,fecha,"
+                    "km_estimados,km_reales,real_distance_meters,esg_km_source"
+                )
                 .eq("empresa_id", eid)
                 .eq("estado", "facturado")
                 .gte("fecha", fi)
@@ -185,6 +193,15 @@ class EsgAuditService:
         co2_by_cert: dict[str, float] = defaultdict(float)
         co2_euro_v = 0.0
         total_co2 = 0.0
+
+        cov_raw = km_coverage_breakdown(porte_rows)
+        km_coverage = EsgKmCoverageOut(
+            total_km_activity=float(cov_raw["total_km_activity"]),
+            pct_km_route_api_meters=float(cov_raw["pct_km_route_api_meters"]),
+            pct_km_recorded_road_km=float(cov_raw["pct_km_recorded_road_km"]),
+            pct_km_telemetry=float(cov_raw["pct_km_telemetry"]),
+            pct_km_estimated=float(cov_raw["pct_km_estimated"]),
+        )
 
         for r in porte_rows:
             c2 = _co2_val(r)
@@ -279,6 +296,7 @@ class EsgAuditService:
             insight_optimizacion=insight,
             escenario_optimizacion_pct=scen,
             co2_ahorro_escenario_kg=round(co2_ahorro, 4),
+            km_coverage=km_coverage,
         )
 
     async def mark_certificate_externally_verified(

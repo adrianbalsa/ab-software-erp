@@ -15,7 +15,7 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Variables públicas inyectadas al bundle (definir en docker-compose args).
+# Public env values are injected at build time into the standalone bundle.
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_API_BASE_URL
 ARG NEXT_PUBLIC_API_BASE
@@ -37,7 +37,7 @@ WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
-    HOSTNAME="0.0.0.0"
+    HOSTNAME=0.0.0.0
 
 RUN apk add --no-cache curl
 

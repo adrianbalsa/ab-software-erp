@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { api, streamAdvisorAsk, type PorteListRow } from "@/lib/api";
+import { api, type PorteListRow } from "@/lib/api";
+import { streamAdvisorAskIntoMessages } from "@/lib/logis-advisor-client";
 import { getOperationalCostEurKmCached, publicOperationalCostEurKmDefault } from "@/lib/operationalPricing";
 
 type RadarPorte = PorteListRow & {
@@ -170,23 +171,11 @@ export default function VampireRadarPage() {
     setStreaming(true);
 
     try {
-      await streamAdvisorAsk(
+      await streamAdvisorAskIntoMessages(
         { message: finalPrompt, stream: true },
         {
-          onDelta: (chunk) => {
-            setMessages((prev) => {
-              const next = [...prev];
-              const last = next[next.length - 1];
-              if (last?.role === "assistant") {
-                next[next.length - 1] = { role: "assistant", content: last.content + chunk };
-              }
-              return next;
-            });
-          },
-          onError: (msg) => {
-            setChatError(msg);
-            setMessages((prev) => (prev.length >= 2 ? prev.slice(0, -2) : prev));
-          },
+          setMessages,
+          onStreamError: setChatError,
         },
       );
     } catch (err) {

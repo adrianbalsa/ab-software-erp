@@ -266,6 +266,7 @@ class EsgPorteCertificatePdfModel:
     nox_total_kg: float
     subcontratado: bool
     scope_note: str
+    km_glec_activity_km: float = 0.0
     verify_url: str | None = None
 
 
@@ -366,6 +367,12 @@ def generar_pdf_certificado_esg_porte_glec(
     _pdf_kv(pdf, body, t("Real distance (km)"), dist_real)
     _pdf_kv(pdf, body, t("Recorded km (operational estimate)"), dist_est)
     _pdf_kv(pdf, body, t("Actual km (portes table)"), dist_kmr)
+    _pdf_kv(
+        pdf,
+        body,
+        t("GLEC activity distance (km)"),
+        t("{v} km").format(v=_fmt_num(model.km_glec_activity_km, 3)),
+    )
     kv = f"{_fmt_num(model.km_vacio or 0.0, 2)} km" if model.km_vacio is not None else "—"
     _pdf_kv(pdf, body, t("Declared empty km"), kv)
     _pdf_kv(

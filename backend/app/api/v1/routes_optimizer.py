@@ -1,7 +1,5 @@
 """Optimización de rutas con Google Distance Matrix API y análisis de huella de carbono."""
 
-from __future__ import annotations
-
 from typing import Any
 from uuid import UUID
 
@@ -66,6 +64,12 @@ class OptimizeRouteOut(BaseModel):
         default=None,
         description="Ruta con menor huella de carbono",
     )
+
+
+WaypointIn.model_rebuild()
+OptimizeRouteIn.model_rebuild()
+RouteOption.model_rebuild()
+OptimizeRouteOut.model_rebuild()
 
 
 async def _fetch_vehiculo_normativa(

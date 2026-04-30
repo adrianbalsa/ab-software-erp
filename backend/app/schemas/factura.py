@@ -212,6 +212,9 @@ class FacturaRecalculateOut(BaseModel):
     lineas: list[dict[str, Any]]
     ajuste_centimos: Decimal
     importe_descuento_global_aplicado: Decimal
+    recalculate_triggered: bool = False
+    coste_operativo_recalculado: Decimal | None = None
+    margen_bruto_recalculado: Decimal | None = None
 
     @field_serializer(
         "base_imponible",
@@ -221,7 +224,10 @@ class FacturaRecalculateOut(BaseModel):
         "total_factura",
         "ajuste_centimos",
         "importe_descuento_global_aplicado",
+        "coste_operativo_recalculado",
+        "margen_bruto_recalculado",
         mode="plain",
+        when_used="unless-none",
     )
     def _ser_recalc(self, v: Decimal) -> float:
         return as_float_fiat(v)

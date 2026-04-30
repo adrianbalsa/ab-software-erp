@@ -59,6 +59,8 @@ from app.services.audit_logs_service import AuditLogsService
 from app.services.bi_service import BiService
 from app.services.geo_activity_service import GeoActivityService
 from app.services.usage_quota_service import UsageQuotaService
+from app.services.logistics_brain_context import LogisticsBrainContextService
+from app.services.chat_persistence_service import ChatPersistenceService
 
 _deps_log = logging.getLogger(__name__)
 
@@ -257,6 +259,20 @@ async def get_geo_activity_service(db: SupabaseAsync = Depends(get_db)) -> GeoAc
 
 async def get_usage_quota_service(db: SupabaseAsync = Depends(get_db)) -> UsageQuotaService:
     return UsageQuotaService(db)
+
+
+async def get_chat_persistence_service(
+    db: SupabaseAsync = Depends(get_db),
+) -> ChatPersistenceService:
+    return ChatPersistenceService(db)
+
+
+async def get_logistics_brain_context_service(
+    finance: FinanceService = Depends(get_finance_service),
+    esg: EsgService = Depends(get_esg_service),
+    bi: BiService = Depends(get_bi_service),
+) -> LogisticsBrainContextService:
+    return LogisticsBrainContextService(finance, esg, bi)
 
 
 async def get_logis_advisor_service(

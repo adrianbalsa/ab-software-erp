@@ -15,19 +15,22 @@ from typing import Any
 
 from app.core.constants import ISO_14083_DIESEL_CO2_KG_PER_LITRE, ISO_14083_REFERENCE_LABEL
 from app.core.esg_engine import calculate_co2_emissions, resolve_normativa_euro_for_co2
+from app.core.esg_km_quality import km_coverage_breakdown
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
 from app.services.esg_audit_service import _norm_cert
 
 
 def _co2_kg(row: dict[str, Any], *, km: float, euro_label: str) -> float:
-    v = row.get("co2_emitido")
-    if v is None:
-        return max(0.0, float(calculate_co2_emissions(km, euro_label)))
-    try:
-        return max(0.0, float(v))
-    except (TypeError, ValueError):
-        return max(0.0, float(calculate_co2_emissions(km, euro_label)))
+    for key in ("co2_kg", "co2_emitido"):
+        v = row.get(key)
+        if v is None:
+            continue
+        try:
+            return max(0.0, float(v))
+        except (TypeError, ValueError):
+            continue
+    return max(0.0, float(calculate_co2_emissions(km, euro_label)))
 
 
 def _km_operativo(row: dict[str, Any]) -> float:
@@ -88,7 +91,10 @@ class EsgExportService:
         try:
             qp = filter_not_deleted(
                 self._db.table("portes")
-                .select("id,vehiculo_id,km_estimados,km_reales,co2_emitido,fecha,estado")
+                .select(
+                    "id,vehiculo_id,km_estimados,km_reales,real_distance_meters,esg_km_source,"
+                    "co2_emitido,co2_kg,fecha,estado"
+                )
                 .eq("empresa_id", eid)
                 .eq("estado", "facturado")
                 .gte("fecha", fi)
@@ -181,6 +187,7 @@ class EsgExportService:
             )
 
         meta["row_count"] = len(out_rows)
+        meta["km_coverage"] = km_coverage_breakdown(porte_rows)
         return out_rows, meta
 
     async def export_json_bytes(
