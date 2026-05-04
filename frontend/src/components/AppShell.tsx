@@ -27,6 +27,7 @@ import {
   Settings,
   Shield,
   Truck,
+  UserPlus,
   Users,
   Wallet,
   X,
@@ -72,7 +73,8 @@ type Props = {
     | "vampire_radar"
     | "simulador"
     | "mapa"
-    | "billing";
+    | "billing"
+    | "team";
 };
 
 function NavSectionHeader({
@@ -445,6 +447,16 @@ function ShellNavAndFooter({
                 {...p}
               />
             )}
+            {(isOwnerLike(role) || role === "developer") && (
+              <SidebarNavLink
+                href="/dashboard/settings/equipo"
+                active={active === "team"}
+                icon={UserPlus}
+                title={catalog.nav.team}
+                subtitle={catalog.nav.teamSub}
+                {...p}
+              />
+            )}
             {!hideFinanceBunkerAndAdminNav && showNavItem("admin", role) && (
               <SidebarNavLink
                 href="/admin"
@@ -519,6 +531,7 @@ export function AppShell({ children, active }: Props) {
       return "vampire_radar";
     }
     if (pathname.startsWith("/dashboard/settings/billing")) return "billing";
+    if (pathname.startsWith("/dashboard/settings/equipo")) return "team";
     if (pathname === "/dashboard/finanzas/tesoreria") return "tesoreria";
     if (pathname === "/dashboard/finanzas/simulador") return "simulador";
     if (pathname === "/dashboard/finanzas/auditoria") return "auditoria";

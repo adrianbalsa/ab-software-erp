@@ -192,6 +192,8 @@ class BankingReconciliationMemoryDb:
                 "deleted_at": None,
                 "stripe_subscription_id": None,
                 "plan_type": "enterprise",
+                "is_active": True,
+                "requires_stripe_subscription": False,
             }
         }
         # get_profile_by_subject(subject="admin@qa.local") → profiles por username/email

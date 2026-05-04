@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { notifyJwtUpdated } from "@/lib/api";
+import { resolvePostAuthNavigation } from "@/lib/postAuthNavigation";
 
 const WELCOME_FLAG = "abl_oauth_welcome";
 
@@ -12,16 +13,22 @@ function AuthCallbackInner() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      sessionStorage.setItem(WELCOME_FLAG, "1");
-      notifyJwtUpdated();
-    } catch {
-      queueMicrotask(() => {
-        setError("No se pudo preparar la sesión en este navegador.");
-      });
-      return;
-    }
-    router.replace("/onboarding");
+    let cancelled = false;
+    void (async () => {
+      try {
+        sessionStorage.setItem(WELCOME_FLAG, "1");
+        notifyJwtUpdated();
+      } catch {
+        if (!cancelled) setError("No se pudo preparar la sesión en este navegador.");
+        return;
+      }
+      const dest = await resolvePostAuthNavigation("/onboarding");
+      if (cancelled) return;
+      router.replace(dest);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   if (error) {

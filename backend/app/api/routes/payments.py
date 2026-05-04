@@ -18,8 +18,11 @@ router = APIRouter()
 def _checkout_urls() -> tuple[str, str]:
     settings = get_settings()
     base = (settings.PUBLIC_APP_URL or getenv("STRIPE_PUBLIC_APP_URL") or "http://localhost:3000").rstrip("/")
-    success = getenv("STRIPE_SUCCESS_URL") or f"{base}/dashboard?checkout=success"
-    cancel = getenv("STRIPE_CANCEL_URL") or f"{base}/?checkout=cancel"
+    # Stripe sustituye {CHECKOUT_SESSION_ID} en la URL de retorno (Checkout Session).
+    default_success = f"{base}/dashboard?checkout=success&session_id={{CHECKOUT_SESSION_ID}}"
+    success = (getenv("STRIPE_SUCCESS_URL") or "").strip() or default_success
+    default_cancel = f"{base}/dashboard?checkout=cancel"
+    cancel = (getenv("STRIPE_CANCEL_URL") or "").strip() or default_cancel
     return success, cancel
 
 

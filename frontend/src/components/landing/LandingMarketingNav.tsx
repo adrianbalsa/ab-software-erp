@@ -11,6 +11,9 @@ export function LandingMarketingNav() {
   const n = catalog.nav;
   const l = catalog.landing;
   const anchors = [
+    { href: "#plataforma", label: l.nav.platform },
+    { href: "#how-it-works", label: l.nav.howItWorks },
+    { href: "#trust", label: l.nav.trust },
     { href: "#pricing", label: l.nav.pricing },
     { href: "#help", label: l.nav.help },
   ];

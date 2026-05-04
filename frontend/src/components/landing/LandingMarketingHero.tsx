@@ -59,7 +59,7 @@ export function LandingMarketingHero() {
             {l.primaryCta}
           </Link>
           <Link
-            href="#plataforma"
+            href="#pricing"
             className="inline-flex min-h-11 items-center justify-center rounded-full border border-zinc-700 bg-transparent px-8 py-3 text-sm font-semibold text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-900/50 hover:text-white"
           >
             {l.secondaryCta}

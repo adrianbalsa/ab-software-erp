@@ -6,6 +6,8 @@ export const extraEn = {
       simulator: "Simulator",
       advantage: "Advantage",
       howItWorks: "How it works",
+      platform: "Product",
+      trust: "Trust",
       pricing: "Pricing",
       help: "Help center",
       menuAria: "Menu",
@@ -14,12 +16,12 @@ export const extraEn = {
       homeAria: "AB Logistics OS - home",
     },
     hero: {
-      eyebrow: "Enterprise logistics OS",
-      title: "The fiscal bunker for modern logistics.",
+      eyebrow: "Transport · Finance · AEAT 2026",
+      title: "One platform for profitable shipments and inspection-ready invoicing.",
       description:
-        "Native VeriFactu compliance, ESG optimization and real-time profitability. Built for CFOs and high-performance fleets.",
-      primaryCta: "Request audit",
-      secondaryCta: "View architecture",
+        "From quote to cash: fleet, VeriFactu, reconciliation and margin visibility for finance and dispatch. The same commercial offer on the web and in Stripe: Essential, Pro and Enterprise.",
+      primaryCta: "Create account and start",
+      secondaryCta: "See plans and pricing",
     },
     bento: {
       eyebrow: "Architecture",
@@ -48,18 +50,20 @@ export const extraEn = {
     pricing: {
       features: [
         "VeriFactu certification",
-        "Real-time EBITDA",
+        "Advanced finance / EBITDA engine",
         "Driver portal",
         "Smart quotation",
         "Expiration control",
         "Automated settlements",
       ],
-      title: "Clear pricing",
+      title: "Published plans = Stripe plans",
       subtitle:
-        "Monthly investment focused on operational ROI: every euro should return as efficiency and margin control. Indicative figures + VAT; add-ons (OCR, premium webhooks, AI Pro) documented in docs/operations/STRIPE_BILLING.md.",
+        "Three tiers with the same names in product and billing: Essential (€350), Pro (€800) and Enterprise (€1000) per month + VAT. Optional add-ons (OCR Pack, Webhooks B2B Premium, LogisAdvisor IA Pro) are purchased from the app.",
       recommended: "Recommended",
       connecting: "Connecting...",
-      requestAccess: "Request system access",
+      requestAccess: "Next: sign up and checkout",
+      subscribeCta: "Subscribe with Stripe",
+      vatExcluded: "VAT excluded",
       missingStripeConfig:
         "Stripe Price IDs are missing in the frontend (NEXT_PUBLIC_STRIPE_PRICE_*). See docs/operations/STRIPE_BILLING.md.",
       pricingStripeFallbackTitle: "Online checkout unavailable",
@@ -70,9 +74,59 @@ export const extraEn = {
       pendingUserId: "PENDING_USER_REGISTRATION",
       monthSuffix: "/month",
     },
+    pricingPage: {
+      title: "Subscribe to Essential, Pro or Enterprise",
+      subtitle:
+        "List prices aligned with the backend and Stripe Billing. If you do not have an empresa_id yet, create your account, finish onboarding and return here or use Subscription in the app.",
+      empresaRequiredHint:
+        "Without empresa_id in the URL we cannot attach the charge. After sign-up, open your welcome email link or sign in and go to Subscription.",
+      stripeEnvHint:
+        "Your build must define all three NEXT_PUBLIC_STRIPE_PRICE_* values (Essential via BASIC or STARTER, PRO, ENTERPRISE).",
+      envVarsList:
+        "Example: NEXT_PUBLIC_STRIPE_PRICE_BASIC or NEXT_PUBLIC_STRIPE_PRICE_STARTER, NEXT_PUBLIC_STRIPE_PRICE_PRO, NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE.",
+      funnelHint:
+        "Self-serve flow: sign up → company created → Stripe checkout from this page (with ?empresa_id=) or from the Subscription menu.",
+      loginCta: "Sign in to pay",
+      backHome: "Back to public site",
+      headerLogin: "Customer login",
+    },
+    socialProof: {
+      eyebrow: "Why dispatch teams take a second look",
+      title: "Less manual closing. More control before margin leaks.",
+      subtitle:
+        "Built for carriers that already invoice at scale and cannot afford to duplicate data across spreadsheets, ERP and the accountant’s inbox.",
+      stats: [
+        { value: "VeriFactu", label: "Fiscal logging focused on traceability and integrity" },
+        { value: "RLS", label: "Each tenant isolated at the database layer" },
+        { value: "Stripe", label: "Same plan hierarchy in checkout and internal docs" },
+      ],
+    },
+    trustStrip: {
+      eyebrow: "Compliance and security",
+      title: "VeriFactu: hash chains and operational discipline",
+      subtitle:
+        "Product priority is fiscal record integrity and coherence between operations and billing. No shortcuts that weaken an inspection story.",
+      bullets: [
+        {
+          title: "Fiscal traceability",
+          body: "Designed for chained records and e-invoicing requirements; QR and submission flows when regulation applies.",
+        },
+        {
+          title: "Layered security",
+          body: "TLS in transit, PostgreSQL RLS per company and secret handling aligned with best practices (no credentials in code).",
+        },
+        {
+          title: "Transparent billing",
+          body: "Stripe Billing with Essential, Pro and Enterprise — same names and indicative prices across the product surface.",
+        },
+      ],
+    },
+    techSpecs: {
+      items: ["VeriFactu-ready", "TLS + RLS PostgreSQL", "Stripe Billing", "GoCardless / SEPA"],
+    },
     faq: {
       title: "Key questions before rolling out AB Logistics OS",
-      subtitle: "Strategic answers for finance leadership and fleet operations.",
+      subtitle: "Typical transport, dispatch and finance objections — without marketing fluff.",
       items: [
         {
           q: "Is migrating historical records and current fleet data difficult?",
@@ -80,7 +134,7 @@ export const extraEn = {
         },
         {
           q: "Is the system worth it if my fleet has fewer than 5 trucks?",
-          a: "Absolutely. Small volume does not remove fiscal obligations. Our Compliance plan is designed to shield small fleets for VeriFactu, removing hours of administrative paperwork so you can run your business, not your accounting.",
+          a: "Absolutely. Small volume does not remove fiscal obligations. Our Essential plan is designed to shield small fleets for VeriFactu, removing hours of administrative paperwork so you can run your business, not your accounting.",
         },
         {
           q: "How exactly does the software guarantee VeriFactu compliance?",
@@ -114,6 +168,26 @@ export const extraEn = {
           q: "Can I test the platform before committing my company's operations?",
           a: "We know switching ERP is a critical decision. We offer tailored demo sessions and the option to run a controlled pilot so your CFO can validate the platform before full rollout.",
         },
+        {
+          q: "Will drivers refuse yet another app?",
+          a: "The driver portal targets short flows (shipment status, delivery, paperwork). You can start with dispatch and billing, then expand to the field when you see value. It does not replace the tachograph or driving-time rules — it complements the documentary and commercial side of the shipment.",
+        },
+        {
+          q: "What about CMR, PODs and evidence if there is a claim or a customer dispute?",
+          a: "We centralise case traceability (origin, destination, price, linked documents) so dispatch and admin work from one source of truth. Civil and commercial liability still sits with the carriage and contract; the software reduces transcription errors and documentation gaps.",
+        },
+        {
+          q: "We use subcontractors and agencies — does it work for mixed fleets?",
+          a: "Yes. Multi-tenant architecture and roles are designed so each company only sees its own world (RLS). You can model customers, recurring routes and internal ops; for complex subcontract chains, Pro and Enterprise add analytics and certification depth.",
+        },
+        {
+          q: "What if AEAT changes technical requirements after we subscribe?",
+          a: "The product updates as SaaS: when regulation or official schemas evolve, we ship changes in the cloud without you reinstalling servers. Keep your tax advisor in the loop — the software encodes logic aligned with the law in force for each release.",
+        },
+        {
+          q: "Do I have to pay before I know it fits my TMS or accountant?",
+          a: "You can sign up, create the company and explore the app with the assigned plan; Stripe checkout aligns when you decide to subscribe (from Subscription or a link that includes empresa_id). If you need specific integrations, Pro and Enterprise are the usual tiers for volume and certification.",
+        },
       ],
     },
     footer: {
@@ -124,8 +198,8 @@ export const extraEn = {
       cookies: "Cookies policy",
       terms: "Terms and conditions",
       contact: "Contact",
-      readyQuestion: "Ready to digitize your fleet?",
-      salesCta: "Talk to sales",
+      readyQuestion: "Already have an account?",
+      salesCta: "Sign in",
       copyright: "All rights reserved.",
     },
     moats: {

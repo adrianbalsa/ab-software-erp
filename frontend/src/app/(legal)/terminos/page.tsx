@@ -64,13 +64,13 @@ export default function TerminosPage() {
       </p>
       <ul>
         <li>
-          <strong>Plan Compliance:</strong> 39 EUR/mes (<strong>IVA no incluido</strong>).
+          <strong>Plan Essential:</strong> 350 EUR/mes (<strong>IVA no incluido</strong>).
         </li>
         <li>
-          <strong>Plan Finance:</strong> 149 EUR/mes (<strong>IVA no incluido</strong>).
+          <strong>Plan Pro:</strong> 800 EUR/mes (<strong>IVA no incluido</strong>).
         </li>
         <li>
-          <strong>Plan Enterprise:</strong> 399 EUR/mes (<strong>IVA no incluido</strong>).
+          <strong>Plan Enterprise:</strong> 1000 EUR/mes (<strong>IVA no incluido</strong>).
         </li>
       </ul>
       <p>

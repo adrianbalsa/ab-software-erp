@@ -57,6 +57,7 @@ export const pagesEs = {
     quickStaffHelpMid: "según tu rol; la facturación y el EBITDA solo están disponibles para el perfil",
     ownerRole: "owner",
     welcomeToast: "Bienvenido",
+    checkoutActivatedToast: "Cuenta activada. Ya puedes operar en AB Logistics OS.",
     sessionInvalid: "Sesión no válida o expirada. Vuelve a iniciar sesión.",
     financeKpiErr: "KPI financieros:",
     statsKpiErr: "KPI operativos:",

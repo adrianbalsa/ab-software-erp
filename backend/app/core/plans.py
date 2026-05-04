@@ -6,13 +6,12 @@ from typing import Any, Final
 
 # ─── Planes SaaS (AB Logistics OS) — catálogo Due Diligence 2026 ─────────────
 # Slugs canónicos en BD (`empresas.plan_type`): starter | pro | enterprise
-# Nombres comerciales: Compliance (antes Starter), Finance (antes Pro),
-# Enterprise. Precios orientativos facturados vía Stripe
-# (montos en EUR/mes IVA aparte según contrato).
+# Nombres comerciales: Essential (slug starter), Pro, Enterprise.
+# Precios orientativos facturados vía Stripe (EUR/mes IVA aparte según contrato).
 #
-# Compliance: 39€/mes — VeriFactu + CMR digital.
-# Finance: 149€/mes — BI avanzado, conciliación bancaria e IA.
-# Enterprise: 399€/mes — certificación ESG ISO 14083 continua y portal B2B.
+# Essential: 350€/mes — VeriFactu + CMR digital.
+# Pro: 800€/mes — BI avanzado, conciliación bancaria e IA.
+# Enterprise: 1000€/mes — certificación ESG ISO 14083 continua y portal B2B.
 
 PLAN_STARTER: Final[str] = "starter"
 PLAN_PRO: Final[str] = "pro"
@@ -20,9 +19,9 @@ PLAN_ENTERPRISE: Final[str] = "enterprise"
 PLAN_FREE: Final[str] = PLAN_STARTER
 
 # EUR/mes (referencia producto; el cargo real lo define el Price en Stripe Dashboard)
-EUR_MONTHLY_COMPLIANCE: Final[int] = 39
-EUR_MONTHLY_FINANCE: Final[int] = 149
-EUR_MONTHLY_FULL_STACK: Final[int] = 399
+EUR_MONTHLY_ESSENTIAL: Final[int] = 350
+EUR_MONTHLY_PRO: Final[int] = 800
+EUR_MONTHLY_ENTERPRISE: Final[int] = 1000
 
 # Add-ons (líneas de ingreso adicionales)
 ADDON_OCR_PACK: Final[str] = "ocr_pack"
@@ -62,6 +61,8 @@ class PlanFeatures:
     math_engine: bool  # EBITDA / motor financiero avanzado
     esg: bool
     max_vehiculos: int | None  # None = ilimitado
+    # Plazas panel (owner + traffic_manager / admin legado); excluye portal cliente y conductores.
+    max_workspace_seats: int | None  # None = ilimitado (Enterprise)
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,24 +166,24 @@ def plan_marketing_name(plan_normalized: str) -> str:
     if p == PLAN_ENTERPRISE:
         return "Enterprise"
     if p == PLAN_PRO:
-        return "Finance"
-    return "Compliance"
+        return "Pro"
+    return "Essential"
 
 
 def plan_list_eur_monthly(plan_normalized: str) -> int:
     """Precio de catálogo EUR/mes del plan base (referencia)."""
     p = normalize_plan(plan_normalized)
     if p == PLAN_ENTERPRISE:
-        return EUR_MONTHLY_FULL_STACK
+        return EUR_MONTHLY_ENTERPRISE
     if p == PLAN_PRO:
-        return EUR_MONTHLY_FINANCE
-    return EUR_MONTHLY_COMPLIANCE
+        return EUR_MONTHLY_PRO
+    return EUR_MONTHLY_ESSENTIAL
 
 
 def normalize_plan(raw: str | None) -> str:
     """Normaliza valores en `empresas.plan_type` (mayúsculas, espacios, alias)."""
     s = (raw or "").strip().lower().replace(" ", "_").replace("-", "_")
-    if s in ("", "starter", "start", "basic", "compliance"):
+    if s in ("", "starter", "start", "basic", "compliance", "essential"):
         return PLAN_STARTER
     if s in ("pro", "professional", "finance"):
         return PLAN_PRO
@@ -221,15 +222,38 @@ def plan_initial_credits(plan_normalized: str) -> int:
 def plan_features(plan_normalized: str) -> PlanFeatures:
     p = normalize_plan(plan_normalized)
     if p == PLAN_ENTERPRISE:
-        return PlanFeatures(verifactu=True, math_engine=True, esg=True, max_vehiculos=None)
+        return PlanFeatures(
+            verifactu=True,
+            math_engine=True,
+            esg=True,
+            max_vehiculos=None,
+            max_workspace_seats=None,
+        )
     if p == PLAN_PRO:
-        return PlanFeatures(verifactu=True, math_engine=True, esg=False, max_vehiculos=25)
-    return PlanFeatures(verifactu=True, math_engine=False, esg=False, max_vehiculos=5)
+        return PlanFeatures(
+            verifactu=True,
+            math_engine=True,
+            esg=False,
+            max_vehiculos=25,
+            max_workspace_seats=25,
+        )
+    return PlanFeatures(
+        verifactu=True,
+        math_engine=False,
+        esg=False,
+        max_vehiculos=5,
+        max_workspace_seats=5,
+    )
 
 
 def max_vehiculos(plan_normalized: str) -> int | None:
     """None = sin tope (Enterprise)."""
     return plan_features(plan_normalized).max_vehiculos
+
+
+def max_workspace_seats(plan_normalized: str) -> int | None:
+    """None = sin tope (Enterprise). Alineado con escala de flota por plan."""
+    return plan_features(plan_normalized).max_workspace_seats
 
 
 async def fetch_empresa_plan(db: Any, *, empresa_id: str) -> str:

@@ -57,6 +57,7 @@ export const pagesEn = {
     quickStaffHelpMid: "for your role; billing and EBITDA are only available for the",
     ownerRole: "owner",
     welcomeToast: "Welcome",
+    checkoutActivatedToast: "Your account is active. You can now work in AB Logistics OS.",
     sessionInvalid: "Session invalid or expired. Please sign in again.",
     financeKpiErr: "Financial KPIs:",
     statsKpiErr: "Operational KPIs:",

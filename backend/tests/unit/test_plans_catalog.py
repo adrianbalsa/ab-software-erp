@@ -5,12 +5,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.core.plans import (
-    EUR_MONTHLY_COMPLIANCE,
-    EUR_MONTHLY_FINANCE,
-    EUR_MONTHLY_FULL_STACK,
+    EUR_MONTHLY_ENTERPRISE,
+    EUR_MONTHLY_ESSENTIAL,
+    EUR_MONTHLY_PRO,
     ADDON_OCR_PACK,
     CostMeter,
     billing_addons,
+    max_workspace_seats,
     monthly_cost_quota,
     monthly_cost_quotas,
     normalize_plan,
@@ -23,18 +24,25 @@ from app.services.stripe_service import _infer_base_plan_from_subscription_line_
 
 def test_normalize_plan_marketing_aliases() -> None:
     assert normalize_plan("COMPLIANCE") == "starter"
+    assert normalize_plan("essential") == "starter"
     assert normalize_plan("finance") == "pro"
     assert normalize_plan("full-stack") == "enterprise"
     assert normalize_plan("fullstack") == "enterprise"
 
 
 def test_plan_marketing_and_list_prices() -> None:
-    assert plan_marketing_name("starter") == "Compliance"
-    assert plan_marketing_name("pro") == "Finance"
+    assert plan_marketing_name("starter") == "Essential"
+    assert plan_marketing_name("pro") == "Pro"
     assert plan_marketing_name("enterprise") == "Enterprise"
-    assert plan_list_eur_monthly("compliance") == EUR_MONTHLY_COMPLIANCE
-    assert plan_list_eur_monthly("finance") == EUR_MONTHLY_FINANCE
-    assert plan_list_eur_monthly("full-stack") == EUR_MONTHLY_FULL_STACK
+    assert plan_list_eur_monthly("compliance") == EUR_MONTHLY_ESSENTIAL
+    assert plan_list_eur_monthly("finance") == EUR_MONTHLY_PRO
+    assert plan_list_eur_monthly("full-stack") == EUR_MONTHLY_ENTERPRISE
+
+
+def test_workspace_seat_limits_align_with_fleet_tiers() -> None:
+    assert max_workspace_seats("starter") == 5
+    assert max_workspace_seats("pro") == 25
+    assert max_workspace_seats("enterprise") is None
 
 
 def test_billing_addons_catalog() -> None:

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TrendingUp, Package, MapPin, Euro, Bell, Route, Lock, Sparkles, UploadCloud, Truck } from "lucide-react";
 import Link from "next/link";
@@ -36,11 +36,13 @@ import { useEcoDashboard } from "@/hooks/useEcoDashboard";
 import { useFinanceDashboard } from "@/hooks/useFinanceDashboard";
 import { useFleetAlerts } from "@/hooks/useFleetAlerts";
 import { API_BASE, apiFetch, isAuthCredentialErrorMessage, isOwnerLike, jwtPayload } from "@/lib/api";
+import { fetchEmpresaQuotaGate } from "@/lib/postAuthNavigation";
 import { useRole } from "@/hooks/useRole";
 import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { currencyLocale, formatCurrencyEUR } from "@/i18n/localeFormat";
 
 const OAUTH_WELCOME_KEY = "abl_oauth_welcome";
+const AB_CHECKOUT_ACTIVATED_TOAST_KEY = "abl_checkout_activated_toast_v1";
 
 const PLACEHOLDER_CHART_VALUES = [12, 16, 14, 20, 18, 24] as const;
 
@@ -213,6 +215,62 @@ export default function Dashboard() {
     }
   }, [p.dashboard.welcomeToast]);
 
+  const stripCheckoutQueryString = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const had = sp.has("checkout") || sp.has("session_id");
+    sp.delete("checkout");
+    sp.delete("session_id");
+    if (!had) return;
+    const rest = sp.toString();
+    const path = rest ? `${window.location.pathname}?${rest}` : window.location.pathname;
+    void router.replace(path, { scroll: false });
+  }, [router]);
+
+  const showCheckoutActivatedToast = useCallback(() => {
+    try {
+      if (sessionStorage.getItem(AB_CHECKOUT_ACTIVATED_TOAST_KEY) === "1") {
+        stripCheckoutQueryString();
+        return;
+      }
+      sessionStorage.setItem(AB_CHECKOUT_ACTIVATED_TOAST_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    toast.success(p.dashboard.checkoutActivatedToast, { id: "abl-checkout-success", duration: 5600 });
+    stripCheckoutQueryString();
+  }, [p.dashboard.checkoutActivatedToast, stripCheckoutQueryString]);
+
+  useEffect(() => {
+    const onEvt = () => showCheckoutActivatedToast();
+    window.addEventListener("abl:checkout-activated", onEvt);
+    return () => window.removeEventListener("abl:checkout-activated", onEvt);
+  }, [showCheckoutActivatedToast]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("checkout") !== "success") return;
+    let cancelled = false;
+    void (async () => {
+      const gate = await fetchEmpresaQuotaGate();
+      if (cancelled) return;
+      if (gate?.must_complete_checkout) return;
+      showCheckoutActivatedToast();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showCheckoutActivatedToast]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("checkout") !== "cancel") return;
+    toast.info(catalog.pricing.checkoutCancelled, { id: "abl-checkout-cancel", duration: 5200 });
+    stripCheckoutQueryString();
+  }, [catalog.pricing.checkoutCancelled, stripCheckoutQueryString]);
+
   useEffect(() => {
     let isMounted = true;
     const verifyOnboardingState = async () => {
@@ -220,6 +278,21 @@ export default function Dashboard() {
         const res = await apiFetch(`${API_BASE}/empresa/quota`, { credentials: "include" });
         if (!isMounted) return;
         if (res.ok) {
+          let j: Record<string, unknown>;
+          try {
+            j = (await res.json()) as Record<string, unknown>;
+          } catch {
+            setOnboarded(true);
+            return;
+          }
+          if (Boolean(j.billing_suspended)) {
+            router.replace("/dashboard/settings/billing");
+            return;
+          }
+          if (Boolean(j.must_complete_checkout)) {
+            router.replace("/payments/create-checkout?plan=starter&source=resume");
+            return;
+          }
           setOnboarded(true);
           return;
         }

@@ -38,9 +38,11 @@ test.describe("Next 16 / React 19 smoke", () => {
     await expect(page.getByLabel(/password|contraseña/i)).toBeVisible();
 
     await page.goto("/pricing?empresa_id=00000000-0000-0000-0000-000000000000");
-    await expect(page.getByRole("heading", { level: 1, name: /Planes y cobro/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Contratar Basic/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Contratar Enterprise/i })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: /Contratar Essential|Subscribe to Essential/i }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /Contratar con Stripe|Subscribe with Stripe/i }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /^Enterprise$/ })).toBeVisible();
 
     expect(errors).toEqual([]);
   });

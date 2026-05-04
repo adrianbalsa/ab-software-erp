@@ -515,16 +515,34 @@ async def get_usuario_db_id(
     return str(u.id).strip()
 
 
-async def bind_write_context(
+async def bind_write_context_without_billing_gate(
     current_user: UserOut = Depends(get_current_user),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> UserOut:
     """
-    Segunda llamada a ``set_empresa_context`` inmediatamente antes de mutar datos
-    (defensa en profundidad frente a fugas de contexto entre corrutinas / pool HTTP).
+    Igual que ``bind_write_context`` pero **sin** ``assert_empresa_billing_active``.
+
+    Casos de uso: invitaciones de equipo durante el checkout inicial (onboarding self-serve).
     """
     await auth_service.ensure_empresa_context(empresa_id=current_user.empresa_id)
     await auth_service.ensure_rbac_context(user=current_user)
+    return current_user
+
+
+async def bind_write_context(
+    current_user: UserOut = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service),
+    db: SupabaseAsync = Depends(get_db),
+) -> UserOut:
+    """
+    Segunda llamada a ``set_empresa_context`` inmediatamente antes de mutar datos
+    (defensa en profundidad frente a fugas de contexto entre corrutinas / pool HTTP).
+
+    Valida facturación SaaS (onboarding self-serve + Stripe) vía ``assert_empresa_billing_active``.
+    """
+    await auth_service.ensure_empresa_context(empresa_id=current_user.empresa_id)
+    await auth_service.ensure_rbac_context(user=current_user)
+    await assert_empresa_billing_active(db, empresa_id=str(current_user.empresa_id))
     return current_user
 
 
@@ -675,7 +693,7 @@ def check_quota_limit(resource: str):
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=(
                         f"Has alcanzado el límite de 5 camiones de tu plan {plan_marketing_name(pn)}. "
-                        "Mejora a Finance para gestionar hasta 25 y activar el cálculo de EBITDA real."
+                        "Mejora a Pro para gestionar hasta 25 y activar el cálculo de EBITDA real."
                     ),
                 )
             if pn == PLAN_PRO:

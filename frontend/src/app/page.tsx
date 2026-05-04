@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { LandingPageDark } from "@/components/landing/LandingPageDark";
 import { getAuthToken } from "@/lib/auth";
+import { resolvePostAuthNavigation } from "@/lib/postAuthNavigation";
 
 function isMarketingRootHostname(hostname: string): boolean {
   const h = hostname.toLowerCase();
@@ -33,7 +34,10 @@ function HomeContent() {
       const t = getAuthToken();
       if (t) {
         setHasToken(true);
-        router.replace("/dashboard");
+        void (async () => {
+          const dest = await resolvePostAuthNavigation("/onboarding");
+          router.replace(dest);
+        })();
       } else {
         setHasToken(false);
       }

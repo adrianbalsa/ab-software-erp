@@ -27,6 +27,7 @@ from app.schemas.auth import (
 )
 from app.schemas.user import UserOut
 from app.services.refresh_token_service import RefreshTokenService
+from app.services.workspace_team_service import seat_limit_error_detail, workspace_seat_usage
 
 router = APIRouter()
 _log = logging.getLogger(__name__)
@@ -109,13 +110,17 @@ _COMMON_AUTH_RESPONSES = {
 @router.post(
     "/invite",
     response_model=InviteUserOut,
-    responses=_COMMON_AUTH_RESPONSES,
-    summary="Invitar usuario (owner only)",
+    responses={
+        **_COMMON_AUTH_RESPONSES,
+        403: {"description": "Límite de plazas del plan alcanzado (detail JSON con code=workspace_seat_limit_exceeded)."},
+    },
+    summary="Invitar usuario (owner o developer)",
 )
 async def invite_user(
     payload: InviteUserIn,
-    _: UserOut = Depends(deps.require_role("owner")),
-    current_user: UserOut = Depends(deps.bind_write_context),
+    _: UserOut = Depends(deps.require_role("owner", "developer")),
+    current_user: UserOut = Depends(deps.bind_write_context_without_billing_gate),
+    db: SupabaseAsync = Depends(deps.get_db),
     db_admin: SupabaseAsync = Depends(get_db_admin),
 ) -> InviteUserOut:
     """
@@ -125,6 +130,12 @@ async def invite_user(
     requested_role = payload.role
     profile_role = "admin" if requested_role == "admin" else "traffic_manager"
     empresa_id = str(current_user.empresa_id)
+    used, seat_limit, plan_slug = await workspace_seat_usage(db, empresa_id=empresa_id)
+    if seat_limit is not None and used >= seat_limit:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=seat_limit_error_detail(used=used, limit=seat_limit, plan_slug=plan_slug),
+        )
     invite_metadata = {"empresa_id": empresa_id, "role": profile_role}
     try:
         invite_res = await db_admin.auth_admin_invite_user_by_email(

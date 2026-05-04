@@ -6,6 +6,7 @@ initialize_global_decimal_context()
 
 import asyncio
 import os
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -286,13 +287,14 @@ def create_app() -> FastAPI:
                 f"errors={jsonable_encoder(exc.errors())}",
                 flush=True,
             )
+        rid = getattr(request.state, "request_id", None) or str(uuid.uuid4())
         return JSONResponse(
             status_code=422,
-            content={"detail": jsonable_encoder(exc.errors())},
+            content={"detail": jsonable_encoder(exc.errors()), "request_id": rid},
         )
 
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(_request: Request, exc: HTTPException):
+    async def http_exception_handler(request: Request, exc: HTTPException):
         if exc.status_code == 500:
             asyncio.create_task(notify_critical_error(short_traceback_from_exc(exc)))
         detail: object = exc.detail
@@ -302,9 +304,10 @@ def create_app() -> FastAPI:
             or (isinstance(detail, str) and not str(detail).strip())
         ):
             detail = "Not enough privileges"
+        rid = getattr(request.state, "request_id", None) or str(uuid.uuid4())
         return JSONResponse(
             status_code=exc.status_code,
-            content={"detail": jsonable_encoder(detail)},
+            content={"detail": jsonable_encoder(detail), "request_id": rid},
         )
 
     @app.get("/health", tags=["Salud"], include_in_schema=True)

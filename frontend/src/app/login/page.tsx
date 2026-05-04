@@ -9,6 +9,7 @@ import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { notifyJwtUpdated } from "@/lib/api";
 import { setAuthToken } from "@/lib/auth";
+import { resolvePostAuthNavigation } from "@/lib/postAuthNavigation";
 
 export default function LoginPage() {
   const { catalog } = useOptionalLocaleCatalog();
@@ -29,8 +30,10 @@ export default function LoginPage() {
     if (state && "success" in state && state.success) {
       setAuthToken(state.accessToken);
       notifyJwtUpdated();
-      /* Navegación completa: garantiza que localStorage y la primera tanda de peticiones al API vean el JWT. */
-      window.location.assign("/dashboard");
+      void (async () => {
+        const dest = await resolvePostAuthNavigation("/onboarding");
+        window.location.assign(dest);
+      })();
     }
   }, [state]);
 

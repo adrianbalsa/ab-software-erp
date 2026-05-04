@@ -164,6 +164,9 @@ class OnboardingFakeSupabase:
             "plan_type": "starter",
             "activa": True,
             "deleted_at": None,
+            "requires_stripe_subscription": True,
+            "stripe_subscription_id": None,
+            "is_active": True,
         }
         row["empresa_id"] = eid
         row["role"] = "admin"
@@ -333,6 +336,10 @@ async def onboarding_client(monkeypatch: pytest.MonkeyPatch):
         return _M()
 
     monkeypatch.setattr("app.api.deps.get_maps_service", _fake_maps)
+
+    from app.services import stripe_service
+
+    monkeypatch.setattr(stripe_service, "_stripe_configured", lambda: False)
 
     from app.core.config import get_settings
 

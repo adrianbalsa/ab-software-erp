@@ -173,8 +173,41 @@ class EmpresaQuotaOut(BaseModel):
     """Cuota de flota y plan normalizado para el tenant actual (JWT + RLS)."""
 
     plan_type: str
+    must_complete_checkout: bool = Field(
+        default=False,
+        description="True si la empresa exige Stripe, el servidor tiene billing configurado y aún no hay suscripción.",
+    )
+    billing_suspended: bool = Field(
+        default=False,
+        description="True si la empresa está marcada inactiva por facturación (p. ej. impago).",
+    )
     limite_vehiculos: int | None = Field(
         default=None,
         description="None = Enterprise (sin tope); en otro caso coincide con plan_features.max_vehiculos.",
     )
     vehiculos_actuales: int
+    limite_usuarios_equipo: int | None = Field(
+        default=None,
+        description="None = Enterprise; plazas panel (owner + gestores), alineado con plan_features.max_workspace_seats.",
+    )
+    usuarios_equipo_actuales: int = Field(
+        default=0,
+        description="Perfiles de panel vinculados al tenant (excluye portal cliente y conductores).",
+    )
+
+
+class WorkspaceMemberOut(BaseModel):
+    """Miembro del espacio de trabajo (panel), sin datos de portal cliente."""
+
+    id: str
+    email: str
+    rbac_role: str
+
+
+class WorkspaceTeamOut(BaseModel):
+    """Listado de equipo + resumen de cupo (solo lectura)."""
+
+    plan_type: str
+    limite_usuarios_equipo: int | None = None
+    usuarios_equipo_actuales: int = 0
+    members: list[WorkspaceMemberOut] = Field(default_factory=list)

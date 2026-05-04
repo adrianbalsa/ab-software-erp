@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -29,4 +30,8 @@ class GlobalExceptionMiddleware(BaseHTTPMiddleware):
                     },
                 )
             )
-            return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+            rid = getattr(request.state, "request_id", None) or str(uuid.uuid4())
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Internal Server Error", "request_id": rid},
+            )

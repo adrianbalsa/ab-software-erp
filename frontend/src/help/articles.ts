@@ -78,7 +78,7 @@ Switch **ES / EN** from the language selector (sidebar or public headers). Prefe
     body: {
       es: `
 ### Modelo
-Los planes **Compliance**, **Finance** y **Enterprise** (slugs técnicos \`starter\`, \`pro\`, \`enterprise\`) se cobran como **suscripción** mediante **Stripe Billing**. Precios de catálogo orientativos: **39 €**, **149 €** y **399 €** / mes (+ IVA); el cargo efectivo depende de tu configuración fiscal y de Stripe Tax si lo activáis.
+Los planes **Essential**, **Pro** y **Enterprise** (slugs técnicos \`starter\`, \`pro\`, \`enterprise\`) se cobran como **suscripción** mediante **Stripe Billing**. Precios de catálogo orientativos: **350 €**, **800 €** y **1000 €** / mes (+ IVA); el cargo efectivo depende de tu configuración fiscal y de Stripe Tax si lo activáis.
 
 ### Add-ons (referencia)
 | Add-on | Orientativo |
@@ -109,7 +109,7 @@ Ver documentación interna \`docs/operations/STRIPE_BILLING.md\` para checklist 
       `.trim(),
       en: `
 ### Model
-**Compliance**, **Finance** and **Enterprise** (technical slugs \`starter\`, \`pro\`, \`enterprise\`) are charged as **subscriptions** via **Stripe Billing**. Indicative list prices: **€39**, **€149** and **€399** / month (+ VAT); actual charges depend on your tax setup and Stripe Tax if enabled.
+**Essential**, **Pro** and **Enterprise** (technical slugs \`starter\`, \`pro\`, \`enterprise\`) are charged as **subscriptions** via **Stripe Billing**. Indicative list prices: **€350**, **€800** and **€1000** / month (+ VAT); actual charges depend on your tax setup and Stripe Tax if enabled.
 
 ### Add-ons (reference)
 | Add-on | Indicative |
@@ -167,7 +167,7 @@ El backend expone \`GET /api/v1/export/audit-package\` (JWT de propietario).
 ### Contenido típico del ZIP
 - \`INDEX.md\` — índice y enlaces a documentación del repositorio.
 - \`public_compliance_snapshot.json\` — misma información que \`GET /api/v1/public/compliance\` más metadatos de generación.
-- \`pricing_catalog.json\` — planes Compliance / Finance / Enterprise y add-ons (referencia \`app/core/plans.py\`).
+- \`pricing_catalog.json\` — planes Essential / Pro / Enterprise y add-ons (referencia \`app/core/plans.py\`).
 - \`security.txt\` — copia del cuerpo RFC 9116.
 
 ### Límites
@@ -187,7 +187,7 @@ The backend route is \`GET /api/v1/export/audit-package\` (owner JWT).
 ### Typical ZIP contents
 - \`INDEX.md\` — index and pointers to repository documentation.
 - \`public_compliance_snapshot.json\` — same payload as \`GET /api/v1/public/compliance\` plus generation metadata.
-- \`pricing_catalog.json\` — Compliance / Finance / Enterprise plans and add-ons (see \`app/core/plans.py\`).
+- \`pricing_catalog.json\` — Essential / Pro / Enterprise plans and add-ons (see \`app/core/plans.py\`).
 - \`security.txt\` — RFC 9116 body snapshot.
 
 ### Limits

@@ -19,6 +19,8 @@ export type Catalog = {
   nav: {
     billing: string;
     billingSub: string;
+    team: string;
+    teamSub: string;
     help: string;
     helpSub: string;
     pricing: string;
@@ -72,6 +74,31 @@ export type Catalog = {
     errorPrefix: string;
     refresh: string;
   };
+  teamPage: {
+    title: string;
+    subtitle: string;
+    seatsLabel: string;
+    seatsUnlimited: string;
+    membersTitle: string;
+    emptyMembers: string;
+    emailLabel: string;
+    emailPlaceholder: string;
+    roleLabel: string;
+    roleAdmin: string;
+    roleAdminHint: string;
+    roleStaff: string;
+    roleStaffHint: string;
+    inviteCta: string;
+    inviting: string;
+    inviteSuccess: string;
+    inviteError: string;
+    atLimitHint: string;
+    upgradeHint: string;
+    rbacOwner: string;
+    rbacTraffic: string;
+    loadError: string;
+    retry: string;
+  };
   pages: typeof pagesEs;
 };
 
@@ -81,27 +108,27 @@ const pricingEs = {
     "Elige el plan que encaja con tu flota. Los cobros se gestionan de forma segura con Stripe Billing.",
   loginCta: "Iniciar sesión para contratar",
   perMonth: "/mes + IVA",
-  starterName: "Compliance",
-  starterPrice: "39 €",
+  starterName: "Essential",
+  starterPrice: "350 €",
   starterDesc: "Hasta 5 vehículos, VeriFactu y operativa central (catálogo 2026).",
   starterBullets: [
     "VeriFactu y facturación electrónica",
     "Cuadro de mando operativo",
     "Límite de 5 vehículos en flota",
   ],
-  proName: "Finance",
-  proPrice: "149 €",
+  proName: "Pro",
+  proPrice: "800 €",
   proDesc: "Hasta 25 vehículos y motor financiero avanzado.",
   proBullets: [
-    "Todo lo de Compliance",
+    "Todo lo de Essential",
     "Hasta 25 vehículos",
     "Inteligencia financiera y BI ampliado",
   ],
   entName: "Enterprise",
-  entPrice: "399 €",
+  entPrice: "1000 €",
   entDesc: "Flota ilimitada, ESG comercial y certificación.",
   entBullets: [
-    "Todo lo de Finance",
+    "Todo lo de Pro",
     "Flota sin límite",
     "Módulo ESG y certificados auditables",
   ],
@@ -116,22 +143,22 @@ const pricingEn = {
   subtitle: "Pick the plan that matches your fleet. Billing is handled securely with Stripe Billing.",
   loginCta: "Sign in to subscribe",
   perMonth: "/month + VAT",
-  starterName: "Compliance",
-  starterPrice: "€39",
+  starterName: "Essential",
+  starterPrice: "€350",
   starterDesc: "Up to 5 vehicles, VeriFactu and core operations (2026 catalog).",
   starterBullets: [
     "VeriFactu & e-invoicing",
     "Operational dashboard",
     "Fleet cap of 5 vehicles",
   ],
-  proName: "Finance",
-  proPrice: "€149",
+  proName: "Pro",
+  proPrice: "€800",
   proDesc: "Up to 25 vehicles and advanced financial intelligence.",
-  proBullets: ["Everything in Compliance", "Up to 25 vehicles", "Extended BI & finance engine"],
+  proBullets: ["Everything in Essential", "Up to 25 vehicles", "Extended BI & finance engine"],
   entName: "Enterprise",
-  entPrice: "€399",
+  entPrice: "€1000",
   entDesc: "Unlimited fleet, commercial ESG and certification.",
-  entBullets: ["Everything in Finance", "Unlimited fleet", "ESG module & auditable certificates"],
+  entBullets: ["Everything in Pro", "Unlimited fleet", "ESG module & auditable certificates"],
   choose: "Subscribe",
   currentNote:
     "If you already have an account, sign in and use “Upgrade plan” in the sidebar or the Subscription page.",
@@ -139,7 +166,7 @@ const pricingEn = {
 } as const;
 
 const helpBillingMdEs = `
-Los pagos del **plan SaaS** (**Compliance**, **Finance**, **Enterprise**; slugs \`starter\` / \`pro\` / \`enterprise\`) se procesan con **Stripe** en modo suscripción recurrente. Precios de catálogo orientativos: **39 €**, **149 €** y **399 €** / mes (+ IVA según caso).
+Los pagos del **plan SaaS** (**Essential**, **Pro**, **Enterprise**; slugs \`starter\` / \`pro\` / \`enterprise\`) se procesan con **Stripe** en modo suscripción recurrente. Precios de catálogo orientativos: **350 €**, **800 €** y **1000 €** / mes (+ IVA según caso).
 
 ### Add-ons (referencia comercial)
 | Add-on | Precio orientativo |
@@ -166,7 +193,7 @@ Para incidencias de acceso o datos de transporte, contacta con el administrador 
 `.trim();
 
 const helpBillingMdEn = `
-**SaaS plan** charges (**Compliance**, **Finance**, **Enterprise**; slugs \`starter\` / \`pro\` / \`enterprise\`) are processed by **Stripe** as recurring subscriptions. Indicative list prices: **€39**, **€149** and **€399** / month (+ VAT as applicable).
+**SaaS plan** charges (**Essential**, **Pro**, **Enterprise**; slugs \`starter\` / \`pro\` / \`enterprise\`) are processed by **Stripe** as recurring subscriptions. Indicative list prices: **€350**, **€800** and **€1000** / month (+ VAT as applicable).
 
 ### Add-ons (commercial reference)
 | Add-on | Indicative price |
@@ -198,6 +225,8 @@ const es: Catalog = {
   nav: {
     billing: "Suscripción",
     billingSub: "Stripe Billing",
+    team: "Equipo",
+    teamSub: "Invitaciones y plazas",
     help: "Centro de ayuda",
     helpSub: "Facturación y autoservicio",
     pricing: "Precios",
@@ -225,12 +254,38 @@ const es: Catalog = {
     portalCta: "Abrir portal de facturación (Stripe)",
     portalHint:
       "Te redirigimos a Stripe para tarjeta, facturas PDF y cancelación de renovación. Volverás al panel al cerrar.",
-    upgradePro: "Contratar o pasar a Finance",
+    upgradePro: "Contratar o pasar a Pro",
     upgradeEnt: "Contratar Enterprise",
     loadingPortal: "Abriendo portal…",
     portalDisabled: "Completa antes un checkout para asociar un cliente Stripe a tu empresa.",
     errorPrefix: "No se pudo abrir el portal",
     refresh: "Actualizar",
+  },
+  teamPage: {
+    title: "Equipo y accesos",
+    subtitle:
+      "Invita a compañeros con rol de administrador o gestor operativo. Las plazas siguen los límites de tu plan (Essential, Pro o Enterprise).",
+    seatsLabel: "Plazas de panel",
+    seatsUnlimited: "Ilimitadas (Enterprise)",
+    membersTitle: "Miembros actuales",
+    emptyMembers: "Aún no hay otros miembros registrados.",
+    emailLabel: "Correo del invitado",
+    emailPlaceholder: "nombre@empresa.com",
+    roleLabel: "Rol",
+    roleAdmin: "Administrador",
+    roleAdminHint: "Misma empresa; acceso ampliado (facturación, finanzas).",
+    roleStaff: "Gestor operativo",
+    roleStaffHint: "Flota y operaciones sin datos financieros globales sensibles.",
+    inviteCta: "Enviar invitación",
+    inviting: "Enviando…",
+    inviteSuccess: "Invitación enviada. El usuario recibirá un correo para unirse.",
+    inviteError: "No se pudo enviar la invitación.",
+    atLimitHint: "Has alcanzado el máximo de usuarios de panel para tu plan.",
+    upgradeHint: "Mejora el plan en Suscripción o libera plazas si alguien deja la empresa.",
+    rbacOwner: "Propietario / Admin",
+    rbacTraffic: "Gestor operativo",
+    loadError: "No se pudo cargar el equipo.",
+    retry: "Reintentar",
   },
   pages: pagesEs,
 };
@@ -241,6 +296,8 @@ const en = {
   nav: {
     billing: "Subscription",
     billingSub: "Stripe Billing",
+    team: "Team",
+    teamSub: "Invites & seats",
     help: "Help center",
     helpSub: "Billing & self-service",
     pricing: "Pricing",
@@ -268,12 +325,38 @@ const en = {
     portalCta: "Open billing portal (Stripe)",
     portalHint:
       "You will be redirected to Stripe for card, PDF invoices and renewal cancellation. You return to the app when finished.",
-    upgradePro: "Subscribe or upgrade to Finance",
+    upgradePro: "Subscribe or upgrade to Pro",
     upgradeEnt: "Subscribe to Enterprise",
     loadingPortal: "Opening portal…",
     portalDisabled: "Complete checkout once so a Stripe customer is linked to your company.",
     errorPrefix: "Could not open portal",
     refresh: "Refresh",
+  },
+  teamPage: {
+    title: "Team & access",
+    subtitle:
+      "Invite colleagues as administrator or operational manager. Seat limits follow your plan (Essential, Pro or Enterprise).",
+    seatsLabel: "Panel seats",
+    seatsUnlimited: "Unlimited (Enterprise)",
+    membersTitle: "Current members",
+    emptyMembers: "No other members yet.",
+    emailLabel: "Invitee email",
+    emailPlaceholder: "name@company.com",
+    roleLabel: "Role",
+    roleAdmin: "Administrator",
+    roleAdminHint: "Same company; broader access (billing, finance).",
+    roleStaff: "Operations manager",
+    roleStaffHint: "Fleet and operations without global sensitive finance data.",
+    inviteCta: "Send invitation",
+    inviting: "Sending…",
+    inviteSuccess: "Invitation sent. They will receive an email to join.",
+    inviteError: "Could not send the invitation.",
+    atLimitHint: "You have reached the maximum panel users for your plan.",
+    upgradeHint: "Upgrade under Subscription or free seats if someone leaves.",
+    rbacOwner: "Owner / Admin",
+    rbacTraffic: "Operations manager",
+    loadError: "Could not load team.",
+    retry: "Retry",
   },
   pages: pagesEn as unknown as typeof pagesEs,
 } as unknown as Catalog;

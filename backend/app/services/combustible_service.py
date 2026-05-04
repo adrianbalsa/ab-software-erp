@@ -4,18 +4,20 @@ Importación CSV de combustible (Solred / StarRessa / Edenred): gastos, ESG (``e
 
 from __future__ import annotations
 
+import inspect
 import io
 import logging
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import pandas as pd
 
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
+from app.core.constants import ISO_14083_DIESEL_CO2_KG_PER_LITRE
 from app.schemas.gasto import GastoCreate
 from app.services.gastos_service import GastosService
 
@@ -163,6 +165,15 @@ def _read_dataframe(raw: bytes, filename: str) -> pd.DataFrame:
 
 
 @dataclass(frozen=True, slots=True)
+class FuelImportErrorDetail:
+    """Incidencia por fila (validación o importación). ``row`` = índice 1..N en el lote parseado (post-filtros)."""
+
+    row: int | None
+    code: str
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
 class FuelImportResult:
     total_filas_leidas: int
     filas_importadas_ok: int
@@ -170,6 +181,36 @@ class FuelImportResult:
     total_euros: float
     total_co2_kg: float
     errores: list[str]
+    dry_run: bool = False
+    errores_detalle: list[FuelImportErrorDetail] = field(default_factory=list)
+    co2_es_estimacion: bool = False
+
+
+def _fuel_err(
+    errores: list[str],
+    detalle: list[FuelImportErrorDetail],
+    *,
+    row: int | None,
+    code: str,
+    message: str,
+) -> None:
+    errores.append(message)
+    detalle.append(FuelImportErrorDetail(row=row, code=code, message=message))
+
+
+async def _emit_fuel_row_progress(
+    cb: Callable[[int, int], Awaitable[None] | None] | None,
+    cur: int,
+    tot: int,
+) -> None:
+    if cb is None:
+        return
+    try:
+        out = cb(cur, tot)
+        if inspect.iscoroutine(out):
+            await out
+    except Exception:
+        _log.debug("fuel import on_progress skip", exc_info=True)
 
 
 async def importar_combustible_csv(
@@ -180,10 +221,18 @@ async def importar_combustible_csv(
     username_empleado: str,
     db: SupabaseAsync,
     gastos_service: GastosService,
+    dry_run: bool = False,
+    on_progress: Callable[[int, int], Awaitable[None] | None] | None = None,
 ) -> FuelImportResult:
     """
     Procesa CSV/Excel de combustible: ``gastos``, ``gastos_vehiculo``, ``esg_auditoria`` (CO2 vía trigger),
     y opcionalmente actualiza ``flota.odometro_actual`` si la columna de kilómetros supera el valor actual.
+
+    Si ``dry_run=True``, no escribe en BD; devuelve agregados y ``errores_detalle``.
+    El CO₂ en simulación usa el factor normativo ISO 14083 (kg/L); tras importación real
+    el valor proviene del trigger de ``esg_auditoria``.
+
+    ``on_progress(fila_actual, total_filas)`` se invoca cada ~25 filas y al final (importaciones largas).
     """
     if not filename:
         raise ValueError("Archivo sin nombre")
@@ -252,129 +301,176 @@ async def importar_combustible_csv(
             continue
 
     errores: list[str] = []
+    errores_detalle: list[FuelImportErrorDetail] = []
     filas_ok = 0
     total_litros = 0.0
     total_euros = 0.0
     total_co2_kg = 0.0
 
-    for row in df.to_dict(orient="records"):
+    for row_index, row in enumerate(df.to_dict(orient="records"), start=1):
+        if on_progress is not None and (row_index == 1 or row_index % 25 == 0):
+            await _emit_fuel_row_progress(on_progress, row_index, total_filas_leidas)
+
         mk = str(row.get("_mat_key") or "").strip()
         display_mat = str(row.get("_mat_display") or mk or "?").strip() or mk
         if not mk:
-            errores.append("Fila sin matrícula válida.")
+            _fuel_err(
+                errores,
+                errores_detalle,
+                row=row_index,
+                code="MISSING_PLATE",
+                message="Fila sin matrícula válida.",
+            )
             continue
 
         vm = flota_map.get(mk)
         if not isinstance(vm, dict):
-            errores.append(f"Matrícula «{display_mat}» no encontrada en la flota.")
+            _fuel_err(
+                errores,
+                errores_detalle,
+                row=row_index,
+                code="PLATE_NOT_IN_FLEET",
+                message=f"Matrícula «{display_mat}» no encontrada en la flota.",
+            )
             continue
 
         vehiculo_id = vm.get("vehiculo_id")
         if not vehiculo_id:
-            errores.append(f"Matrícula «{display_mat}» no encontrada en la flota.")
+            _fuel_err(
+                errores,
+                errores_detalle,
+                row=row_index,
+                code="PLATE_NOT_IN_FLEET",
+                message=f"Matrícula «{display_mat}» no encontrada en la flota.",
+            )
             continue
 
         fd = row.get("_fecha_parsed")
         if not isinstance(fd, date):
-            errores.append(f"Fila (matrícula «{display_mat}»): fecha inválida.")
+            _fuel_err(
+                errores,
+                errores_detalle,
+                row=row_index,
+                code="INVALID_DATE",
+                message=f"Fila (matrícula «{display_mat}»): fecha inválida.",
+            )
             continue
 
         litros = float(row.get("_litros_f") or 0.0)
         if litros <= 0:
-            errores.append(f"Fila «{display_mat}» {fd.isoformat()}: litros debe ser > 0.")
+            _fuel_err(
+                errores,
+                errores_detalle,
+                row=row_index,
+                code="INVALID_LITERS",
+                message=f"Fila «{display_mat}» {fd.isoformat()}: litros debe ser > 0.",
+            )
             continue
 
         importe_f = float(row.get("_importe_f") or 0.0)
         if importe_f <= 0:
-            errores.append(f"Fila «{display_mat}» {fd.isoformat()}: importe total inválido o cero.")
+            _fuel_err(
+                errores,
+                errores_detalle,
+                row=row_index,
+                code="INVALID_AMOUNT",
+                message=f"Fila «{display_mat}» {fd.isoformat()}: importe total inválido o cero.",
+            )
             continue
 
         prov_raw = str(row.get("_proveedor_str") or "").strip()
         proveedor = prov_raw if prov_raw else "Combustible"
         concepto = f"Combustible {proveedor} ({mk})"[:2000]
 
-        created = await gastos_service.create_gasto(
-            empresa_id=eid,
-            empleado=username_empleado,
-            gasto_in=GastoCreate(
-                proveedor=proveedor,
-                fecha=fd,
-                total_chf=importe_f,
-                categoria="Combustible",
-                concepto=concepto,
-                moneda="EUR",
-                nif_proveedor=None,
-                iva=None,
-                total_eur=importe_f,
-            ),
-            evidencia_bytes=None,
-            evidencia_filename=None,
-            evidencia_content_type=None,
-        )
-
-        await db.execute(
-            db.table("gastos_vehiculo").insert(
-                {
-                    "empresa_id": eid,
-                    "vehiculo_id": vehiculo_id,
-                    "gasto_id": created.id,
-                    "fecha": fd.isoformat(),
-                    "categoria": "Combustible",
-                    "proveedor": proveedor,
-                    "estacion": prov_raw or None,
-                    "matricula_normalizada": mk,
-                    "litros": litros,
-                    "importe_total": importe_f,
-                    "moneda": "EUR",
-                    "concepto": concepto,
-                }
+        if dry_run:
+            co2_fila = float(litros) * float(ISO_14083_DIESEL_CO2_KG_PER_LITRE)
+            total_co2_kg += co2_fila
+        else:
+            created = await gastos_service.create_gasto(
+                empresa_id=eid,
+                empleado=username_empleado,
+                gasto_in=GastoCreate(
+                    proveedor=proveedor,
+                    fecha=fd,
+                    total_chf=importe_f,
+                    categoria="Combustible",
+                    concepto=concepto,
+                    moneda="EUR",
+                    nif_proveedor=None,
+                    iva=None,
+                    total_eur=importe_f,
+                ),
+                evidencia_bytes=None,
+                evidencia_filename=None,
+                evidencia_content_type=None,
             )
-        )
 
-        # CO2: el trigger ``trg_esg_auditoria_calc_co2`` recalcula ``co2_emitido_kg`` en INSERT.
-        ins_esg = await db.execute(
-            db.table("esg_auditoria")
-            .insert(
-                {
-                    "empresa_id": eid,
-                    "vehiculo_id": vehiculo_id,
-                    "gasto_id": str(created.id),
-                    "fecha": fd.isoformat(),
-                    "litros_consumidos": litros,
-                    "tipo_combustible": "Diesel A",
-                }
+            await db.execute(
+                db.table("gastos_vehiculo").insert(
+                    {
+                        "empresa_id": eid,
+                        "vehiculo_id": vehiculo_id,
+                        "gasto_id": created.id,
+                        "fecha": fd.isoformat(),
+                        "categoria": "Combustible",
+                        "proveedor": proveedor,
+                        "estacion": prov_raw or None,
+                        "matricula_normalizada": mk,
+                        "litros": litros,
+                        "importe_total": importe_f,
+                        "moneda": "EUR",
+                        "concepto": concepto,
+                    }
+                )
             )
-            .select("co2_emitido_kg")
-        )
-        esg_data = getattr(ins_esg, "data", None)
-        co2_fila = 0.0
-        if isinstance(esg_data, list) and esg_data:
-            try:
-                co2_fila = float(esg_data[0].get("co2_emitido_kg") or 0)
-            except (TypeError, ValueError):
-                co2_fila = 0.0
-        total_co2_kg += co2_fila
 
-        km_val = row.get("_km_f")
-        if km_val is not None and not (isinstance(km_val, float) and pd.isna(km_val)):  # type: ignore[arg-type]
-            try:
-                km_int = int(round(float(km_val)))
-                cur_odo = int(vm.get("odometro_actual") or 0)
-                if km_int > cur_odo:
-                    await db.execute(
-                        db.table("flota")
-                        .update({"odometro_actual": km_int})
-                        .eq("id", vehiculo_id)
-                        .eq("empresa_id", eid)
-                    )
-                    vm["odometro_actual"] = km_int
-                    flota_map[mk] = vm
-            except (TypeError, ValueError) as exc:
-                _log.debug("odometro skip fila %s: %s", display_mat, exc)
+            # CO2: el trigger ``trg_esg_auditoria_calc_co2`` recalcula ``co2_emitido_kg`` en INSERT.
+            ins_esg = await db.execute(
+                db.table("esg_auditoria")
+                .insert(
+                    {
+                        "empresa_id": eid,
+                        "vehiculo_id": vehiculo_id,
+                        "gasto_id": str(created.id),
+                        "fecha": fd.isoformat(),
+                        "litros_consumidos": litros,
+                        "tipo_combustible": "Diesel A",
+                    }
+                )
+                .select("co2_emitido_kg")
+            )
+            esg_data = getattr(ins_esg, "data", None)
+            co2_fila = 0.0
+            if isinstance(esg_data, list) and esg_data:
+                try:
+                    co2_fila = float(esg_data[0].get("co2_emitido_kg") or 0)
+                except (TypeError, ValueError):
+                    co2_fila = 0.0
+            total_co2_kg += co2_fila
+
+            km_val = row.get("_km_f")
+            if km_val is not None and not (isinstance(km_val, float) and pd.isna(km_val)):  # type: ignore[arg-type]
+                try:
+                    km_int = int(round(float(km_val)))
+                    cur_odo = int(vm.get("odometro_actual") or 0)
+                    if km_int > cur_odo:
+                        await db.execute(
+                            db.table("flota")
+                            .update({"odometro_actual": km_int})
+                            .eq("id", vehiculo_id)
+                            .eq("empresa_id", eid)
+                        )
+                        vm["odometro_actual"] = km_int
+                        flota_map[mk] = vm
+                except (TypeError, ValueError) as exc:
+                    _log.debug("odometro skip fila %s: %s", display_mat, exc)
 
         filas_ok += 1
         total_litros += litros
         total_euros += importe_f
+
+    if on_progress is not None:
+        await _emit_fuel_row_progress(on_progress, total_filas_leidas, total_filas_leidas)
 
     return FuelImportResult(
         total_filas_leidas=total_filas_leidas,
@@ -383,4 +479,7 @@ async def importar_combustible_csv(
         total_euros=round(total_euros, 2),
         total_co2_kg=round(total_co2_kg, 6),
         errores=errores,
+        dry_run=dry_run,
+        errores_detalle=errores_detalle,
+        co2_es_estimacion=dry_run,
     )

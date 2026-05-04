@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { useRole } from "@/hooks/useRole";
 import { isOwnerLike } from "@/lib/api";
+import { fetchEmpresaQuotaGate } from "@/lib/postAuthNavigation";
 
 const STEPS: Step[] = [
   {
@@ -14,7 +15,7 @@ const STEPS: Step[] = [
     placement: "right",
     disableBeacon: true,
     content:
-      "Bienvenido a AB Logistics OS. Tu centro de mando financiero y operativo. Empecemos a rodar.",
+      "Bienvenido a AB Logistics OS. Con la suscripción activa, aquí tienes el centro de mando financiero y operativo. Empecemos a rodar.",
   },
   {
     target: "#tour-nav-flota",
@@ -54,8 +55,18 @@ export function TourGuide() {
     if (!shouldOfferTour || pathname !== "/dashboard") {
       return;
     }
-    const id = window.setTimeout(() => setRun(true), 600);
-    return () => window.clearTimeout(id);
+    let cancelled = false;
+    let timer: number | undefined;
+    void (async () => {
+      const gate = await fetchEmpresaQuotaGate();
+      if (cancelled) return;
+      if (gate?.must_complete_checkout) return;
+      timer = window.setTimeout(() => setRun(true), 700);
+    })();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, [shouldOfferTour, pathname]);
 
   const handleCallback = useCallback(

@@ -393,6 +393,14 @@ export async function apiFetch<T>(
   const headers = new Headers(init.headers ?? {});
   const credentials = init.credentials ?? "include";
 
+  if (!headers.has("X-Request-Id") && !headers.has("x-request-id")) {
+    const rid =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `abl-fe-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    headers.set("X-Request-Id", rid);
+  }
+
   const token = await resolveAccessToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
@@ -430,13 +438,23 @@ export async function apiFetch<T>(
 }
 
 export async function parseApiError(res: Response): Promise<string> {
+  const hdr = (res.headers.get("x-request-id") || res.headers.get("X-Request-Id") || "").trim() || null;
+  let base = `Error HTTP ${res.status}`;
+  let ref: string | null = hdr;
   try {
-    const json = (await res.json()) as { detail?: unknown };
-    if (typeof json.detail === "string") return json.detail;
+    const json = (await res.json()) as { detail?: unknown; request_id?: unknown };
+    if (typeof json.request_id === "string" && json.request_id.trim()) {
+      ref = json.request_id.trim();
+    }
+    if (typeof json.detail === "string") base = json.detail;
+    else if (typeof json.detail === "object" && json.detail !== null && "message" in json.detail) {
+      const m = (json.detail as { message?: unknown }).message;
+      if (typeof m === "string" && m.trim()) base = m;
+    }
   } catch {
-    // ignore
+    /* cuerpo no JSON: conservar ref de cabecera si existe */
   }
-  return `Error HTTP ${res.status}`;
+  return ref ? `${base} (Ref: ${ref})` : base;
 }
 
 /** Certificado ESG emitido en servidor (GLEC v2.0 / ISO 14083, registro auditable). */
@@ -1165,6 +1183,12 @@ export type PortalEsgResumen = {
   co2_savings_ytd: number;
 };
 
+export type FuelImportErrorItem = {
+  row: number | null;
+  code: string;
+  message: string;
+};
+
 export type FuelImportacionResponse = {
   errores: string[];
   importedAt?: string;
@@ -1173,7 +1197,27 @@ export type FuelImportacionResponse = {
   total_co2_kg: number;
   filas_importadas_ok: number;
   total_filas_leidas: number;
+  /** Simulación sin persistencia (endpoint de validación). */
+  solo_validacion?: boolean;
+  errores_detalle?: FuelImportErrorItem[];
+  /** CO₂ agregado es estimación ISO 14083 (solo en validación). */
+  co2_es_estimacion?: boolean;
 };
+
+export type FuelImportJobQueuedResponse = {
+  job_id: string;
+  status: string;
+  poll_path: string;
+};
+
+export type FuelImportJobStatusPayload = {
+  job_id: string;
+  status: string;
+  progress: number;
+  result: FuelImportacionResponse | null;
+  error: string | null;
+};
+
 export type MantenimientoUrgencia = "CRITICO" | "ADVERTENCIA" | "OK";
 export type MantenimientoAlertaKm = {
   urgencia: MantenimientoUrgencia;
@@ -1371,6 +1415,42 @@ export const postAuthOnboardingSetup = async (payload: OnboardingSetupInput) =>
     body: JSON.stringify(payload),
   });
 
+export type WorkspaceMemberRow = {
+  id: string;
+  email: string;
+  rbac_role: string;
+};
+
+export type WorkspaceTeamResponse = {
+  plan_type: string;
+  limite_usuarios_equipo: number | null;
+  usuarios_equipo_actuales: number;
+  members: WorkspaceMemberRow[];
+};
+
+export const fetchWorkspaceTeam = () =>
+  getJson<WorkspaceTeamResponse>(`${API_BASE}/empresa/workspace-team`, { credentials: "include" });
+
+export type AuthInviteInput = {
+  email: string;
+  role: "admin" | "staff";
+};
+
+export type AuthInviteResponse = {
+  detail?: string;
+  invited_email: string;
+  role: "admin" | "staff";
+  empresa_id: string;
+};
+
+export const postAuthInviteUser = (payload: AuthInviteInput) =>
+  getJson<AuthInviteResponse>(`${API_BASE}/api/v1/auth/invite`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
 export type PortalMandateSetupResponse = {
   has_active_mandate?: boolean;
   redirect_url?: string;
@@ -1489,7 +1569,25 @@ export const loadLastFuelImport = () => {
 export const saveLastFuelImport = (value: FuelImportacionResponse) => {
   if (typeof window !== "undefined") localStorage.setItem("abl:last_fuel_import", JSON.stringify(value));
 };
-export const postImportarCombustible = async (payload: FormData | File) => {
+export const postValidarImportacionCombustible = async (
+  file: File,
+  init?: Pick<RequestInit, "signal">,
+) => {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await apiFetch(`${API_BASE}/api/v1/gastos/validar-importacion-combustible`, {
+    method: "POST",
+    body: fd,
+    signal: init?.signal,
+  });
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as FuelImportacionResponse;
+};
+
+export const postImportarCombustible = async (
+  payload: FormData | File,
+  opts?: { idempotencyKey?: string; signal?: AbortSignal },
+) => {
   const body =
     payload instanceof FormData
       ? payload
@@ -1498,10 +1596,45 @@ export const postImportarCombustible = async (payload: FormData | File) => {
           fd.append("file", payload);
           return fd;
         })();
-  const res = await apiFetch(`${API_BASE}/api/v1/gastos/importar-combustible`, { method: "POST", body });
+  const headers: Record<string, string> = {};
+  if (opts?.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
+  const res = await apiFetch(`${API_BASE}/api/v1/gastos/importar-combustible`, {
+    method: "POST",
+    body,
+    headers,
+    signal: opts?.signal,
+  });
   if (!res.ok) throw new Error(await parseApiError(res));
   return (await res.json()) as FuelImportacionResponse;
 };
+
+export const postImportarCombustibleJob = async (
+  file: File,
+  init?: Pick<RequestInit, "signal">,
+): Promise<FuelImportJobQueuedResponse> => {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await apiFetch(`${API_BASE}/api/v1/gastos/importar-combustible/jobs`, {
+    method: "POST",
+    body: fd,
+    signal: init?.signal,
+  });
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as FuelImportJobQueuedResponse;
+};
+
+export const getImportarCombustibleJob = async (
+  jobId: string,
+  init?: Pick<RequestInit, "signal">,
+): Promise<FuelImportJobStatusPayload> => {
+  const res = await apiFetch(
+    `${API_BASE}/api/v1/gastos/importar-combustible/jobs/${encodeURIComponent(jobId)}`,
+    { signal: init?.signal },
+  );
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return (await res.json()) as FuelImportJobStatusPayload;
+};
+
 export const getAlertasMantenimiento = async () =>
   getJson<MantenimientoAlerta[]>(`${API_BASE}/api/v1/flota/alertas-mantenimiento`);
 export const isAlertaKm = (row: MantenimientoAlerta): row is MantenimientoAlertaKm =>

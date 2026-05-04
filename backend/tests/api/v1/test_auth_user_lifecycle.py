@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from uuid import UUID
 
+import pytest
+
 from app.api.v1 import auth as auth_v1
 from app.core.config import get_settings
 from app.models.enums import UserRole
@@ -109,6 +111,31 @@ async def test_invite_user_staff_propagates_empresa_id(client) -> None:
     profile_payload = fake_db.upsert_payloads[0]
     assert profile_payload["empresa_id"] == body["empresa_id"]
     assert profile_payload["role"] == "traffic_manager"
+
+
+async def test_invite_forbidden_when_workspace_seats_full(monkeypatch: pytest.MonkeyPatch, client) -> None:
+    async def _full(_db: object, *, empresa_id: str) -> tuple[int, int | None, str]:
+        _ = _db, empresa_id
+        return (5, 5, "starter")
+
+    monkeypatch.setattr("app.api.v1.auth.workspace_seat_usage", _full)
+    fake_db = _FakeAuthDb()
+    app = client._transport.app
+    app.dependency_overrides[auth_v1.get_db_admin] = lambda: fake_db
+    try:
+        res = await client.post(
+            "/api/v1/auth/invite",
+            json={"email": "new@example.com", "role": "staff"},
+            headers=_test_headers(),
+        )
+    finally:
+        app.dependency_overrides.pop(auth_v1.get_db_admin, None)
+
+    assert res.status_code == 403, res.text
+    body = res.json()
+    assert isinstance(body.get("detail"), dict)
+    assert body["detail"]["code"] == "workspace_seat_limit_exceeded"
+    assert fake_db.invite_calls == []
 
 
 async def test_send_reset_password_uses_supabase_recovery(client) -> None:

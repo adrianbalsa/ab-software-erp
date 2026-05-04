@@ -264,11 +264,14 @@ def is_stripe_configured() -> bool:
 
 async def assert_empresa_billing_active(db: SupabaseAsync, *, empresa_id: str) -> None:
     """
-    Comprueba que la empresa no esté archivada (``deleted_at``) y, si hay suscripción Stripe,
-    que el estado en Stripe permita el uso del producto.
+    Comprueba que la empresa no esté archivada (``deleted_at``), que no esté suspendida por
+    facturación (``is_active``) y, si ``requires_stripe_subscription`` y Stripe están configurados,
+    que exista ``stripe_subscription_id`` y la suscripción en Stripe no esté en estado terminal
+    inactivo.
 
     Sin ``STRIPE_SECRET_KEY`` no se llama a la API de Stripe (desarrollo / despliegues sin billing).
-    Sin ``stripe_subscription_id`` en la fila (p. ej. plan Compliance sin tarjeta) se considera activo.
+    Empresas legacy (``requires_stripe_subscription`` false) sin ``stripe_subscription_id`` siguen
+    considerándose activas respecto al checkout.
     """
     eid = str(empresa_id or "").strip()
     if not eid:
@@ -280,7 +283,7 @@ async def assert_empresa_billing_active(db: SupabaseAsync, *, empresa_id: str) -
     try:
         res: Any = await db.execute(
             db.table("empresas")
-            .select("deleted_at, stripe_subscription_id, is_active")
+            .select("deleted_at, stripe_subscription_id, is_active, requires_stripe_subscription")
             .eq("id", eid)
             .limit(1)
         )
@@ -314,8 +317,20 @@ async def assert_empresa_billing_active(db: SupabaseAsync, *, empresa_id: str) -
     if not _stripe_configured():
         return
 
-    sub_id = row.get("stripe_subscription_id")
-    if sub_id is None or not str(sub_id).strip():
+    sub_raw = row.get("stripe_subscription_id")
+    sub_id = str(sub_raw).strip() if sub_raw else ""
+    requires_sub = row.get("requires_stripe_subscription") is True
+
+    if requires_sub and not sub_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Completa la suscripción para activar la operativa. "
+                "Inicia el pago desde la pantalla de checkout o desde Ajustes → Facturación."
+            ),
+        )
+
+    if not sub_id:
         return
 
     sk = get_secret_manager().get_stripe_secret_key()
@@ -323,7 +338,7 @@ async def assert_empresa_billing_active(db: SupabaseAsync, *, empresa_id: str) -
     stripe.api_key = sk
 
     try:
-        sub = stripe.Subscription.retrieve(str(sub_id).strip())
+        sub = stripe.Subscription.retrieve(sub_id)
     except stripe.error.StripeError as exc:
         logger.warning("Stripe Subscription.retrieve falló: %s", exc)
         raise HTTPException(
@@ -439,7 +454,7 @@ async def _downgrade_empresa_to_starter(
     stripe_customer_id: str | None = None,
     stripe_subscription_id: str | None = None,
 ) -> None:
-    """Busca empresa por ids Stripe y la deja en plan Compliance (slug `starter`)."""
+    """Busca empresa por ids Stripe y la deja en plan Essential (slug `starter`)."""
     if stripe_subscription_id:
         res: Any = await db.execute(
             db.table("empresas")
@@ -479,7 +494,7 @@ async def _downgrade_empresa_to_starter(
         "is_active": True,
     }
     await db.execute(db.table("empresas").update(payload).eq("id", eid))
-    logger.warning("empresa %s downgrade a Compliance (starter) tras cancelación de suscripción", eid[:8])
+    logger.warning("empresa %s downgrade a Essential (starter) tras cancelación de suscripción", eid[:8])
 
 
 def _stripe_external_event_id(event: Any) -> str:

@@ -397,7 +397,7 @@ def get_settings() -> Settings:
 
     stripe_secret = _opt_secret("STRIPE_SECRET_KEY", "get_stripe_secret_key")
     stripe_wh = _opt_secret("STRIPE_WEBHOOK_SECRET", "get_stripe_webhook_secret")
-    # Precios base: nombres históricos + alias Due Diligence (Compliance / Finance / Enterprise)
+    # Precios base: catálogo Essential / Pro / Enterprise (slugs starter / pro / enterprise)
     stripe_ps = (
         _opt_secret("STRIPE_STARTER_PRICE_ID", "get_stripe_price_starter")
         or _opt("STRIPE_PRICE_COMPLIANCE")

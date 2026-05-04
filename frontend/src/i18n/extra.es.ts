@@ -6,6 +6,8 @@ export const extraEs = {
       simulator: "Simulador",
       advantage: "Ventaja",
       howItWorks: "Cómo funciona",
+      platform: "Producto",
+      trust: "Cumplimiento",
       pricing: "Precios",
       help: "Centro de ayuda",
       menuAria: "Menú",
@@ -14,12 +16,12 @@ export const extraEs = {
       homeAria: "AB Logistics OS - inicio",
     },
     hero: {
-      eyebrow: "Enterprise logistics OS",
-      title: "El Búnker Fiscal para la Logística Moderna.",
+      eyebrow: "Transporte · Finanzas · AEAT 2026",
+      title: "Una sola plataforma para portes rentables y facturación a prueba de inspección.",
       description:
-        "Cumplimiento VeriFactu nativo, optimización ESG y rentabilidad en tiempo real. Construido para CFOs y flotas de alto rendimiento.",
-      primaryCta: "Solicitar auditoría",
-      secondaryCta: "Ver arquitectura",
+        "Desde el presupuesto hasta el cobro: flota, VeriFactu, conciliación y visibilidad de margen para dirección y tráfico. Misma oferta comercial en web y en Stripe: Essential, Pro y Enterprise.",
+      primaryCta: "Crear cuenta y empezar",
+      secondaryCta: "Ver planes y precios",
     },
     bento: {
       eyebrow: "Arquitectura",
@@ -48,18 +50,20 @@ export const extraEs = {
     pricing: {
       features: [
         "Certificación VeriFactu",
-        "EBITDA en tiempo real",
+        "Motor financiero / EBITDA avanzado",
         "Portal del chófer",
         "Cotizador inteligente",
         "Control de vencimientos",
         "Liquidaciones automáticas",
       ],
-      title: "Precios claros",
+      title: "Planes publicados = planes de Stripe",
       subtitle:
-        "Inversión mensual orientada a ROI operativo: cada euro debe volver en eficiencia y control de margen. Cifras orientativas + IVA; add-ons (OCR, webhooks premium, IA Pro) documentados en docs/operations/STRIPE_BILLING.md.",
+        "Tres niveles con los mismos nombres en producto y en facturación: Essential (350 €), Pro (800 €) y Enterprise (1000 €) al mes + IVA. Add-ons opcionales (OCR Pack, Webhooks B2B Premium, LogisAdvisor IA Pro) se contratan desde el panel.",
       recommended: "Recomendado",
       connecting: "Conectando...",
-      requestAccess: "Solicitar acceso al sistema",
+      requestAccess: "Siguiente: registro y checkout",
+      subscribeCta: "Contratar con Stripe",
+      vatExcluded: "IVA no incluido",
       missingStripeConfig:
         "Falta configurar los Price IDs de Stripe en el frontend (NEXT_PUBLIC_STRIPE_PRICE_*). Consulta docs/operations/STRIPE_BILLING.md.",
       pricingStripeFallbackTitle: "Contratación en línea no disponible",
@@ -70,9 +74,60 @@ export const extraEs = {
       pendingUserId: "USUARIO_PENDIENTE_DE_REGISTRO",
       monthSuffix: "/mes",
     },
+    pricingPage: {
+      title: "Contratar Essential, Pro o Enterprise",
+      subtitle:
+        "Precios de catálogo alineados con el backend y Stripe Billing. Si aún no tienes empresa_id, crea la cuenta, completa el onboarding y vuelve aquí o usa «Suscripción» en el panel.",
+      empresaRequiredHint:
+        "Sin empresa_id en la URL no se puede asociar el cobro. Tras registrarte, abre el enlace del correo de bienvenida o inicia sesión y ve a Suscripción.",
+      stripeEnvHint:
+        "En el build deben existir los tres NEXT_PUBLIC_STRIPE_PRICE_* (Essential vía BASIC o STARTER, PRO, ENTERPRISE).",
+      envVarsList:
+        "Ejemplo: NEXT_PUBLIC_STRIPE_PRICE_BASIC o NEXT_PUBLIC_STRIPE_PRICE_STARTER, NEXT_PUBLIC_STRIPE_PRICE_PRO, NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE.",
+      funnelHint:
+        "Flujo self-serve: registro → empresa creada → checkout Stripe desde esta página (con ?empresa_id=) o desde el menú Suscripción.",
+      loginCta: "Iniciar sesión para pagar",
+      backHome: "Volver a la web pública",
+      headerLogin: "Acceso clientes",
+    },
+    socialProof: {
+      eyebrow: "Por qué equipos de tráfico lo miran dos veces",
+      title: "Menos cierre manual. Más control antes de que el margen se escape.",
+      subtitle:
+        "Pensado para empresas de transporte que ya facturan en serie y no pueden permitirse duplicar datos entre Excel, el ERP y el correo del gestor.",
+      stats: [
+        { value: "VeriFactu", label: "Registro fiscal con foco en trazabilidad e integridad" },
+        { value: "RLS", label: "Cada tenant aislado a nivel de base de datos" },
+        { value: "Stripe", label: "Misma jerarquía de planes en checkout y en documentación interna" },
+      ],
+    },
+    trustStrip: {
+      eyebrow: "Cumplimiento y seguridad",
+      title: "VeriFactu: cadena de hashes y disciplina operativa",
+      subtitle:
+        "La prioridad del producto es la integridad del registro fiscal y la coherencia entre operación y facturación. Sin atajos que comprometan una inspección.",
+      bullets: [
+        {
+          title: "Trazabilidad fiscal",
+          body: "Diseñado para encadenamiento de registros y requisitos de facturación electrónica; QR y remisión cuando aplique normativa.",
+        },
+        {
+          title: "Seguridad por capas",
+          body: "TLS en tránsito, RLS en PostgreSQL por empresa y gestión de secretos alineada con buenas prácticas (sin credenciales en código).",
+        },
+        {
+          title: "Cobro transparente",
+          body: "Stripe Billing con planes Essential, Pro y Enterprise — mismos nombres y precios orientativos en toda la superficie del producto.",
+        },
+      ],
+    },
+    techSpecs: {
+      items: ["VeriFactu-ready", "TLS + RLS PostgreSQL", "Stripe Billing", "GoCardless / SEPA"],
+    },
     faq: {
       title: "Preguntas clave antes de implantar AB Logistics OS",
-      subtitle: "Respuestas estratégicas para dirección financiera y operaciones de tráfico.",
+      subtitle:
+        "Objeciones típicas de transporte, tráfico y dirección financiera — sin humo comercial.",
       items: [
         {
           q: "¿Es difícil migrar el histórico y los datos de mi flota actual?",
@@ -80,7 +135,7 @@ export const extraEs = {
         },
         {
           q: "¿Es rentable el sistema si mi flota tiene menos de 5 camiones?",
-          a: "Totalmente. El volumen no exime de las obligaciones fiscales. Nuestro plan 'Compliance' está diseñado para blindar a pequeñas flotas ante VeriFactu, eliminando horas de papeleo administrativo para que te centres en conducir tu negocio, no tu contabilidad.",
+          a: "Totalmente. El volumen no exime de las obligaciones fiscales. Nuestro plan Essential está diseñado para blindar a pequeñas flotas ante VeriFactu, eliminando horas de papeleo administrativo para que te centres en conducir tu negocio, no tu contabilidad.",
         },
         {
           q: "¿Cómo garantiza exactamente el software el cumplimiento de la ley VeriFactu?",
@@ -114,6 +169,26 @@ export const extraEs = {
           q: "¿Puedo probar la plataforma antes de comprometer la operativa de mi empresa?",
           a: "Entendemos que cambiar de ERP es una decisión crítica. Ofrecemos sesiones de demostración personalizadas y la posibilidad de ejecutar un piloto controlado para que tu director financiero valide la herramienta antes del despliegue total.",
         },
+        {
+          q: "¿Mis conductores van a rechazar otra app más?",
+          a: "El portal del conductor está pensado para flujos cortos (estado del porte, entrega, documentación). Puedes implantar primero despacho y facturación, e ir extendiendo a campo cuando veáis valor. No sustituye el tacógrafo ni la normativa de tiempos de conducción: complementa la parte documental y comercial del porte.",
+        },
+        {
+          q: "¿Qué pasa con el CMR, albaranes y la prueba en caso de siniestro o disputa con el cliente?",
+          a: "Centralizamos la trazabilidad del expediente (origen, destino, precio, documentos asociados) para que despacho y administración trabajen sobre la misma verdad. La responsabilidad civil y mercantil sigue siendo de la mercancía y del contrato de transporte; el software reduce errores de transcripción y lagunas de documentación.",
+        },
+        {
+          q: "Trabajamos con subcontratistas y agencias: ¿el sistema sirve para flotas mixtas?",
+          a: "Sí. La arquitectura multi-tenant y los roles están pensados para que cada empresa vea solo su mundo (RLS). Puedes modelar clientes, rutas recurrentes y operativa interna; para modelos complejos de subcontratación en cadena, Pro y Enterprise amplían capacidades de análisis y certificación.",
+        },
+        {
+          q: "¿Qué ocurre si AEAT cambia requisitos técnicos después de contratar?",
+          a: "El producto se actualiza como SaaS: cuando la normativa o los esquemas oficiales evolucionen, desplegamos cambios en la nube sin que tengas que reinstalar servidores. Mantén comunicación con tu asesor fiscal: el software implementa la lógica acordada con la legislación vigente en cada release.",
+        },
+        {
+          q: "¿Tengo que pagar antes de saber si encaja con mi TMS o mi gestoría?",
+          a: "Puedes registrarte, crear la empresa y explorar el panel con el plan asignado; el checkout Stripe se alinea cuando decidas suscribirte (desde Suscripción o con enlace que incluya empresa_id). Si necesitas integraciones específicas, Pro y Enterprise son los niveles habituales para volumen y certificación.",
+        },
       ],
     },
     footer: {
@@ -124,8 +199,8 @@ export const extraEs = {
       cookies: "Política de cookies",
       terms: "Términos y condiciones",
       contact: "Contacto",
-      readyQuestion: "¿Listo para digitalizar tu flota?",
-      salesCta: "Hablar con ventas",
+      readyQuestion: "¿Ya tienes cuenta o quieres ver el panel?",
+      salesCta: "Iniciar sesión",
       copyright: "Todos los derechos reservados.",
     },
     moats: {

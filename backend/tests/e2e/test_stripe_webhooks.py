@@ -105,6 +105,7 @@ async def test_invoice_payment_failed_blocks_empresa(monkeypatch: pytest.MonkeyP
             "stripe_subscription_id": "sub_test_block",
             "is_active": True,
             "subscription_status": "active",
+            "requires_stripe_subscription": False,
         }
     }
     db = _StripeWebhookE2eDb(empresas)
@@ -141,4 +142,31 @@ async def test_invoice_payment_failed_blocks_empresa(monkeypatch: pytest.MonkeyP
     assert exc.value.status_code == 403
 
     monkeypatch.delenv("STRIPE_WEBHOOK_SECRET", raising=False)
+    reset_secret_manager()
+
+
+@pytest.mark.asyncio
+async def test_assert_requires_stripe_subscription_blocks_without_sub(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_requires_sub")
+    reset_secret_manager()
+
+    eid = str(EMPRESA_A_ID)
+    empresas: dict[str, dict[str, Any]] = {
+        eid: {
+            "id": eid,
+            "deleted_at": None,
+            "stripe_customer_id": None,
+            "stripe_subscription_id": None,
+            "is_active": True,
+            "subscription_status": None,
+            "requires_stripe_subscription": True,
+        }
+    }
+    db = _StripeWebhookE2eDb(empresas)
+
+    with pytest.raises(HTTPException) as exc:
+        await stripe_service.assert_empresa_billing_active(db, empresa_id=eid)  # type: ignore[arg-type]
+    assert exc.value.status_code == 403
+
+    monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
     reset_secret_manager()

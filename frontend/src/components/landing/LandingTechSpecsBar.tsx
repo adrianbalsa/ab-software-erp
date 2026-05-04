@@ -2,14 +2,12 @@
 
 import { motion } from "framer-motion";
 
-const specs = [
-  "Zero-Any Types",
-  "Zod Validated",
-  "RLS PostgreSQL",
-  "AES-128 Encrypted",
-] as const;
+import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 
 export function LandingTechSpecsBar() {
+  const { catalog } = useOptionalLocaleCatalog();
+  const specs = catalog.landing.techSpecs.items;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}

@@ -60,7 +60,7 @@ async def crear_sesion_checkout(body: StripeCheckoutPublicCreate) -> dict[str, s
             line_items=[{"price": str(body.price_id).strip(), "quantity": 1}],
             mode="subscription",
             success_url=f"{_frontend_base()}/dashboard?checkout=success&session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{_frontend_base()}/pricing?checkout=cancel",
+            cancel_url=f"{_frontend_base()}/dashboard?checkout=cancel",
             client_reference_id=eid,
             metadata={"empresa_id": eid, "plan_type": plan_slug},
             subscription_data={"metadata": {"empresa_id": eid, "plan_type": plan_slug}},

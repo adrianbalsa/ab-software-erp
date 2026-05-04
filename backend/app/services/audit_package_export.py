@@ -11,9 +11,9 @@ from typing import Any
 
 from app.api.v1.public_compliance import build_public_compliance_pack, build_security_txt_body
 from app.core.plans import (
-    EUR_MONTHLY_COMPLIANCE,
-    EUR_MONTHLY_FINANCE,
-    EUR_MONTHLY_FULL_STACK,
+    EUR_MONTHLY_ENTERPRISE,
+    EUR_MONTHLY_ESSENTIAL,
+    EUR_MONTHLY_PRO,
     PLAN_ENTERPRISE,
     PLAN_PRO,
     PLAN_STARTER,
@@ -31,17 +31,17 @@ def _pricing_catalog() -> dict[str, Any]:
             {
                 "plan_slug": PLAN_STARTER,
                 "marketing_name": plan_marketing_name(PLAN_STARTER),
-                "eur_monthly": EUR_MONTHLY_COMPLIANCE,
+                "eur_monthly": EUR_MONTHLY_ESSENTIAL,
             },
             {
                 "plan_slug": PLAN_PRO,
                 "marketing_name": plan_marketing_name(PLAN_PRO),
-                "eur_monthly": EUR_MONTHLY_FINANCE,
+                "eur_monthly": EUR_MONTHLY_PRO,
             },
             {
                 "plan_slug": PLAN_ENTERPRISE,
                 "marketing_name": plan_marketing_name(PLAN_ENTERPRISE),
-                "eur_monthly": EUR_MONTHLY_FULL_STACK,
+                "eur_monthly": EUR_MONTHLY_ENTERPRISE,
             },
         ],
         "addons": [asdict(a) for a in billing_addons()],

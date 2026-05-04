@@ -156,9 +156,9 @@ $$\text{Margen Neto} = \text{Ingresos} - \sum \text{Gastos (ROUND\_HALF\_EVEN)}$
 ### Tiers SaaS (mensual, orientativo)
 | Tier | Precio |
 | :--- | :---: |
-| **Starter** | **€39** / mes |
-| **Pro** | **€149** / mes |
-| **Enterprise** | **€399** / mes |
+| **Essential** (slug `starter`) | **€350** / mes |
+| **Pro** | **€800** / mes |
+| **Enterprise** | **€1000** / mes |
 
 ### Revenue stream: add-ons
 | Add-on | Precio |

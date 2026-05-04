@@ -59,6 +59,21 @@ export default function OnboardingPage() {
         const res = await apiFetch(`${API_BASE}/empresa/quota`, { credentials: "include" });
         if (!isMounted) return;
         if (res.ok) {
+          let j: Record<string, unknown>;
+          try {
+            j = (await res.json()) as Record<string, unknown>;
+          } catch {
+            router.replace("/dashboard");
+            return;
+          }
+          if (Boolean(j.billing_suspended)) {
+            router.replace("/dashboard/settings/billing");
+            return;
+          }
+          if (Boolean(j.must_complete_checkout)) {
+            router.replace("/payments/create-checkout?plan=starter&source=onboarding");
+            return;
+          }
           router.replace("/dashboard");
           return;
         }
@@ -77,7 +92,7 @@ export default function OnboardingPage() {
     };
   }, [router]);
 
-  const progressLabel = useMemo(() => `Paso ${step} de 3`, [step]);
+  const progressLabel = useMemo(() => `Paso ${step} de 3 · Datos de empresa`, [step]);
 
   const nextStep = async () => {
     setError(null);
@@ -111,7 +126,7 @@ export default function OnboardingPage() {
         initial_fleet_type: values.initial_fleet_type.join(", "),
         target_margin_pct: Number(values.target_margin_pct),
       });
-      router.replace("/dashboard");
+      router.replace("/payments/create-checkout?plan=starter&source=onboarding");
       router.refresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "No se pudo completar el onboarding.");
@@ -125,7 +140,13 @@ export default function OnboardingPage() {
       <Card className="w-full max-w-2xl border border-zinc-800 bg-zinc-900 text-zinc-100">
         <CardHeader>
           <CardTitle>Configuración inicial de AB Logistics OS</CardTitle>
-          <CardDescription className="text-zinc-400">{progressLabel}</CardDescription>
+          <CardDescription className="space-y-1 text-zinc-400">
+            <span className="block">{progressLabel}</span>
+            <span className="block text-xs text-zinc-500">
+              Después activarás la suscripción Essential en Stripe (pago seguro). Invita a tu equipo cuando
+              quieras desde Ajustes.
+            </span>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {checkingStatus ? (
@@ -210,7 +231,7 @@ export default function OnboardingPage() {
             </Button>
           ) : (
             <Button onClick={handleSubmit(onSubmit)} disabled={checkingStatus || submitting}>
-              {submitting ? "Configurando..." : "Finalizar onboarding"}
+              {submitting ? "Guardando empresa…" : "Continuar al pago seguro"}
             </Button>
           )}
         </CardFooter>
