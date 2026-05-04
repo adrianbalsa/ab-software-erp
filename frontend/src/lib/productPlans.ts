@@ -1,11 +1,11 @@
 /**
- * Re-export del catálogo público (`shared/marketingPlanCatalog.ts`) alineado con
- * `backend/app/core/plans.py`. Resolución de Stripe Price IDs en build-time.
+ * Catálogo público (`./marketingPlanCatalog.ts`) alineado con `backend/app/core/plans.py`.
+ * Resolución de Stripe Price IDs en build-time.
  */
 
-import type { StripePriceIds } from "@shared/marketingPlanCatalog";
+import type { StripePriceIds } from "./marketingPlanCatalog";
 
-export type { PublicPlanSlug, PublicPlanTier, StripePriceIds } from "@shared/marketingPlanCatalog";
+export type { PublicPlanSlug, PublicPlanTier, StripePriceIds } from "./marketingPlanCatalog";
 
 export {
   PLAN_SLUG_STARTER,
@@ -17,7 +17,7 @@ export {
   PLAN_COMPARISON_INCLUDES,
   buildPublicPlanTiers,
   normalizePlanQueryParam,
-} from "@shared/marketingPlanCatalog";
+} from "./marketingPlanCatalog";
 
 /** Resuelve Price IDs públicos (build-time) en el mismo orden que documenta `STRIPE_BILLING.md`. */
 export function resolvePublicStripePriceIds(): StripePriceIds {

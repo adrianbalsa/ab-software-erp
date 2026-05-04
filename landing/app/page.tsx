@@ -22,7 +22,7 @@ import {
 import { EnterpriseShowcase } from "@/components/EnterpriseShowcase";
 import { SecurityTrustSection } from "@/components/SecurityTrustSection";
 import { LOGIN_URL, START_NOW_URL } from "@/components/site";
-import { buildPublicPlanTiers, PLAN_PITCH_I18N } from "@shared/marketingPlanCatalog";
+import { buildPublicPlanTiers, PLAN_PITCH_I18N } from "../lib/marketingPlanCatalog";
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const NAV_LINKS = [
