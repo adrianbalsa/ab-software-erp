@@ -520,6 +520,10 @@ async def oauth_google_callback(
         ) from exc
 
     profile = await auth_service.get_profile_by_subject(subject=udb.username)
+    if profile is None and udb.id:
+        profile = await auth_service.get_profile_by_subject(subject=str(udb.id))
+    if profile is None and email:
+        profile = await auth_service.get_profile_by_subject(subject=email)
     if profile is not None and profile.empresa_id:
         user_out = profile
     elif udb.empresa_id:

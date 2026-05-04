@@ -75,6 +75,49 @@ async def test_lazy_migration_sha256_to_argon2id_tras_login(monkeypatch: pytest.
 
 
 @pytest.mark.asyncio
+async def test_authenticate_resolves_profile_by_usuario_id_when_usuario_empresa_null() -> None:
+    """Login con email aunque ``usuarios.empresa_id`` sea null: perfil por ``profiles.id`` = ``usuarios.id``."""
+    password = "ClaveSegura!2026"
+    uid = UUID("66666666-6666-6666-6666-666666666666")
+    user_row = UserInDB(
+        id=uid,
+        username="owner@test",
+        empresa_id=None,
+        rol="owner",
+        password_hash=hash_password_argon2id(password),
+    )
+
+    async def fake_get_user(self: AuthService, *, username: str) -> UserInDB | None:
+        if username.lower() == "loginemail@test.com":
+            return user_row
+        return None
+
+    async def fake_profile(self: AuthService, *, subject: str) -> UserOut | None:
+        if subject == str(uid):
+            return UserOut(
+                username="owner@test",
+                empresa_id=EMPRESA_A_ID,
+                rol="owner",
+                usuario_id=uid,
+            )
+        return None
+
+    db = MagicMock()
+    db.table = MagicMock(return_value=MagicMock())
+    db.execute = AsyncMock(return_value=_data([{}]))
+    svc = AuthService(db)
+
+    with (
+        patch.object(AuthService, "get_user", fake_get_user),
+        patch.object(AuthService, "get_profile_by_subject", fake_profile),
+    ):
+        out = await svc.authenticate(username="LoginEmail@test.com", password=password)
+
+    assert out is not None
+    assert out.empresa_id == EMPRESA_A_ID
+
+
+@pytest.mark.asyncio
 async def test_password_must_reset_bloquea_login_sha256_legacy() -> None:
     """Con credenciales válidas, una cuenta marcada no recibe sesión ni migración lazy."""
     password = "ClaveSegura!2026"
