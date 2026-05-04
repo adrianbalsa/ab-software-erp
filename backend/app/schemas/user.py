@@ -14,7 +14,10 @@ class UserInDB(BaseModel):
         description="PK `usuarios.id` (UUID); necesario para refresh tokens.",
     )
     username: str
-    empresa_id: UUID
+    empresa_id: UUID | None = Field(
+        default=None,
+        description="FK empresa en usuarios; puede ser null si el tenant se resuelve vía profiles.",
+    )
     rol: str
     password_hash: str
     password_must_reset: bool = False

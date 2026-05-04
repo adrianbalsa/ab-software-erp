@@ -43,6 +43,16 @@ def _uuid_or_none(value: str) -> str | None:
         return None
 
 
+def _empresa_uuid_from_usuario_row(row: dict[str, Any]) -> UUID | None:
+    raw = row.get("empresa_id")
+    if raw is None or not str(raw).strip():
+        return None
+    try:
+        return UUID(str(raw).strip())
+    except (ValueError, TypeError):
+        return None
+
+
 class AuthService:
     """
     Async authentication service.
@@ -115,6 +125,8 @@ class AuthService:
         profile = await self.get_profile_by_subject(subject=username)
         if profile is None and canonical != (username or "").strip():
             profile = await self.get_profile_by_subject(subject=canonical)
+        if profile is None and user.id is not None:
+            profile = await self.get_profile_by_subject(subject=str(user.id))
         if profile is not None and profile.empresa_id:
             _auth_debug(
                 "authenticate using profiles rbac_role=%s empresa_id=%s",
@@ -175,16 +187,19 @@ class AuthService:
         username = str(row.get("username") or "").strip()
         if not username:
             return None
-        empresa_id = str(row.get("empresa_id") or "").strip()
+        empresa_uuid = _empresa_uuid_from_usuario_row(row)
         rol = str(row.get("rol") or "user").strip() or "user"
         profile = await self.get_profile_by_subject(subject=username)
         if profile is not None and profile.empresa_id:
             return profile
-        if not empresa_id:
+        profile = await self.get_profile_by_subject(subject=uid)
+        if profile is not None and profile.empresa_id:
+            return profile
+        if empresa_uuid is None:
             return None
         base = UserOut(
             username=username,
-            empresa_id=UUID(empresa_id),
+            empresa_id=empresa_uuid,
             role=normalize_user_role(None, legacy_role=rol),
             rol=rol,
             rbac_role=normalize_rbac_role(None, legacy_rol=rol),
@@ -223,7 +238,7 @@ class AuthService:
             return UserInDB(
                 id=uid,
                 username=str(row.get("username") or ""),
-                empresa_id=UUID(str(row.get("empresa_id") or "").strip()),
+                empresa_id=_empresa_uuid_from_usuario_row(row),
                 rol=str(row.get("rol") or "user"),
                 password_hash=str(row.get("password_hash") or ""),
                 password_must_reset=bool(row.get("password_must_reset") or False),
@@ -304,7 +319,7 @@ class AuthService:
             return UserInDB(
                 id=uid,
                 username=str(row.get("username") or ""),
-                empresa_id=UUID(str(row.get("empresa_id") or "").strip()),
+                empresa_id=_empresa_uuid_from_usuario_row(row),
                 rol=str(row.get("rol") or "user"),
                 password_hash=str(row.get("password_hash") or ""),
                 password_must_reset=bool(row.get("password_must_reset") or False),
@@ -382,6 +397,20 @@ class AuthService:
             usuario_id=usuario_uuid,
         )
 
+    async def _fetch_profile_row_ilike_email(self, email: str) -> dict[str, Any] | None:
+        """Coincidencia insensible a mayúsculas en ``profiles.email`` (login con correo capitalizado)."""
+        em = (email or "").strip()
+        if not em or "@" not in em:
+            return None
+        try:
+            q = self._db.table("profiles").select("*").ilike("email", em.lower()).limit(1)
+            res: Any = await self._db.execute(q)
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+            return rows[0] if rows else None
+        except Exception as exc:
+            logger.warning("profiles ilike email omitido (%s…): %s", em[:48], exc)
+            return None
+
     async def get_profile_by_subject(self, *, subject: str) -> UserOut | None:
         """
         Resuelve empresa (y rol) desde `profiles` usando el claim `sub` del JWT.
@@ -402,6 +431,13 @@ class AuthService:
 
         for column in ("username", "email"):
             row = await self._fetch_profile_row(column, subject)
+            if row is not None:
+                out = self._profile_row_to_user_out(row, subject=subject)
+                if out is not None:
+                    return await self.attach_preferred_language(out)
+
+        if "@" in subject:
+            row = await self._fetch_profile_row_ilike_email(subject)
             if row is not None:
                 out = self._profile_row_to_user_out(row, subject=subject)
                 if out is not None:

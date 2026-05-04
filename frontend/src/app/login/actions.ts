@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 
 import { getAblAuthCookieSetOptions } from "@/lib/auth-cookie";
 import { apiFetch } from "@/lib/api";
+import { parseLoginApiFailure } from "@/lib/loginResponseErrors";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -44,20 +45,14 @@ export async function loginAction(
   }
 
   if (!res.ok) {
-    let detail = "Credenciales incorrectas";
-    let resetRequired = false;
+    let payload: unknown = null;
     try {
-      const err = (await res.json()) as { detail?: unknown };
-      if (typeof err?.detail === "string") detail = err.detail;
-      if (err?.detail && typeof err.detail === "object") {
-        const payload = err.detail as { code?: unknown; message?: unknown };
-        if (typeof payload.message === "string") detail = payload.message;
-        resetRequired = payload.code === "password_reset_required";
-      }
+      payload = await res.json();
     } catch {
-      /* ignore */
+      payload = null;
     }
-    return { error: detail, resetRequired };
+    const parsed = parseLoginApiFailure(res.status, payload);
+    return { error: parsed.message, resetRequired: parsed.resetRequired };
   }
 
   let accessToken: string;

@@ -1,4 +1,6 @@
 import axios, { type AxiosRequestConfig } from "axios";
+
+import { isAnonymousAuthEndpoint } from "@/lib/authAnonymousEndpoints";
 import { createBrowserClient } from "@supabase/ssr";
 import { z, type ZodSchema } from "zod";
 import { getAuthToken as getAuthTokenFromStore } from "@/lib/auth";
@@ -401,15 +403,16 @@ export async function apiFetch<T>(
     headers.set("X-Request-Id", rid);
   }
 
+  const omitAuthBearer = isAnonymousAuthEndpoint(input);
   const token = await resolveAccessToken();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (token && !omitAuthBearer) headers.set("Authorization", `Bearer ${token}`);
 
   let response = await fetch(input, { ...init, credentials, headers });
 
   if (shouldRetry401AfterAuth(input, init, response)) {
     await wait(450);
     const token2 = await resolveAccessToken();
-    if (token2) {
+    if (token2 && !omitAuthBearer) {
       headers.set("Authorization", `Bearer ${token2}`);
       response = await fetch(input, { ...init, credentials, headers });
     }
