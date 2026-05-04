@@ -3,13 +3,14 @@
  * `backend/app/core/plans.py`. Resolución de Stripe Price IDs en build-time.
  */
 
+import type { StripePriceIds } from "@shared/marketingPlanCatalog";
+
+export type { PublicPlanSlug, PublicPlanTier, StripePriceIds } from "@shared/marketingPlanCatalog";
+
 export {
   PLAN_SLUG_STARTER,
   PLAN_SLUG_PRO,
   PLAN_SLUG_ENTERPRISE,
-  type PublicPlanSlug,
-  type PublicPlanTier,
-  type StripePriceIds,
   EUR_MONTHLY_COMPLIANCE,
   EUR_MONTHLY_FINANCE,
   EUR_MONTHLY_ENTERPRISE,
@@ -17,8 +18,6 @@ export {
   buildPublicPlanTiers,
   normalizePlanQueryParam,
 } from "@shared/marketingPlanCatalog";
-
-import type { StripePriceIds } from "@shared/marketingPlanCatalog";
 
 /** Resuelve Price IDs públicos (build-time) en el mismo orden que documenta `STRIPE_BILLING.md`. */
 export function resolvePublicStripePriceIds(): StripePriceIds {

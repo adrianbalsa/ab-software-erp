@@ -1,16 +1,19 @@
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const isProd = process.env.NODE_ENV === "production";
-const projectRoot = dirname(fileURLToPath(import.meta.url));
+/** Directorio `frontend/` (donde vive este `next.config.ts`). */
+const frontendDir = dirname(fileURLToPath(import.meta.url));
+/** Raíz del monorepo (`Scanner/`): incluye `shared/` para Turbopack; no usar solo `frontend/` como root. */
+const monorepoRoot = join(frontendDir, "..");
 
 const nextConfig: NextConfig = {
   /* Imagen Docker: copiar .next/standalone + .next/static (usuario no-root). */
   output: "standalone",
   turbopack: {
-    root: projectRoot,
+    root: monorepoRoot,
   },
   compiler: isProd
     ? {

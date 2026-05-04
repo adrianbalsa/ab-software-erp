@@ -1,13 +1,15 @@
 import type { NextConfig } from "next";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const projectRoot = dirname(fileURLToPath(import.meta.url));
+const landingDir = dirname(fileURLToPath(import.meta.url));
+/** Raíz del monorepo (incluye `shared/`) — no usar solo `landing/` o Turbopack bloquea imports a `../shared`. */
+const monorepoRoot = join(landingDir, "..");
 
 const nextConfig: NextConfig = {
   output: "standalone",
   turbopack: {
-    root: projectRoot,
+    root: monorepoRoot,
   },
 };
 
