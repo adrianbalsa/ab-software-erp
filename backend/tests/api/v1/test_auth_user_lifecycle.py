@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
 
 from app.api.v1 import auth as auth_v1
+from app.services.auth_service import AuthService
 from app.core.config import get_settings
 from app.models.enums import UserRole
 from app.schemas.user import UserOut
@@ -55,7 +57,9 @@ class _FakeAuthDb:
 
     async def auth_verify_otp(self, payload: dict[str, object]) -> object:
         self.verify_payloads.append(payload)
-        return {"ok": True}
+        user = SimpleNamespace(email="staff@example.com")
+        session = SimpleNamespace(user=user)
+        return SimpleNamespace(session=session, user=user)
 
     async def auth_update_user(self, attributes: dict[str, object]) -> object:
         self.update_payloads.append(attributes)
@@ -156,10 +160,17 @@ async def test_send_reset_password_uses_supabase_recovery(client) -> None:
     assert fake_db.reset_calls[0]["email"] == "staff@example.com"
 
 
-async def test_confirm_reset_password_verifies_token_and_updates_password(client) -> None:
+async def test_confirm_reset_password_verifies_token_and_updates_password(client, monkeypatch: pytest.MonkeyPatch) -> None:
     fake_db = _FakeAuthDb()
     app = client._transport.app
     app.dependency_overrides[auth_v1.get_db_anon] = lambda: fake_db
+
+    async def _fake_admin() -> _FakeAuthDb:
+        return fake_db
+
+    sync_usuarios = AsyncMock(return_value=True)
+    monkeypatch.setattr(auth_v1, "get_db_admin", _fake_admin)
+    monkeypatch.setattr(AuthService, "set_password_for_username", sync_usuarios)
     try:
         res = await client.post(
             "/api/v1/auth/reset-password/confirm",
@@ -172,6 +183,10 @@ async def test_confirm_reset_password_verifies_token_and_updates_password(client
     assert res.status_code == 200, res.text
     assert fake_db.verify_payloads == [{"type": "recovery", "token": "123456"}]
     assert fake_db.update_payloads == [{"password": "NuevaClave!2026"}]
+    sync_usuarios.assert_awaited_once()
+    call_kw = sync_usuarios.await_args.kwargs
+    assert call_kw["username"] == "staff@example.com"
+    assert call_kw["new_plain_password"] == "NuevaClave!2026"
 
 
 async def test_logout_revokes_current_session_when_cookie_present(client) -> None:

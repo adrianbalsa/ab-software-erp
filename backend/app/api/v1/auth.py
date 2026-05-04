@@ -26,11 +26,44 @@ from app.schemas.auth import (
     ValidationErrorOut,
 )
 from app.schemas.user import UserOut
+from app.services.auth_service import AuthService
 from app.services.refresh_token_service import RefreshTokenService
 from app.services.workspace_team_service import seat_limit_error_detail, workspace_seat_usage
 
 router = APIRouter()
 _log = logging.getLogger(__name__)
+
+
+def _recovery_email_from_verify_otp(raw: Any) -> str | None:
+    """Email del usuario tras ``verify_otp`` (AuthResponse / dict según cliente Supabase)."""
+    if raw is None:
+        return None
+    session = getattr(raw, "session", None)
+    if session is not None:
+        user = getattr(session, "user", None)
+        if user is not None:
+            em = getattr(user, "email", None)
+            if isinstance(em, str) and em.strip():
+                return em.strip().lower()
+    user = getattr(raw, "user", None)
+    if user is not None:
+        em = getattr(user, "email", None)
+        if isinstance(em, str) and em.strip():
+            return em.strip().lower()
+    if isinstance(raw, dict):
+        sess = raw.get("session")
+        if isinstance(sess, dict):
+            u = sess.get("user")
+            if isinstance(u, dict):
+                em = u.get("email")
+                if isinstance(em, str) and em.strip():
+                    return em.strip().lower()
+        u2 = raw.get("user")
+        if isinstance(u2, dict):
+            em = u2.get("email")
+            if isinstance(em, str) and em.strip():
+                return em.strip().lower()
+    return None
 
 
 async def get_db_admin() -> SupabaseAsync:
@@ -220,13 +253,41 @@ async def confirm_reset_password(
     db_anon: SupabaseAsync = Depends(get_db_anon),
 ) -> ResetPasswordOut:
     try:
-        await db_anon.auth_verify_otp({"type": "recovery", "token": payload.token})
+        verify_res = await db_anon.auth_verify_otp({"type": "recovery", "token": payload.token})
         await db_anon.auth_update_user({"password": payload.new_password})
     except Exception as exc:
         detail = str(exc).strip() or "Token inválido o expirado"
         if _is_supabase_bad_request(exc):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail) from exc
+
+    # Login de la app valida ``public.usuarios.password_hash``, no solo Supabase Auth.
+    recovery_email = _recovery_email_from_verify_otp(verify_res)
+    if recovery_email:
+        try:
+            db_admin = await get_db_admin()
+            auth_svc = AuthService(db_admin)
+            synced = await auth_svc.set_password_for_username(
+                username=recovery_email,
+                new_plain_password=payload.new_password,
+            )
+            if not synced:
+                _log.warning(
+                    "recovery: contraseña actualizada en Supabase Auth pero sin fila usuarios para email=%s",
+                    recovery_email[:48],
+                )
+        except ValueError as exc:
+            if str(exc) == "password_too_short":
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="La contraseña debe tener al menos 8 caracteres.",
+                ) from exc
+            raise
+        except Exception as exc:
+            _log.warning("recovery: no se pudo sincronizar usuarios.password_hash: %s", exc)
+    else:
+        _log.warning("recovery: verify_otp no devolvió email; usuarios.password_hash no sincronizado")
+
     return ResetPasswordOut()
 
 
@@ -261,8 +322,16 @@ async def forgot_password_legacy(
     payload: ForgotPasswordIn,
     db_anon: SupabaseAsync = Depends(get_db_anon),
 ) -> ForgotPasswordOut:
+    settings = get_settings()
+    redirect_base = (settings.PUBLIC_APP_URL or "").strip().rstrip("/")
+    options: dict[str, Any] | None = None
+    if redirect_base:
+        options = {"redirect_to": f"{redirect_base}/reset-password"}
     try:
-        await db_anon.auth_reset_password_for_email(email=str(payload.email).strip().lower(), options=None)
+        await db_anon.auth_reset_password_for_email(
+            email=str(payload.email).strip().lower(),
+            options=options,
+        )
     except Exception:
         pass
     return ForgotPasswordOut()
