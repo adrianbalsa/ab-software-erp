@@ -454,7 +454,7 @@ async def _downgrade_empresa_to_starter(
     stripe_customer_id: str | None = None,
     stripe_subscription_id: str | None = None,
 ) -> None:
-    """Busca empresa por ids Stripe y la deja en plan Essential (slug `starter`)."""
+    """Busca empresa por ids Stripe y la deja en plan Compliance (slug `starter`)."""
     if stripe_subscription_id:
         res: Any = await db.execute(
             db.table("empresas")
@@ -494,7 +494,7 @@ async def _downgrade_empresa_to_starter(
         "is_active": True,
     }
     await db.execute(db.table("empresas").update(payload).eq("id", eid))
-    logger.warning("empresa %s downgrade a Essential (starter) tras cancelación de suscripción", eid[:8])
+    logger.warning("empresa %s downgrade a Compliance (starter) tras cancelación de suscripción", eid[:8])
 
 
 def _stripe_external_event_id(event: Any) -> str:

@@ -28,9 +28,9 @@ async def test_export_audit_package_zip_owner(client) -> None:
     zf = zipfile.ZipFile(io.BytesIO(res.content))
     pricing = json.loads(zf.read("pricing_catalog.json").decode("utf-8"))
     plans = {p["plan_slug"]: p["eur_monthly"] for p in pricing["base_plans"]}
-    assert plans["starter"] == 350
-    assert plans["pro"] == 800
-    assert plans["enterprise"] == 1000
+    assert plans["starter"] == 149
+    assert plans["pro"] == 449
+    assert plans["enterprise"] == 1200
     assert len(pricing.get("addons", [])) == 3
 
     snap = json.loads(zf.read("public_compliance_snapshot.json").decode("utf-8"))

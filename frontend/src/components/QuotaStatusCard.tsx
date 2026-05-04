@@ -76,7 +76,12 @@ export function QuotaStatusCard() {
 
   let message: string;
   if (plan === "starter") {
-    message = q.starterMsg.replace("{used}", String(used));
+    const invUsed = data.facturas_emitidas_mes_actual ?? 0;
+    const invLimit = data.limite_facturas_mes ?? 150;
+    message = q.starterMsg
+      .replace("{used}", String(used))
+      .replace("{inv_used}", String(invUsed))
+      .replace("{inv_limit}", String(invLimit));
   } else if (plan === "pro") {
     message = q.proMsg;
   } else {

@@ -1,8 +1,11 @@
 import { API_BASE, apiFetch } from "@/lib/api";
+import { normalizePlanQueryParam } from "@/lib/productPlans";
 
 export type EmpresaQuotaGate = {
   must_complete_checkout?: boolean;
   billing_suspended?: boolean;
+  /** Slug canónico devuelto por `GET /empresa/quota` (`starter` | `pro` | `enterprise`). */
+  plan_type?: string;
 };
 
 type QuotaRead =
@@ -31,8 +34,12 @@ export async function resolvePostAuthNavigation(noTenantPath = "/onboarding"): P
   if (r.tag === "unauth") return "/login";
   if (r.tag !== "ok") return noTenantPath;
   if (Boolean(r.data.billing_suspended)) return "/dashboard/settings/billing";
-  if (Boolean(r.data.must_complete_checkout))
-    return "/payments/create-checkout?plan=starter&source=resume";
+  if (Boolean(r.data.must_complete_checkout)) {
+    const planSlug = normalizePlanQueryParam(
+      typeof r.data.plan_type === "string" ? r.data.plan_type : "starter",
+    );
+    return `/payments/create-checkout?plan=${encodeURIComponent(planSlug)}&source=resume`;
+  }
   return "/dashboard";
 }
 
@@ -43,5 +50,6 @@ export async function fetchEmpresaQuotaGate(): Promise<EmpresaQuotaGate | null> 
   return {
     must_complete_checkout: Boolean(r.data.must_complete_checkout),
     billing_suspended: Boolean(r.data.billing_suspended),
+    plan_type: typeof r.data.plan_type === "string" ? r.data.plan_type : undefined,
   };
 }

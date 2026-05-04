@@ -692,15 +692,15 @@ def check_quota_limit(resource: str):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=(
-                        f"Has alcanzado el límite de 5 camiones de tu plan {plan_marketing_name(pn)}. "
-                        "Mejora a Pro para gestionar hasta 25 y activar el cálculo de EBITDA real."
+                        f"Has alcanzado el límite de {cap} vehículos de tu plan {plan_marketing_name(pn)}. "
+                        f"Mejora a {plan_marketing_name(PLAN_PRO)} para gestionar hasta 30 y activar el cálculo de EBITDA real."
                     ),
                 )
             if pn == PLAN_PRO:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=(
-                        f"Has alcanzado el límite de 25 vehículos de tu plan {plan_marketing_name(pn)}. "
+                        f"Has alcanzado el límite de {cap} vehículos de tu plan {plan_marketing_name(pn)}. "
                         f"Pasa a {plan_marketing_name(PLAN_ENTERPRISE)} para flota ilimitada y el módulo ESG completo."
                     ),
                 )

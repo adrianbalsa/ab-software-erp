@@ -5,12 +5,13 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from app.api import deps
-from app.core.plans import fetch_empresa_plan, max_vehiculos, max_workspace_seats, normalize_plan
+from app.core.plans import fetch_empresa_plan, max_facturas_mes, max_vehiculos, max_workspace_seats, normalize_plan
 from app.db.supabase import SupabaseAsync
 from app.schemas.empresa import EmpresaQuotaOut, WorkspaceMemberOut, WorkspaceTeamOut
 from app.schemas.user import UserOut
 from app.services import stripe_service
 from app.services.flota_service import FlotaService
+from app.services.facturas_service import FacturasService
 from app.services.workspace_team_service import count_workspace_seated_profiles, list_workspace_members
 
 router = APIRouter()
@@ -20,6 +21,7 @@ router = APIRouter()
 async def get_quota(
     current_user: UserOut = Depends(deps.get_current_user),
     db: SupabaseAsync = Depends(deps.get_db),
+    facturas: FacturasService = Depends(deps.get_facturas_service),
 ) -> EmpresaQuotaOut:
     eid = str(current_user.empresa_id)
     must_complete = False
@@ -48,9 +50,13 @@ async def get_quota(
         must_complete = bool(rq and stripe_service.is_stripe_configured() and not sid_s)
     limit = max_vehiculos(plan)
     seat_limit = max_workspace_seats(plan)
+    inv_limit = max_facturas_mes(plan)
     team_used = await count_workspace_seated_profiles(db, empresa_id=eid)
     fs = FlotaService(db)
     m = await fs.metricas_flota(empresa_id=eid)
+    inv_used = 0
+    if inv_limit is not None:
+        inv_used = await facturas.count_facturas_emitidas_mes_calendario(empresa_id=eid)
     return EmpresaQuotaOut(
         plan_type=plan,
         must_complete_checkout=must_complete,
@@ -59,6 +65,8 @@ async def get_quota(
         vehiculos_actuales=m.total_vehiculos,
         limite_usuarios_equipo=seat_limit,
         usuarios_equipo_actuales=team_used,
+        limite_facturas_mes=inv_limit,
+        facturas_emitidas_mes_actual=inv_used,
     )
 
 

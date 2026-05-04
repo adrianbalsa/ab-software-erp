@@ -22,6 +22,7 @@ import {
 import { EnterpriseShowcase } from "@/components/EnterpriseShowcase";
 import { SecurityTrustSection } from "@/components/SecurityTrustSection";
 import { LOGIN_URL, START_NOW_URL } from "@/components/site";
+import { buildPublicPlanTiers, PLAN_PITCH_I18N } from "@shared/marketingPlanCatalog";
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const NAV_LINKS = [
@@ -42,8 +43,9 @@ const FEATURES = [
   },
   {
     icon: BarChart3,
-    title: "EBITDA en Tiempo Real",
-    description: "Cruza ingresos con gastos de combustible, peajes y amortización para saber exactamente qué rutas son rentables.",
+    title: "Rentabilidad y margen",
+    description:
+      "Desde el cuadro operativo hasta el motor financiero avanzado (Operational/Institutional): ingresos, costes variables y margen por expediente.",
     color: "text-emerald-600",
     bg: "bg-emerald-50",
   },
@@ -77,47 +79,15 @@ const FEATURES = [
   },
 ];
 
-const PLANS = [
-  {
-    name: "Starter",
-    price: "19",
-    description: "Cumplimiento legal y control básico para autónomos.",
-    popular: false,
-    features: [
-      "Hasta 2 vehículos",
-      "Facturación VeriFactu obligatoria",
-      "Portal móvil para 2 chóferes",
-      "Gestión de gastos básicos",
-      "Soporte por email (48h)",
-    ],
-  },
-  {
-    name: "Pro",
-    price: "49",
-    description: "Control de rentabilidad para flotas en crecimiento.",
-    popular: true,
-    features: [
-      "Hasta 15 vehículos",
-      "Dashboard de EBITDA en tiempo real",
-      "Simulador de rentabilidad por porte",
-      "Control de vencimientos (ITV, Seguros)",
-      "Soporte prioritario (24h)",
-    ],
-  },
-  {
-    name: "Enterprise",
-    price: "89",
-    description: "Analítica avanzada y automatización total.",
-    popular: false,
-    features: [
-      "Vehículos ilimitados",
-      "Liquidación automática de chóferes",
-      "Integración API con bancos",
-      "Gestión multi-empresa",
-      "Gestor de cuenta personal",
-    ],
-  },
-];
+const PLANS = buildPublicPlanTiers({ starter: "", pro: "", enterprise: "" }).map((tier) => ({
+  slug: tier.slug,
+  name: tier.marketingNameEs,
+  price: String(tier.priceEur),
+  priceSuffix: tier.priceSuffix ?? "",
+  description: PLAN_PITCH_I18N[tier.slug].descriptionEs,
+  popular: tier.highlight,
+  features: [...PLAN_PITCH_I18N[tier.slug].bulletsEs],
+}));
 
 // ─── FADE-UP ANIMATION VARIANT ────────────────────────────────────────────────
 const fadeUp: Variants = {
@@ -667,15 +637,17 @@ function Pricing() {
           <h2 className="mt-3 text-3xl sm:text-4xl font-extrabold text-slate-900">
             Planes simples y transparentes
           </h2>
-          <p className="mt-3 text-slate-500 max-w-xl mx-auto">
-            Sin costes ocultos. Escala cuando crezcas. Cancela cuando quieras.
+          <p className="mt-3 text-slate-500 max-w-2xl mx-auto text-sm leading-relaxed">
+            Inversión mensual orientada a ROI operativo: Compliance, Operational e Institutional alineados con el
+            mismo catálogo que Stripe Billing (149 €, 449 € y desde 1.200 €+ / mes + IVA). Sin costes ocultos; cancela cuando
+            quieras.
           </p>
         </motion.div>
 
         <div className="grid md:grid-cols-3 gap-8 items-stretch max-w-6xl mx-auto">
           {PLANS.map((plan, i) => (
             <motion.div
-              key={plan.name}
+              key={plan.slug}
               variants={fadeUp}
               initial="hidden"
               whileInView="visible"
@@ -728,7 +700,8 @@ function Pricing() {
                         plan.popular ? "text-[#F8FAFC]" : "text-slate-900"
                       }`}
                     >
-                      {plan.price}€
+                      {plan.price}
+                      {plan.priceSuffix}€
                     </span>
                     <span
                       className={`text-sm pb-1 ${

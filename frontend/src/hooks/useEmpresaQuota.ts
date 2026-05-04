@@ -13,6 +13,9 @@ export type QuotaResponse = {
   /** Plazas de panel (owner + gestores); `null` = Enterprise ilimitado. */
   limite_usuarios_equipo: number | null;
   usuarios_equipo_actuales: number;
+  /** Solo Compliance: tope de facturas selladas por mes natural; `null` en planes superiores. */
+  limite_facturas_mes: number | null;
+  facturas_emitidas_mes_actual: number;
   must_complete_checkout?: boolean;
   billing_suspended?: boolean;
 };
@@ -39,6 +42,8 @@ export function useEmpresaQuota() {
       const usadosFlota = (json.vehiculos_actuales ?? json.portes_actuales) as number | string | undefined;
       const limiteTeam = json.limite_usuarios_equipo as number | null | undefined;
       const usadosTeam = json.usuarios_equipo_actuales as number | string | undefined;
+      const limiteInv = json.limite_facturas_mes as number | null | undefined;
+      const usadosInv = json.facturas_emitidas_mes_actual as number | string | undefined;
       setData({
         plan: typeof planRaw === "string" ? planRaw : "",
         limite_portes: limiteFlota == null ? null : Number(limiteFlota),
@@ -47,6 +52,8 @@ export function useEmpresaQuota() {
         facturacion_actual: Number(json.facturacion_actual ?? 0),
         limite_usuarios_equipo: limiteTeam == null ? null : Number(limiteTeam),
         usuarios_equipo_actuales: Number(usadosTeam ?? 0),
+        limite_facturas_mes: limiteInv == null ? null : Number(limiteInv),
+        facturas_emitidas_mes_actual: Number(usadosInv ?? 0),
         must_complete_checkout: Boolean(json.must_complete_checkout),
         billing_suspended: Boolean(json.billing_suspended),
       });

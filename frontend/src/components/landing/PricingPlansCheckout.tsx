@@ -14,17 +14,36 @@ import {
   normalizePlanQueryParam,
   resolvePublicStripePriceIds,
   stripeCheckoutReady,
-  type PlanSlug,
+  type PublicPlanSlug,
   type PublicPlanTier,
 } from "@/lib/productPlans";
 
 type Variant = "marketing-section" | "full-page";
 
-function tierTagline(c: Catalog, slug: PlanSlug): string {
+function tierMarketingName(tier: PublicPlanTier, locale: string): string {
+  return locale === "en" ? tier.marketingNameEn : tier.marketingNameEs;
+}
+
+function tierTagline(c: Catalog, slug: PublicPlanSlug): string {
   const p = c.pricing;
   if (slug === "starter") return p.starterDesc;
   if (slug === "pro") return p.proDesc;
   return p.entDesc;
+}
+
+function tierLimitsCaption(tier: PublicPlanTier, locale: string): string {
+  return locale === "en" ? tier.limitsLineEn : tier.limitsLineEs;
+}
+
+function tierPriceLabel(tier: PublicPlanTier): string {
+  const suffix = tier.priceSuffix ?? "";
+  return `${tier.priceEur}€${suffix}`;
+}
+
+function defaultSalesHref(): string {
+  const raw = (process.env.NEXT_PUBLIC_SALES_CONTACT ?? "").trim();
+  if (raw) return raw;
+  return "mailto:ventas@ablogistics.es?subject=Suscripci%C3%B3n%20AB%20Logistics%20OS";
 }
 
 export function PricingPlansCheckout({ variant }: { variant: Variant }) {
@@ -32,11 +51,11 @@ export function PricingPlansCheckout({ variant }: { variant: Variant }) {
   const searchParams = useSearchParams();
   const empresaId = (searchParams.get("empresa_id") ?? "").trim();
   const planParam = searchParams.get("plan");
-  const { catalog } = useOptionalLocaleCatalog();
+  const { catalog, locale } = useOptionalLocaleCatalog();
   const l = catalog.landing.pricing;
   const lp = catalog.landing.pricingPage;
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
-  const cardRefs = useRef<Partial<Record<PlanSlug, HTMLDivElement | null>>>({});
+  const cardRefs = useRef<Partial<Record<PublicPlanSlug, HTMLDivElement | null>>>({});
 
   const ids = useMemo(() => resolvePublicStripePriceIds(), []);
   const checkoutOk = useMemo(() => stripeCheckoutReady(ids), [ids]);
@@ -50,15 +69,21 @@ export function PricingPlansCheckout({ variant }: { variant: Variant }) {
     el.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [highlightedSlug]);
 
-  const handleSuscripcion = async (tier: PublicPlanTier) => {
+  const loginThenPricingHref = (slug: PublicPlanSlug) =>
+    `/login?next=${encodeURIComponent(`/pricing?plan=${encodeURIComponent(slug)}`)}`;
+
+  const handlePrimaryCta = async (tier: PublicPlanTier) => {
     const priceId = tier.stripePriceId;
+    if (!checkoutOk) {
+      window.location.href = defaultSalesHref();
+      return;
+    }
     if (!priceId.trim()) {
       toast.error(l.missingStripeConfig);
       return;
     }
     if (!empresaId) {
-      const target = `/pricing?plan=${encodeURIComponent(tier.slug)}`;
-      router.push(target);
+      router.push(loginThenPricingHref(tier.slug));
       return;
     }
     setLoadingTier(priceId);
@@ -109,7 +134,7 @@ export function PricingPlansCheckout({ variant }: { variant: Variant }) {
         {variant === "full-page" && !empresaId ? (
           <p className="mt-4 text-pretty text-sm text-amber-200/90 max-w-2xl mx-auto">{lp.empresaRequiredHint}</p>
         ) : null}
-        {variant === "full-page" ? (
+        {variant === "full-page" && checkoutOk ? (
           <p className="mt-3 text-xs text-zinc-500 max-w-2xl mx-auto">{lp.stripeEnvHint}</p>
         ) : null}
       </div>
@@ -117,17 +142,28 @@ export function PricingPlansCheckout({ variant }: { variant: Variant }) {
       {!checkoutOk ? (
         <div
           role="status"
-          className="mb-8 rounded-2xl border border-amber-500/25 bg-amber-950/35 px-4 py-3 text-left sm:px-5 sm:py-4 max-w-6xl mx-auto"
+          className="mb-8 rounded-2xl border border-amber-500/20 bg-amber-950/25 px-4 py-4 text-left sm:px-6 sm:py-5 max-w-6xl mx-auto"
         >
-          <p className="text-sm font-semibold text-amber-100">{l.pricingStripeFallbackTitle}</p>
-          <p className="mt-1 text-sm leading-relaxed text-amber-100/85">{l.pricingStripeFallbackBody}</p>
-          {variant === "full-page" ? <p className="mt-2 text-xs text-amber-100/75">{lp.envVarsList}</p> : null}
+          <p className="text-sm font-semibold text-amber-50">{l.pricingStripeFallbackTitle}</p>
+          <p className="mt-2 text-sm leading-relaxed text-amber-100/90">{l.pricingStripeFallbackBody}</p>
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            <Link
+              href="/help/billing"
+              className="font-medium text-emerald-400/95 underline-offset-2 hover:text-emerald-300 hover:underline"
+            >
+              {l.pricingHelpBillingLink}
+            </Link>
+            {variant === "full-page" ? (
+              <span className="text-xs text-amber-100/70">{lp.envVarsList}</span>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         {tiers.map((tier) => {
           const ring = highlightedSlug === tier.slug;
+          const name = tierMarketingName(tier, locale);
           return (
             <div
               key={tier.slug}
@@ -145,14 +181,15 @@ export function PricingPlansCheckout({ variant }: { variant: Variant }) {
                   {l.recommended}
                 </span>
               )}
-              <h3 className="text-lg font-bold tracking-tight text-white">{tier.marketingName}</h3>
+              <h3 className="text-lg font-bold tracking-tight text-white">{name}</h3>
               <p className="mt-2 text-sm leading-relaxed text-zinc-400">{tierTagline(catalog, tier.slug)}</p>
               <div className="mt-6 flex items-baseline gap-1">
-                <span className="text-4xl font-extrabold text-white">{tier.priceEur}€</span>
+                <span className="text-4xl font-extrabold text-white">{tierPriceLabel(tier)}</span>
                 <span className="text-zinc-400">{l.monthSuffix}</span>
               </div>
               <p className="mt-1 text-xs text-zinc-500">{l.vatExcluded}</p>
-              <ul className="mt-8 flex-1 divide-y divide-zinc-800/80 rounded-2xl border border-zinc-800/80 bg-surface-elevated text-sm">
+              <p className="mt-2 text-xs font-medium text-zinc-400">{tierLimitsCaption(tier, locale)}</p>
+              <ul className="mt-6 flex-1 divide-y divide-zinc-800/80 rounded-2xl border border-zinc-800/80 bg-surface-elevated text-sm">
                 {l.features.map((feature, index) => (
                   <li key={feature} className="flex items-center justify-between gap-2 px-3 py-2.5 text-zinc-300">
                     <span>{feature}</span>
@@ -167,9 +204,9 @@ export function PricingPlansCheckout({ variant }: { variant: Variant }) {
 
               <button
                 type="button"
-                onClick={() => void handleSuscripcion(tier)}
-                disabled={!tier.stripePriceId || loadingTier === tier.stripePriceId}
-                title={!tier.stripePriceId ? l.missingStripeConfig : undefined}
+                onClick={() => void handlePrimaryCta(tier)}
+                disabled={(checkoutOk && !tier.stripePriceId.trim()) || loadingTier === tier.stripePriceId}
+                title={checkoutOk && !tier.stripePriceId ? l.missingStripeConfig : undefined}
                 className={`mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold transition ${
                   tier.highlight
                     ? "bg-emerald-500 text-zinc-950 hover:bg-emerald-400 disabled:bg-emerald-500/50"
@@ -182,10 +219,12 @@ export function PricingPlansCheckout({ variant }: { variant: Variant }) {
                       <Loader2 className="h-4 w-4 animate-spin" />
                       {l.connecting}
                     </>
-                  ) : empresaId ? (
+                  ) : checkoutOk && empresaId ? (
                     l.subscribeCta
+                  ) : checkoutOk && !empresaId ? (
+                    l.ctaLoginToSubscribe
                   ) : (
-                    l.requestAccess
+                    l.contactSalesCta
                   )}
                 </span>
               </button>
@@ -199,7 +238,7 @@ export function PricingPlansCheckout({ variant }: { variant: Variant }) {
           <p className="text-sm text-zinc-400 max-w-xl">{lp.funnelHint}</p>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Link
-              href="/login"
+              href="/login?next=%2Fpricing"
               className="inline-flex min-h-11 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900/60 px-6 py-2.5 text-sm font-semibold text-zinc-100 transition hover:bg-zinc-800"
             >
               {lp.loginCta}

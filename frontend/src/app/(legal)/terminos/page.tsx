@@ -64,13 +64,14 @@ export default function TerminosPage() {
       </p>
       <ul>
         <li>
-          <strong>Plan Essential:</strong> 350 EUR/mes (<strong>IVA no incluido</strong>).
+          <strong>Plan Compliance:</strong> 149 EUR/mes (<strong>IVA no incluido</strong>).
         </li>
         <li>
-          <strong>Plan Pro:</strong> 800 EUR/mes (<strong>IVA no incluido</strong>).
+          <strong>Plan Operational:</strong> 449 EUR/mes (<strong>IVA no incluido</strong>).
         </li>
         <li>
-          <strong>Plan Enterprise:</strong> 1000 EUR/mes (<strong>IVA no incluido</strong>).
+          <strong>Plan Institutional:</strong> desde 1.200 EUR/mes en adelante (<strong>IVA no incluido</strong>); el
+          importe exacto depende del volumen, SLA y anexos contractuales.
         </li>
       </ul>
       <p>

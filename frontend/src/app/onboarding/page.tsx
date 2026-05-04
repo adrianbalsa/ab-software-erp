@@ -143,7 +143,7 @@ export default function OnboardingPage() {
           <CardDescription className="space-y-1 text-zinc-400">
             <span className="block">{progressLabel}</span>
             <span className="block text-xs text-zinc-500">
-              Después activarás la suscripción Essential en Stripe (pago seguro). Invita a tu equipo cuando
+              Después activarás la suscripción en Stripe (pago seguro). Invita a tu equipo cuando
               quieras desde Ajustes.
             </span>
           </CardDescription>

@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { isOwnerLike, type AppRbacRole } from "@/lib/api";
 import { useRole } from "@/hooks/useRole";
 import { fetchEmpresaQuotaGate, type EmpresaQuotaGate } from "@/lib/postAuthNavigation";
+import { normalizePlanQueryParam } from "@/lib/productPlans";
 
 function adminCanPay(role: AppRbacRole): boolean {
   return isOwnerLike(role) || role === "developer";
@@ -38,7 +39,8 @@ function DashboardBillingGateInner({ children }: { children: ReactNode }) {
       return;
     }
     if (must && admin && !pathname.startsWith(billingPath)) {
-      router.replace("/payments/create-checkout?plan=starter&source=resume");
+      const planSlug = normalizePlanQueryParam(q.plan_type ?? "starter");
+      router.replace(`/payments/create-checkout?plan=${encodeURIComponent(planSlug)}&source=resume`);
       return;
     }
     if (must && !admin && pathname !== pendingPath && !pathname.startsWith(billingPath)) {

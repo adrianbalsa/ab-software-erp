@@ -19,7 +19,7 @@ export const extraEs = {
       eyebrow: "Transporte · Finanzas · AEAT 2026",
       title: "Una sola plataforma para portes rentables y facturación a prueba de inspección.",
       description:
-        "Desde el presupuesto hasta el cobro: flota, VeriFactu, conciliación y visibilidad de margen para dirección y tráfico. Misma oferta comercial en web y en Stripe: Essential, Pro y Enterprise.",
+        "Desde el presupuesto hasta el cobro: flota, VeriFactu, conciliación y visibilidad de margen para dirección y tráfico. Misma oferta comercial en web y en Stripe: Compliance, Operational e Institutional.",
       primaryCta: "Crear cuenta y empezar",
       secondaryCta: "Ver planes y precios",
     },
@@ -58,32 +58,37 @@ export const extraEs = {
       ],
       title: "Planes publicados = planes de Stripe",
       subtitle:
-        "Tres niveles con los mismos nombres en producto y en facturación: Essential (350 €), Pro (800 €) y Enterprise (1000 €) al mes + IVA. Add-ons opcionales (OCR Pack, Webhooks B2B Premium, LogisAdvisor IA Pro) se contratan desde el panel.",
+        "Inversión mensual orientada a ROI operativo: cada euro debe volver en eficiencia y control de margen. Tres segmentos — Compliance (149 €), Operational (449 €) e Institutional (desde 1.200 €+) al mes + IVA — con los mismos slugs en producto y en Stripe Billing. Add-ons opcionales (OCR Pack, Webhooks B2B Premium, LogisAdvisor IA Pro) se contratan desde el panel.",
       recommended: "Recomendado",
       connecting: "Conectando...",
       requestAccess: "Siguiente: registro y checkout",
       subscribeCta: "Contratar con Stripe",
+      ctaLoginToSubscribe: "Iniciar sesión y contratar",
+      contactSalesCta: "Hablar con ventas",
+      limitsFinite: "Hasta {{v}} vehículos · hasta {{u}} usuarios de panel",
+      limitsUnlimited: "Flota y usuarios de panel ilimitados (Institutional)",
+      pricingHelpBillingLink: "Centro de ayuda — Facturación y Stripe",
       vatExcluded: "IVA no incluido",
       missingStripeConfig:
-        "Falta configurar los Price IDs de Stripe en el frontend (NEXT_PUBLIC_STRIPE_PRICE_*). Consulta docs/operations/STRIPE_BILLING.md.",
-      pricingStripeFallbackTitle: "Contratación en línea no disponible",
+        "Falta configurar los Price IDs públicos de Stripe en el despliegue (variables NEXT_PUBLIC_STRIPE_PRICE_*). Tu equipo técnico puede completarlo en unos minutos.",
+      pricingStripeFallbackTitle: "Contratación en línea en preparación",
       pricingStripeFallbackBody:
-        "Los enlaces de pago no están configurados en este entorno. Puedes revisar los planes; para contratar, contacta con ventas o completa la configuración de Stripe.",
+        "En este entorno los enlaces de pago no están activos todavía. Puedes revisar el catálogo y los límites por plan; nuestro equipo comercial puede activar el checkout o enviarte un enlace de suscripción.",
       stripeGatewayError: "Hubo un problema al conectar con la pasarela segura.",
       stripeConnectionError: "No se pudo conectar con la pasarela segura. Inténtalo de nuevo.",
       pendingUserId: "USUARIO_PENDIENTE_DE_REGISTRO",
       monthSuffix: "/mes",
     },
     pricingPage: {
-      title: "Contratar Essential, Pro o Enterprise",
+      title: "Contratar Compliance, Operational o Institutional",
       subtitle:
         "Precios de catálogo alineados con el backend y Stripe Billing. Si aún no tienes empresa_id, crea la cuenta, completa el onboarding y vuelve aquí o usa «Suscripción» en el panel.",
       empresaRequiredHint:
         "Sin empresa_id en la URL no se puede asociar el cobro. Tras registrarte, abre el enlace del correo de bienvenida o inicia sesión y ve a Suscripción.",
       stripeEnvHint:
-        "En el build deben existir los tres NEXT_PUBLIC_STRIPE_PRICE_* (Essential vía BASIC o STARTER, PRO, ENTERPRISE).",
+        "En producción deben existir los tres NEXT_PUBLIC_STRIPE_PRICE_* (Compliance vía BASIC/STARTER/COMPLIANCE, FINANCE/PRO, ENTERPRISE).",
       envVarsList:
-        "Ejemplo: NEXT_PUBLIC_STRIPE_PRICE_BASIC o NEXT_PUBLIC_STRIPE_PRICE_STARTER, NEXT_PUBLIC_STRIPE_PRICE_PRO, NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE.",
+        "Variables típicas: NEXT_PUBLIC_STRIPE_PRICE_BASIC o STARTER o COMPLIANCE, NEXT_PUBLIC_STRIPE_PRICE_PRO o FINANCE, NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE.",
       funnelHint:
         "Flujo self-serve: registro → empresa creada → checkout Stripe desde esta página (con ?empresa_id=) o desde el menú Suscripción.",
       loginCta: "Iniciar sesión para pagar",
@@ -98,7 +103,7 @@ export const extraEs = {
       stats: [
         { value: "VeriFactu", label: "Registro fiscal con foco en trazabilidad e integridad" },
         { value: "RLS", label: "Cada tenant aislado a nivel de base de datos" },
-        { value: "Stripe", label: "Misma jerarquía de planes en checkout y en documentación interna" },
+        { value: "Stripe", label: "Misma jerarquía Compliance / Operational / Institutional en checkout y producto" },
       ],
     },
     trustStrip: {
@@ -117,7 +122,7 @@ export const extraEs = {
         },
         {
           title: "Cobro transparente",
-          body: "Stripe Billing con planes Essential, Pro y Enterprise — mismos nombres y precios orientativos en toda la superficie del producto.",
+          body: "Stripe Billing con Compliance, Operational e Institutional — mismos precios de catálogo en toda la superficie del producto.",
         },
       ],
     },
@@ -135,7 +140,7 @@ export const extraEs = {
         },
         {
           q: "¿Es rentable el sistema si mi flota tiene menos de 5 camiones?",
-          a: "Totalmente. El volumen no exime de las obligaciones fiscales. Nuestro plan Essential está diseñado para blindar a pequeñas flotas ante VeriFactu, eliminando horas de papeleo administrativo para que te centres en conducir tu negocio, no tu contabilidad.",
+          a: "Totalmente. El volumen no exime de las obligaciones fiscales. El plan Compliance está diseñado para blindar a pequeñas flotas ante VeriFactu, eliminando horas de papeleo administrativo para que te centres en conducir tu negocio, no tu contabilidad.",
         },
         {
           q: "¿Cómo garantiza exactamente el software el cumplimiento de la ley VeriFactu?",
@@ -155,7 +160,7 @@ export const extraEs = {
         },
         {
           q: "Si mi empresa crece rápidamente, ¿el software podrá soportarlo?",
-          a: "AB Logistics OS nace en la nube con una arquitectura serverless capaz de escalar dinámicamente. Ya sea que gestiones 10 portes al mes o 10.000, el rendimiento del sistema (Plan Enterprise) se mantiene intacto sin tiempos de latencia.",
+          a: "AB Logistics OS nace en la nube con una arquitectura serverless capaz de escalar dinámicamente. Ya sea que gestiones 10 portes al mes o 10.000, el rendimiento del sistema (Plan Institutional) se mantiene intacto sin tiempos de latencia.",
         },
         {
           q: "¿Qué nivel de soporte técnico incluye la suscripción?",
@@ -179,7 +184,7 @@ export const extraEs = {
         },
         {
           q: "Trabajamos con subcontratistas y agencias: ¿el sistema sirve para flotas mixtas?",
-          a: "Sí. La arquitectura multi-tenant y los roles están pensados para que cada empresa vea solo su mundo (RLS). Puedes modelar clientes, rutas recurrentes y operativa interna; para modelos complejos de subcontratación en cadena, Pro y Enterprise amplían capacidades de análisis y certificación.",
+          a: "Sí. La arquitectura multi-tenant y los roles están pensados para que cada empresa vea solo su mundo (RLS). Puedes modelar clientes, rutas recurrentes y operativa interna; para modelos complejos de subcontratación en cadena, Operational e Institutional amplían capacidades de análisis y certificación.",
         },
         {
           q: "¿Qué ocurre si AEAT cambia requisitos técnicos después de contratar?",
@@ -187,7 +192,7 @@ export const extraEs = {
         },
         {
           q: "¿Tengo que pagar antes de saber si encaja con mi TMS o mi gestoría?",
-          a: "Puedes registrarte, crear la empresa y explorar el panel con el plan asignado; el checkout Stripe se alinea cuando decidas suscribirte (desde Suscripción o con enlace que incluya empresa_id). Si necesitas integraciones específicas, Pro y Enterprise son los niveles habituales para volumen y certificación.",
+          a: "Puedes registrarte, crear la empresa y explorar el panel con el plan asignado; el checkout Stripe se alinea cuando decidas suscribirte (desde Suscripción o con enlace que incluya empresa_id). Si necesitas integraciones específicas, Operational e Institutional son los niveles habituales para volumen y certificación.",
         },
       ],
     },
@@ -334,10 +339,10 @@ export const extraEs = {
     quotaPrefix: "Cuota:",
     fleetQuota: "Cuota flota",
     starterMsg:
-      "Estás usando {used} de 5 vehículos. Pásate a PRO para gestionar hasta 25.",
+      "Flota: {used}/5 vehículos. Facturas emitidas este mes: {inv_used}/{inv_limit}. Mejora a Operational (hasta 30 vehículos y sin tope de facturas).",
     proMsg:
-      "Módulo ESG bloqueado. Sube a ENTERPRISE para certificar tu huella de carbono.",
-    enterpriseMsg: "Plan Enterprise · {used} vehículo(s) registrados (sin límite).",
+      "Módulo ESG bloqueado. Sube a Institutional para certificar tu huella de carbono.",
+    enterpriseMsg: "Plan Institutional · {used} vehículo(s) registrados (sin límite).",
     upgrade: "Mejorar plan",
     manageSubscription: "Gestionar suscripción",
     manageSubscriptionBusy: "Abriendo portal…",

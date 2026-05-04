@@ -78,7 +78,9 @@ Switch **ES / EN** from the language selector (sidebar or public headers). Prefe
     body: {
       es: `
 ### Modelo
-Los planes **Essential**, **Pro** y **Enterprise** (slugs técnicos \`starter\`, \`pro\`, \`enterprise\`) se cobran como **suscripción** mediante **Stripe Billing**. Precios de catálogo orientativos: **350 €**, **800 €** y **1000 €** / mes (+ IVA); el cargo efectivo depende de tu configuración fiscal y de Stripe Tax si lo activáis.
+Los planes **Compliance**, **Operational** e **Institutional** (slugs técnicos \`starter\`, \`pro\`, \`enterprise\`) se cobran como **suscripción** mediante **Stripe Billing**. Precios de catálogo orientativos: **149 €**, **449 €** y **desde 1.200 €+** / mes (+ IVA); el cargo efectivo depende de tu configuración fiscal y de Stripe Tax si lo activáis.
+
+Límites de producto (referencia): flota y plazas de panel **5 / 30 / ilimitado** según plan; en **Compliance** hay además un máximo de **150 facturas selladas por mes natural**.
 
 ### Add-ons (referencia)
 | Add-on | Orientativo |
@@ -109,7 +111,9 @@ Ver documentación interna \`docs/operations/STRIPE_BILLING.md\` para checklist 
       `.trim(),
       en: `
 ### Model
-**Essential**, **Pro** and **Enterprise** (technical slugs \`starter\`, \`pro\`, \`enterprise\`) are charged as **subscriptions** via **Stripe Billing**. Indicative list prices: **€350**, **€800** and **€1000** / month (+ VAT); actual charges depend on your tax setup and Stripe Tax if enabled.
+**Compliance**, **Operational** and **Institutional** (technical slugs \`starter\`, \`pro\`, \`enterprise\`) are charged as **subscriptions** via **Stripe Billing**. Indicative list prices: **€149**, **€449** and **from €1,200+** / month (+ VAT); actual charges depend on your tax setup and Stripe Tax if enabled.
+
+Product limits (reference): fleet and panel seats **5 / 30 / unlimited** by plan; **Compliance** also caps **150 sealed invoices per calendar month**.
 
 ### Add-ons (reference)
 | Add-on | Indicative |
@@ -167,7 +171,7 @@ El backend expone \`GET /api/v1/export/audit-package\` (JWT de propietario).
 ### Contenido típico del ZIP
 - \`INDEX.md\` — índice y enlaces a documentación del repositorio.
 - \`public_compliance_snapshot.json\` — misma información que \`GET /api/v1/public/compliance\` más metadatos de generación.
-- \`pricing_catalog.json\` — planes Essential / Pro / Enterprise y add-ons (referencia \`app/core/plans.py\`).
+- \`pricing_catalog.json\` — planes Compliance / Operational / Institutional y add-ons (referencia \`app/core/plans.py\`).
 - \`security.txt\` — copia del cuerpo RFC 9116.
 
 ### Límites
@@ -187,7 +191,7 @@ The backend route is \`GET /api/v1/export/audit-package\` (owner JWT).
 ### Typical ZIP contents
 - \`INDEX.md\` — index and pointers to repository documentation.
 - \`public_compliance_snapshot.json\` — same payload as \`GET /api/v1/public/compliance\` plus generation metadata.
-- \`pricing_catalog.json\` — Essential / Pro / Enterprise plans and add-ons (see \`app/core/plans.py\`).
+- \`pricing_catalog.json\` — Compliance / Operational / Institutional plans and add-ons (see \`app/core/plans.py\`).
 - \`security.txt\` — RFC 9116 body snapshot.
 
 ### Limits

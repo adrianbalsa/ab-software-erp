@@ -108,29 +108,29 @@ const pricingEs = {
     "Elige el plan que encaja con tu flota. Los cobros se gestionan de forma segura con Stripe Billing.",
   loginCta: "Iniciar sesión para contratar",
   perMonth: "/mes + IVA",
-  starterName: "Essential",
-  starterPrice: "350 €",
-  starterDesc: "Hasta 5 vehículos, VeriFactu y operativa central (catálogo 2026).",
+  starterName: "Compliance",
+  starterPrice: "149 €",
+  starterDesc: "VeriFactu, AEAT y reemplazo del Excel fiscal para autónomos y micro-flotas.",
   starterBullets: [
     "VeriFactu y facturación electrónica",
-    "Cuadro de mando operativo",
-    "Límite de 5 vehículos en flota",
+    "Almacenamiento cifrado (retención legal)",
+    "Hasta 5 vehículos, 5 usuarios de panel y 150 facturas/mes",
   ],
-  proName: "Pro",
-  proPrice: "800 €",
-  proDesc: "Hasta 25 vehículos y motor financiero avanzado.",
+  proName: "Operational",
+  proPrice: "449 €",
+  proDesc: "Motor operativo y financiero: combustible, EBITDA en tiempo real y LogisAdvisor.",
   proBullets: [
-    "Todo lo de Essential",
-    "Hasta 25 vehículos",
-    "Inteligencia financiera y BI ampliado",
+    "Todo lo de Compliance",
+    "Hasta 30 vehículos y 30 usuarios de panel",
+    "Telemetría de combustible, EBITDA y RBAC administración/operaciones",
   ],
-  entName: "Enterprise",
-  entPrice: "1000 €",
-  entDesc: "Flota ilimitada, ESG comercial y certificación.",
+  entName: "Institutional",
+  entPrice: "desde 1.200 €+",
+  entDesc: "ESG, seguridad corporativa, SLA y paquetes de auditoría para licitaciones.",
   entBullets: [
-    "Todo lo de Pro",
-    "Flota sin límite",
-    "Módulo ESG y certificados auditables",
+    "Todo lo de Operational",
+    "Módulo ESG-CO₂ e ISO 14083",
+    "API, webhooks y Account Manager dedicado",
   ],
   choose: "Contratar",
   currentNote:
@@ -143,22 +143,30 @@ const pricingEn = {
   subtitle: "Pick the plan that matches your fleet. Billing is handled securely with Stripe Billing.",
   loginCta: "Sign in to subscribe",
   perMonth: "/month + VAT",
-  starterName: "Essential",
-  starterPrice: "€350",
-  starterDesc: "Up to 5 vehicles, VeriFactu and core operations (2026 catalog).",
+  starterName: "Compliance",
+  starterPrice: "€149",
+  starterDesc: "VeriFactu, AEAT and a fiscal upgrade over spreadsheets for sole traders and micro-fleets.",
   starterBullets: [
     "VeriFactu & e-invoicing",
-    "Operational dashboard",
-    "Fleet cap of 5 vehicles",
+    "Encrypted storage (legal retention)",
+    "Up to 5 vehicles, 5 panel users and 150 invoices/mo",
   ],
-  proName: "Pro",
-  proPrice: "€800",
-  proDesc: "Up to 25 vehicles and advanced financial intelligence.",
-  proBullets: ["Everything in Essential", "Up to 25 vehicles", "Extended BI & finance engine"],
-  entName: "Enterprise",
-  entPrice: "€1000",
-  entDesc: "Unlimited fleet, commercial ESG and certification.",
-  entBullets: ["Everything in Pro", "Unlimited fleet", "ESG module & auditable certificates"],
+  proName: "Operational",
+  proPrice: "€449",
+  proDesc: "Operating and finance engine: fuel, real-time EBITDA and LogisAdvisor.",
+  proBullets: [
+    "Everything in Compliance",
+    "Up to 30 vehicles and 30 panel users",
+    "Fuel telemetry, EBITDA dashboards and admin/ops RBAC",
+  ],
+  entName: "Institutional",
+  entPrice: "from €1,200+",
+  entDesc: "ESG, corporate security, SLA and audit packs for large tenders.",
+  entBullets: [
+    "Everything in Operational",
+    "ESG-CO₂ module and ISO 14083",
+    "APIs, webhooks and a dedicated account manager",
+  ],
   choose: "Subscribe",
   currentNote:
     "If you already have an account, sign in and use “Upgrade plan” in the sidebar or the Subscription page.",
@@ -166,7 +174,9 @@ const pricingEn = {
 } as const;
 
 const helpBillingMdEs = `
-Los pagos del **plan SaaS** (**Essential**, **Pro**, **Enterprise**; slugs \`starter\` / \`pro\` / \`enterprise\`) se procesan con **Stripe** en modo suscripción recurrente. Precios de catálogo orientativos: **350 €**, **800 €** y **1000 €** / mes (+ IVA según caso).
+Los pagos del **plan SaaS** (**Compliance**, **Operational**, **Institutional**; slugs \`starter\` / \`pro\` / \`enterprise\`) se procesan con **Stripe** en modo suscripción recurrente. Precios de catálogo orientativos: **149 €**, **449 €** y **desde 1.200 €+** / mes (+ IVA según caso).
+
+Límites de referencia en producto: **5 / 30 / ∞** vehículos (y mismas plazas de panel en Compliance / Operational); el plan **Compliance** incluye además un tope de **150 facturas selladas por mes natural** (F1/R1).
 
 ### Add-ons (referencia comercial)
 | Add-on | Precio orientativo |
@@ -193,7 +203,9 @@ Para incidencias de acceso o datos de transporte, contacta con el administrador 
 `.trim();
 
 const helpBillingMdEn = `
-**SaaS plan** charges (**Essential**, **Pro**, **Enterprise**; slugs \`starter\` / \`pro\` / \`enterprise\`) are processed by **Stripe** as recurring subscriptions. Indicative list prices: **€350**, **€800** and **€1000** / month (+ VAT as applicable).
+**SaaS plan** charges (**Compliance**, **Operational**, **Institutional**; slugs \`starter\` / \`pro\` / \`enterprise\`) are processed by **Stripe** as recurring subscriptions. Indicative list prices: **€149**, **€449** and **from €1,200+** / month (+ VAT as applicable).
+
+Reference product limits: **5 / 30 / ∞** vehicles (and the same panel seats on Compliance / Operational). **Compliance** also caps **150 sealed invoices per calendar month** (F1/R1).
 
 ### Add-ons (commercial reference)
 | Add-on | Indicative price |
@@ -255,7 +267,7 @@ const es: Catalog = {
     portalHint:
       "Te redirigimos a Stripe para tarjeta, facturas PDF y cancelación de renovación. Volverás al panel al cerrar.",
     upgradePro: "Contratar o pasar a Pro",
-    upgradeEnt: "Contratar Enterprise",
+    upgradeEnt: "Contratar Institutional",
     loadingPortal: "Abriendo portal…",
     portalDisabled: "Completa antes un checkout para asociar un cliente Stripe a tu empresa.",
     errorPrefix: "No se pudo abrir el portal",
@@ -264,9 +276,9 @@ const es: Catalog = {
   teamPage: {
     title: "Equipo y accesos",
     subtitle:
-      "Invita a compañeros con rol de administrador o gestor operativo. Las plazas siguen los límites de tu plan (Essential, Pro o Enterprise).",
+      "Invita a compañeros con rol de administrador o gestor operativo. Las plazas siguen los límites de tu plan (Compliance, Operational o Institutional).",
     seatsLabel: "Plazas de panel",
-    seatsUnlimited: "Ilimitadas (Enterprise)",
+    seatsUnlimited: "Ilimitadas (Institutional)",
     membersTitle: "Miembros actuales",
     emptyMembers: "Aún no hay otros miembros registrados.",
     emailLabel: "Correo del invitado",
@@ -326,7 +338,7 @@ const en = {
     portalHint:
       "You will be redirected to Stripe for card, PDF invoices and renewal cancellation. You return to the app when finished.",
     upgradePro: "Subscribe or upgrade to Pro",
-    upgradeEnt: "Subscribe to Enterprise",
+    upgradeEnt: "Subscribe to Institutional",
     loadingPortal: "Opening portal…",
     portalDisabled: "Complete checkout once so a Stripe customer is linked to your company.",
     errorPrefix: "Could not open portal",
@@ -335,9 +347,9 @@ const en = {
   teamPage: {
     title: "Team & access",
     subtitle:
-      "Invite colleagues as administrator or operational manager. Seat limits follow your plan (Essential, Pro or Enterprise).",
+      "Invite colleagues as administrator or operational manager. Seat limits follow your plan (Compliance, Operational or Institutional).",
     seatsLabel: "Panel seats",
-    seatsUnlimited: "Unlimited (Enterprise)",
+    seatsUnlimited: "Unlimited (Institutional)",
     membersTitle: "Current members",
     emptyMembers: "No other members yet.",
     emailLabel: "Invitee email",

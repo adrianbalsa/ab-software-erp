@@ -194,6 +194,14 @@ class EmpresaQuotaOut(BaseModel):
         default=0,
         description="Perfiles de panel vinculados al tenant (excluye portal cliente y conductores).",
     )
+    limite_facturas_mes: int | None = Field(
+        default=None,
+        description="None = sin tope mensual; Compliance: máximo de facturas selladas por mes natural.",
+    )
+    facturas_emitidas_mes_actual: int = Field(
+        default=0,
+        description="Recuento de facturas bloqueadas emitidas en el mes natural actual (excl. anulada_compensacion).",
+    )
 
 
 class WorkspaceMemberOut(BaseModel):

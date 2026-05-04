@@ -19,11 +19,13 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@shared/*": ["../shared/*"]
     }
   },
   "include": [
     "next-env.d.ts",
+    "../shared/**/*.ts",
     "**/*.d.ts",
     "**/*.ts",
     "**/*.tsx",

@@ -7,7 +7,7 @@ import io
 import json
 import logging
 import zipfile
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -38,7 +38,8 @@ from app.core.math_engine import (
     safe_divide,
     to_decimal,
 )
-from app.core.plans import PLAN_ENTERPRISE, fetch_empresa_plan, normalize_plan
+from app.core.billing_exceptions import InvoiceMonthlyQuotaExceededError
+from app.core.plans import PLAN_ENTERPRISE, fetch_empresa_plan, max_facturas_mes, normalize_plan
 from app.db.session import get_engine
 from app.db.soft_delete import filter_not_deleted
 from app.db.supabase import SupabaseAsync
@@ -899,6 +900,55 @@ class FacturasService:
         except Exception:
             return genesis_hash
 
+    async def count_facturas_emitidas_mes_calendario(self, *, empresa_id: str) -> int:
+        """
+        Facturas selladas del mes natural actual (``fecha_emision``), excl. ``anulada_compensacion``.
+        Cada F1/R1 emitida cuenta para el cupo Compliance.
+        """
+        eid = str(empresa_id).strip()
+        if not eid:
+            return 0
+        today = date.today()
+        first = date(today.year, today.month, 1)
+        if today.month == 12:
+            last = date(today.year, 12, 31)
+        else:
+            last = date(today.year, today.month + 1, 1) - timedelta(days=1)
+        try:
+            res: Any = await self._execute_native(
+                self._db.table("facturas")
+                .select("id,estado")
+                .eq("empresa_id", eid)
+                .eq("bloqueado", True)
+                .gte("fecha_emision", first.isoformat())
+                .lte("fecha_emision", last.isoformat())
+            )
+            rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
+        except Exception:
+            return 0
+        n = 0
+        for r in rows:
+            if str(r.get("estado") or "").strip() == "anulada_compensacion":
+                continue
+            n += 1
+        return n
+
+    async def _ensure_compliance_invoice_monthly_quota(self, *, empresa_id: str) -> None:
+        plan = await fetch_empresa_plan(self._db, empresa_id=str(empresa_id))
+        cap = max_facturas_mes(normalize_plan(plan))
+        if cap is None:
+            return
+        used = await self.count_facturas_emitidas_mes_calendario(empresa_id=str(empresa_id))
+        if used >= cap:
+            raise InvoiceMonthlyQuotaExceededError(
+                cap=cap,
+                used=used,
+                message=(
+                    f"Has alcanzado el límite de {cap} facturas emitidas este mes natural en el plan Compliance. "
+                    "Mejora a Operational o espera al siguiente mes para seguir emitiendo."
+                ),
+            )
+
     async def list_facturas(
         self,
         *,
@@ -1440,6 +1490,7 @@ class FacturasService:
         5. **Portes** (``schemas/porte.py``): tras insert OK, ``estado='facturado'`` y ``factura_id``.
         """
         eid = _as_empresa_id_str(empresa_id)
+        await self._ensure_compliance_invoice_monthly_quota(empresa_id=eid)
         cid = str(payload.cliente_id)
         # --- 1) Portes pendientes del cliente (opcionalmente filtrados por IDs) ---
         q_portes = filter_not_deleted(
@@ -1936,6 +1987,8 @@ class FacturasService:
         fid = int(factura_id)
         if not eid or fid < 1:
             raise ValueError("empresa_id y factura_id son obligatorios")
+
+        await self._ensure_compliance_invoice_monthly_quota(empresa_id=eid)
 
         res_o: Any = await self._db.execute(
             self._db.table("facturas").select("*").eq("id", fid).eq("empresa_id", eid).limit(1)

@@ -4,24 +4,27 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Final
 
-# ─── Planes SaaS (AB Logistics OS) — catálogo Due Diligence 2026 ─────────────
+# ─── Planes SaaS (AB Logistics OS) — Modelado comercial 2026 ─────────────────
 # Slugs canónicos en BD (`empresas.plan_type`): starter | pro | enterprise
-# Nombres comerciales: Essential (slug starter), Pro, Enterprise.
-# Precios orientativos facturados vía Stripe (EUR/mes IVA aparte según contrato).
+# Nombres comerciales: Compliance (starter), Operational (pro), Institutional (enterprise).
+# Precios de catálogo orientativos (EUR/mes, IVA aparte); el cargo real lo define el Price en Stripe.
 #
-# Essential: 350€/mes — VeriFactu + CMR digital.
-# Pro: 800€/mes — BI avanzado, conciliación bancaria e IA.
-# Enterprise: 1000€/mes — certificación ESG ISO 14083 continua y portal B2B.
+# Compliance: 149 €/mes — núcleo fiscal VeriFactu y tranquilidad AEAT.
+# Operational: 449 €/mes — motor operativo y financiero, BI y telemetría de combustible.
+# Institutional: desde 1.200 €/mes — ESG, seguridad corporativa y acompañamiento enterprise.
 
 PLAN_STARTER: Final[str] = "starter"
 PLAN_PRO: Final[str] = "pro"
 PLAN_ENTERPRISE: Final[str] = "enterprise"
 PLAN_FREE: Final[str] = PLAN_STARTER
 
+# Límite mensual de facturas emitidas (F1/R1 selladas) solo en Compliance (`starter`); None = sin tope.
+COMPLIANCE_MAX_FACTURAS_MES: Final[int] = 150
+
 # EUR/mes (referencia producto; el cargo real lo define el Price en Stripe Dashboard)
-EUR_MONTHLY_ESSENTIAL: Final[int] = 350
-EUR_MONTHLY_PRO: Final[int] = 800
-EUR_MONTHLY_ENTERPRISE: Final[int] = 1000
+EUR_MONTHLY_ESSENTIAL: Final[int] = 149
+EUR_MONTHLY_PRO: Final[int] = 449
+EUR_MONTHLY_ENTERPRISE: Final[int] = 1200
 
 # Add-ons (líneas de ingreso adicionales)
 ADDON_OCR_PACK: Final[str] = "ocr_pack"
@@ -63,6 +66,8 @@ class PlanFeatures:
     max_vehiculos: int | None  # None = ilimitado
     # Plazas panel (owner + traffic_manager / admin legado); excluye portal cliente y conductores.
     max_workspace_seats: int | None  # None = ilimitado (Enterprise)
+    # Facturas emitidas (bloqueadas) por mes natural; None = sin tope (Operational+).
+    max_facturas_mes: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,7 +118,7 @@ def billing_addons() -> tuple[BillingAddon, ...]:
             slug=ADDON_LOGISADVISOR_IA_PRO,
             marketing_name="LogisAdvisor IA Pro",
             eur_monthly=29,
-            description="Capa IA avanzada de LogisAdvisor (planes inferiores a Enterprise).",
+            description="Capa IA avanzada de LogisAdvisor (planes inferiores a Institutional).",
             stripe_price_env=ENV_STRIPE_PRICE_LOGISADVISOR_IA_PRO,
             stripe_product_env=ENV_STRIPE_PRODUCT_LOGISADVISOR_IA_PRO,
             extra_ocr_documents_per_month=None,
@@ -164,10 +169,10 @@ def plan_marketing_name(plan_normalized: str) -> str:
     """Nombre comercial para UI / mensajes de error (el slug canónico sigue siendo técnico)."""
     p = normalize_plan(plan_normalized)
     if p == PLAN_ENTERPRISE:
-        return "Enterprise"
+        return "Institutional"
     if p == PLAN_PRO:
-        return "Pro"
-    return "Essential"
+        return "Operational"
+    return "Compliance"
 
 
 def plan_list_eur_monthly(plan_normalized: str) -> int:
@@ -185,9 +190,9 @@ def normalize_plan(raw: str | None) -> str:
     s = (raw or "").strip().lower().replace(" ", "_").replace("-", "_")
     if s in ("", "starter", "start", "basic", "compliance", "essential"):
         return PLAN_STARTER
-    if s in ("pro", "professional", "finance"):
+    if s in ("pro", "professional", "finance", "operational", "operations"):
         return PLAN_PRO
-    if s in ("enterprise", "ent", "unlimited", "full_stack", "fullstack"):
+    if s in ("enterprise", "ent", "unlimited", "full_stack", "fullstack", "institutional"):
         return PLAN_ENTERPRISE
     return PLAN_STARTER
 
@@ -228,14 +233,16 @@ def plan_features(plan_normalized: str) -> PlanFeatures:
             esg=True,
             max_vehiculos=None,
             max_workspace_seats=None,
+            max_facturas_mes=None,
         )
     if p == PLAN_PRO:
         return PlanFeatures(
             verifactu=True,
             math_engine=True,
             esg=False,
-            max_vehiculos=25,
-            max_workspace_seats=25,
+            max_vehiculos=30,
+            max_workspace_seats=30,
+            max_facturas_mes=None,
         )
     return PlanFeatures(
         verifactu=True,
@@ -243,6 +250,7 @@ def plan_features(plan_normalized: str) -> PlanFeatures:
         esg=False,
         max_vehiculos=5,
         max_workspace_seats=5,
+        max_facturas_mes=COMPLIANCE_MAX_FACTURAS_MES,
     )
 
 
@@ -254,6 +262,11 @@ def max_vehiculos(plan_normalized: str) -> int | None:
 def max_workspace_seats(plan_normalized: str) -> int | None:
     """None = sin tope (Enterprise). Alineado con escala de flota por plan."""
     return plan_features(plan_normalized).max_workspace_seats
+
+
+def max_facturas_mes(plan_normalized: str) -> int | None:
+    """None = sin tope mensual de emisiones; Compliance devuelve ``COMPLIANCE_MAX_FACTURAS_MES``."""
+    return plan_features(plan_normalized).max_facturas_mes
 
 
 async def fetch_empresa_plan(db: Any, *, empresa_id: str) -> str:

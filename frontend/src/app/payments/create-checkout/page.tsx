@@ -105,7 +105,7 @@ function CheckoutRedirect() {
         <p className="text-sm font-medium text-zinc-200">Abriendo Stripe…</p>
         <p className="text-xs leading-relaxed text-zinc-500">
           {fromOnboarding
-            ? "Tras el alta de empresa, activa tu plan Essential en la pasarela segura. No guardamos tu tarjeta en nuestros servidores."
+            ? "Tras el alta de empresa, activa tu suscripción en la pasarela segura. No guardamos tu tarjeta en nuestros servidores."
             : fromResume
               ? "Falta activar la suscripción de tu espacio de trabajo. Un pago y podréis operar con normalidad."
               : "Serás redirigido a la pasarela segura de Stripe para completar la suscripción."}

@@ -19,7 +19,7 @@ export const extraEn = {
       eyebrow: "Transport · Finance · AEAT 2026",
       title: "One platform for profitable shipments and inspection-ready invoicing.",
       description:
-        "From quote to cash: fleet, VeriFactu, reconciliation and margin visibility for finance and dispatch. The same commercial offer on the web and in Stripe: Essential, Pro and Enterprise.",
+        "From quote to cash: fleet, VeriFactu, reconciliation and margin visibility for finance and dispatch. The same commercial offer on the web and in Stripe: Compliance, Operational and Institutional.",
       primaryCta: "Create account and start",
       secondaryCta: "See plans and pricing",
     },
@@ -58,32 +58,37 @@ export const extraEn = {
       ],
       title: "Published plans = Stripe plans",
       subtitle:
-        "Three tiers with the same names in product and billing: Essential (€350), Pro (€800) and Enterprise (€1000) per month + VAT. Optional add-ons (OCR Pack, Webhooks B2B Premium, LogisAdvisor IA Pro) are purchased from the app.",
+        "Monthly investment focused on operational ROI: every euro should return as efficiency and margin control. Three segments — Compliance (€149), Operational (€449) and Institutional (from €1,200+) per month + VAT — with the same slugs in product and Stripe Billing. Optional add-ons (OCR Pack, Webhooks B2B Premium, LogisAdvisor IA Pro) are purchased from the app.",
       recommended: "Recommended",
       connecting: "Connecting...",
       requestAccess: "Next: sign up and checkout",
       subscribeCta: "Subscribe with Stripe",
+      ctaLoginToSubscribe: "Sign in to subscribe",
+      contactSalesCta: "Talk to sales",
+      limitsFinite: "Up to {{v}} vehicles · up to {{u}} panel users",
+      limitsUnlimited: "Unlimited fleet and panel users (Institutional)",
+      pricingHelpBillingLink: "Help centre — Billing and Stripe",
       vatExcluded: "VAT excluded",
       missingStripeConfig:
-        "Stripe Price IDs are missing in the frontend (NEXT_PUBLIC_STRIPE_PRICE_*). See docs/operations/STRIPE_BILLING.md.",
-      pricingStripeFallbackTitle: "Online checkout unavailable",
+        "Public Stripe Price IDs are missing in this deployment (NEXT_PUBLIC_STRIPE_PRICE_*). Your technical team can complete this in minutes.",
+      pricingStripeFallbackTitle: "Online checkout not enabled yet",
       pricingStripeFallbackBody:
-        "Payment links are not configured in this environment. You can still review the plans below; to subscribe, contact sales or finish Stripe setup.",
+        "Payment links are not active in this environment. You can still review plans and per-plan limits; our sales team can enable checkout or send a subscription link.",
       stripeGatewayError: "There was a problem connecting to the secure gateway.",
       stripeConnectionError: "Could not connect to the secure gateway. Please try again.",
       pendingUserId: "PENDING_USER_REGISTRATION",
       monthSuffix: "/month",
     },
     pricingPage: {
-      title: "Subscribe to Essential, Pro or Enterprise",
+      title: "Subscribe to Compliance, Operational or Institutional",
       subtitle:
         "List prices aligned with the backend and Stripe Billing. If you do not have an empresa_id yet, create your account, finish onboarding and return here or use Subscription in the app.",
       empresaRequiredHint:
         "Without empresa_id in the URL we cannot attach the charge. After sign-up, open your welcome email link or sign in and go to Subscription.",
       stripeEnvHint:
-        "Your build must define all three NEXT_PUBLIC_STRIPE_PRICE_* values (Essential via BASIC or STARTER, PRO, ENTERPRISE).",
+        "Production builds should define all three NEXT_PUBLIC_STRIPE_PRICE_* values (Compliance via BASIC/STARTER/COMPLIANCE, FINANCE/PRO, ENTERPRISE).",
       envVarsList:
-        "Example: NEXT_PUBLIC_STRIPE_PRICE_BASIC or NEXT_PUBLIC_STRIPE_PRICE_STARTER, NEXT_PUBLIC_STRIPE_PRICE_PRO, NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE.",
+        "Typical variables: NEXT_PUBLIC_STRIPE_PRICE_BASIC or STARTER or COMPLIANCE, NEXT_PUBLIC_STRIPE_PRICE_PRO or FINANCE, NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE.",
       funnelHint:
         "Self-serve flow: sign up → company created → Stripe checkout from this page (with ?empresa_id=) or from the Subscription menu.",
       loginCta: "Sign in to pay",
@@ -98,7 +103,7 @@ export const extraEn = {
       stats: [
         { value: "VeriFactu", label: "Fiscal logging focused on traceability and integrity" },
         { value: "RLS", label: "Each tenant isolated at the database layer" },
-        { value: "Stripe", label: "Same plan hierarchy in checkout and internal docs" },
+        { value: "Stripe", label: "Same Compliance / Operational / Institutional hierarchy in checkout and product" },
       ],
     },
     trustStrip: {
@@ -117,7 +122,7 @@ export const extraEn = {
         },
         {
           title: "Transparent billing",
-          body: "Stripe Billing with Essential, Pro and Enterprise — same names and indicative prices across the product surface.",
+          body: "Stripe Billing with Compliance, Operational and Institutional — same list prices across the product surface.",
         },
       ],
     },
@@ -134,7 +139,7 @@ export const extraEn = {
         },
         {
           q: "Is the system worth it if my fleet has fewer than 5 trucks?",
-          a: "Absolutely. Small volume does not remove fiscal obligations. Our Essential plan is designed to shield small fleets for VeriFactu, removing hours of administrative paperwork so you can run your business, not your accounting.",
+          a: "Absolutely. Small volume does not remove fiscal obligations. The Compliance plan is designed to shield small fleets for VeriFactu, removing hours of administrative paperwork so you can run your business, not your accounting.",
         },
         {
           q: "How exactly does the software guarantee VeriFactu compliance?",
@@ -154,7 +159,7 @@ export const extraEn = {
         },
         {
           q: "If my company grows fast, can the software keep up?",
-          a: "AB Logistics OS is cloud-native with a serverless architecture that scales dynamically. Whether you manage 10 shipments a month or 10,000, system performance in the Enterprise plan remains consistent with no latency bottlenecks.",
+          a: "AB Logistics OS is cloud-native with a serverless architecture that scales dynamically. Whether you manage 10 shipments a month or 10,000, system performance on the Institutional plan remains consistent with no latency bottlenecks.",
         },
         {
           q: "What level of technical support is included in the subscription?",
@@ -178,7 +183,7 @@ export const extraEn = {
         },
         {
           q: "We use subcontractors and agencies — does it work for mixed fleets?",
-          a: "Yes. Multi-tenant architecture and roles are designed so each company only sees its own world (RLS). You can model customers, recurring routes and internal ops; for complex subcontract chains, Pro and Enterprise add analytics and certification depth.",
+          a: "Yes. Multi-tenant architecture and roles are designed so each company only sees its own world (RLS). You can model customers, recurring routes and internal ops; for complex subcontract chains, Operational and Institutional add analytics and certification depth.",
         },
         {
           q: "What if AEAT changes technical requirements after we subscribe?",
@@ -186,7 +191,7 @@ export const extraEn = {
         },
         {
           q: "Do I have to pay before I know it fits my TMS or accountant?",
-          a: "You can sign up, create the company and explore the app with the assigned plan; Stripe checkout aligns when you decide to subscribe (from Subscription or a link that includes empresa_id). If you need specific integrations, Pro and Enterprise are the usual tiers for volume and certification.",
+          a: "You can sign up, create the company and explore the app with the assigned plan; Stripe checkout aligns when you decide to subscribe (from Subscription or a link that includes empresa_id). If you need specific integrations, Operational and Institutional are the usual tiers for volume and certification.",
         },
       ],
     },
@@ -332,9 +337,10 @@ export const extraEn = {
     noData: "No quota data",
     quotaPrefix: "Quota:",
     fleetQuota: "Fleet quota",
-    starterMsg: "You are using {used} of 5 vehicles. Upgrade to PRO for up to 25.",
-    proMsg: "ESG module locked. Upgrade to ENTERPRISE to certify your carbon footprint.",
-    enterpriseMsg: "Enterprise plan · {used} vehicle(s) registered (unlimited).",
+    starterMsg:
+      "Fleet: {used}/5 vehicles. Invoices issued this calendar month: {inv_used}/{inv_limit}. Upgrade to Operational (up to 30 vehicles, no monthly invoice cap).",
+    proMsg: "ESG module locked. Upgrade to Institutional to certify your carbon footprint.",
+    enterpriseMsg: "Institutional plan · {used} vehicle(s) registered (unlimited).",
     upgrade: "Upgrade plan",
     manageSubscription: "Manage subscription",
     manageSubscriptionBusy: "Opening billing portal…",

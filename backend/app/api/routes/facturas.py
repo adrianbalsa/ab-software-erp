@@ -10,6 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from starlette.requests import Request
 
 from app.api import deps
+from app.core.billing_exceptions import InvoiceMonthlyQuotaExceededError
 from app.db.supabase import SupabaseAsync
 from app.schemas.factura import (
     FacturaCreateFromPortes,
@@ -34,6 +35,19 @@ from pydantic import BaseModel
 
 router = APIRouter()
 _log = logging.getLogger(__name__)
+
+
+def _invoice_monthly_quota_http(exc: InvoiceMonthlyQuotaExceededError) -> HTTPException:
+    """403 + ``detail`` estable para cupo mensual de facturas (plan Compliance)."""
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "code": InvoiceMonthlyQuotaExceededError.code,
+            "cap": exc.cap,
+            "used": exc.used,
+            "message": str(exc),
+        },
+    )
 
 
 class FacturaQueueOut(BaseModel):
@@ -130,6 +144,8 @@ async def generar_factura_desde_portes(
             usuario_id=current_user.usuario_id or current_user.username,
             background_tasks=background_tasks,
         )
+    except InvoiceMonthlyQuotaExceededError as e:
+        raise _invoice_monthly_quota_http(e) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -194,6 +210,8 @@ async def rectificar_factura(
             motivo=payload.motivo,
             usuario_id=current_user.usuario_id or current_user.username,
         )
+    except InvoiceMonthlyQuotaExceededError as e:
+        raise _invoice_monthly_quota_http(e) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
