@@ -28,6 +28,7 @@ class _FakeAuthDb:
     reset_calls: list[dict[str, object]] = field(default_factory=list)
     verify_payloads: list[dict[str, object]] = field(default_factory=list)
     update_payloads: list[dict[str, object]] = field(default_factory=list)
+    set_session_calls: list[dict[str, object]] = field(default_factory=list)
 
     async def auth_admin_invite_user_by_email(self, *, email: str, options: dict[str, object]) -> object:
         self.invite_calls.append({"email": email, "options": options})
@@ -64,6 +65,12 @@ class _FakeAuthDb:
     async def auth_update_user(self, attributes: dict[str, object]) -> object:
         self.update_payloads.append(attributes)
         return {"ok": True}
+
+    async def auth_set_session(self, *, access_token: str, refresh_token: str) -> object:
+        self.set_session_calls.append({"access_token": access_token, "refresh_token": refresh_token})
+        user = SimpleNamespace(email="staff@example.com")
+        session = SimpleNamespace(user=user)
+        return SimpleNamespace(session=session, user=user)
 
 
 class _RefreshServiceStub:
@@ -187,6 +194,31 @@ async def test_confirm_reset_password_verifies_token_and_updates_password(client
     call_kw = sync_usuarios.await_args.kwargs
     assert call_kw["username"] == "staff@example.com"
     assert call_kw["new_plain_password"] == "NuevaClave!2026"
+
+
+async def test_confirm_reset_password_accepts_token_hash(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_db = _FakeAuthDb()
+    app = client._transport.app
+    app.dependency_overrides[auth_v1.get_db_anon] = lambda: fake_db
+
+    async def _fake_admin() -> _FakeAuthDb:
+        return fake_db
+
+    sync_usuarios = AsyncMock(return_value=True)
+    monkeypatch.setattr(auth_v1, "get_db_admin", _fake_admin)
+    monkeypatch.setattr(AuthService, "set_password_for_username", sync_usuarios)
+    try:
+        res = await client.post(
+            "/api/v1/auth/reset-password/confirm",
+            json={"token_hash": "abc123hash", "new_password": "NuevaClave!2026"},
+            headers=_test_headers(),
+        )
+    finally:
+        app.dependency_overrides.pop(auth_v1.get_db_anon, None)
+
+    assert res.status_code == 200, res.text
+    assert fake_db.verify_payloads == [{"type": "recovery", "token_hash": "abc123hash"}]
+    assert fake_db.update_payloads == [{"password": "NuevaClave!2026"}]
 
 
 async def test_logout_revokes_current_session_when_cookie_present(client) -> None:
