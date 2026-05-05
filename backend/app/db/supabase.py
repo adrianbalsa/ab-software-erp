@@ -158,11 +158,6 @@ class SupabaseAsync:
             return await result
         return result
 
-    async def auth_exchange_code_for_session(self, *, auth_code: str) -> Any:
-        result = self._client.auth.exchange_code_for_session(auth_code)
-        if inspect.isawaitable(result):
-            return await result
-        return result
 
 
 def _extract_action_link(raw: Any) -> str | None:

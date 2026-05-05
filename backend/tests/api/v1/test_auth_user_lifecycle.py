@@ -72,12 +72,6 @@ class _FakeAuthDb:
         session = SimpleNamespace(user=user)
         return SimpleNamespace(session=session, user=user)
 
-    async def auth_exchange_code_for_session(self, auth_code: str) -> object:
-        self.set_session_calls.append({"code": auth_code})
-        user = SimpleNamespace(email="staff@example.com")
-        session = SimpleNamespace(user=user)
-        return SimpleNamespace(session=session, user=user)
-
 
 class _RefreshServiceStub:
     def __init__(self) -> None:
@@ -248,7 +242,7 @@ async def test_confirm_reset_password_accepts_code_exchange(client, monkeypatch:
         app.dependency_overrides.pop(auth_v1.get_db_anon, None)
 
     assert res.status_code == 200, res.text
-    assert fake_db.set_session_calls == [{"code": "abcdef123456"}]
+    assert fake_db.verify_payloads == [{"type": "recovery", "token_hash": "abcdef123456"}]
     assert fake_db.update_payloads == [{"password": "NuevaClave!2026"}]
 
 
