@@ -80,16 +80,22 @@ type Props = {
 function NavSectionHeader({
   title,
   subtitle,
+  withDivider = true,
 }: {
   title: string;
   subtitle: string;
+  /** Separador sutil entre grupos (un solo carril lateral, sin “bloques” de otro color). */
+  withDivider?: boolean;
 }) {
   return (
-    <div className="px-3 pb-2 pt-1">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{title}</p>
-      <p className="mt-0.5 text-[10px] font-medium normal-case tracking-normal text-zinc-600">
-        {subtitle}
-      </p>
+    <div
+      className={cn(
+        "px-3 pb-1.5",
+        withDivider && "mt-2 border-t border-zinc-800/55 pt-3",
+      )}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{title}</p>
+      <p className="mt-0.5 text-[10px] font-medium leading-snug text-zinc-600">{subtitle}</p>
     </div>
   );
 }
@@ -200,10 +206,14 @@ function ShellNavAndFooter({
 
   return (
     <>
-      <nav className="flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto px-4 py-6" aria-label={s.navAriaLabel}>
+      <nav className="flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto px-4 py-4" aria-label={s.navAriaLabel}>
         {/* INSTITUCIONAL */}
         <section className="mt-0">
-          <NavSectionHeader title={s.sections.institutional.title} subtitle={s.sections.institutional.subtitle} />
+          <NavSectionHeader
+            title={s.sections.institutional.title}
+            subtitle={s.sections.institutional.subtitle}
+            withDivider={false}
+          />
           <div className="flex flex-col gap-0.5">
             <SidebarNavLink
               id="tour-nav-dashboard"
@@ -258,7 +268,7 @@ function ShellNavAndFooter({
         </section>
 
         {/* OPERACIONES */}
-        <section className="mt-6">
+        <section className="mt-0">
           <NavSectionHeader title={s.sections.operations.title} subtitle={s.sections.operations.subtitle} />
           <div className="flex flex-col gap-0.5">
             <SidebarNavLink
@@ -319,7 +329,7 @@ function ShellNavAndFooter({
 
         {/* FINANZAS & FISCAL (Búnker) — oculto explícitamente para traffic_manager */}
         {!hideFinanceBunkerAndAdminNav && showNavItem("finanzas", role) && (
-          <section className="mt-6">
+          <section className="mt-0">
             <NavSectionHeader title={s.sections.finance.title} subtitle={s.sections.finance.subtitle} />
             <div className="flex flex-col gap-0.5">
               <SidebarNavLink
@@ -396,7 +406,7 @@ function ShellNavAndFooter({
 
         {/* GESTIÓN */}
         {(showNavItem("clientes", role) || isOwnerLike(role)) && (
-          <section className="mt-6">
+          <section className="mt-0">
             <NavSectionHeader title={s.sections.management.title} subtitle={s.sections.management.subtitle} />
             <div className="flex flex-col gap-0.5">
               {showNavItem("clientes", role) && (
@@ -426,7 +436,7 @@ function ShellNavAndFooter({
         )}
 
         {/* SISTEMA */}
-        <section className="mt-6">
+        <section className="mt-0">
           <NavSectionHeader title={s.sections.system.title} subtitle={s.sections.system.subtitle} />
           <div className="flex flex-col gap-0.5">
             <SidebarNavLink
