@@ -25,6 +25,16 @@ _PUBLIC_PREFIXES = (
 )
 _EXCLUDED_LOGIN_PATH_FRAGMENTS = ("/auth/login", "/login")
 
+# POST sin JWT (Supabase Auth vía cliente anónimo); deben pasar OPTIONS (CORS) y el POST.
+_ANONYMOUS_POST_API_V1_AUTH_PATHS: frozenset[str] = frozenset(
+    {
+        "/api/v1/auth/forgot-password",
+        "/api/v1/auth/reset-password",
+        "/api/v1/auth/reset-password/confirm",
+    }
+)
+
+
 def _extract_access_token(request: Request) -> str | None:
     auth = request.headers.get("Authorization") or request.headers.get("authorization") or ""
     if auth.startswith("Bearer "):
@@ -46,10 +56,15 @@ class TenantRBACContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Any):  # type: ignore[override]
         path = request.url.path.rstrip("/") or "/"
         method = (request.method or "").upper()
+        # Preflight CORS: sin Authorization; no aplicar contexto tenant (el método real irá después).
+        if method == "OPTIONS":
+            return await call_next(request)
         is_excluded_login_path = any(fragment in path for fragment in _EXCLUDED_LOGIN_PATH_FRAGMENTS)
         if path != "/" and any(path.startswith(prefix.rstrip("/")) for prefix in _PUBLIC_PREFIXES):
             return await call_next(request)
         if is_excluded_login_path:
+            return await call_next(request)
+        if method == "POST" and path in _ANONYMOUS_POST_API_V1_AUTH_PATHS:
             return await call_next(request)
 
         token = _extract_access_token(request)

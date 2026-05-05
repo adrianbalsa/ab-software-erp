@@ -53,7 +53,7 @@ function ResetPasswordForm() {
     setSubmitting(true);
     setFieldError(null);
     try {
-      const res = await apiFetch(`${API_BASE}/api/v1/auth/reset-password`, {
+      const res = await apiFetch(`${API_BASE}/api/v1/auth/reset-password/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ token, new_password: password }),
