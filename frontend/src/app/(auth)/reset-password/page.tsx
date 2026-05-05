@@ -22,7 +22,8 @@ function ResetPasswordFallback() {
 function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const queryToken = useMemo(() => (searchParams.get("token") || searchParams.get("code") || "").trim(), [searchParams]);
+  const queryToken = useMemo(() => (searchParams.get("token") || "").trim(), [searchParams]);
+  const queryCode = useMemo(() => (searchParams.get("code") || "").trim(), [searchParams]);
   const queryTokenHash = useMemo(() => (searchParams.get("token_hash") || "").trim(), [searchParams]);
   const [hashAccessToken, setHashAccessToken] = useState("");
   const [hashRefreshToken, setHashRefreshToken] = useState("");
@@ -48,6 +49,7 @@ function ResetPasswordForm() {
   const effectiveTokenHash = queryTokenHash || hashTokenHash;
   const hasRecoveryCredential = Boolean(
     effectiveToken ||
+      queryCode ||
       effectiveTokenHash ||
       (hashAccessToken && hashRefreshToken),
   );
@@ -79,6 +81,7 @@ function ResetPasswordForm() {
       const payload: Record<string, string> = { new_password: password };
       if (effectiveTokenHash) payload.token_hash = effectiveTokenHash;
       else if (effectiveToken) payload.token = effectiveToken;
+      else if (queryCode) payload.code = queryCode;
       else if (hashAccessToken && hashRefreshToken) {
         payload.access_token = hashAccessToken;
         payload.refresh_token = hashRefreshToken;
@@ -99,6 +102,7 @@ function ResetPasswordForm() {
         tags: { flow: "reset_password" },
         extra: {
           hasToken: Boolean(effectiveToken),
+          hasCode: Boolean(queryCode),
           hasTokenHash: Boolean(effectiveTokenHash),
           hasHashSession: Boolean(hashAccessToken && hashRefreshToken),
         },

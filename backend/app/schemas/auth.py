@@ -118,6 +118,7 @@ class ResetPasswordEmailOut(BaseModel):
 class ResetPasswordConfirmIn(BaseModel):
     token: str | None = Field(default=None, min_length=6, max_length=4096)
     token_hash: str | None = Field(default=None, min_length=6, max_length=4096)
+    code: str | None = Field(default=None, min_length=6, max_length=4096)
     access_token: str | None = Field(default=None, min_length=16, max_length=4096)
     refresh_token: str | None = Field(default=None, min_length=16, max_length=4096)
     new_password: str = Field(..., min_length=8, max_length=256)
