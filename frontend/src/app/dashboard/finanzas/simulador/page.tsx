@@ -76,50 +76,50 @@ export default function SimuladorImpactoPage() {
       <RoleGuard
         allowedRoles={["owner"]}
         fallback={
-          <main className="bg-zinc-950 p-8">
-            <p className="text-sm text-zinc-400">Acceso restringido: solo dirección.</p>
+          <main className="bg-zinc-50 dark:bg-zinc-950 p-8">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">Acceso restringido: solo dirección.</p>
           </main>
         }
       >
-        <main className="space-y-6 bg-zinc-950 p-8">
+        <main className="space-y-6 bg-zinc-50 dark:bg-zinc-950 p-8">
           <header>
-            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-100">
+            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
               <Calculator className="h-6 w-6 text-emerald-500" aria-hidden />
               Simulador de Impacto Económico
             </h1>
-            <p className="mt-1 text-sm text-zinc-400">
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               Analiza sensibilidad de margen frente a variaciones de combustible, salarios y peajes.
             </p>
           </header>
 
           <Card className="bunker-card">
             <CardHeader>
-              <CardTitle className="text-zinc-100">Variables de simulación</CardTitle>
-              <CardDescription className="text-zinc-400">
+              <CardTitle className="text-zinc-900 dark:text-zinc-100">Variables de simulación</CardTitle>
+              <CardDescription className="text-zinc-600 dark:text-zinc-400">
                 Ajusta los costes y recalcula el EBITDA esperado.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-zinc-300">Cambio combustible</span>
-                  <span className="text-zinc-400">{fmtPct(combustible)}</span>
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Cambio combustible</span>
+                  <span className="text-zinc-600 dark:text-zinc-400">{fmtPct(combustible)}</span>
                 </div>
                 <Slider value={[combustible]} min={-30} max={50} step={1} onValueChange={(v) => setCombustible(v[0] ?? 0)} />
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-zinc-300">Cambio salarios</span>
-                  <span className="text-zinc-400">{fmtPct(salarios)}</span>
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Cambio salarios</span>
+                  <span className="text-zinc-600 dark:text-zinc-400">{fmtPct(salarios)}</span>
                 </div>
                 <Slider value={[salarios]} min={-30} max={50} step={1} onValueChange={(v) => setSalarios(v[0] ?? 0)} />
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-zinc-300">Cambio peajes</span>
-                  <span className="text-zinc-400">{fmtPct(peajes)}</span>
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Cambio peajes</span>
+                  <span className="text-zinc-600 dark:text-zinc-400">{fmtPct(peajes)}</span>
                 </div>
                 <Slider value={[peajes]} min={-30} max={50} step={1} onValueChange={(v) => setPeajes(v[0] ?? 0)} />
               </div>
@@ -134,7 +134,7 @@ export default function SimuladorImpactoPage() {
                   })
                 }
                 disabled={loading}
-                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:opacity-60"
               >
                 <RefreshCw className="w-4 h-4" />
                 Recalcular ahora
@@ -163,15 +163,15 @@ export default function SimuladorImpactoPage() {
             <>
               <Card className="bunker-card border-emerald-500/35">
                 <CardHeader>
-                  <CardDescription className="text-zinc-400">Impacto principal estimado</CardDescription>
-                  <CardTitle className="text-3xl font-extrabold tracking-tight text-zinc-100">
+                  <CardDescription className="text-zinc-600 dark:text-zinc-400">Impacto principal estimado</CardDescription>
+                  <CardTitle className="text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-100">
                     Impacto estimado en beneficio:{" "}
                     <span className={result.impacto_mensual_estimado_eur <= 0 ? "text-rose-400" : "text-emerald-500"}>
                       {formatEUR(result.impacto_mensual_estimado_eur)}/mes
                     </span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-1 text-sm text-zinc-400">
+                <CardContent className="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
                   <p>Impacto EBITDA periodo: {formatEUR(result.impacto_ebitda_eur)} ({fmtPct(result.impacto_ebitda_pct)})</p>
                   <p>
                     Punto de ruptura tarifario: +{result.break_even.tarifa_incremento_pct.toLocaleString("es-ES", { maximumFractionDigits: 2 })}% para mantener margen.
@@ -181,8 +181,8 @@ export default function SimuladorImpactoPage() {
 
               <Card className="bunker-card">
                 <CardHeader>
-                  <CardTitle className="text-zinc-100">Situación Actual vs Simulada</CardTitle>
-                  <CardDescription className="text-zinc-400">
+                  <CardTitle className="text-zinc-900 dark:text-zinc-100">Situación Actual vs Simulada</CardTitle>
+                  <CardDescription className="text-zinc-600 dark:text-zinc-400">
                     Comparativa de EBITDA agregado en ventana de {result.periodo_meses} meses.
                   </CardDescription>
                 </CardHeader>
@@ -190,10 +190,10 @@ export default function SimuladorImpactoPage() {
                   <div className="relative h-[320px] w-full">
                     {loading ? (
                       <div
-                        className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-zinc-950/50 backdrop-blur-[1px]"
+                        className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-zinc-50 dark:bg-zinc-950/50 backdrop-blur-[1px]"
                         aria-hidden
                       >
-                        <span className="inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/95 px-3 py-1.5 text-xs font-medium text-zinc-200 shadow-sm">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/95 px-3 py-1.5 text-xs font-medium text-zinc-800 dark:text-zinc-200 shadow-sm">
                           <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-500" />
                           Recalculando…
                         </span>

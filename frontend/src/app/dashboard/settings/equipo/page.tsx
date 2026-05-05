@@ -78,11 +78,11 @@ export default function EquipoSettingsPage() {
 
   return (
     <AppShell active="team">
-      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-zinc-950">
-        <header className="z-10 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-4 border-b border-zinc-800 bg-zinc-950/90 px-6 py-4 backdrop-blur-md">
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-zinc-50 dark:bg-zinc-950">
+        <header className="z-10 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/90 px-6 py-4 backdrop-blur-md">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">{t.title}</h1>
-            <p className="mt-0.5 max-w-2xl text-sm text-zinc-400">{t.subtitle}</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">{t.title}</h1>
+            <p className="mt-0.5 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">{t.subtitle}</p>
           </div>
           <LocaleSwitcher />
         </header>
@@ -103,12 +103,12 @@ export default function EquipoSettingsPage() {
             </div>
           ) : data ? (
             <>
-              <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
-                <div className="flex items-center gap-2 text-zinc-200">
+              <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-6">
+                <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-200">
                   <UserPlus className="h-5 w-5 text-emerald-500" aria-hidden />
                   <h2 className="text-lg font-semibold">{t.seatsLabel}</h2>
                 </div>
-                <p className="mt-3 text-sm tabular-nums text-zinc-300">{seatsLine}</p>
+                <p className="mt-3 text-sm tabular-nums text-zinc-700 dark:text-zinc-300">{seatsLine}</p>
                 {atLimit ? (
                   <p className="mt-3 text-xs leading-relaxed text-amber-200/90">
                     {t.atLimitHint} {t.upgradeHint}
@@ -116,18 +116,18 @@ export default function EquipoSettingsPage() {
                 ) : null}
               </section>
 
-              <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
-                <h2 className="text-lg font-semibold text-zinc-100">{t.membersTitle}</h2>
+              <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-6">
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t.membersTitle}</h2>
                 {data.members.length === 0 ? (
                   <p className="mt-3 text-sm text-zinc-500">{t.emptyMembers}</p>
                 ) : (
                   <ul className="mt-4 divide-y divide-zinc-800/80">
                     {data.members.map((m) => (
                       <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
-                        <span className="truncate text-zinc-200" title={m.email}>
+                        <span className="truncate text-zinc-800 dark:text-zinc-200" title={m.email}>
                           {m.email || "—"}
                         </span>
-                        <span className="shrink-0 rounded-md border border-zinc-700/80 bg-zinc-950/60 px-2 py-0.5 text-xs text-zinc-400">
+                        <span className="shrink-0 rounded-md border border-zinc-700/80 bg-zinc-50 dark:bg-zinc-950/60 px-2 py-0.5 text-xs text-zinc-600 dark:text-zinc-400">
                           {rbacLabel(m.rbac_role)}
                         </span>
                       </li>
@@ -136,11 +136,11 @@ export default function EquipoSettingsPage() {
                 )}
               </section>
 
-              <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
-                <h2 className="text-lg font-semibold text-zinc-100">{t.inviteCta}</h2>
+              <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-6">
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t.inviteCta}</h2>
                 <form className="mt-4 space-y-4" onSubmit={(e) => void onInvite(e)}>
                   <div className="space-y-2">
-                    <label htmlFor="invite-email" className="text-sm text-zinc-300">
+                    <label htmlFor="invite-email" className="text-sm text-zinc-700 dark:text-zinc-300">
                       {t.emailLabel}
                     </label>
                     <Input
@@ -151,12 +151,12 @@ export default function EquipoSettingsPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       disabled={atLimit || submitting}
-                      className="border-zinc-700 bg-zinc-950 text-zinc-100"
+                      className="border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
                   <fieldset className="space-y-2">
-                    <legend className="text-sm font-medium text-zinc-300">{t.roleLabel}</legend>
-                    <label className="flex cursor-pointer gap-3 rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 has-[:checked]:border-emerald-500/40">
+                    <legend className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.roleLabel}</legend>
+                    <label className="flex cursor-pointer gap-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 p-3 has-[:checked]:border-emerald-500/40">
                       <input
                         type="radio"
                         name="invite-role"
@@ -167,11 +167,11 @@ export default function EquipoSettingsPage() {
                         className="mt-1"
                       />
                       <span>
-                        <span className="block text-sm font-medium text-zinc-200">{t.roleAdmin}</span>
+                        <span className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">{t.roleAdmin}</span>
                         <span className="mt-0.5 block text-xs text-zinc-500">{t.roleAdminHint}</span>
                       </span>
                     </label>
-                    <label className="flex cursor-pointer gap-3 rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 has-[:checked]:border-emerald-500/40">
+                    <label className="flex cursor-pointer gap-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 p-3 has-[:checked]:border-emerald-500/40">
                       <input
                         type="radio"
                         name="invite-role"
@@ -182,7 +182,7 @@ export default function EquipoSettingsPage() {
                         className="mt-1"
                       />
                       <span>
-                        <span className="block text-sm font-medium text-zinc-200">{t.roleStaff}</span>
+                        <span className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">{t.roleStaff}</span>
                         <span className="mt-0.5 block text-xs text-zinc-500">{t.roleStaffHint}</span>
                       </span>
                     </label>

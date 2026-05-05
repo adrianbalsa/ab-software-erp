@@ -132,7 +132,7 @@ export function FleetMap({ trucks, loading = false, error = null, heightPx = 500
 
   if (loading) {
     return (
-      <div className="flex min-h-[500px] w-full items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-6 text-sm text-zinc-300">
+      <div className="flex min-h-[500px] w-full items-center justify-center rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/60 px-4 py-6 text-sm text-zinc-700 dark:text-zinc-300">
         Cargando posiciones de flota...
       </div>
     );
@@ -156,14 +156,14 @@ export function FleetMap({ trucks, loading = false, error = null, heightPx = 500
 
   if (!isLoaded) {
     return (
-      <div className="flex min-h-[500px] w-full items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-6 text-sm text-zinc-300">
+      <div className="flex min-h-[500px] w-full items-center justify-center rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/60 px-4 py-6 text-sm text-zinc-700 dark:text-zinc-300">
         Inicializando entorno cartográfico...
       </div>
     );
   }
 
   return (
-    <div className="w-full overflow-hidden rounded-2xl border border-zinc-800 shadow-2xl shadow-black/35" style={{ height: `${Math.max(heightPx, 500)}px` }}>
+    <div className="w-full overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl shadow-black/35" style={{ height: `${Math.max(heightPx, 500)}px` }}>
       <GoogleMap
         mapContainerStyle={MAP_CONTAINER_STYLE}
         center={center}

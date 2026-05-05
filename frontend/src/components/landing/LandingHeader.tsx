@@ -19,9 +19,12 @@ export function LandingHeader() {
   ];
 
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-800/80 bg-surface-nav-strong backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-zinc-200/90 dark:border-zinc-800/80 bg-surface-nav-strong backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <Link href="/" className="inline-flex min-h-11 items-center gap-2 py-1 text-white font-bold tracking-tight">
+        <Link
+          href="/"
+          className="inline-flex min-h-11 items-center gap-2 py-1 font-bold tracking-tight text-zinc-900 dark:text-white"
+        >
           <Image
             src="/logo.png"
             alt={l.brandAlt}
@@ -34,7 +37,7 @@ export function LandingHeader() {
           <span className="hidden sm:inline text-lg">AB Logistics OS</span>
         </Link>
 
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-zinc-300">
+        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-zinc-700 dark:text-zinc-300">
           {nav.map((item) => (
             <a
               key={item.href}
@@ -49,7 +52,7 @@ export function LandingHeader() {
         <div className="flex items-center gap-2 sm:gap-3">
           <Link
             href="/login"
-            className="hidden sm:inline-flex min-h-11 items-center text-sm font-medium text-zinc-300 hover:text-white transition-colors"
+            className="hidden sm:inline-flex min-h-11 items-center text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white transition-colors"
           >
             {l.nav.login}
           </Link>
@@ -61,7 +64,7 @@ export function LandingHeader() {
           </Link>
           <button
             type="button"
-            className="md:hidden min-h-11 min-w-11 rounded-lg p-2 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+            className="md:hidden min-h-11 min-w-11 rounded-lg p-2 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-950 dark:hover:text-white"
             aria-expanded={open}
             aria-label={l.nav.menuAria}
             onClick={() => setOpen((v) => !v)}
@@ -72,7 +75,7 @@ export function LandingHeader() {
       </div>
 
       <div
-        className={`transform-gpu overflow-hidden border-t border-zinc-800 bg-surface-base px-4 transition-[max-height,opacity,transform] duration-200 ease-out motion-reduce:transition-none md:hidden ${
+        className={`transform-gpu overflow-hidden border-t border-zinc-200 bg-surface-base px-4 transition-[max-height,opacity,transform] duration-200 ease-out motion-reduce:transition-none dark:border-zinc-800 md:hidden ${
           open ? "max-h-96 py-4 opacity-100 translate-y-0" : "max-h-0 py-0 opacity-0 -translate-y-1 pointer-events-none"
         }`}
       >
@@ -81,7 +84,7 @@ export function LandingHeader() {
             <a
               key={item.href}
               href={item.href}
-              className="block min-h-11 py-2 text-zinc-300 font-medium"
+              className="block min-h-11 py-2 text-zinc-700 dark:text-zinc-300 font-medium"
               onClick={() => setOpen(false)}
             >
               {item.label}

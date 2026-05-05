@@ -60,7 +60,7 @@ export function CashFlowChart({ data, loading }: CashFlowChartProps) {
 
   return (
     <div className="dashboard-bento rounded-2xl p-6">
-      <h3 className="mb-1 text-sm font-semibold text-zinc-100">Tesorería: facturado vs cobrado</h3>
+      <h3 className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Tesorería: facturado vs cobrado</h3>
       <p className="mb-1 text-xs text-zinc-500">
         Ingresos facturados (emisión) frente a cobros reconocidos en el mismo mes (facturas marcadas como
         cobradas). El desfase refleja facturación pendiente de cobro.
@@ -113,7 +113,7 @@ export function CashFlowChart({ data, loading }: CashFlowChartProps) {
               />
               <Legend
                 wrapperStyle={{ fontSize: 12, color: "#a1a1aa" }}
-                formatter={(value) => <span className="text-zinc-400">{value}</span>}
+                formatter={(value) => <span className="text-zinc-600 dark:text-zinc-400">{value}</span>}
               />
               <Area
                 type="monotone"

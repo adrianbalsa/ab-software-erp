@@ -136,11 +136,11 @@ export default function OnboardingPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 py-8">
-      <Card className="w-full max-w-2xl border border-zinc-800 bg-zinc-900 text-zinc-100">
+    <main className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4 py-8">
+      <Card className="w-full max-w-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900 text-zinc-900 dark:text-zinc-100">
         <CardHeader>
           <CardTitle>Configuración inicial de AB Logistics OS</CardTitle>
-          <CardDescription className="space-y-1 text-zinc-400">
+          <CardDescription className="space-y-1 text-zinc-600 dark:text-zinc-400">
             <span className="block">{progressLabel}</span>
             <span className="block text-xs text-zinc-500">
               Después activarás la suscripción en Stripe (pago seguro). Invita a tu equipo cuando
@@ -150,14 +150,14 @@ export default function OnboardingPage() {
         </CardHeader>
         <CardContent>
           {checkingStatus ? (
-            <p className="text-sm text-zinc-400">Validando estado de onboarding...</p>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">Validando estado de onboarding...</p>
           ) : (
           <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
             {step === 1 && (
               <section className="space-y-4">
-                <h2 className="text-sm font-semibold text-zinc-300">Datos de la Empresa</h2>
+                <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Datos de la Empresa</h2>
                 <div className="space-y-2">
-                  <label className="text-sm text-zinc-300" htmlFor="company_name">
+                  <label className="text-sm text-zinc-700 dark:text-zinc-300" htmlFor="company_name">
                     Razón social
                   </label>
                   <Input
@@ -167,14 +167,14 @@ export default function OnboardingPage() {
                   {errors.company_name && <p className="text-xs text-red-400">{errors.company_name.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm text-zinc-300" htmlFor="cif">
+                  <label className="text-sm text-zinc-700 dark:text-zinc-300" htmlFor="cif">
                     CIF
                   </label>
                   <Input id="cif" {...register("cif", { required: "El CIF es obligatorio." })} />
                   {errors.cif && <p className="text-xs text-red-400">{errors.cif.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm text-zinc-300" htmlFor="address">
+                  <label className="text-sm text-zinc-700 dark:text-zinc-300" htmlFor="address">
                     Dirección
                   </label>
                   <Input id="address" {...register("address", { required: "La dirección es obligatoria." })} />
@@ -185,8 +185,8 @@ export default function OnboardingPage() {
 
             {step === 2 && (
               <section className="space-y-4">
-                <h2 className="text-sm font-semibold text-zinc-300">Configuración Logística</h2>
-                <p className="text-sm text-zinc-400">Selecciona los tipos de vehículos habituales.</p>
+                <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Configuración Logística</h2>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">Selecciona los tipos de vehículos habituales.</p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {FLEET_OPTIONS.map((item) => (
                     <label key={item} className="flex items-center gap-2 rounded-md border border-zinc-700 p-3 text-sm">
@@ -200,9 +200,9 @@ export default function OnboardingPage() {
 
             {step === 3 && (
               <section className="space-y-4">
-                <h2 className="text-sm font-semibold text-zinc-300">Preferencias del Radar</h2>
+                <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Preferencias del Radar</h2>
                 <div className="space-y-2">
-                  <label className="text-sm text-zinc-300" htmlFor="target_margin_pct">
+                  <label className="text-sm text-zinc-700 dark:text-zinc-300" htmlFor="target_margin_pct">
                     Margen objetivo (%)
                   </label>
                   <Input
@@ -221,7 +221,7 @@ export default function OnboardingPage() {
           </form>
           )}
         </CardContent>
-        <CardFooter className="justify-between border-zinc-800 bg-zinc-900">
+        <CardFooter className="justify-between border-zinc-200 dark:border-zinc-800 bg-zinc-900">
           <Button variant="outline" onClick={prevStep} disabled={checkingStatus || step === 1 || submitting}>
             Atrás
           </Button>

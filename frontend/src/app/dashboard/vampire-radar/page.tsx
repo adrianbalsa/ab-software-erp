@@ -189,22 +189,22 @@ export default function VampireRadarPage() {
   return (
     <AppShell active="vampire_radar">
       <RoleGuard allowedRoles={["owner", "admin", "traffic_manager"]}>
-        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-zinc-950">
-          <header className="flex min-h-16 shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950/90 px-4 py-3 backdrop-blur-md sm:px-6">
+        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-zinc-50 dark:bg-zinc-950">
+          <header className="flex min-h-16 shrink-0 items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/90 px-4 py-3 backdrop-blur-md sm:px-6">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Vampire Radar</h1>
+              <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Vampire Radar</h1>
               <p className="mt-0.5 text-xs text-zinc-500">Detección quirúrgica de fugas de margen por ruta activa.</p>
             </div>
-            <Button variant="outline" className="border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800" onClick={() => void refresh()}>
+            <Button variant="outline" className="border-zinc-700 bg-zinc-900 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-800" onClick={() => void refresh()}>
               Actualizar
             </Button>
           </header>
 
           <div className="mx-auto grid w-full max-w-[1600px] gap-6 p-4 sm:p-6">
-            <Card className="border-zinc-800 bg-gradient-to-br from-zinc-900/95 to-zinc-950">
+            <Card className="border-zinc-200 dark:border-zinc-800 bg-gradient-to-br from-zinc-900/95 to-zinc-950">
               <CardHeader className="pb-2">
-                <CardTitle className="text-zinc-100">Daily Margin Leak</CardTitle>
-                <CardDescription className="text-zinc-400">Suma de márgenes negativos en portes activos.</CardDescription>
+                <CardTitle className="text-zinc-900 dark:text-zinc-100">Daily Margin Leak</CardTitle>
+                <CardDescription className="text-zinc-600 dark:text-zinc-400">Suma de márgenes negativos en portes activos.</CardDescription>
               </CardHeader>
               <CardContent className="flex items-end justify-between gap-4">
                 <p className="text-3xl font-bold tracking-tight text-red-300">{formatEUR(leak)}</p>
@@ -212,10 +212,10 @@ export default function VampireRadarPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-zinc-800 bg-zinc-900/60">
+            <Card className="border-zinc-200 dark:border-zinc-800 bg-zinc-900/60">
               <CardHeader>
-                <CardTitle className="text-zinc-100">Mapa de rentabilidad por ruta</CardTitle>
-                <CardDescription className="text-zinc-400">
+                <CardTitle className="text-zinc-900 dark:text-zinc-100">Mapa de rentabilidad por ruta</CardTitle>
+                <CardDescription className="text-zinc-600 dark:text-zinc-400">
                   Líneas verdes: eficiencia {">"} 90 %. Rojas: {"<"} 70 % (vampiros). Pasa el cursor para EBITDA
                   estimado.
                 </CardDescription>
@@ -224,15 +224,15 @@ export default function VampireRadarPage() {
                 <VampireMap
                   portes={rows}
                   costEurPerKm={cpk}
-                  className="relative h-[min(420px,55vh)] w-full min-h-[300px] overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 sm:rounded-lg"
+                  className="relative h-[min(420px,55vh)] w-full min-h-[300px] overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 sm:rounded-lg"
                 />
               </CardContent>
             </Card>
 
-            <Card className="border-zinc-800 bg-zinc-900/60">
+            <Card className="border-zinc-200 dark:border-zinc-800 bg-zinc-900/60">
               <CardHeader>
-                <CardTitle className="text-zinc-100">Distribución Rentable vs Vampiros</CardTitle>
-                <CardDescription className="text-zinc-400">Relación de rutas sanas frente a rutas con sangrado de margen.</CardDescription>
+                <CardTitle className="text-zinc-900 dark:text-zinc-100">Distribución Rentable vs Vampiros</CardTitle>
+                <CardDescription className="text-zinc-600 dark:text-zinc-400">Relación de rutas sanas frente a rutas con sangrado de margen.</CardDescription>
               </CardHeader>
               <CardContent className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
@@ -256,16 +256,16 @@ export default function VampireRadarPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-zinc-800 bg-zinc-900/60">
+            <Card className="border-zinc-200 dark:border-zinc-800 bg-zinc-900/60">
               <CardHeader>
-                <CardTitle className="text-zinc-100">Rutas activas en vigilancia</CardTitle>
-                <CardDescription className="text-zinc-400">
+                <CardTitle className="text-zinc-900 dark:text-zinc-100">Rutas activas en vigilancia</CardTitle>
+                <CardDescription className="text-zinc-600 dark:text-zinc-400">
                   Umbrales η: Vampiro &lt; 1.15 · Margen Ajustado 1.15–1.30 · Rentable &gt; 1.30.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {loading ? (
-                  <div className="flex items-center gap-2 text-sm text-zinc-400">
+                  <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Cargando portes activos...
                   </div>
@@ -292,7 +292,7 @@ export default function VampireRadarPage() {
                         const meta = statusMeta(row.efficiency_eta);
                         return (
                           <TableRow key={row.id}>
-                            <TableCell className="font-medium text-zinc-100">
+                            <TableCell className="font-medium text-zinc-900 dark:text-zinc-100">
                               {row.origen} - {row.destino}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">{formatEUR(ingreso)}</TableCell>
@@ -307,7 +307,7 @@ export default function VampireRadarPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                                className="border-zinc-700 bg-zinc-900 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-800"
                                 onClick={() => openAdvisor(row)}
                               >
                                 Consultar IA
@@ -332,27 +332,27 @@ export default function VampireRadarPage() {
               aria-label="Cerrar panel de LogisAdvisor"
               onClick={() => setSelectedRoute(null)}
             />
-            <aside className="fixed inset-y-0 right-0 z-[70] flex w-[min(100vw,28rem)] flex-col border-l border-zinc-800 bg-zinc-950 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+            <aside className="fixed inset-y-0 right-0 z-[70] flex w-[min(100vw,28rem)] flex-col border-l border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/15 p-1.5">
                     <Bot className="h-4 w-4 text-emerald-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-zinc-100">LogisAdvisor</p>
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">LogisAdvisor</p>
                     <p className="text-xs text-zinc-500">
                       {selectedRoute.origen} - {selectedRoute.destino}
                     </p>
                   </div>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setSelectedRoute(null)} className="text-zinc-400 hover:text-zinc-100">
+                <Button variant="ghost" size="icon" onClick={() => setSelectedRoute(null)} className="text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:text-zinc-100">
                   <X className="h-4 w-4" />
                 </Button>
               </div>
 
               <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
                 {messages.length === 0 ? (
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-400">
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-600 dark:text-zinc-400">
                     Consulta sugerida: explica por qué la eficiencia de esta ruta cae y qué palancas tácticas activar esta semana.
                   </div>
                 ) : null}
@@ -362,7 +362,7 @@ export default function VampireRadarPage() {
                       className={`max-w-[92%] rounded-xl px-3 py-2 text-sm ${
                         m.role === "user"
                           ? "bg-emerald-600 text-white"
-                          : "border border-zinc-700 bg-zinc-900 text-zinc-100"
+                          : "border border-zinc-700 bg-zinc-900 text-zinc-900 dark:text-zinc-100"
                       }`}
                     >
                       {m.content || (streaming && m.role === "assistant" ? "Analizando..." : "")}
@@ -379,7 +379,7 @@ export default function VampireRadarPage() {
                 ) : null}
               </div>
 
-              <div className="border-t border-zinc-800 p-3">
+              <div className="border-t border-zinc-200 dark:border-zinc-800 p-3">
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -392,7 +392,7 @@ export default function VampireRadarPage() {
                       }
                     }}
                     placeholder="Pregunta táctica para esta ruta..."
-                    className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                    className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
                     disabled={streaming}
                   />
                   <Button onClick={() => void sendAdvisorPrompt()} disabled={streaming || !chatInput.trim()} className="bg-emerald-600 hover:bg-emerald-500">

@@ -1,9 +1,12 @@
 import { Redirect, Stack } from "expo-router";
 
 import { useAuth } from "../../src/context/AuthContext";
+import { useThemePreference } from "../../src/context/ThemePreferenceContext";
 
 export default function AppGroupLayout() {
   const { token, isReady } = useAuth();
+  const { resolvedScheme } = useThemePreference();
+  const isDark = resolvedScheme === "dark";
 
   if (!isReady) return null;
   if (!token) return <Redirect href="/(auth)/login" />;
@@ -11,9 +14,9 @@ export default function AppGroupLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: "#f8fafc" },
-        headerTintColor: "#0f172a",
-        headerTitleStyle: { fontWeight: "600" },
+        headerStyle: { backgroundColor: isDark ? "#18181b" : "#f8fafc" },
+        headerTintColor: isDark ? "#fafafa" : "#0f172a",
+        headerTitleStyle: { fontWeight: "600", color: isDark ? "#fafafa" : "#0f172a" },
       }}
     >
       <Stack.Screen name="index" options={{ title: "Portes" }} />

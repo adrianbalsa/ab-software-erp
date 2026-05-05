@@ -64,11 +64,11 @@ export default function FinanceSettingsPage() {
   return (
     <AppShell active="dashboard">
       <ToastHost toast={toast} onDismiss={() => setToast(null)} durationMs={6200} />
-      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-zinc-950">
-        <header className="z-10 flex h-16 shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950/90 px-8 backdrop-blur-md">
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-zinc-50 dark:bg-zinc-950">
+        <header className="z-10 flex h-16 shrink-0 items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/90 px-8 backdrop-blur-md">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Ajustes financieros</h1>
-            <p className="mt-0.5 text-sm text-zinc-400">
+            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Ajustes financieros</h1>
+            <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
               Fuentes de datos para el dashboard económico y la tesorería
             </p>
           </div>
@@ -94,13 +94,13 @@ export default function FinanceSettingsPage() {
           )}
 
           <section className="space-y-4" aria-labelledby="finance-sources-heading">
-            <div className="flex items-center gap-2 text-zinc-100">
+            <div className="flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
               <Database className="h-5 w-5 text-emerald-500" aria-hidden />
               <h2 id="finance-sources-heading" className="text-lg font-semibold tracking-tight">
                 Fuentes de datos
               </h2>
             </div>
-            <p className="text-sm leading-relaxed text-zinc-400">
+            <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
               Conecta tu cuenta empresarial mediante Open Banking para sincronizar movimientos y conciliar
               facturas automáticamente. Solo administradores pueden gestionar esta conexión.
             </p>
@@ -108,9 +108,9 @@ export default function FinanceSettingsPage() {
             <BankConnectionCard bank={bank} onReconciled={onReconciled} />
           </section>
 
-          <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-            <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Cobros SEPA (GoCardless)</h2>
-            <p className="text-sm leading-relaxed text-zinc-400">
+          <section className="space-y-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/60 p-6">
+            <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Cobros SEPA (GoCardless)</h2>
+            <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
               Vincula una cuenta bancaria de adeudo SEPA para automatizar la autorización de mandatos
               y la activación de cobros enterprise.
             </p>

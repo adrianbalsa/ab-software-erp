@@ -168,7 +168,7 @@ export default function PorteDetailScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-slate-50">
+      <View className="flex-1 items-center justify-center bg-slate-50 dark:bg-zinc-950">
         <ActivityIndicator size="large" />
       </View>
     );
@@ -183,13 +183,13 @@ export default function PorteDetailScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-slate-50" contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
-      <View className="rounded-xl border border-slate-200 bg-white p-4">
-        <Text className="text-xs font-medium uppercase text-slate-500">{porte.fecha}</Text>
-        <Text className="mt-1 text-lg font-semibold text-slate-900">
+    <ScrollView className="flex-1 bg-slate-50 dark:bg-zinc-950" contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
+      <View className="rounded-xl border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 p-4">
+        <Text className="text-xs font-medium uppercase text-slate-500 dark:text-zinc-500">{porte.fecha}</Text>
+        <Text className="mt-1 text-lg font-semibold text-slate-900 dark:text-zinc-100">
           {porte.origen} → {porte.destino}
         </Text>
-        <Text className="mt-2 text-sm text-slate-600">
+        <Text className="mt-2 text-sm text-slate-600 dark:text-zinc-400">
           Estado: {porte.estado} · {porte.km_estimados} km
         </Text>
         {porte.fecha_entrega_real ? (
@@ -213,24 +213,24 @@ export default function PorteDetailScreen() {
         ) : null}
       </View>
 
-      <View className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-        <Text className="text-base font-semibold text-slate-900">Registrar Entrega (POD)</Text>
-        <Text className="mt-1 text-xs text-slate-500">
+      <View className="mt-4 rounded-xl border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 p-4">
+        <Text className="text-base font-semibold text-slate-900 dark:text-zinc-100">Registrar Entrega (POD)</Text>
+        <Text className="mt-1 text-xs text-slate-500 dark:text-zinc-500">
           Captura firma, foto y geolocalización del momento de firma.
         </Text>
 
-        <Text className="mt-4 text-xs font-medium uppercase text-slate-500">Receptor</Text>
+        <Text className="mt-4 text-xs font-medium uppercase text-slate-500 dark:text-zinc-500">Receptor</Text>
         <TextInput
           value={consignatario}
           onChangeText={setConsignatario}
           placeholder="Nombre y apellidos"
-          className="mt-1 rounded-lg border border-slate-200 bg-white px-3 py-3 text-base text-slate-900"
+          className="mt-1 rounded-lg border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 px-3 py-3 text-base text-slate-900 dark:text-zinc-100"
         />
         <TextInput
           value={dni}
           onChangeText={setDni}
           placeholder="DNI/NIE (opcional)"
-          className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-base text-slate-900"
+          className="mt-2 rounded-lg border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 px-3 py-3 text-base text-slate-900 dark:text-zinc-100"
         />
 
         <View className="mt-4 gap-2">
@@ -244,7 +244,7 @@ export default function PorteDetailScreen() {
           </Pressable>
           {signatureDataUrl ? <Text className="text-xs text-emerald-700">Firma capturada</Text> : null}
           {geostamp ? (
-            <Text className="text-xs text-slate-600">
+            <Text className="text-xs text-slate-600 dark:text-zinc-400">
               Geostamp: {geostamp.lat.toFixed(5)}, {geostamp.lng.toFixed(5)}
             </Text>
           ) : null}

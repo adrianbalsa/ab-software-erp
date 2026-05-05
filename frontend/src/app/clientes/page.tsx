@@ -9,7 +9,7 @@ import { RoleGuard } from "@/components/auth/RoleGuard";
 import { API_BASE, apiFetch } from "@/lib/api";
 
 const inputClass =
-  "mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/25";
+  "mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-50 dark:bg-zinc-950/60 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/25";
 
 type ClienteRow = {
   id: string;
@@ -88,19 +88,19 @@ function ClientesContent() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-4xl bg-zinc-950 p-6 md:p-8">
+    <div className="mx-auto w-full max-w-4xl bg-zinc-50 dark:bg-zinc-950 p-6 md:p-8">
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-100">
+          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
             <Users className="h-7 w-7 text-emerald-500" aria-hidden />
             Clientes
           </h1>
-          <p className="mt-1 text-sm text-zinc-400">Alta y listado de clientes para portes y facturación.</p>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Alta y listado de clientes para portes y facturación.</p>
         </div>
         <div className="flex items-center gap-2">
           <Link
             href="/dashboard/clientes"
-            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50"
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-2 text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50"
           >
             <BarChart3 className="h-4 w-4" aria-hidden />
             Dashboard Onboarding
@@ -109,7 +109,7 @@ function ClientesContent() {
             type="button"
             onClick={() => void load()}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-2 text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
             Actualizar
@@ -117,11 +117,11 @@ function ClientesContent() {
         </div>
       </div>
 
-      <div className="mb-8 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
-        <h2 className="mb-3 text-sm font-semibold text-zinc-100">Nuevo cliente</h2>
+      <div className="mb-8 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-5">
+        <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Nuevo cliente</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
-            <span className="text-zinc-400">Nombre / razón social</span>
+            <span className="text-zinc-600 dark:text-zinc-400">Nombre / razón social</span>
             <input
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
@@ -130,7 +130,7 @@ function ClientesContent() {
             />
           </label>
           <label className="block text-sm">
-            <span className="text-zinc-400">CIF / NIF (opcional)</span>
+            <span className="text-zinc-600 dark:text-zinc-400">CIF / NIF (opcional)</span>
             <input
               value={nif}
               onChange={(e) => setNif(e.target.value)}
@@ -163,12 +163,12 @@ function ClientesContent() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/40">
-        <div className="border-b border-zinc-800 bg-zinc-950/40 px-5 py-3">
-          <h2 className="text-sm font-semibold text-zinc-100">Clientes activos</h2>
+      <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40">
+        <div className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/40 px-5 py-3">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Clientes activos</h2>
         </div>
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-zinc-400">
+          <div className="flex items-center justify-center gap-2 py-16 text-zinc-600 dark:text-zinc-400">
             <Loader2 className="h-5 w-5 animate-spin text-emerald-500" aria-hidden />
             Cargando…
           </div>
@@ -184,7 +184,7 @@ function ClientesContent() {
           <div className="min-w-0 w-full overflow-x-auto">
             <table className="w-full min-w-[800px] text-left text-sm">
               <thead>
-                <tr className="border-b border-zinc-800 text-xs uppercase tracking-wide text-zinc-500">
+                <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wide text-zinc-500">
                   <th className="px-5 py-3 font-semibold">Nombre / razón social</th>
                   <th className="hidden w-[40%] px-5 py-3 font-semibold md:table-cell">ID (sistema)</th>
                 </tr>
@@ -192,8 +192,8 @@ function ClientesContent() {
               <tbody className="divide-y divide-zinc-900">
                 {rows.map((r) => (
                   <tr key={r.id} className="transition-colors hover:bg-zinc-800/30">
-                    <td className="align-top px-5 py-3 font-medium text-zinc-100">{r.nombre}</td>
-                    <td className="hidden align-top px-5 py-3 font-mono text-xs break-all text-zinc-400 md:table-cell">
+                    <td className="align-top px-5 py-3 font-medium text-zinc-900 dark:text-zinc-100">{r.nombre}</td>
+                    <td className="hidden align-top px-5 py-3 font-mono text-xs break-all text-zinc-600 dark:text-zinc-400 md:table-cell">
                       {r.id}
                     </td>
                   </tr>
@@ -213,8 +213,8 @@ export default function ClientesPage() {
       <RoleGuard
         allowedRoles={["owner"]}
         fallback={
-          <div className="max-w-lg bg-zinc-950 p-8">
-            <p className="text-zinc-300">Esta sección solo está disponible para el perfil de administrador.</p>
+          <div className="max-w-lg bg-zinc-50 dark:bg-zinc-950 p-8">
+            <p className="text-zinc-700 dark:text-zinc-300">Esta sección solo está disponible para el perfil de administrador.</p>
             <Link href="/dashboard" className="mt-4 inline-block font-medium text-emerald-500 hover:text-emerald-400 hover:underline">
               Volver al dashboard
             </Link>

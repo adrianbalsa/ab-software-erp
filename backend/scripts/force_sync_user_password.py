@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from argon2 import PasswordHasher, Type
 from dotenv import dotenv_values
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -40,10 +41,19 @@ if ENV_FILE.exists():
 
 from supabase import create_client  # noqa: E402
 
-from app.core.security import hash_password_argon2id  # noqa: E402
-
-
 DEFAULT_EMAIL = "adrian.balsa@yahoo.es"
+_password_hasher = PasswordHasher(
+    memory_cost=65536,
+    time_cost=3,
+    parallelism=4,
+    hash_len=32,
+    salt_len=16,
+    type=Type.ID,
+)
+
+
+def _hash_password_argon2id(plain_password: str) -> str:
+    return _password_hasher.hash(plain_password)
 
 
 def _lookup_auth_user_id(client, *, email: str) -> str | None:
@@ -51,7 +61,11 @@ def _lookup_auth_user_id(client, *, email: str) -> str | None:
     want = email.strip().lower()
     page = 1
     while page <= 100:
-        users = client.auth.admin.list_users(page=page, per_page=200)
+        try:
+            users = client.auth.admin.list_users(page=page, per_page=200)
+        except Exception as exc:
+            print(f"Aviso: auth.admin.list_users falló, se omite lookup por Auth API: {exc}")
+            return None
         if not users:
             return None
         for u in users:
@@ -63,6 +77,20 @@ def _lookup_auth_user_id(client, *, email: str) -> str | None:
             return None
         page += 1
     return None
+
+
+def _lookup_profile_id_by_email(client, *, email: str) -> str | None:
+    """Fallback: en muchos entornos profiles.id coincide con auth.users.id."""
+    try:
+        res = client.table("profiles").select("id,email").ilike("email", email.strip().lower()).limit(1).execute()
+        rows = getattr(res, "data", None) or []
+        if not rows:
+            return None
+        raw = str(rows[0].get("id") or "").strip()
+        return raw or None
+    except Exception as exc:
+        print(f"Aviso: profiles lookup por email falló: {exc}")
+        return None
 
 
 def _first_empresa_id(client) -> UUID:
@@ -112,9 +140,9 @@ def main() -> None:
 
     client = create_client(url, key)
     empresa_id = UUID(args.empresa_id) if args.empresa_id else _first_empresa_id(client)
-    pwd_hash = hash_password_argon2id(password)
+    pwd_hash = _hash_password_argon2id(password)
 
-    auth_uid = _lookup_auth_user_id(client, email=email)
+    auth_uid = _lookup_auth_user_id(client, email=email) or _lookup_profile_id_by_email(client, email=email)
     if auth_uid is None and args.create_auth:
         try:
             created = client.auth.admin.create_user(
@@ -129,11 +157,11 @@ def main() -> None:
         except Exception as exc:
             err = str(exc).lower()
             if "already been registered" in err or "already exists" in err or "duplicate" in err:
-                auth_uid = _lookup_auth_user_id(client, email=email)
+                auth_uid = _lookup_auth_user_id(client, email=email) or _lookup_profile_id_by_email(client, email=email)
             else:
                 raise SystemExit(f"No se pudo crear usuario en Auth: {exc}") from exc
         if not auth_uid:
-            auth_uid = _lookup_auth_user_id(client, email=email)
+            auth_uid = _lookup_auth_user_id(client, email=email) or _lookup_profile_id_by_email(client, email=email)
         if auth_uid:
             print(f"Usuario Supabase Auth creado o resuelto: id={auth_uid}")
     elif auth_uid is None:

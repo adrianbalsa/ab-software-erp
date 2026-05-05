@@ -72,14 +72,14 @@ export default function AdminHeatmapMapClient() {
   }, [cells]);
 
   if (loading) {
-    return <p className="text-sm text-zinc-400">Cargando mapa de calor…</p>;
+    return <p className="text-sm text-zinc-600 dark:text-zinc-400">Cargando mapa de calor…</p>;
   }
   if (error) {
     return <p className="text-sm text-red-400">{error}</p>;
   }
   if (!cells.length) {
     return (
-      <p className="text-sm text-zinc-400">
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
         No hay celdas con coordenadas de entrega suficientes para el mapa de calor.
       </p>
     );

@@ -35,7 +35,7 @@ export default async function RootLayout({
   const initialRole = await getServerInitialRole();
 
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <body
         className={`${plusJakartaSans.variable} ${geistMono.variable} font-sans antialiased`}
       >

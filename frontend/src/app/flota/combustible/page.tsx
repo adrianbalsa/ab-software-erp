@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 
 import { RoleGuard } from "@/components/auth/RoleGuard";
@@ -23,11 +23,9 @@ import {
 } from "@/lib/api";
 
 function CombustibleImportPage() {
-  const [last, setLast] = useState<(FuelImportacionResponse & { importedAt?: string }) | null>(null);
-
-  useEffect(() => {
-    setLast(loadLastFuelImport());
-  }, []);
+  const [last, setLast] = useState<(FuelImportacionResponse & { importedAt?: string }) | null>(() =>
+    loadLastFuelImport(),
+  );
 
   return (
     <AppShell active="flota">

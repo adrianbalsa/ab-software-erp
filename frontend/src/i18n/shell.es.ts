@@ -5,6 +5,10 @@ export const shellEs = {
   closeMenu: "Cerrar menú",
   openMenu: "Abrir menú de navegación",
   sidebarBrand: "AB Logistics OS",
+  themeAppearance: "Apariencia",
+  themeLight: "Modo claro",
+  themeDark: "Modo oscuro",
+  themeSystem: "Según el sistema",
   sections: {
     institutional: { title: "Institucional", subtitle: "Dashboards" },
     operations: { title: "Operaciones", subtitle: "Logistics" },

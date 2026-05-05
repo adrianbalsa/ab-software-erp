@@ -10,6 +10,7 @@ import {
 } from "react-native";
 
 import { ConnectionProbe } from "../../src/components/ConnectionProbe";
+import { ThemeModePicker } from "../../src/components/ThemeModePicker";
 import { useAuth } from "../../src/context/AuthContext";
 import { ApiError } from "../../src/lib/api";
 import { fetchRecentGastos } from "../../src/services/gastosApi";
@@ -124,27 +125,35 @@ export default function PortesScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-slate-50">
+      <View className="flex-1 items-center justify-center bg-slate-50 dark:bg-zinc-950">
         <ActivityIndicator size="large" />
-        <Text className="mt-2 text-sm text-slate-500">Cargando portes…</Text>
+        <Text className="mt-2 text-sm text-slate-500 dark:text-zinc-500">Cargando portes…</Text>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-slate-50">
-      <View className="flex-row items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-        <Text className="text-lg font-semibold text-slate-900">Portes pendientes</Text>
-        <View className="flex-row gap-2">
-          <Pressable onPress={() => router.push("/(app)/pendientes")} className="rounded-lg bg-slate-700 px-3 py-1.5 active:opacity-80">
-            <Text className="text-sm font-medium text-white">Pendientes</Text>
-          </Pressable>
-          <Pressable onPress={() => router.push("/(app)/gastos")} className="rounded-lg bg-indigo-600 px-3 py-1.5 active:opacity-80">
-            <Text className="text-sm font-medium text-white">Gastos</Text>
-          </Pressable>
-          <Pressable onPress={() => void signOut()} className="rounded-lg bg-slate-200 px-3 py-1.5 active:opacity-80">
-            <Text className="text-sm font-medium text-slate-800">Salir</Text>
-          </Pressable>
+    <View className="flex-1 bg-slate-50 dark:bg-zinc-950">
+      <View className="border-b border-slate-200 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900">
+        <View className="flex-row flex-wrap items-center justify-between gap-2">
+          <Text className="text-lg font-semibold text-slate-900 dark:text-zinc-100">Portes pendientes</Text>
+          <View className="flex-row flex-wrap gap-2">
+            <Pressable
+              onPress={() => router.push("/(app)/pendientes")}
+              className="rounded-lg bg-slate-700 px-3 py-1.5 active:opacity-80"
+            >
+              <Text className="text-sm font-medium text-white">Pendientes</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push("/(app)/gastos")} className="rounded-lg bg-indigo-600 px-3 py-1.5 active:opacity-80">
+              <Text className="text-sm font-medium text-white">Gastos</Text>
+            </Pressable>
+            <Pressable onPress={() => void signOut()} className="rounded-lg bg-slate-200 px-3 py-1.5 active:opacity-80 dark:bg-zinc-700">
+              <Text className="text-sm font-medium text-slate-800 dark:text-zinc-100">Salir</Text>
+            </Pressable>
+          </View>
+        </View>
+        <View className="mt-3">
+          <ThemeModePicker />
         </View>
       </View>
 
@@ -157,10 +166,10 @@ export default function PortesScreen() {
         </View>
       ) : null}
 
-      <View className="mx-4 mt-3 rounded-lg border border-slate-200 bg-white px-3 py-3">
-        <Text className="text-xs uppercase text-slate-500">Resumen personal</Text>
-        <Text className="mt-1 text-sm text-slate-800">Km realizados (mes): {kmMes}</Text>
-        <Text className="text-sm text-slate-800">Total gastos registrados (semana): {gastoSemana} EUR</Text>
+      <View className="mx-4 mt-3 rounded-lg border border-slate-200 bg-white px-3 py-3 dark:border-zinc-700 dark:bg-zinc-900">
+        <Text className="text-xs uppercase text-slate-500 dark:text-zinc-500">Resumen personal</Text>
+        <Text className="mt-1 text-sm text-slate-800 dark:text-zinc-200">Km realizados (mes): {kmMes}</Text>
+        <Text className="text-sm text-slate-800 dark:text-zinc-200">Total gastos registrados (semana): {gastoSemana} EUR</Text>
       </View>
 
       {queueSize > 0 || dlqSize > 0 ? (
@@ -189,23 +198,23 @@ export default function PortesScreen() {
           </View>
         }
         ListEmptyComponent={
-          <Text className="py-8 text-center text-slate-500">No hay portes pendientes.</Text>
+          <Text className="py-8 text-center text-slate-500 dark:text-zinc-500">No hay portes pendientes.</Text>
         }
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push(`/(app)/porte/${item.id}`)}
-            className="mb-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm active:opacity-80"
+            className="mb-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm active:opacity-80 dark:border-zinc-700 dark:bg-zinc-900"
           >
-            <Text className="text-xs font-medium uppercase text-slate-400">{item.fecha}</Text>
-            <Text className="mt-1 text-base font-semibold text-slate-900" numberOfLines={1}>
+            <Text className="text-xs font-medium uppercase text-slate-400 dark:text-zinc-500">{item.fecha}</Text>
+            <Text className="mt-1 text-base font-semibold text-slate-900 dark:text-zinc-100" numberOfLines={1}>
               {item.origen} → {item.destino}
             </Text>
             <View className="mt-2 flex-row flex-wrap gap-2">
-              <View className="rounded-md bg-slate-100 px-2 py-1">
-                <Text className="text-xs text-slate-700">{item.estado}</Text>
+              <View className="rounded-md bg-slate-100 dark:bg-zinc-800 px-2 py-1">
+                <Text className="text-xs text-slate-700 dark:text-zinc-300">{item.estado}</Text>
               </View>
-              <View className="rounded-md bg-slate-100 px-2 py-1">
-                <Text className="text-xs text-slate-700">{item.km_estimados} km</Text>
+              <View className="rounded-md bg-slate-100 dark:bg-zinc-800 px-2 py-1">
+                <Text className="text-xs text-slate-700 dark:text-zinc-300">{item.km_estimados} km</Text>
               </View>
               {item.precio_pactado != null ? (
                 <View className="rounded-md bg-emerald-50 px-2 py-1">
@@ -214,11 +223,13 @@ export default function PortesScreen() {
               ) : null}
             </View>
             {item.descripcion ? (
-              <Text className="mt-2 text-sm text-slate-600" numberOfLines={2}>
+              <Text className="mt-2 text-sm text-slate-600 dark:text-zinc-400" numberOfLines={2}>
                 {item.descripcion}
               </Text>
             ) : null}
-            <Text className="mt-3 text-xs font-medium text-indigo-700">Ver detalle y registrar entrega</Text>
+            <Text className="mt-3 text-xs font-medium text-indigo-700 dark:text-indigo-400">
+              Ver detalle y registrar entrega
+            </Text>
           </Pressable>
         )}
       />

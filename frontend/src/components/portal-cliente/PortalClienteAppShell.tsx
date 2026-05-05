@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, Leaf, LogOut, Moon, Package, Receipt, Sun } from "lucide-react";
+import { BarChart3, Leaf, LogOut, Package, Receipt } from "lucide-react";
 
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
+import { ThemeModeControl } from "@/components/ThemeModeControl";
 import { PortalClienteRiskModal } from "@/components/portal-cliente/PortalClienteRiskModal";
 import { useOptionalLocaleCatalog } from "@/context/LocaleContext";
 import { PortalClienteOnboardingProvider } from "@/context/PortalClienteOnboardingContext";
@@ -20,14 +21,6 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { catalog } = useOptionalLocaleCatalog();
   const p = catalog.portalCliente;
-  const [dark, setDark] = useState(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      return localStorage.getItem("abl-portal-theme") !== "light";
-    } catch {
-      return true;
-    }
-  });
 
   const nav = useMemo(
     () =>
@@ -52,14 +45,6 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
 
   const showApiDebug = isPortalApiBaseDebugVisible();
   const apiHostShort = API_BASE.replace(/^https?:\/\//, "");
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("abl-portal-theme", dark ? "dark" : "light");
-    } catch {
-      /* ignore */
-    }
-  }, [dark]);
 
   useEffect(() => {
     const role = jwtRbacRole();
@@ -89,7 +74,7 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
 
   return (
     <PortalClienteOnboardingProvider>
-    <div className={cn("min-h-screen font-sans antialiased", dark ? "dark" : "")}>
+    <div className="min-h-screen font-sans antialiased">
       <div className="flex min-h-screen bg-zinc-100 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
         <aside className="hidden w-56 shrink-0 flex-col border-r border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-900/95 md:flex">
           <div className="flex items-center gap-2 border-b border-zinc-200/80 px-4 py-5 dark:border-zinc-800">
@@ -102,7 +87,7 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
               priority
             />
             <div className="min-w-0">
-              <p className="truncate text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              <p className="truncate text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-600 dark:text-zinc-400">
                 {p.badge}
               </p>
               <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">AB Logistics OS</p>
@@ -129,30 +114,41 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
             })}
           </nav>
           <div className="flex flex-col gap-2 border-t border-zinc-200/80 p-3 dark:border-zinc-800">
+            <div className="flex flex-wrap items-center gap-2">
+              <ThemeModeControl
+                labels={{
+                  appearance: p.themeAppearance,
+                  light: p.themeLight,
+                  dark: p.themeDark,
+                  system: p.themeSystem,
+                }}
+              />
+              <LocaleSwitcher className="border-zinc-200 dark:border-zinc-700" />
+            </div>
             <nav className="flex flex-col gap-1.5 text-[11px] font-medium">
               {footerLinks.map(({ href, label }) => (
                 <Link
                   key={href}
                   href={href}
-                  className="text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                  className="text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-600 dark:text-zinc-400 dark:hover:text-zinc-900 dark:text-zinc-100"
                 >
                   {label}
                 </Link>
               ))}
               <a
                 href={portalSupportMailto()}
-                className="text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+                className="text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-600 dark:text-zinc-400 dark:hover:text-zinc-900 dark:text-zinc-100"
               >
                 {p.footer.support}
               </a>
             </nav>
             {showApiDebug ? (
-              <p className="truncate font-mono text-[10px] text-zinc-400" title={API_BASE}>
+              <p className="truncate font-mono text-[10px] text-zinc-600 dark:text-zinc-400" title={API_BASE}>
                 {p.footer.apiDebugPrefix}
                 {apiHostShort}
               </p>
             ) : (
-              <p className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">{p.footer.productNote}</p>
+              <p className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-600 dark:text-zinc-400">{p.footer.productNote}</p>
             )}
           </div>
         </aside>
@@ -170,16 +166,16 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
               />
               <span className="truncate text-sm font-semibold">{p.mobileHeader}</span>
             </div>
-            <div className="flex flex-1 items-center justify-end gap-2">
+            <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
+              <ThemeModeControl
+                labels={{
+                  appearance: p.themeAppearance,
+                  light: p.themeLight,
+                  dark: p.themeDark,
+                  system: p.themeSystem,
+                }}
+              />
               <LocaleSwitcher className="border-zinc-200 dark:border-zinc-700" />
-              <button
-                type="button"
-                onClick={() => setDark((d) => !d)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-700 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                aria-label={dark ? p.themeLight : p.themeDark}
-              >
-                {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </button>
               <button
                 type="button"
                 onClick={logout}
@@ -233,12 +229,12 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
               </a>
             </nav>
             {showApiDebug ? (
-              <p className="mt-2 truncate font-mono text-[10px] text-zinc-400" title={API_BASE}>
+              <p className="mt-2 truncate font-mono text-[10px] text-zinc-600 dark:text-zinc-400" title={API_BASE}>
                 {p.footer.apiDebugPrefix}
                 {apiHostShort}
               </p>
             ) : (
-              <p className="mt-2 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">{p.footer.productNote}</p>
+              <p className="mt-2 text-[10px] leading-snug text-zinc-500 dark:text-zinc-600 dark:text-zinc-400">{p.footer.productNote}</p>
             )}
           </footer>
         </div>

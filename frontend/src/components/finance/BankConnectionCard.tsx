@@ -21,7 +21,7 @@ type Props = {
 function GoCardlessWordmark() {
   return (
     <div className="flex flex-col items-end gap-0.5 text-right sm:items-start sm:text-left">
-      <span className="text-sm font-bold leading-none tracking-tight text-zinc-200">
+      <span className="text-sm font-bold leading-none tracking-tight text-zinc-800 dark:text-zinc-200">
         GoCardless
       </span>
       <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
@@ -32,7 +32,7 @@ function GoCardlessWordmark() {
 }
 
 const inputDark =
-  "w-full rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2.5 font-mono text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/25";
+  "w-full rounded-lg border border-zinc-700 bg-zinc-50 dark:bg-zinc-950/60 px-3 py-2.5 font-mono text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 outline-none transition focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/25";
 
 export function BankConnectionCard({ bank, onReconciled }: Props) {
   const {
@@ -85,7 +85,7 @@ export function BankConnectionCard({ bank, onReconciled }: Props) {
 
   if (!hydrated) {
     return (
-      <div className="animate-pulse rounded-2xl border border-zinc-800 bg-zinc-900/40 p-8">
+      <div className="animate-pulse rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-8">
         <div className="h-6 w-48 rounded-lg bg-zinc-800" />
         <div className="mt-6 h-24 rounded-xl bg-zinc-800/80" />
       </div>
@@ -103,14 +103,14 @@ export function BankConnectionCard({ bank, onReconciled }: Props) {
     : null;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950/40 px-6 py-4">
+    <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/40 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-900/40">
             <Landmark className="h-5 w-5" aria-hidden />
           </div>
           <div>
-            <h3 className="text-base font-semibold tracking-tight text-zinc-100">Conexión bancaria</h3>
+            <h3 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Conexión bancaria</h3>
             <p className="text-xs text-zinc-500">Datos de solo lectura · Conciliación automática</p>
           </div>
         </div>
@@ -138,12 +138,12 @@ export function BankConnectionCard({ bank, onReconciled }: Props) {
         {!isConnected ? (
           <div className="space-y-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <div className="flex-1 rounded-xl border border-zinc-700 bg-zinc-950/40 p-4">
+              <div className="flex-1 rounded-xl border border-zinc-700 bg-zinc-50 dark:bg-zinc-950/40 p-4">
                 <div className="flex items-start gap-3">
                   <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" aria-hidden />
                   <div>
-                    <p className="text-sm font-semibold text-zinc-100">Conexión de solo lectura</p>
-                    <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Conexión de solo lectura</p>
+                    <p className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
                       Autoriza el acceso en tu banco para importar movimientos y conciliar facturas. No
                       realizamos pagos ni transferencias en tu nombre.
                     </p>
@@ -184,7 +184,7 @@ export function BankConnectionCard({ bank, onReconciled }: Props) {
                   directorio de bancos
                   <ExternalLink className="h-3 w-3" aria-hidden />
                 </a>
-                . Tras conectar, vuelve aquí y pulsa <strong className="text-zinc-300">Sincronizar</strong>.
+                . Tras conectar, vuelve aquí y pulsa <strong className="text-zinc-700 dark:text-zinc-300">Sincronizar</strong>.
               </p>
             </div>
 
@@ -214,9 +214,9 @@ export function BankConnectionCard({ bank, onReconciled }: Props) {
                 <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
                   Banco vinculado
                 </p>
-                <p className="mt-1 text-lg font-semibold text-zinc-100">{institutionLabel}</p>
-                <p className="mt-3 text-sm text-zinc-400">
-                  <span className="font-medium text-zinc-300">Última sincronización: </span>
+                <p className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">{institutionLabel}</p>
+                <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Última sincronización: </span>
                   {lastSyncText ?? <span className="text-amber-400">Aún no has sincronizado</span>}
                 </p>
               </div>

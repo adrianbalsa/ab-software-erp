@@ -85,7 +85,7 @@ export function EmissionBadge({ year }: { year?: number }) {
   if (error || !data) {
     return (
       <div className="dashboard-bento rounded-2xl border border-zinc-800/50 p-6">
-        <p className="text-sm font-medium text-zinc-300">Ahorro verde (CO₂)</p>
+        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Ahorro verde (CO₂)</p>
         <p className="mt-1 text-xs text-zinc-500">Datos no disponibles. Revisa el aviso en pantalla.</p>
       </div>
     );
@@ -104,8 +104,8 @@ export function EmissionBadge({ year }: { year?: number }) {
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-zinc-400">Ahorro verde (CO₂)</p>
-          <h3 className="text-3xl font-bold tracking-tight text-zinc-100">
+          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">Ahorro verde (CO₂)</p>
+          <h3 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
             {ahorroFmt} <span className="text-sm font-semibold text-zinc-500">kg</span>
           </h3>
           <p className="mt-1 text-xs text-zinc-500">
@@ -116,7 +116,7 @@ export function EmissionBadge({ year }: { year?: number }) {
         </div>
         <div
           className={`shrink-0 rounded-xl p-3 ${
-            computed.positive ? "bg-emerald-500/15 text-emerald-400" : "bg-zinc-800 text-zinc-400"
+            computed.positive ? "bg-emerald-500/15 text-emerald-400" : "bg-zinc-800 text-zinc-600 dark:text-zinc-400"
           }`}
           aria-hidden
         >

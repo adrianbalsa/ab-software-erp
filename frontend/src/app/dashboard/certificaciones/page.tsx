@@ -278,13 +278,13 @@ function CertificacionesContent() {
   }, [seriesPeriodLabel, esgReport?.periodo]);
 
   return (
-    <div className="mx-auto w-full max-w-6xl bg-zinc-950 p-6 md:p-10">
-      <header className="mb-10 border-b border-zinc-800/90 pb-8">
+    <div className="mx-auto w-full max-w-6xl bg-zinc-50 dark:bg-zinc-950 p-6 md:p-10">
+      <header className="mb-10 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-8">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Cumplimiento normativo</p>
         <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight text-zinc-50 md:text-4xl">
           Certificaciones y cumplimiento
         </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
           Documentación oficial de integridad fiscal, huella de carbono y trazabilidad de eventos críticos para
           auditorías internas y externas.
         </p>
@@ -299,7 +299,7 @@ function CertificacionesContent() {
       {/* Bento: dos tarjetas grandes */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-6">
         {/* Card 1 — VeriFactu */}
-        <Card className="bunker-card relative overflow-hidden border-zinc-800/90">
+        <Card className="bunker-card relative overflow-hidden border-zinc-200/90 dark:border-zinc-800/90">
           <div className="pointer-events-none absolute -right-8 -top-8 h-56 w-56 rounded-full bg-emerald-500/5 blur-3xl" />
           <CardHeader className="relative space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -319,14 +319,14 @@ function CertificacionesContent() {
               </div>
             </div>
             <CardTitle className="font-serif text-xl text-zinc-50">Integridad de cadena y firma electrónica</CardTitle>
-            <CardDescription className="text-sm leading-relaxed text-zinc-400">
+            <CardDescription className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
               El 100% de las facturas emitidas en esta plataforma se sellan con firma electrónica avanzada (perfil
-              equivalente a <strong className="font-medium text-zinc-300">XAdES-BES</strong>) y se encadenan
+              equivalente a <strong className="font-medium text-zinc-700 dark:text-zinc-300">XAdES-BES</strong>) y se encadenan
               criptográficamente para garantizar inalterabilidad ante la Agencia Tributaria.
             </CardDescription>
           </CardHeader>
           <CardContent className="relative space-y-5">
-            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-xs text-zinc-500">
+            <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 px-4 py-3 text-xs text-zinc-500">
               {chainInitialLoading ? (
                 <span className="inline-flex items-center gap-2">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-500" aria-hidden />
@@ -353,7 +353,7 @@ function CertificacionesContent() {
                 type="button"
                 onClick={() => void onDownloadJson()}
                 disabled={chainDownloading}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/50 px-4 py-2.5 text-sm font-medium text-zinc-100 transition-colors hover:border-emerald-500/40 hover:bg-zinc-800/40 disabled:opacity-50 min-[420px]:flex-none"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/50 px-4 py-2.5 text-sm font-medium text-zinc-900 dark:text-zinc-100 transition-colors hover:border-emerald-500/40 hover:bg-zinc-800/40 disabled:opacity-50 min-[420px]:flex-none"
               >
                 {jsonDownloading ? (
                   <Loader2 className="h-4 w-4 animate-spin text-emerald-500" aria-hidden />
@@ -366,12 +366,12 @@ function CertificacionesContent() {
                 type="button"
                 onClick={() => void onDownloadPdf()}
                 disabled={chainDownloading}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/50 px-4 py-2.5 text-sm font-medium text-zinc-100 transition-colors hover:border-emerald-500/40 hover:bg-zinc-800/40 disabled:opacity-50 min-[420px]:flex-none"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/50 px-4 py-2.5 text-sm font-medium text-zinc-900 dark:text-zinc-100 transition-colors hover:border-emerald-500/40 hover:bg-zinc-800/40 disabled:opacity-50 min-[420px]:flex-none"
               >
                 {pdfDownloading ? (
                   <Loader2 className="h-4 w-4 animate-spin text-emerald-500" aria-hidden />
                 ) : (
-                  <FileText className="h-4 w-4 text-zinc-400" aria-hidden />
+                  <FileText className="h-4 w-4 text-zinc-600 dark:text-zinc-400" aria-hidden />
                 )}
                 Registro PDF
               </button>
@@ -384,7 +384,7 @@ function CertificacionesContent() {
         </Card>
 
         {/* Card 2 — ESG */}
-        <Card className="bunker-card relative overflow-hidden border-zinc-800/90">
+        <Card className="bunker-card relative overflow-hidden border-zinc-200/90 dark:border-zinc-800/90">
           <div className="pointer-events-none absolute -left-10 -bottom-10 h-48 w-48 rounded-full bg-emerald-500/5 blur-3xl" />
           <CardHeader className="relative space-y-3">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
@@ -397,13 +397,13 @@ function CertificacionesContent() {
                 Framework GLEC compliant
               </span>
             </div>
-            <CardDescription className="text-sm text-zinc-400">
+            <CardDescription className="text-sm text-zinc-600 dark:text-zinc-400">
               Metodología alineada con el cálculo de emisiones de transporte para reporting corporativo y clientes
-              exigentes en <strong className="font-medium text-zinc-300">ESG</strong>.
+              exigentes en <strong className="font-medium text-zinc-700 dark:text-zinc-300">ESG</strong>.
             </CardDescription>
           </CardHeader>
           <CardContent className="relative space-y-5">
-            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm">
+            <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 px-4 py-3 text-sm">
               {esgReportLoading ? (
                 <span className="inline-flex items-center gap-2 text-zinc-500">
                   <Loader2 className="h-4 w-4 animate-spin text-emerald-500" aria-hidden />
@@ -411,7 +411,7 @@ function CertificacionesContent() {
                 </span>
               ) : (
                 <>
-                  <p className="text-zinc-200">
+                  <p className="text-zinc-800 dark:text-zinc-200">
                     <span className="font-medium text-zinc-500">Periodo:</span>{" "}
                     <span>{esgPeriodLabel ?? "—"}</span>
                   </p>
@@ -424,7 +424,7 @@ function CertificacionesContent() {
                   {esgReport ? (
                     <p className="mt-2 text-[11px] leading-relaxed text-zinc-600">
                       Reporte oficial{" "}
-                      <code className="rounded bg-zinc-900 px-1 py-0.5 text-zinc-400">GET /api/v1/finance/esg-report</code>
+                      <code className="rounded bg-zinc-900 px-1 py-0.5 text-zinc-600 dark:text-zinc-400">GET /api/v1/finance/esg-report</code>
                       · Mes de referencia: {formatMonthYear(esgReport.periodo)} · {esgReport.total_portes} porte(s) en
                       periodo.
                     </p>
@@ -463,10 +463,10 @@ function CertificacionesContent() {
                 </ResponsiveContainer>
               )}
             </div>
-            <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 px-4 py-3 text-[11px] leading-relaxed text-zinc-500">
-              <span className="font-semibold text-zinc-400">GLEC — nivel de precisión: </span>
+            <div className="rounded-lg border border-zinc-200/90 dark:border-zinc-800/80 bg-zinc-50 dark:bg-zinc-950/40 px-4 py-3 text-[11px] leading-relaxed text-zinc-500">
+              <span className="font-semibold text-zinc-600 dark:text-zinc-400">GLEC — nivel de precisión: </span>
               Nivel 3 (GLEC Accuracy Level 3): cálculo con{" "}
-              <strong className="font-medium text-zinc-300">datos operativos reales</strong> por servicio (km, carga,
+              <strong className="font-medium text-zinc-700 dark:text-zinc-300">datos operativos reales</strong> por servicio (km, carga,
               vehículo / factor de emisión), no solo valores genéricos de sector.
             </div>
             {esgError ? (
@@ -495,11 +495,11 @@ function CertificacionesContent() {
       <section className="mt-8">
         <div className="mb-3 flex items-center gap-2">
           <Lock className="h-4 w-4 text-zinc-500" aria-hidden />
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Registro de auditoría</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">Registro de auditoría</h2>
         </div>
-        <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/35">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-5 py-3">
-            <span className="text-sm font-medium text-zinc-200">Últimos eventos críticos</span>
+        <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/35">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 px-5 py-3">
+            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Últimos eventos críticos</span>
             <span className="text-xs text-zinc-500">Autenticación, exportaciones y datos personales</span>
           </div>
           <div className="w-full overflow-x-auto">
@@ -513,7 +513,7 @@ function CertificacionesContent() {
             ) : (
               <table className="w-full min-w-[800px] text-left text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-800 text-xs uppercase tracking-wide text-zinc-500">
+                  <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wide text-zinc-500">
                     <th className="px-5 py-3 font-semibold">Fecha / hora</th>
                     <th className="px-5 py-3 font-semibold">Tipo</th>
                     <th className="px-5 py-3 font-semibold">Descripción</th>
@@ -535,15 +535,15 @@ function CertificacionesContent() {
                       const isPorte = origen === "portes";
                       return (
                         <tr key={row.id} className="transition-colors hover:bg-zinc-800/25">
-                          <td className="whitespace-nowrap px-5 py-3 text-zinc-400">
+                          <td className="whitespace-nowrap px-5 py-3 text-zinc-600 dark:text-zinc-400">
                             {formatDateTime(row.created_at)}
                           </td>
                           <td className="px-5 py-3">
-                            <span className="rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-0.5 text-xs text-zinc-300">
+                            <span className="rounded-md border border-zinc-700 bg-zinc-50 dark:bg-zinc-950/60 px-2 py-0.5 text-xs text-zinc-700 dark:text-zinc-300">
                               {tipo}
                             </span>
                           </td>
-                          <td className="max-w-md px-5 py-3 text-zinc-300">{descripcion}</td>
+                          <td className="max-w-md px-5 py-3 text-zinc-700 dark:text-zinc-300">{descripcion}</td>
                           <td className="hidden px-5 py-3 font-mono text-xs text-zinc-500 md:table-cell">
                             {origen || "—"}
                           </td>
@@ -571,7 +571,7 @@ function CertificacionesContent() {
         </div>
       </section>
 
-      <footer className="mt-12 flex flex-wrap items-center gap-2 border-t border-zinc-800/80 pt-6 text-[11px] text-zinc-600">
+      <footer className="mt-12 flex flex-wrap items-center gap-2 border-t border-zinc-200/90 dark:border-zinc-800/80 pt-6 text-[11px] text-zinc-600">
         <Award className="h-3.5 w-3.5 shrink-0 text-zinc-600" aria-hidden />
         <span>
           AB Logistics OS — documentación orientada a cumplimiento; conserve estos registros junto con su política de
@@ -588,7 +588,7 @@ export default function CertificacionesPage() {
       <RoleGuard
         allowedRoles={["owner"]}
         fallback={
-          <main className="bg-zinc-950 p-8">
+          <main className="bg-zinc-50 dark:bg-zinc-950 p-8">
             <p className="text-sm text-zinc-500">Esta área está reservada a administradores de la empresa.</p>
           </main>
         }

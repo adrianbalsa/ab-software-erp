@@ -35,10 +35,10 @@ export default function BillingPendingPage() {
 
   return (
     <AppShell active="dashboard">
-      <main className="flex min-h-0 flex-1 flex-col items-center justify-center bg-zinc-950 px-6 py-16">
-        <div className="max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/60 p-8 text-center shadow-lg">
-          <h1 className="text-lg font-semibold text-zinc-100">Suscripción pendiente</h1>
-          <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+      <main className="flex min-h-0 flex-1 flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-6 py-16">
+        <div className="max-w-md rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/60 p-8 text-center shadow-lg">
+          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Suscripción pendiente</h1>
+          <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
             El administrador de tu empresa debe completar el pago en Stripe antes de que el equipo pueda
             operar con normalidad en la plataforma.
           </p>
@@ -64,7 +64,7 @@ export default function BillingPendingPage() {
             </button>
             <Link
               href="/dashboard/settings/billing"
-              className="inline-flex justify-center rounded-xl border border-zinc-600 bg-zinc-800/60 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-500"
+              className="inline-flex justify-center rounded-xl border border-zinc-600 bg-zinc-800/60 px-4 py-2.5 text-sm font-semibold text-zinc-800 dark:text-zinc-200 transition hover:border-zinc-500"
             >
               Ir a facturación
             </Link>

@@ -86,21 +86,21 @@ export default function AuditoriaFiscalPage() {
           </main>
         }
       >
-        <main className="space-y-6 bg-zinc-950 p-8">
+        <main className="space-y-6 bg-zinc-50 dark:bg-zinc-950 p-8">
           <header>
-            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-100">
+            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
               <ShieldCheck className="h-6 w-6 text-emerald-500" aria-hidden />
               Auditoría de Integridad VeriFactu
             </h1>
-            <p className="mt-1 text-sm text-zinc-400">
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               Verificación criptográfica de encadenamiento fiscal.
             </p>
           </header>
 
           <Card className="bunker-card">
             <CardHeader>
-              <CardTitle className="text-zinc-100">Paquete auditor (Due Diligence)</CardTitle>
-              <CardDescription className="text-zinc-400">
+              <CardTitle className="text-zinc-900 dark:text-zinc-100">Paquete auditor (Due Diligence)</CardTitle>
+              <CardDescription className="text-zinc-600 dark:text-zinc-400">
                 ZIP con compliance público, matriz de precios de catálogo y security.txt. Sin datos operativos ni PII
                 de clientes. Ayuda: /help/audit-evidence-pack
               </CardDescription>
@@ -120,8 +120,8 @@ export default function AuditoriaFiscalPage() {
 
           <Card className="bunker-card">
             <CardHeader>
-              <CardTitle className="text-zinc-100">Verificación de cadena fiscal</CardTitle>
-              <CardDescription className="text-zinc-400">
+              <CardTitle className="text-zinc-900 dark:text-zinc-100">Verificación de cadena fiscal</CardTitle>
+              <CardDescription className="text-zinc-600 dark:text-zinc-400">
                 Comprueba que cada factura enlaza con el hash anterior sin alteraciones.
               </CardDescription>
             </CardHeader>
@@ -130,7 +130,7 @@ export default function AuditoriaFiscalPage() {
                 type="button"
                 onClick={() => void onVerify()}
                 disabled={loading}
-                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:opacity-60"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 Verificar Integridad Fiscal
@@ -160,8 +160,8 @@ export default function AuditoriaFiscalPage() {
 
           <Card className="bunker-card">
             <CardHeader>
-              <CardTitle className="text-zinc-100">Previsualización QR de factura</CardTitle>
-              <CardDescription className="text-zinc-400">
+              <CardTitle className="text-zinc-900 dark:text-zinc-100">Previsualización QR de factura</CardTitle>
+              <CardDescription className="text-zinc-600 dark:text-zinc-400">
                 Comprueba que el QR codifica correctamente número, fecha, importe y huella fiscal.
               </CardDescription>
             </CardHeader>
@@ -173,13 +173,13 @@ export default function AuditoriaFiscalPage() {
                   value={facturaIdInput}
                   onChange={(e) => setFacturaIdInput(e.target.value)}
                   placeholder="ID de factura"
-                  className="w-48 rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500"
+                  className="w-48 rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500"
                 />
                 <button
                   type="button"
                   onClick={() => void onPreviewQr()}
                   disabled={previewLoading}
-                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:opacity-60"
                 >
                   {previewLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   Previsualizar QR

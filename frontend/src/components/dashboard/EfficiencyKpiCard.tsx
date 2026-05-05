@@ -50,18 +50,18 @@ export function EfficiencyKpiCard({
     <div className="dashboard-bento rounded-2xl p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className="mb-1 text-sm font-medium text-zinc-400">Margen neto por km</p>
+          <p className="mb-1 text-sm font-medium text-zinc-600 dark:text-zinc-400">Margen neto por km</p>
           <p className="mb-2 text-xs text-zinc-500">
             (Ingresos − Gastos) ÷ km facturados en el mes · mismo criterio que el Math Engine (sin IVA)
           </p>
-          <h3 className="text-3xl font-bold tracking-tight text-zinc-100">{formatEURPerKm(margenNetoKm)}</h3>
+          <h3 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">{formatEURPerKm(margenNetoKm)}</h3>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
             {showMom ? (
               <span
                 className={
                   positive
                     ? "inline-flex items-center gap-1 font-semibold text-emerald-400"
-                    : "inline-flex items-center gap-1 font-semibold text-zinc-400"
+                    : "inline-flex items-center gap-1 font-semibold text-zinc-600 dark:text-zinc-400"
                 }
               >
                 <span aria-hidden>{positive ? "↑" : "↓"}</span>
@@ -74,19 +74,19 @@ export function EfficiencyKpiCard({
           </div>
           <p className="mt-3 text-xs text-zinc-500">
             Km facturados (mes):{" "}
-            <span className="font-semibold text-zinc-200">{formatKm(kmFacturadosMes)}</span>
+            <span className="font-semibold text-zinc-800 dark:text-zinc-200">{formatKm(kmFacturadosMes)}</span>
             {kmFacturadosMesAnterior != null && kmFacturadosMesAnterior > 0 && (
               <>
                 {" "}
                 · mes ant.:{" "}
-                <span className="font-medium text-zinc-400">{formatKm(kmFacturadosMesAnterior)}</span>
+                <span className="font-medium text-zinc-600 dark:text-zinc-400">{formatKm(kmFacturadosMesAnterior)}</span>
               </>
             )}
           </p>
           {margenNetoKmMesAnterior != null && (
             <p className="mt-2 text-xs text-zinc-500">
               Margen/km mes anterior:{" "}
-              <span className="font-medium text-zinc-300">{formatEURPerKm(margenNetoKmMesAnterior)}</span>
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">{formatEURPerKm(margenNetoKmMesAnterior)}</span>
             </p>
           )}
         </div>

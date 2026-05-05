@@ -82,11 +82,11 @@ export function SupportCard() {
               </p>
               <h2
                 id="support-card-heading"
-                className="mt-1 text-lg font-semibold tracking-tight text-zinc-100 sm:text-xl"
+                className="mt-1 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-xl"
               >
                 Bienvenido al Búnker: control total, ROI medible
               </h2>
-              <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-zinc-400">
+              <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
                 Cuatro pilares para blindar la facturación, priorizar rutas rentables, anticipar el taller y
                 negociar tarifas con datos. Use los accesos para profundizar en cada área.
               </p>
@@ -97,7 +97,7 @@ export function SupportCard() {
               <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-400" aria-hidden />
               Tip ahorro: revise la Matriz CIP antes del cierre mensual
             </div>
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800/60 bg-zinc-900/40 px-3 py-1.5 text-xs font-medium text-zinc-400">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800/60 bg-zinc-900/40 px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400">
               <Leaf className="h-3.5 w-3.5 shrink-0 text-emerald-500/90" aria-hidden />
               ESG + margen en un solo gráfico
             </div>
@@ -114,12 +114,12 @@ export function SupportCard() {
                   className={`group flex gap-3 rounded-xl border border-zinc-800/50 bg-zinc-900/40 p-4 shadow-none backdrop-blur transition hover:border-emerald-500/30 hover:shadow-[0_0_20px_rgba(16,185,129,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950`}
                 >
                   <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${p.accent} text-zinc-100 ring-1 ${p.iconRing}`}
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${p.accent} text-zinc-900 dark:text-zinc-100 ring-1 ${p.iconRing}`}
                   >
                     <Icon className="h-5 w-5" aria-hidden />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-zinc-100 group-hover:text-emerald-300">{p.title}</p>
+                    <p className="font-semibold text-zinc-900 dark:text-zinc-100 group-hover:text-emerald-300">{p.title}</p>
                     <p className="mt-0.5 text-sm leading-snug text-zinc-500">{p.description}</p>
                     <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 group-hover:underline">
                       Abrir módulo
@@ -137,7 +137,7 @@ export function SupportCard() {
 
         <p className="mt-5 border-t border-zinc-800/50 pt-4 text-xs text-zinc-500">
           Documentación ejecutiva completa:{" "}
-          <code className="rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-[11px] text-zinc-400">
+          <code className="rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-[11px] text-zinc-600 dark:text-zinc-400">
             QUICKSTART_GUIDE.md
           </code>{" "}
           en la raíz del repositorio.

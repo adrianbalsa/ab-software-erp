@@ -18,17 +18,17 @@ export function LandingHero() {
         }}
       />
       <div className="relative mx-auto max-w-4xl text-center">
-        <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-zinc-700/80 bg-zinc-900/60 px-3 py-1 text-xs font-medium text-emerald-400/90 sm:text-sm">
+        <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-zinc-300/90 dark:border-zinc-700/80 bg-zinc-100/90 dark:bg-zinc-900/60 px-3 py-1 text-xs font-medium text-emerald-400/90 sm:text-sm">
           <Sparkles className="h-3.5 w-3.5 shrink-0" />
           {l.pill}
         </p>
-        <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-5xl sm:leading-[1.1]">
+        <h1 className="text-3xl font-extrabold tracking-tight text-zinc-950 dark:text-white sm:text-5xl sm:leading-[1.1]">
           {l.titlePrefix}{" "}
           <span className="bg-gradient-to-r from-blue-400 via-sky-400 to-emerald-400 bg-clip-text text-transparent">
             {l.titleHighlight}
           </span>
         </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-zinc-300 sm:text-lg">
+        <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-zinc-700 dark:text-zinc-300 sm:text-lg">
           {l.description}
         </p>
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -41,12 +41,12 @@ export function LandingHero() {
           </a>
           <Link
             href="/login"
-            className="inline-flex w-full sm:w-auto items-center justify-center rounded-full border border-zinc-600 bg-zinc-900/50 px-8 py-3.5 text-base font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800"
+            className="inline-flex w-full sm:w-auto items-center justify-center rounded-full border border-zinc-300 dark:border-zinc-600 bg-zinc-100/80 dark:bg-zinc-900/50 px-8 py-3.5 text-base font-semibold text-zinc-800 dark:text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-800"
           >
             {l.secondaryCta}
           </Link>
         </div>
-        <ul className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-zinc-300 sm:text-sm">
+        <ul className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-zinc-700 dark:text-zinc-300 sm:text-sm">
           {l.trustSignals.map((signal) => (
             <li key={signal} className="inline-flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
@@ -54,7 +54,7 @@ export function LandingHero() {
             </li>
           ))}
         </ul>
-        <p className="mt-10 text-xs sm:text-sm text-zinc-300 max-w-xl mx-auto leading-relaxed border border-zinc-800/80 rounded-lg px-4 py-2.5 bg-zinc-900/40">
+        <p className="mt-10 text-xs sm:text-sm text-zinc-700 dark:text-zinc-300 max-w-xl mx-auto leading-relaxed border border-zinc-200/90 dark:border-zinc-800/80 rounded-lg px-4 py-2.5 bg-zinc-50/95 dark:bg-zinc-900/40">
           {l.complianceNote}
         </p>
       </div>

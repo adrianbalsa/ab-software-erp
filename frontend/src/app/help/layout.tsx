@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function HelpLayout({ children }: { children: ReactNode }) {
-  return <div className="min-h-screen bg-zinc-950">{children}</div>;
+  return <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">{children}</div>;
 }

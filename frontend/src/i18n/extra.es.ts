@@ -359,6 +359,8 @@ export const extraEs = {
     mobileHeader: "Portal cliente",
     themeLight: "Modo claro",
     themeDark: "Modo oscuro",
+    themeSystem: "Según el sistema",
+    themeAppearance: "Apariencia",
     signOut: "Salir",
     navShipments: "Mis Portes",
     navInvoices: "Facturas",

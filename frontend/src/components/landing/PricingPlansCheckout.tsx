@@ -128,14 +128,14 @@ export function PricingPlansCheckout({ variant }: { variant: Variant }) {
         >
           {variant === "full-page" ? lp.title : l.title}
         </TitleTag>
-        <p className="mt-3 text-pretty text-sm text-zinc-300 sm:text-base max-w-3xl mx-auto">
+        <p className="mt-3 text-pretty text-sm text-zinc-700 dark:text-zinc-300 sm:text-base max-w-3xl mx-auto">
           {variant === "full-page" ? lp.subtitle : l.subtitle}
         </p>
         {variant === "full-page" && !empresaId ? (
           <p className="mt-4 text-pretty text-sm text-amber-200/90 max-w-2xl mx-auto">{lp.empresaRequiredHint}</p>
         ) : null}
         {variant === "full-page" && checkoutOk ? (
-          <p className="mt-3 text-xs text-zinc-500 max-w-2xl mx-auto">{lp.stripeEnvHint}</p>
+          <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-500 max-w-2xl mx-auto">{lp.stripeEnvHint}</p>
         ) : null}
       </div>
 
@@ -173,7 +173,7 @@ export function PricingPlansCheckout({ variant }: { variant: Variant }) {
               className={`relative flex flex-col rounded-3xl border p-8 transition-shadow duration-300 ${
                 tier.highlight
                   ? "border-emerald-400/60 bg-gradient-to-b from-emerald-500/10 to-zinc-900/90 shadow-2xl shadow-emerald-500/10 ring-2 ring-emerald-500/30 md:-translate-y-1 md:scale-[1.02]"
-                  : "border-zinc-800 bg-zinc-900/60"
+                  : "border-zinc-200 dark:border-zinc-800 bg-zinc-100/90 dark:bg-zinc-900/60"
               } ${ring ? "ring-2 ring-sky-400/50 shadow-[0_0_0_1px_rgba(56,189,248,0.2)]" : ""}`}
             >
               {tier.highlight && (
@@ -182,21 +182,21 @@ export function PricingPlansCheckout({ variant }: { variant: Variant }) {
                 </span>
               )}
               <h3 className="text-lg font-bold tracking-tight text-white">{name}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-400">{tierTagline(catalog, tier.slug)}</p>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{tierTagline(catalog, tier.slug)}</p>
               <div className="mt-6 flex items-baseline gap-1">
                 <span className="text-4xl font-extrabold text-white">{tierPriceLabel(tier)}</span>
-                <span className="text-zinc-400">{l.monthSuffix}</span>
+                <span className="text-zinc-600 dark:text-zinc-400">{l.monthSuffix}</span>
               </div>
-              <p className="mt-1 text-xs text-zinc-500">{l.vatExcluded}</p>
-              <p className="mt-2 text-xs font-medium text-zinc-400">{tierLimitsCaption(tier, locale)}</p>
-              <ul className="mt-6 flex-1 divide-y divide-zinc-800/80 rounded-2xl border border-zinc-800/80 bg-surface-elevated text-sm">
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">{l.vatExcluded}</p>
+              <p className="mt-2 text-xs font-medium text-zinc-600 dark:text-zinc-400">{tierLimitsCaption(tier, locale)}</p>
+              <ul className="mt-6 flex-1 divide-y divide-zinc-200/90 dark:divide-zinc-800/80 rounded-2xl border border-zinc-200/90 dark:border-zinc-800/80 bg-surface-elevated text-sm">
                 {l.features.map((feature, index) => (
-                  <li key={feature} className="flex items-center justify-between gap-2 px-3 py-2.5 text-zinc-300">
+                  <li key={feature} className="flex items-center justify-between gap-2 px-3 py-2.5 text-zinc-700 dark:text-zinc-300">
                     <span>{feature}</span>
                     {tier.includes[index] ? (
                       <Check className="h-4 w-4 shrink-0 text-emerald-400" />
                     ) : (
-                      <Minus className="h-4 w-4 shrink-0 text-zinc-500" />
+                      <Minus className="h-4 w-4 shrink-0 text-zinc-500 dark:text-zinc-500" />
                     )}
                   </li>
                 ))}
@@ -210,7 +210,7 @@ export function PricingPlansCheckout({ variant }: { variant: Variant }) {
                 className={`mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold transition ${
                   tier.highlight
                     ? "bg-emerald-500 text-zinc-950 hover:bg-emerald-400 disabled:bg-emerald-500/50"
-                    : "border border-zinc-600 text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                    : "border border-zinc-300 dark:border-zinc-600 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800 disabled:opacity-50"
                 }`}
               >
                 <span className="inline-flex min-w-[8rem] items-center justify-center gap-2">
@@ -235,11 +235,11 @@ export function PricingPlansCheckout({ variant }: { variant: Variant }) {
 
       {variant === "full-page" ? (
         <div className="mt-12 flex flex-col items-center gap-4 text-center">
-          <p className="text-sm text-zinc-400 max-w-xl">{lp.funnelHint}</p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 max-w-xl">{lp.funnelHint}</p>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/login?next=%2Fpricing"
-              className="inline-flex min-h-11 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900/60 px-6 py-2.5 text-sm font-semibold text-zinc-100 transition hover:bg-zinc-800"
+              className="inline-flex min-h-11 items-center justify-center rounded-full border border-zinc-300 dark:border-zinc-600 bg-zinc-100/90 dark:bg-zinc-900/60 px-6 py-2.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100 transition hover:bg-zinc-200 dark:hover:bg-zinc-800"
             >
               {lp.loginCta}
             </Link>

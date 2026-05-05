@@ -49,7 +49,7 @@ export default function MisPortesPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{p.title}</h1>
-          <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">{p.subtitle}</p>
+          <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-600 dark:text-zinc-400">{p.subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="hidden text-xs text-zinc-500 dark:text-zinc-500 sm:inline">{p.pollHint}</span>
@@ -86,7 +86,7 @@ export default function MisPortesPage() {
             <Activity className="h-5 w-5 text-blue-600 dark:text-blue-400" aria-hidden />
             <div>
               <CardTitle className="text-lg text-zinc-900 dark:text-zinc-50">{p.activeTitle}</CardTitle>
-              <CardDescription className="dark:text-zinc-400">{p.activeDesc}</CardDescription>
+              <CardDescription className="dark:text-zinc-600 dark:text-zinc-400">{p.activeDesc}</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -126,7 +126,7 @@ export default function MisPortesPage() {
                     <TableRow key={String(row.id)} className="border-zinc-100 dark:border-zinc-800/80">
                       <TableCell className="font-medium text-zinc-900 dark:text-zinc-100">{row.origen}</TableCell>
                       <TableCell className="text-zinc-700 dark:text-zinc-300">{row.destino}</TableCell>
-                      <TableCell className="text-zinc-600 dark:text-zinc-400">{fmt(row.fecha)}</TableCell>
+                      <TableCell className="text-zinc-600 dark:text-zinc-600 dark:text-zinc-400">{fmt(row.fecha)}</TableCell>
                       <TableCell>
                         <span
                           className={cn(
@@ -151,7 +151,7 @@ export default function MisPortesPage() {
       <Card className="border-zinc-200/90 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
         <CardHeader className="border-b border-zinc-100 dark:border-zinc-800">
           <CardTitle className="text-lg text-zinc-900 dark:text-zinc-50">{p.historicTitle}</CardTitle>
-          <CardDescription className="dark:text-zinc-400">{p.historicDesc}</CardDescription>
+          <CardDescription className="dark:text-zinc-600 dark:text-zinc-400">{p.historicDesc}</CardDescription>
         </CardHeader>
         <CardContent className="pt-4">
           <div className="overflow-x-auto rounded-lg border border-zinc-200/80 dark:border-zinc-800">
@@ -191,7 +191,7 @@ export default function MisPortesPage() {
                     <TableRow key={String(row.id)} className="border-zinc-100 dark:border-zinc-800/80">
                       <TableCell className="font-medium text-zinc-900 dark:text-zinc-100">{row.origen}</TableCell>
                       <TableCell className="text-zinc-700 dark:text-zinc-300">{row.destino}</TableCell>
-                      <TableCell className="text-zinc-600 dark:text-zinc-400">{fmt(row.fecha_entrega)}</TableCell>
+                      <TableCell className="text-zinc-600 dark:text-zinc-600 dark:text-zinc-400">{fmt(row.fecha_entrega)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex flex-wrap justify-end gap-2">
                           <Button

@@ -131,10 +131,10 @@ export function LiveFleetMap({
     return (
       <div className="flex h-full min-h-[420px] w-full items-center justify-center rounded-2xl border border-zinc-700/80 bg-zinc-900/90 px-6 py-10 text-center">
         <div className="max-w-md space-y-2">
-          <p className="text-base font-semibold text-zinc-100">Configuración de mapa requerida</p>
-          <p className="text-sm text-zinc-400">
+          <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Configuración de mapa requerida</p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
             Defina la variable de entorno{" "}
-            <code className="rounded bg-zinc-950 px-1.5 py-0.5 font-mono text-xs text-emerald-400">
+            <code className="rounded bg-zinc-50 dark:bg-zinc-950 px-1.5 py-0.5 font-mono text-xs text-emerald-400">
               NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
             </code>{" "}
             para cargar el centro de mando sobre Google Maps.
@@ -154,7 +154,7 @@ export function LiveFleetMap({
 
   if (!isLoaded) {
     return (
-      <div className="flex h-full min-h-[420px] items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/80 text-sm text-zinc-400">
+      <div className="flex h-full min-h-[420px] items-center justify-center rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/80 text-sm text-zinc-600 dark:text-zinc-400">
         Inicializando mapa…
       </div>
     );
@@ -162,7 +162,7 @@ export function LiveFleetMap({
 
   if (loading) {
     return (
-      <div className="flex h-full min-h-[420px] items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/80 text-sm text-zinc-400">
+      <div className="flex h-full min-h-[420px] items-center justify-center rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/80 text-sm text-zinc-600 dark:text-zinc-400">
         Obteniendo posiciones…
       </div>
     );

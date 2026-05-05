@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 
+import { ThemeModePicker } from "../../src/components/ThemeModePicker";
 import { ConnectionProbe } from "../../src/components/ConnectionProbe";
 import { useAuth } from "../../src/context/AuthContext";
 import { ApiError } from "../../src/lib/api";
@@ -54,15 +55,20 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      className="flex-1 bg-slate-50"
+      className="flex-1 bg-slate-50 dark:bg-zinc-950"
     >
       <View className="flex-1 justify-center px-5 py-8">
-        <Text className="text-2xl font-bold text-slate-900">AB Logistics</Text>
-        <Text className="mt-1 text-sm text-slate-600">Acceso operadores</Text>
+        <View className="mb-6 flex-row justify-end">
+          <ThemeModePicker />
+        </View>
+        <Text className="text-2xl font-bold text-slate-900 dark:text-zinc-100">AB Logistics</Text>
+        <Text className="mt-1 text-sm text-slate-600 dark:text-zinc-400">Acceso operadores</Text>
 
         <View className="mt-8 gap-3">
           <View>
-            <Text className="mb-1 text-xs font-medium uppercase text-slate-500">Usuario o email</Text>
+            <Text className="mb-1 text-xs font-medium uppercase text-slate-500 dark:text-zinc-500">
+              Usuario o email
+            </Text>
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
@@ -70,23 +76,27 @@ export default function LoginScreen() {
               value={username}
               onChangeText={setUsername}
               placeholder="usuario@empresa.com"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-3 text-base text-slate-900"
+              placeholderTextColor="#71717a"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-3 text-base text-slate-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
             />
           </View>
           <View>
-            <Text className="mb-1 text-xs font-medium uppercase text-slate-500">Contraseña</Text>
+            <Text className="mb-1 text-xs font-medium uppercase text-slate-500 dark:text-zinc-500">Contraseña</Text>
             <TextInput
               secureTextEntry
               value={password}
               onChangeText={setPassword}
               placeholder="••••••••"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-3 text-base text-slate-900"
+              placeholderTextColor="#71717a"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-3 text-base text-slate-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
             />
           </View>
         </View>
 
         {error ? (
-          <Text className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</Text>
+          <Text className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200">
+            {error}
+          </Text>
         ) : null}
 
         <Pressable

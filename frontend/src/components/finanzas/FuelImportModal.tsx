@@ -36,7 +36,9 @@ export function FuelImportModal({ open, onClose, onImported }: Props) {
   const [resetToken, setResetToken] = useState(0);
 
   useEffect(() => {
-    if (open) setResetToken((t) => t + 1);
+    if (!open) return;
+    const id = requestAnimationFrame(() => setResetToken((t) => t + 1));
+    return () => cancelAnimationFrame(id);
   }, [open]);
 
   return (

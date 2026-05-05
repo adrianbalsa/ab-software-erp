@@ -63,11 +63,11 @@ export default function DashboardPorteDetailPage() {
 
   return (
     <AppShell active="portes">
-      <div className="mx-auto w-full max-w-2xl bg-zinc-950 p-6 md:p-10">
+      <div className="mx-auto w-full max-w-2xl bg-zinc-50 dark:bg-zinc-950 p-6 md:p-10">
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <Link
             href="/portes"
-            className="inline-flex items-center gap-2 text-sm font-medium text-zinc-400 transition-colors hover:text-emerald-400"
+            className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 transition-colors hover:text-emerald-400"
           >
             <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
             Volver a Portes
@@ -81,7 +81,7 @@ export default function DashboardPorteDetailPage() {
           </Link>
         </div>
 
-        <header className="mb-8 flex flex-col gap-4 border-b border-zinc-800 pb-6 sm:flex-row sm:items-start sm:justify-between">
+        <header className="mb-8 flex flex-col gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
               <Truck className="h-4 w-4 text-emerald-500/90" aria-hidden />
@@ -106,7 +106,7 @@ export default function DashboardPorteDetailPage() {
         </header>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-zinc-400">
+          <div className="flex items-center justify-center gap-2 py-16 text-zinc-600 dark:text-zinc-400">
             <Loader2 className="h-5 w-5 animate-spin text-emerald-500" aria-hidden />
             Cargando…
           </div>
@@ -115,28 +115,28 @@ export default function DashboardPorteDetailPage() {
             {error}
           </div>
         ) : porte ? (
-          <div className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
+          <div className="space-y-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-6">
             <div className="flex items-start gap-3">
               <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-zinc-500" aria-hidden />
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Origen</p>
-                <p className="text-sm text-zinc-100">{porte.origen || "—"}</p>
+                <p className="text-sm text-zinc-900 dark:text-zinc-100">{porte.origen || "—"}</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-zinc-500" aria-hidden />
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Destino</p>
-                <p className="text-sm text-zinc-100">{porte.destino || "—"}</p>
+                <p className="text-sm text-zinc-900 dark:text-zinc-100">{porte.destino || "—"}</p>
               </div>
             </div>
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Estado</p>
-              <p className="mt-1 inline-flex rounded-md border border-zinc-700 bg-zinc-950/60 px-2.5 py-1 text-sm text-zinc-200">
+              <p className="mt-1 inline-flex rounded-md border border-zinc-700 bg-zinc-50 dark:bg-zinc-950/60 px-2.5 py-1 text-sm text-zinc-800 dark:text-zinc-200">
                 {porte.estado || "—"}
               </p>
             </div>
-            <div className="flex items-start gap-3 border-t border-zinc-800 pt-4">
+            <div className="flex items-start gap-3 border-t border-zinc-200 dark:border-zinc-800 pt-4">
               <Leaf className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500/80" aria-hidden />
               <div className="min-w-0 space-y-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
@@ -148,9 +148,9 @@ export default function DashboardPorteDetailPage() {
                     : formatKg(porte.co2_emitido)}
                 </p>
                 {porte.esg_co2_euro_iii_baseline_kg != null && (
-                  <p className="text-xs text-zinc-400">
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
                     Referencia Euro III (mismo recorrido):{" "}
-                    <span className="font-mono text-zinc-200">
+                    <span className="font-mono text-zinc-800 dark:text-zinc-200">
                       {Number(porte.esg_co2_euro_iii_baseline_kg).toLocaleString("es-ES", {
                         maximumFractionDigits: 3,
                       })}{" "}

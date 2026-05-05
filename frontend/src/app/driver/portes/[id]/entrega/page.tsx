@@ -87,8 +87,8 @@ export default function EntregaDriverPage() {
   );
 
   return (
-    <div className="min-h-dvh bg-zinc-950 text-zinc-100">
-      <header className="sticky top-0 z-10 border-b border-zinc-800/80 bg-zinc-950/95 px-4 py-3 backdrop-blur">
+    <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
+      <header className="sticky top-0 z-10 border-b border-zinc-200/90 dark:border-zinc-800/80 bg-zinc-50 dark:bg-zinc-950/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
           <Link
             href="/portes"
@@ -105,7 +105,7 @@ export default function EntregaDriverPage() {
 
       <main className="mx-auto max-w-lg px-4 pb-10 pt-4">
         {loading && (
-          <div className="flex flex-col items-center gap-3 py-16 text-zinc-400">
+          <div className="flex flex-col items-center gap-3 py-16 text-zinc-600 dark:text-zinc-400">
             <Loader2 className="h-10 w-10 animate-spin text-emerald-500" aria-hidden />
             <p className="text-sm">Cargando porte…</p>
           </div>
@@ -119,7 +119,7 @@ export default function EntregaDriverPage() {
 
         {porte && (
           <>
-            <section className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-lg shadow-black/40">
+            <section className="mb-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/60 p-4 shadow-lg shadow-black/40">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-emerald-500/90">
                 Resumen del servicio
               </p>
@@ -127,28 +127,28 @@ export default function EntregaDriverPage() {
                 <li className="flex gap-2">
                   <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
                   <span>
-                    <span className="font-medium text-zinc-300">Origen</span>
+                    <span className="font-medium text-zinc-700 dark:text-zinc-300">Origen</span>
                     <br />
-                    <span className="text-zinc-100">{porte.origen}</span>
+                    <span className="text-zinc-900 dark:text-zinc-100">{porte.origen}</span>
                   </span>
                 </li>
                 <li className="flex gap-2">
                   <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
                   <span>
-                    <span className="font-medium text-zinc-300">Destino</span>
+                    <span className="font-medium text-zinc-700 dark:text-zinc-300">Destino</span>
                     <br />
-                    <span className="text-zinc-100">{porte.destino}</span>
+                    <span className="text-zinc-900 dark:text-zinc-100">{porte.destino}</span>
                   </span>
                 </li>
                 <li className="flex gap-2">
                   <Package className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
                   <span>
-                    <span className="font-medium text-zinc-300">Mercancía</span>
+                    <span className="font-medium text-zinc-700 dark:text-zinc-300">Mercancía</span>
                     <br />
-                    <span className="text-zinc-100">{porte.descripcion?.trim() || "—"}</span>
+                    <span className="text-zinc-900 dark:text-zinc-100">{porte.descripcion?.trim() || "—"}</span>
                   </span>
                 </li>
-                <li className="rounded-lg bg-zinc-950/80 px-3 py-2 text-center text-lg font-semibold text-white">
+                <li className="rounded-lg bg-zinc-50 dark:bg-zinc-950/80 px-3 py-2 text-center text-lg font-semibold text-white">
                   Bultos a entregar: {porte.bultos}
                 </li>
               </ul>
@@ -204,7 +204,7 @@ export default function EntregaDriverPage() {
                 <CheckCircle2 className="h-20 w-20 text-emerald-400" strokeWidth={1.5} />
               </motion.div>
               <p className="text-xl font-semibold text-white">Entrega registrada</p>
-              <p className="text-sm text-zinc-400">Volviendo a tus rutas…</p>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">Volviendo a tus rutas…</p>
             </motion.div>
           </motion.div>
         )}

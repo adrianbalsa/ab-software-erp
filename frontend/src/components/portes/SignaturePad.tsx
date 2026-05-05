@@ -107,16 +107,16 @@ export function SignaturePad({
         role="dialog"
         aria-modal
         aria-labelledby="signature-pad-title"
-        className="relative z-10 flex max-h-[min(96dvh,880px)] w-full max-w-lg flex-col rounded-t-2xl border border-zinc-700 bg-zinc-950 shadow-2xl sm:rounded-2xl"
+        className="relative z-10 flex max-h-[min(96dvh,880px)] w-full max-w-lg flex-col rounded-t-2xl border border-zinc-700 bg-zinc-50 dark:bg-zinc-950 shadow-2xl sm:rounded-2xl"
       >
-        <div className="shrink-0 border-b border-zinc-800 px-4 py-3">
+        <div className="shrink-0 border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
           <h2 id="signature-pad-title" className="text-center text-lg font-semibold text-white">
             {title}
           </h2>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 pt-3">
-          <label className="mb-1 block text-sm font-medium text-zinc-400">
+          <label className="mb-1 block text-sm font-medium text-zinc-600 dark:text-zinc-400">
             Nombre y apellidos del consignatario
           </label>
           <input
@@ -129,7 +129,7 @@ export function SignaturePad({
             className="mb-3 w-full min-h-12 rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-base text-white placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
           />
 
-          <label className="mb-1 block text-sm font-medium text-zinc-400">DNI / NIE (opcional)</label>
+          <label className="mb-1 block text-sm font-medium text-zinc-600 dark:text-zinc-400">DNI / NIE (opcional)</label>
           <input
             type="text"
             autoComplete="off"
@@ -141,7 +141,7 @@ export function SignaturePad({
             className="mb-4 w-full min-h-11 rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-base text-white placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
           />
 
-          <p className="mb-2 text-sm font-medium text-zinc-300">Firma del consignatario</p>
+          <p className="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">Firma del consignatario</p>
           <div ref={wrapRef} className="w-full touch-none">
             <SignatureCanvas
               ref={sigRef}
@@ -151,7 +151,7 @@ export function SignaturePad({
                 width: canvasW,
                 height: 256,
                 className:
-                  "h-64 w-full touch-none rounded-xl border-2 border-emerald-600/40 bg-zinc-950",
+                  "h-64 w-full touch-none rounded-xl border-2 border-emerald-600/40 bg-zinc-50 dark:bg-zinc-950",
               }}
             />
           </div>
@@ -167,7 +167,7 @@ export function SignaturePad({
               type="button"
               onClick={limpiar}
               disabled={busy}
-              className="min-h-12 flex-1 rounded-xl border-2 border-zinc-600 bg-zinc-900 text-base font-semibold text-zinc-200 active:bg-zinc-800 disabled:opacity-50"
+              className="min-h-12 flex-1 rounded-xl border-2 border-zinc-600 bg-zinc-900 text-base font-semibold text-zinc-800 dark:text-zinc-200 active:bg-zinc-800 disabled:opacity-50"
             >
               Limpiar
             </button>

@@ -156,7 +156,7 @@ function FleetMapInner({ portes, vehiclesById, costEurKm, onGeocodingChange }: M
   return (
     <>
       {geoError ? (
-        <div className="absolute left-4 top-4 z-10 max-w-sm rounded-lg border border-amber-500/40 bg-zinc-950/95 px-3 py-2 text-xs text-amber-100 shadow-lg backdrop-blur">
+        <div className="absolute left-4 top-4 z-10 max-w-sm rounded-lg border border-amber-500/40 bg-zinc-50 dark:bg-zinc-950/95 px-3 py-2 text-xs text-amber-100 shadow-lg backdrop-blur">
           {geoError}
         </div>
       ) : null}
@@ -282,7 +282,7 @@ export function FleetIntelligenceMap({
     return (
       <div
         className={cn(
-          "flex min-h-[min(100dvh,720px)] w-full items-center justify-center border border-amber-500/30 bg-zinc-950 px-4 text-center text-sm text-amber-100",
+          "flex min-h-[min(100dvh,720px)] w-full items-center justify-center border border-amber-500/30 bg-zinc-50 dark:bg-zinc-950 px-4 text-center text-sm text-amber-100",
           className,
         )}
       >
@@ -299,7 +299,7 @@ export function FleetIntelligenceMap({
     return (
       <div
         className={cn(
-          "flex min-h-[min(100dvh,720px)] w-full items-center justify-center border border-rose-500/30 bg-zinc-950 px-4 text-center text-sm text-rose-200",
+          "flex min-h-[min(100dvh,720px)] w-full items-center justify-center border border-rose-500/30 bg-zinc-50 dark:bg-zinc-950 px-4 text-center text-sm text-rose-200",
           className,
         )}
       >
@@ -312,7 +312,7 @@ export function FleetIntelligenceMap({
     return (
       <div
         className={cn(
-          "flex min-h-[min(100dvh,720px)] w-full items-center justify-center bg-zinc-950 text-sm text-zinc-400",
+          "flex min-h-[min(100dvh,720px)] w-full items-center justify-center bg-zinc-50 dark:bg-zinc-950 text-sm text-zinc-600 dark:text-zinc-400",
           className,
         )}
       >
@@ -322,7 +322,7 @@ export function FleetIntelligenceMap({
   }
 
   return (
-    <div className={cn("relative min-h-[min(100dvh,720px)] w-full bg-zinc-950", className)}>
+    <div className={cn("relative min-h-[min(100dvh,720px)] w-full bg-zinc-50 dark:bg-zinc-950", className)}>
       <APIProvider apiKey={apiKey} libraries={["marker"]}>
         <Map
           className="h-[100dvh] w-full [&_.map]:!h-full"
@@ -345,7 +345,7 @@ export function FleetIntelligenceMap({
       </APIProvider>
 
       <div className="pointer-events-none absolute bottom-6 left-4 right-4 z-10 flex flex-wrap items-end justify-between gap-3">
-        <div className="pointer-events-auto max-w-md rounded-xl border border-zinc-800/90 bg-zinc-950/90 px-4 py-3 text-xs text-zinc-400 shadow-xl backdrop-blur">
+        <div className="pointer-events-auto max-w-md rounded-xl border border-zinc-200/90 dark:border-zinc-800/90 bg-zinc-50 dark:bg-zinc-950/90 px-4 py-3 text-xs text-zinc-600 dark:text-zinc-400 shadow-xl backdrop-blur">
           <p className="font-semibold uppercase tracking-wide text-zinc-500">Leyenda</p>
           <ul className="mt-2 space-y-1.5">
             <li className="flex items-center gap-2">
@@ -363,7 +363,7 @@ export function FleetIntelligenceMap({
           </ul>
         </div>
         {geocoding ? (
-          <div className="pointer-events-auto rounded-lg border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-xs text-zinc-300">
+          <div className="pointer-events-auto rounded-lg border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300">
             Geocodificando rutas…
           </div>
         ) : null}

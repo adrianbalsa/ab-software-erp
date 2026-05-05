@@ -108,7 +108,7 @@ export function CotizadorInteligente({ empresaId }: CotizadorInteligenteProps) {
   );
 
   return (
-    <section className="rounded-3xl border border-zinc-800/90 bg-zinc-900/50 p-6 shadow-xl shadow-black/25 backdrop-blur-sm sm:p-8">
+    <section className="rounded-3xl border border-zinc-200/90 dark:border-zinc-800/90 bg-zinc-900/50 p-6 shadow-xl shadow-black/25 backdrop-blur-sm sm:p-8">
       <div className="mb-6 flex items-start gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
           <Calculator className="h-5 w-5" />
@@ -117,7 +117,7 @@ export function CotizadorInteligente({ empresaId }: CotizadorInteligenteProps) {
           <h2 className="text-lg font-semibold tracking-tight text-white sm:text-xl">
             Cotizador inteligente
           </h2>
-          <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+          <p className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
             Valida distancia, tiempo y viabilidad económica con el margen operativo de tu empresa antes de
             registrar el porte.
           </p>
@@ -136,7 +136,7 @@ export function CotizadorInteligente({ empresaId }: CotizadorInteligenteProps) {
               value={origen}
               onChange={(e) => setOrigen(e.target.value)}
               placeholder="Ciudad, polígono o dirección"
-              className="w-full rounded-2xl border border-zinc-700/80 bg-zinc-950/60 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none ring-emerald-500/30 transition focus:border-emerald-500/50 focus:ring-2"
+              className="w-full rounded-2xl border border-zinc-700/80 bg-zinc-50 dark:bg-zinc-950/60 px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-600 outline-none ring-emerald-500/30 transition focus:border-emerald-500/50 focus:ring-2"
               autoComplete="off"
             />
           </label>
@@ -150,7 +150,7 @@ export function CotizadorInteligente({ empresaId }: CotizadorInteligenteProps) {
               value={destino}
               onChange={(e) => setDestino(e.target.value)}
               placeholder="Ciudad, polígono o dirección"
-              className="w-full rounded-2xl border border-zinc-700/80 bg-zinc-950/60 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none ring-emerald-500/30 transition focus:border-emerald-500/50 focus:ring-2"
+              className="w-full rounded-2xl border border-zinc-700/80 bg-zinc-50 dark:bg-zinc-950/60 px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-600 outline-none ring-emerald-500/30 transition focus:border-emerald-500/50 focus:ring-2"
               autoComplete="off"
             />
           </label>
@@ -167,7 +167,7 @@ export function CotizadorInteligente({ empresaId }: CotizadorInteligenteProps) {
             value={precioOferta}
             onChange={(e) => setPrecioOferta(e.target.value)}
             placeholder="Ej. 1250"
-            className="w-full max-w-md rounded-2xl border border-zinc-700/80 bg-zinc-950/60 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none ring-emerald-500/30 transition focus:border-emerald-500/50 focus:ring-2"
+            className="w-full max-w-md rounded-2xl border border-zinc-700/80 bg-zinc-50 dark:bg-zinc-950/60 px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-600 outline-none ring-emerald-500/30 transition focus:border-emerald-500/50 focus:ring-2"
           />
         </label>
 
@@ -198,20 +198,20 @@ export function CotizadorInteligente({ empresaId }: CotizadorInteligenteProps) {
       </form>
 
       {result && (
-        <div className="mt-8 rounded-3xl border border-zinc-800/80 bg-zinc-950/40 p-5 sm:p-6">
+        <div className="mt-8 rounded-3xl border border-zinc-200/90 dark:border-zinc-800/80 bg-zinc-50 dark:bg-zinc-950/40 p-5 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Resultado</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4">
+            <div className="rounded-2xl border border-zinc-200/90 dark:border-zinc-800/80 bg-zinc-900/40 p-4">
               <div className="flex items-center gap-2 text-zinc-500">
-                <Route className="h-4 w-4 text-zinc-400" />
+                <Route className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
                 <span className="text-xs font-medium uppercase tracking-wide">Kilómetros totales</span>
               </div>
               <p className="mt-2 text-2xl font-bold tabular-nums text-white">{result.kilometros_totales}</p>
               <p className="text-xs text-zinc-500">Ruta carretera (Google Maps)</p>
             </div>
-            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4">
+            <div className="rounded-2xl border border-zinc-200/90 dark:border-zinc-800/80 bg-zinc-900/40 p-4">
               <div className="flex items-center gap-2 text-zinc-500">
-                <Timer className="h-4 w-4 text-zinc-400" />
+                <Timer className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
                 <span className="text-xs font-medium uppercase tracking-wide">ETA estimado</span>
               </div>
               <p className="mt-2 text-2xl font-bold tabular-nums text-white">
@@ -219,9 +219,9 @@ export function CotizadorInteligente({ empresaId }: CotizadorInteligenteProps) {
               </p>
               <p className="text-xs text-zinc-500">Tiempo de conducción estimado</p>
             </div>
-            <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4">
+            <div className="rounded-2xl border border-zinc-200/90 dark:border-zinc-800/80 bg-zinc-900/40 p-4">
               <div className="flex items-center gap-2 text-zinc-500">
-                <CircleDollarSign className="h-4 w-4 text-zinc-400" />
+                <CircleDollarSign className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
                 <span className="text-xs font-medium uppercase tracking-wide">Coste operativo</span>
               </div>
               <p className="mt-2 text-2xl font-bold tabular-nums text-white">
@@ -235,7 +235,7 @@ export function CotizadorInteligente({ empresaId }: CotizadorInteligenteProps) {
                   ? "border-emerald-500/40 bg-emerald-500/10"
                   : result.es_rentable === false
                     ? "border-red-500/40 bg-red-500/10"
-                    : "border-zinc-800/80 bg-zinc-900/40"
+                    : "border-zinc-200/90 dark:border-zinc-800/80 bg-zinc-900/40"
               }`}
             >
               <div className="flex items-center justify-between gap-2">
@@ -265,7 +265,7 @@ export function CotizadorInteligente({ empresaId }: CotizadorInteligenteProps) {
                     {result.es_rentable ? "Rentable" : "No rentable"}
                   </span>
                 ) : (
-                  <span className="rounded-full bg-zinc-800/80 px-2.5 py-1 text-xs font-medium text-zinc-400">
+                  <span className="rounded-full bg-zinc-800/80 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
                     Indica precio oferta
                   </span>
                 )}
@@ -273,11 +273,11 @@ export function CotizadorInteligente({ empresaId }: CotizadorInteligenteProps) {
               <p className="mt-2 text-2xl font-bold tabular-nums text-white">
                 {formatEur(result.margen_proyectado)}
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+              <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
                 {Number.isFinite(precioNum) && precioNum > 0 ? (
                   <>
                     Diferencial oferta − coste operativo (Math Engine). Remanente:{" "}
-                    <span className="font-medium text-zinc-200">
+                    <span className="font-medium text-zinc-800 dark:text-zinc-200">
                       {margenSobreOferta !== null ? formatEur(margenSobreOferta) : "—"}
                     </span>
                     .

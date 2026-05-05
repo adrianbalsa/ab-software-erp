@@ -38,11 +38,11 @@ function EmptyState({ t }: { t: Catalog["pages"]["tesoreria"] }) {
   return (
     <Card className="bunker-card border-dashed border-zinc-700">
       <CardHeader>
-        <CardTitle className="text-zinc-100">{t.emptyTitle}</CardTitle>
-        <CardDescription className="text-zinc-400">{t.emptyDesc}</CardDescription>
+        <CardTitle className="text-zinc-900 dark:text-zinc-100">{t.emptyTitle}</CardTitle>
+        <CardDescription className="text-zinc-600 dark:text-zinc-400">{t.emptyDesc}</CardDescription>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-zinc-400">{t.emptyBody}</p>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">{t.emptyBody}</p>
       </CardContent>
     </Card>
   );
@@ -68,15 +68,15 @@ function KpiCard({
         ? "border-emerald-500/50"
         : tone === "amber"
           ? "border-amber-500/40"
-          : "border-zinc-800";
+          : "border-zinc-200 dark:border-zinc-800";
 
   return (
     <Card
       className={`bunker-card ${toneClass} ${highlight ? "ring-2 ring-rose-500/40" : ""}`}
     >
       <CardHeader className="pb-1">
-        <CardDescription className="text-zinc-400">{title}</CardDescription>
-        <CardTitle className="text-2xl text-zinc-100">{value}</CardTitle>
+        <CardDescription className="text-zinc-600 dark:text-zinc-400">{title}</CardDescription>
+        <CardTitle className="text-2xl text-zinc-900 dark:text-zinc-100">{value}</CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-xs text-zinc-500">{subtitle}</p>
@@ -181,26 +181,26 @@ export default function DashboardTesoreriaPage() {
       <RoleGuard
         allowedRoles={["owner", "admin"]}
         fallback={
-          <main className="bg-zinc-950 p-8">
-            <p className="text-sm text-zinc-400">{p.tesoreria.roleFallback}</p>
+          <main className="bg-zinc-50 dark:bg-zinc-950 p-8">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">{p.tesoreria.roleFallback}</p>
           </main>
         }
       >
-        <main className="min-h-0 flex-1 space-y-6 overflow-y-auto bg-zinc-950 p-8">
+        <main className="min-h-0 flex-1 space-y-6 overflow-y-auto bg-zinc-50 dark:bg-zinc-950 p-8">
           <header className="flex items-center justify-between gap-4">
             <div>
-              <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-100">
+              <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
                 <Wallet className="h-6 w-6 text-emerald-500" aria-hidden />
                 {p.tesoreria.title}
               </h1>
-              <p className="mt-1 text-sm text-zinc-400">{p.tesoreria.subtitle}</p>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{p.tesoreria.subtitle}</p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => void loadData()}
                 disabled={loading}
-                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-3 py-2 text-sm font-medium text-zinc-800 dark:text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:opacity-60"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
                 {p.tesoreria.refresh}
@@ -210,13 +210,13 @@ export default function DashboardTesoreriaPage() {
 
           <CreditAlertBanner alerts={creditAlerts} />
 
-          <Card className="bunker-card border-zinc-800">
+          <Card className="bunker-card border-zinc-200 dark:border-zinc-800">
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-lg text-zinc-100">
+              <CardTitle className="flex items-center gap-2 text-lg text-zinc-900 dark:text-zinc-100">
                 <Building2 className="h-5 w-5 text-sky-400" aria-hidden />
                 {p.tesoreria.bankingTitle}
               </CardTitle>
-              <CardDescription className="text-zinc-400">
+              <CardDescription className="text-zinc-600 dark:text-zinc-400">
                 {p.tesoreria.bankingDesc}{" "}
                 <code className="text-xs text-zinc-500">POST /api/v1/banking/reconcile</code>.
               </CardDescription>
@@ -240,9 +240,9 @@ export default function DashboardTesoreriaPage() {
               {bankPending.length === 0 ? (
                 <p className="text-sm text-zinc-500">{p.tesoreria.noPending}</p>
               ) : (
-                <div className="overflow-x-auto rounded-md border border-zinc-800">
-                  <table className="w-full min-w-[520px] text-left text-sm text-zinc-200">
-                    <thead className="border-b border-zinc-800 bg-zinc-900/50 text-xs uppercase tracking-wide text-zinc-500">
+                <div className="overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+                  <table className="w-full min-w-[520px] text-left text-sm text-zinc-800 dark:text-zinc-200">
+                    <thead className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-900/50 text-xs uppercase tracking-wide text-zinc-500">
                       <tr>
                         <th className="px-3 py-2">{p.tesoreria.thDate}</th>
                         <th className="px-3 py-2">{p.tesoreria.thConcept}</th>
@@ -252,9 +252,9 @@ export default function DashboardTesoreriaPage() {
                     </thead>
                     <tbody>
                       {bankPending.map((row) => (
-                        <tr key={row.transaction_id} className="border-b border-zinc-800/80 last:border-0">
-                          <td className="px-3 py-2 whitespace-nowrap text-zinc-300">{row.booking_date}</td>
-                          <td className="max-w-[280px] truncate px-3 py-2 text-zinc-400" title={row.description ?? ""}>
+                        <tr key={row.transaction_id} className="border-b border-zinc-200/90 dark:border-zinc-800/80 last:border-0">
+                          <td className="px-3 py-2 whitespace-nowrap text-zinc-700 dark:text-zinc-300">{row.booking_date}</td>
+                          <td className="max-w-[280px] truncate px-3 py-2 text-zinc-600 dark:text-zinc-400" title={row.description ?? ""}>
                             {row.description || "—"}
                           </td>
                           <td className="px-3 py-2 text-right font-medium tabular-nums">
@@ -285,7 +285,7 @@ export default function DashboardTesoreriaPage() {
           {loading && !data ? (
             <Card className="bunker-card">
               <CardContent className="pt-6">
-                <p className="text-sm text-zinc-400">{p.tesoreria.loading}</p>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">{p.tesoreria.loading}</p>
               </CardContent>
             </Card>
           ) : !data || !hasAnyData ? (
@@ -317,11 +317,11 @@ export default function DashboardTesoreriaPage() {
               {esgReport && (
                 <Card className="bunker-card border-emerald-500/35">
                   <CardHeader className="pb-1">
-                    <CardTitle className="text-lg text-zinc-100">{p.tesoreria.esgTitle}</CardTitle>
-                    <CardDescription className="text-zinc-400">{p.tesoreria.esgDesc}</CardDescription>
+                    <CardTitle className="text-lg text-zinc-900 dark:text-zinc-100">{p.tesoreria.esgTitle}</CardTitle>
+                    <CardDescription className="text-zinc-600 dark:text-zinc-400">{p.tesoreria.esgDesc}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <p className="text-sm text-zinc-300">
+                    <p className="text-sm text-zinc-700 dark:text-zinc-300">
                       {p.tesoreria.esgPeriod} {esgReport.periodo}:{" "}
                       <span className="font-semibold text-emerald-400">
                         {esgReport.total_co2_kg.toLocaleString(numLoc, { maximumFractionDigits: 2 })}{" "}
@@ -360,8 +360,8 @@ export default function DashboardTesoreriaPage() {
 
               <Card className="bunker-card">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-lg text-zinc-100">{p.tesoreria.rankRiskTitle}</CardTitle>
-                  <CardDescription className="text-zinc-400">{p.tesoreria.rankRiskDesc}</CardDescription>
+                  <CardTitle className="text-lg text-zinc-900 dark:text-zinc-100">{p.tesoreria.rankRiskTitle}</CardTitle>
+                  <CardDescription className="text-zinc-600 dark:text-zinc-400">{p.tesoreria.rankRiskDesc}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <RiskRankingTable rows={riskRanking ?? []} />
@@ -370,8 +370,8 @@ export default function DashboardTesoreriaPage() {
 
               <Card className="bunker-card">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-lg text-zinc-100">{p.tesoreria.rankMarginTitle}</CardTitle>
-                  <CardDescription className="text-zinc-400">{p.tesoreria.rankMarginDesc}</CardDescription>
+                  <CardTitle className="text-lg text-zinc-900 dark:text-zinc-100">{p.tesoreria.rankMarginTitle}</CardTitle>
+                  <CardDescription className="text-zinc-600 dark:text-zinc-400">{p.tesoreria.rankMarginDesc}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <RouteMarginTable rows={routeMarginRows} />
