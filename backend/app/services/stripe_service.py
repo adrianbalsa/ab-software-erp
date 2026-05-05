@@ -280,20 +280,34 @@ async def assert_empresa_billing_active(db: SupabaseAsync, *, empresa_id: str) -
             detail="Empresa no identificada",
         )
 
-    try:
-        res: Any = await db.execute(
-            db.table("empresas")
-            .select("deleted_at, stripe_subscription_id, is_active, requires_stripe_subscription")
-            .eq("id", eid)
-            .limit(1)
-        )
-        rows: list[dict[str, Any]] = (res.data or []) if hasattr(res, "data") else []
-    except Exception as exc:
-        logger.warning("assert_empresa_billing_active: lectura empresas falló: %s", exc)
+    rows: list[dict[str, Any]] = []
+    last_exc: Exception | None = None
+    # Compatibilidad zero-downtime:
+    # - Esquema nuevo: is_active + requires_stripe_subscription.
+    # - Esquema legacy: activa (sin requires_stripe_subscription).
+    for select_cols in (
+        "deleted_at, stripe_subscription_id, is_active, requires_stripe_subscription",
+        "deleted_at, stripe_subscription_id, activa",
+    ):
+        try:
+            res: Any = await db.execute(
+                db.table("empresas")
+                .select(select_cols)
+                .eq("id", eid)
+                .limit(1)
+            )
+            rows = (res.data or []) if hasattr(res, "data") else []
+            last_exc = None
+            break
+        except Exception as exc:
+            last_exc = exc
+            continue
+    if last_exc is not None:
+        logger.warning("assert_empresa_billing_active: lectura empresas falló: %s", last_exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="No se pudo verificar el estado de la empresa",
-        ) from exc
+        ) from last_exc
 
     if not rows:
         raise HTTPException(
@@ -308,7 +322,10 @@ async def assert_empresa_billing_active(db: SupabaseAsync, *, empresa_id: str) -
             detail="La cuenta de empresa está archivada",
         )
 
-    if row.get("is_active") is False:
+    is_active = row.get("is_active")
+    if is_active is None and "activa" in row:
+        is_active = row.get("activa")
+    if is_active is False:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="La cuenta de empresa está suspendida por facturación. Actualiza el método de pago o contacta con administración.",

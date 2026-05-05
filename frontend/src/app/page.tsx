@@ -35,7 +35,12 @@ function HomeContent() {
       if (t) {
         setHasToken(true);
         void (async () => {
-          const dest = await resolvePostAuthNavigation("/onboarding");
+          const dest = await Promise.race([
+            resolvePostAuthNavigation("/onboarding"),
+            new Promise<string>((resolve) => {
+              globalThis.setTimeout(() => resolve("/dashboard"), 12000);
+            }),
+          ]);
           router.replace(dest);
         })();
       } else {

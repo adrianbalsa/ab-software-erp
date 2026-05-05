@@ -14,15 +14,38 @@ type QuotaRead =
   | { tag: "ok"; data: Record<string, unknown> };
 
 async function readEmpresaQuota(): Promise<QuotaRead> {
-  const res = await apiFetch(`${API_BASE}/empresa/quota`, { credentials: "include" });
-  if (res.status === 401) return { tag: "unauth" };
-  if (!res.ok) return { tag: "fail", status: res.status };
-  try {
-    const data = (await res.json()) as Record<string, unknown>;
-    return { tag: "ok", data };
-  } catch {
-    return { tag: "fail", status: res.status };
-  }
+  const HARD_DEADLINE_MS = 9000;
+
+  const doFetch = async (): Promise<QuotaRead> => {
+    const ctrl = new AbortController();
+    const t = globalThis.setTimeout(() => ctrl.abort(), 7500);
+    let res: Response;
+    try {
+      res = await apiFetch(`${API_BASE}/empresa/quota`, {
+        credentials: "include",
+        signal: ctrl.signal,
+      });
+    } catch {
+      return { tag: "fail", status: 0 };
+    } finally {
+      globalThis.clearTimeout(t);
+    }
+    if (res.status === 401) return { tag: "unauth" };
+    if (!res.ok) return { tag: "fail", status: res.status };
+    try {
+      const data = (await res.json()) as Record<string, unknown>;
+      return { tag: "ok", data };
+    } catch {
+      return { tag: "fail", status: res.status };
+    }
+  };
+
+  return Promise.race([
+    doFetch(),
+    new Promise<QuotaRead>((resolve) => {
+      globalThis.setTimeout(() => resolve({ tag: "fail", status: 0 }), HARD_DEADLINE_MS);
+    }),
+  ]);
 }
 
 /**
