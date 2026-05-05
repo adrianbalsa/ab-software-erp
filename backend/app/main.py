@@ -242,12 +242,21 @@ def create_app() -> FastAPI:
         if isinstance(settings.CORS_ALLOW_ORIGINS, str)
         else [origin.strip() for origin in settings.CORS_ALLOW_ORIGINS if str(origin).strip()]
     )
+    cors_regex_raw = getattr(settings, "CORS_ALLOW_ORIGIN_REGEX", None)
+    cors_regex = (
+        cors_regex_raw.strip()
+        if isinstance(cors_regex_raw, str) and cors_regex_raw.strip()
+        else None
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
+        allow_origin_regex=cors_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Request-Id"],
+        max_age=86400,
     )
     # Idempotencia debe ejecutarse después de identidad y rate-limit:
     # se añade antes para que quede más interno en el stack.

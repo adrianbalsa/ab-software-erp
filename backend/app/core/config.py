@@ -562,6 +562,10 @@ def get_settings() -> Settings:
             "http://localhost:3001",
         )
         origins_set = {o for o in dev_defaults}
+        # Staging/API con ENVIRONMENT=development debe aceptar el mismo front prod/previews
+        # (si no, el navegador bloquea CORS → «Failed to fetch» sin JSON usable).
+        if _env_bool("MERGE_OFFICIAL_FRONTEND_ORIGINS_IN_DEV", True):
+            origins_set.update(_default_prod_cors)
         if cors_extra_raw.strip():
             for part in cors_extra_raw.split(","):
                 o = part.strip().rstrip("/")
