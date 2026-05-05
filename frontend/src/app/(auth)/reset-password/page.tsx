@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -22,12 +22,35 @@ function ResetPasswordFallback() {
 function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const token = useMemo(() => (searchParams.get("token") || "").trim(), [searchParams]);
+  const queryToken = useMemo(() => (searchParams.get("token") || searchParams.get("code") || "").trim(), [searchParams]);
+  const queryTokenHash = useMemo(() => (searchParams.get("token_hash") || "").trim(), [searchParams]);
+  const [hashAccessToken, setHashAccessToken] = useState("");
+  const [hashRefreshToken, setHashRefreshToken] = useState("");
+  const [hashToken, setHashToken] = useState("");
+  const [hashTokenHash, setHashTokenHash] = useState("");
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const rawHash = window.location.hash || "";
+    const hashParams = new URLSearchParams(rawHash.startsWith("#") ? rawHash.slice(1) : rawHash);
+    setHashAccessToken((hashParams.get("access_token") || "").trim());
+    setHashRefreshToken((hashParams.get("refresh_token") || "").trim());
+    setHashToken((hashParams.get("token") || "").trim());
+    setHashTokenHash((hashParams.get("token_hash") || "").trim());
+  }, []);
+
+  const effectiveToken = queryToken || hashToken;
+  const effectiveTokenHash = queryTokenHash || hashTokenHash;
+  const hasRecoveryCredential = Boolean(
+    effectiveToken ||
+      effectiveTokenHash ||
+      (hashAccessToken && hashRefreshToken),
+  );
 
   const validate = useCallback(() => {
     if (password.length < 8) {
@@ -44,7 +67,7 @@ function ResetPasswordForm() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) {
+    if (!hasRecoveryCredential) {
       setFieldError("Enlace inválido o incompleto. Solicita un nuevo correo de recuperación.");
       return;
     }
@@ -53,10 +76,17 @@ function ResetPasswordForm() {
     setSubmitting(true);
     setFieldError(null);
     try {
+      const payload: Record<string, string> = { new_password: password };
+      if (effectiveTokenHash) payload.token_hash = effectiveTokenHash;
+      else if (effectiveToken) payload.token = effectiveToken;
+      else if (hashAccessToken && hashRefreshToken) {
+        payload.access_token = hashAccessToken;
+        payload.refresh_token = hashRefreshToken;
+      }
       const res = await apiFetch(`${API_BASE}/api/v1/auth/reset-password/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ token, new_password: password }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const msg = await parseApiError(res);
@@ -67,7 +97,11 @@ function ResetPasswordForm() {
       const message = err instanceof Error ? err.message : "No se pudo actualizar la contraseña.";
       Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
         tags: { flow: "reset_password" },
-        extra: { hasToken: Boolean(token) },
+        extra: {
+          hasToken: Boolean(effectiveToken),
+          hasTokenHash: Boolean(effectiveTokenHash),
+          hasHashSession: Boolean(hashAccessToken && hashRefreshToken),
+        },
       });
       setFieldError(message);
     } finally {
@@ -103,7 +137,7 @@ function ResetPasswordForm() {
           </div>
         </div>
 
-        {!token ? (
+        {!hasRecoveryCredential ? (
           <p className="rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">
             Falta el token en la URL. Abre el enlace del correo o solicita uno nuevo desde el inicio de sesión.
           </p>
@@ -121,7 +155,7 @@ function ResetPasswordForm() {
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              disabled={submitting || !token}
+              disabled={submitting || !hasRecoveryCredential}
               className="h-11 border-teal-500/25 bg-stone-950/80 text-stone-100 placeholder:text-stone-500 focus-visible:border-teal-400/60 focus-visible:ring-teal-500/30"
               placeholder="Mínimo 8 caracteres"
             />
@@ -137,7 +171,7 @@ function ResetPasswordForm() {
               autoComplete="new-password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              disabled={submitting || !token}
+              disabled={submitting || !hasRecoveryCredential}
               className="h-11 border-teal-500/25 bg-stone-950/80 text-stone-100 placeholder:text-stone-500 focus-visible:border-teal-400/60 focus-visible:ring-teal-500/30"
               placeholder="Repite la contraseña"
             />
@@ -151,7 +185,7 @@ function ResetPasswordForm() {
 
           <Button
             type="submit"
-            disabled={submitting || !token}
+            disabled={submitting || !hasRecoveryCredential}
             className="h-11 w-full border border-teal-400/30 bg-teal-600 text-white shadow-[0_0_20px_rgba(13,148,136,0.25)] hover:bg-teal-500 disabled:opacity-50"
           >
             {submitting ? "Actualizando…" : "Actualizar contraseña"}

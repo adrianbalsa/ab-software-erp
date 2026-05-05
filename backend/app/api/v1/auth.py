@@ -252,10 +252,27 @@ async def confirm_reset_password(
     payload: ResetPasswordConfirmIn,
     db_anon: SupabaseAsync = Depends(get_db_anon),
 ) -> ResetPasswordOut:
+    token = str(payload.token or "").strip()
+    token_hash = str(payload.token_hash or "").strip()
+    access_token = str(payload.access_token or "").strip()
+    refresh_token = str(payload.refresh_token or "").strip()
+    verify_res: Any | None = None
     try:
-        verify_res = await db_anon.auth_verify_otp({"type": "recovery", "token": payload.token})
+        if token_hash:
+            verify_res = await db_anon.auth_verify_otp({"type": "recovery", "token_hash": token_hash})
+        elif token:
+            verify_res = await db_anon.auth_verify_otp({"type": "recovery", "token": token})
+        elif access_token and refresh_token:
+            await db_anon.auth_set_session(access_token=access_token, refresh_token=refresh_token)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Falta token de recuperación válido en la URL.",
+            )
         await db_anon.auth_update_user({"password": payload.new_password})
     except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
         detail = str(exc).strip() or "Token inválido o expirado"
         if _is_supabase_bad_request(exc):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc

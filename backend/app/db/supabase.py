@@ -152,6 +152,12 @@ class SupabaseAsync:
             return await result
         return result
 
+    async def auth_set_session(self, *, access_token: str, refresh_token: str) -> Any:
+        result = self._client.auth.set_session(access_token=access_token, refresh_token=refresh_token)
+        if inspect.isawaitable(result):
+            return await result
+        return result
+
 
 def _extract_action_link(raw: Any) -> str | None:
     if raw is None:
