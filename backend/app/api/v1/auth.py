@@ -262,7 +262,12 @@ async def confirm_reset_password(
         if token_hash:
             verify_res = await db_anon.auth_verify_otp({"type": "recovery", "token_hash": token_hash})
         elif code:
-            verify_res = await db_anon.auth_exchange_code_for_session(auth_code=code)
+            # Compatibilidad defensiva: algunos enlaces incluyen ``code`` en query.
+            # Intentamos ambos formatos OTP para evitar 5xx por SDK mismatch.
+            try:
+                verify_res = await db_anon.auth_verify_otp({"type": "recovery", "token_hash": code})
+            except Exception:
+                verify_res = await db_anon.auth_verify_otp({"type": "recovery", "token": code})
         elif token:
             verify_res = await db_anon.auth_verify_otp({"type": "recovery", "token": token})
         elif access_token and refresh_token:
