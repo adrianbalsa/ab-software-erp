@@ -51,12 +51,17 @@ function DashboardBillingGateInner({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    const failSafe = globalThis.setTimeout(() => {
+      if (!cancelled) setSplash(false);
+    }, 11000);
     void (async () => {
       await applyRedirects();
+      globalThis.clearTimeout(failSafe);
       if (!cancelled) setSplash(false);
     })();
     return () => {
       cancelled = true;
+      globalThis.clearTimeout(failSafe);
     };
   }, [applyRedirects]);
 
