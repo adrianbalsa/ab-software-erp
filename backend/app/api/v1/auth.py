@@ -254,12 +254,15 @@ async def confirm_reset_password(
 ) -> ResetPasswordOut:
     token = str(payload.token or "").strip()
     token_hash = str(payload.token_hash or "").strip()
+    code = str(payload.code or "").strip()
     access_token = str(payload.access_token or "").strip()
     refresh_token = str(payload.refresh_token or "").strip()
     verify_res: Any | None = None
     try:
         if token_hash:
             verify_res = await db_anon.auth_verify_otp({"type": "recovery", "token_hash": token_hash})
+        elif code:
+            verify_res = await db_anon.auth_exchange_code_for_session(auth_code=code)
         elif token:
             verify_res = await db_anon.auth_verify_otp({"type": "recovery", "token": token})
         elif access_token and refresh_token:

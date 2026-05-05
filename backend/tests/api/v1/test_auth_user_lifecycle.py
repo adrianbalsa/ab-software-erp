@@ -72,6 +72,12 @@ class _FakeAuthDb:
         session = SimpleNamespace(user=user)
         return SimpleNamespace(session=session, user=user)
 
+    async def auth_exchange_code_for_session(self, auth_code: str) -> object:
+        self.set_session_calls.append({"code": auth_code})
+        user = SimpleNamespace(email="staff@example.com")
+        session = SimpleNamespace(user=user)
+        return SimpleNamespace(session=session, user=user)
+
 
 class _RefreshServiceStub:
     def __init__(self) -> None:
@@ -218,6 +224,31 @@ async def test_confirm_reset_password_accepts_token_hash(client, monkeypatch: py
 
     assert res.status_code == 200, res.text
     assert fake_db.verify_payloads == [{"type": "recovery", "token_hash": "abc123hash"}]
+    assert fake_db.update_payloads == [{"password": "NuevaClave!2026"}]
+
+
+async def test_confirm_reset_password_accepts_code_exchange(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_db = _FakeAuthDb()
+    app = client._transport.app
+    app.dependency_overrides[auth_v1.get_db_anon] = lambda: fake_db
+
+    async def _fake_admin() -> _FakeAuthDb:
+        return fake_db
+
+    sync_usuarios = AsyncMock(return_value=True)
+    monkeypatch.setattr(auth_v1, "get_db_admin", _fake_admin)
+    monkeypatch.setattr(AuthService, "set_password_for_username", sync_usuarios)
+    try:
+        res = await client.post(
+            "/api/v1/auth/reset-password/confirm",
+            json={"code": "abcdef123456", "new_password": "NuevaClave!2026"},
+            headers=_test_headers(),
+        )
+    finally:
+        app.dependency_overrides.pop(auth_v1.get_db_anon, None)
+
+    assert res.status_code == 200, res.text
+    assert fake_db.set_session_calls == [{"code": "abcdef123456"}]
     assert fake_db.update_payloads == [{"password": "NuevaClave!2026"}]
 
 
