@@ -6,6 +6,12 @@
 # advisory de VeriFactu) y dependencias de sistema para WeasyPrint/PDF.
 #
 # Convención de ejecución: desde el directorio backend, ``python -m pytest tests/``.
+#
+# Opcional (solo pushes a main/master): variable de repositorio
+# ``CI_SKIP_DEPLOY_INFRA_GATE=true`` omite el job ``deploy-infra-readiness``
+# (validación remota AEAT + HEAD /health + Redis). El workflow ``deploy`` sigue
+# construyendo y empujando la imagen; use esta válvula solo mientras se
+# completan secretos AEAT o se estabiliza el gate en Actions.
 # -----------------------------------------------------------------------------
 
 name: CI
@@ -299,7 +305,10 @@ jobs:
 
   deploy-infra-readiness:
     name: Deploy gate — infra readiness go-live
-    if: github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master')
+    if: >-
+      github.event_name == 'push'
+      && (github.ref_name == 'main' || github.ref_name == 'master')
+      && vars.CI_SKIP_DEPLOY_INFRA_GATE != 'true'
     runs-on: ubuntu-latest
     needs:
       - backend-tests
