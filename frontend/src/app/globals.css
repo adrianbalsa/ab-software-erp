@@ -46,17 +46,17 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
-  /* Surfaces oscuras (shell marketing + dashboard / búnker) */
-  --surface-base: hsl(222 47% 8%);
-  --surface-nav: hsl(222 47% 8% / 0.82);
-  --surface-nav-strong: hsl(222 47% 8% / 0.85);
-  --surface-section: hsl(222 47% 10% / 0.45);
-  --surface-section-strong: hsl(222 47% 10% / 0.5);
-  --surface-elevated: hsl(222 47% 8% / 0.5);
-  --surface-icon: hsl(222 47% 8% / 0.8);
-  --surface-panel: hsl(222 47% 8% / 0.6);
-  --surface-roi-gradient-start: hsl(222 34% 14% / 0.92);
-  --surface-roi-gradient-end: hsl(222 47% 8%);
+  /* Surfaces claras (marketing + landing en modo light) */
+  --surface-base: hsl(210 40% 98%);
+  --surface-nav: hsl(0 0% 100% / 0.88);
+  --surface-nav-strong: hsl(0 0% 100% / 0.94);
+  --surface-section: hsl(210 40% 96% / 0.92);
+  --surface-section-strong: hsl(210 35% 94% / 0.96);
+  --surface-elevated: hsl(0 0% 100% / 0.92);
+  --surface-icon: hsl(210 40% 96% / 1);
+  --surface-panel: hsl(0 0% 100% / 0.97);
+  --surface-roi-gradient-start: hsl(210 45% 97% / 0.98);
+  --surface-roi-gradient-end: hsl(210 35% 96%);
 }
 
 @theme inline {
@@ -109,13 +109,6 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ab-card: rgba(15, 23, 42, 0.85);
-    --ab-border: rgba(148, 163, 184, 0.12);
-  }
 }
 
 body {
@@ -265,22 +258,35 @@ body {
   color: #0f172a;
 }
 
-/* Cuadro de Mando / Búnker — alineado con landing dark */
-/* Búnker / landing — tarjetas y paneles (zinc-950 + zinc-900/40) */
+/* Cuadro de Mando / tarjetas — light por defecto, búnker en .dark */
 .dashboard-bento {
   border-radius: 0.75rem;
-  border: 1px solid rgb(39 39 42); /* zinc-800 */
-  background-color: rgb(24 24 27 / 0.4); /* zinc-900/40 */
+  border: 1px solid rgb(228 228 231); /* zinc-200 */
+  background-color: rgb(255 255 255 / 0.82);
   backdrop-filter: blur(12px);
   transition: box-shadow 300ms ease, border-color 300ms ease;
 }
 .dashboard-bento:hover {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.12);
+}
+
+.dark .dashboard-bento {
+  border-color: rgb(39 39 42);
+  background-color: rgb(24 24 27 / 0.4);
+}
+.dark .dashboard-bento:hover {
   box-shadow: 0 0 20px rgba(16, 185, 129, 0.08);
 }
 
 .bunker-card {
   border-radius: 0.75rem;
-  border: 1px solid rgb(39 39 42);
+  border: 1px solid rgb(228 228 231);
+  background-color: rgb(255 255 255 / 0.9);
+  color: rgb(24 24 27);
+}
+
+.dark .bunker-card {
+  border-color: rgb(39 39 42);
   background-color: rgb(24 24 27 / 0.4);
   color: rgb(244 244 245);
 }
@@ -296,6 +302,19 @@ body {
 }
 
 .dark {
+  --ab-card: rgba(15, 23, 42, 0.85);
+  --ab-border: rgba(148, 163, 184, 0.12);
+  /* Surfaces oscuras (shell marketing + dashboard / búnker) */
+  --surface-base: hsl(222 47% 8%);
+  --surface-nav: hsl(222 47% 8% / 0.82);
+  --surface-nav-strong: hsl(222 47% 8% / 0.85);
+  --surface-section: hsl(222 47% 10% / 0.45);
+  --surface-section-strong: hsl(222 47% 10% / 0.5);
+  --surface-elevated: hsl(222 47% 8% / 0.5);
+  --surface-icon: hsl(222 47% 8% / 0.8);
+  --surface-panel: hsl(222 47% 8% / 0.6);
+  --surface-roi-gradient-start: hsl(222 34% 14% / 0.92);
+  --surface-roi-gradient-end: hsl(222 47% 8%);
   --background: var(--surface-base);
   --foreground: hsl(210 40% 96%);
   --card: hsl(222 34% 15%);

@@ -36,8 +36,10 @@ import type { LucideIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { useEffect, useState } from "react";
 
+import { ThemeModeControl } from "@/components/ThemeModeControl";
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
 import { ConfiguracionNavSection, SidebarUserSection } from "@/components/layout/Sidebar";
+import { SidebarNavCollapsible } from "@/components/layout/SidebarNavCollapsible";
 import { sidebarNavIcon, sidebarNavRow } from "@/components/layout/sidebarNavStyles";
 import { QuotaStatusCard } from "@/components/QuotaStatusCard";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -76,29 +78,6 @@ type Props = {
     | "billing"
     | "team";
 };
-
-function NavSectionHeader({
-  title,
-  subtitle,
-  withDivider = true,
-}: {
-  title: string;
-  subtitle: string;
-  /** Separador sutil entre grupos (un solo carril lateral, sin “bloques” de otro color). */
-  withDivider?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "px-3 pb-1.5",
-        withDivider && "mt-2 border-t border-zinc-800/55 pt-3",
-      )}
-    >
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{title}</p>
-      <p className="mt-0.5 text-[10px] font-medium leading-snug text-zinc-600">{subtitle}</p>
-    </div>
-  );
-}
 
 function BrandLogo({ className = "h-8 w-8 md:h-10 md:w-10" }: { className?: string }) {
   return (
@@ -142,7 +121,7 @@ function SidebarNavLink({
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="leading-snug">{title}</span>
         {subtitle ? (
-          <span className="text-[11px] font-normal leading-snug text-zinc-500 group-hover:text-zinc-400">
+          <span className="text-[11px] font-normal leading-snug text-zinc-500 group-hover:text-zinc-600 dark:group-hover:text-zinc-600 dark:text-zinc-400">
             {subtitle}
           </span>
         ) : null}
@@ -190,6 +169,56 @@ function showNavItem(
   return false;
 }
 
+type SidebarActive = NonNullable<Props["active"]>;
+
+function institutionalContainsActive(active: SidebarActive): boolean {
+  return (
+    active === "dashboard" ||
+    active === "analitica" ||
+    active === "bi" ||
+    active === "vampire_radar" ||
+    active === "operaciones"
+  );
+}
+
+function operationsContainsActive(active: SidebarActive): boolean {
+  return (
+    active === "portes" ||
+    active === "flota" ||
+    active === "eficiencia" ||
+    active === "mapa" ||
+    active === "sostenibilidad"
+  );
+}
+
+function financeContainsActive(active: SidebarActive): boolean {
+  return (
+    active === "finanzas" ||
+    active === "facturas" ||
+    active === "gastos" ||
+    active === "conciliacion" ||
+    active === "tesoreria" ||
+    active === "auditoria" ||
+    active === "certificaciones"
+  );
+}
+
+function managementContainsActive(active: SidebarActive): boolean {
+  return active === "clientes" || active === "simulador";
+}
+
+function systemContainsActive(active: SidebarActive): boolean {
+  return (
+    active === "billing" ||
+    active === "team" ||
+    active === "admin" ||
+    active === "integrations" ||
+    active === "desarrolladores" ||
+    active === "seguridad" ||
+    active === "exportar"
+  );
+}
+
 function ShellNavAndFooter({
   active,
   onNavLinkClick,
@@ -203,326 +232,339 @@ function ShellNavAndFooter({
   const hideFinanceBunkerAndAdminNav = isTrafficManager(role);
   const p = onNavLinkClick ? { onClick: onNavLinkClick } : {};
   const L = s.links;
+  const navActive = (active ?? "dashboard") as SidebarActive;
 
   return (
-    <>
-      <nav className="flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto px-4 py-4" aria-label={s.navAriaLabel}>
-        {/* INSTITUCIONAL */}
-        <section className="mt-0">
-          <NavSectionHeader
-            title={s.sections.institutional.title}
-            subtitle={s.sections.institutional.subtitle}
-            withDivider={false}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <nav className="flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto overflow-x-hidden px-4 py-4" aria-label={s.navAriaLabel}>
+        <SidebarNavCollapsible
+          sectionId="institutional"
+          containsActive={institutionalContainsActive(navActive)}
+          title={s.sections.institutional.title}
+          subtitle={s.sections.institutional.subtitle}
+          withDivider={false}
+        >
+          <SidebarNavLink
+            id="tour-nav-dashboard"
+            href="/dashboard"
+            active={active === "dashboard"}
+            icon={LayoutDashboard}
+            title={L.dashboard[0]}
+            subtitle={L.dashboard[1]}
+            {...p}
           />
-          <div className="flex flex-col gap-0.5">
+          {isOwnerLike(role) && (
             <SidebarNavLink
-              id="tour-nav-dashboard"
-              href="/dashboard"
-              active={active === "dashboard"}
-              icon={LayoutDashboard}
-              title={L.dashboard[0]}
-              subtitle={L.dashboard[1]}
+              href="/dashboard/analitica"
+              active={active === "analitica"}
+              icon={BarChart3}
+              title={L.matrizCip[0]}
+              subtitle={L.matrizCip[1]}
               {...p}
             />
-            {isOwnerLike(role) && (
+          )}
+          {isOwnerLike(role) && (
+            <SidebarNavLink
+              href="/dashboard/bi"
+              active={active === "bi"}
+              icon={Target}
+              title={L.bi[0]}
+              subtitle={L.bi[1]}
+              {...p}
+            />
+          )}
+          {isOwnerLike(role) && (
+            <SidebarNavLink
+              href="/dashboard/vampire-radar"
+              active={active === "vampire_radar"}
+              icon={Activity}
+              title={L.vampire[0]}
+              subtitle={L.vampire[1]}
+              {...p}
+            />
+          )}
+          {showNavItem("flota", role) && (
+            <SidebarNavLink
+              href="/operaciones/live"
+              active={active === "operaciones"}
+              icon={MapPin}
+              title={L.command[0]}
+              subtitle={L.command[1]}
+              {...p}
+            />
+          )}
+        </SidebarNavCollapsible>
+
+        <SidebarNavCollapsible
+          sectionId="operations"
+          containsActive={operationsContainsActive(navActive)}
+          title={s.sections.operations.title}
+          subtitle={s.sections.operations.subtitle}
+        >
+          <SidebarNavLink
+            id="tour-nav-portes"
+            href="/portes"
+            active={active === "portes"}
+            icon={Truck}
+            title={L.portes[0]}
+            subtitle={L.portes[1]}
+            className="nav-portes"
+            {...p}
+          />
+          {showNavItem("flota", role) && (
+            <>
               <SidebarNavLink
-                href="/dashboard/analitica"
-                active={active === "analitica"}
-                icon={BarChart3}
-                title={L.matrizCip[0]}
-                subtitle={L.matrizCip[1]}
+                id="tour-nav-flota"
+                href="/flota"
+                active={active === "flota"}
+                icon={Car}
+                title={L.flota[0]}
+                subtitle={L.flota[1]}
+                className="nav-flota"
                 {...p}
               />
-            )}
-            {isOwnerLike(role) && (
               <SidebarNavLink
-                href="/dashboard/bi"
-                active={active === "bi"}
-                icon={Target}
-                title={L.bi[0]}
-                subtitle={L.bi[1]}
-                {...p}
-              />
-            )}
-            {isOwnerLike(role) && (
-              <SidebarNavLink
-                href="/dashboard/vampire-radar"
-                active={active === "vampire_radar"}
+                href="/flota/eficiencia"
+                active={active === "eficiencia"}
                 icon={Activity}
-                title={L.vampire[0]}
-                subtitle={L.vampire[1]}
+                title={L.eficiencia[0]}
+                subtitle={L.eficiencia[1]}
+                className="nav-flota-eficiencia"
                 {...p}
               />
-            )}
-            {showNavItem("flota", role) && (
-              <SidebarNavLink
-                href="/operaciones/live"
-                active={active === "operaciones"}
-                icon={MapPin}
-                title={L.command[0]}
-                subtitle={L.command[1]}
-                {...p}
-              />
-            )}
-          </div>
-        </section>
-
-        {/* OPERACIONES */}
-        <section className="mt-0">
-          <NavSectionHeader title={s.sections.operations.title} subtitle={s.sections.operations.subtitle} />
-          <div className="flex flex-col gap-0.5">
+              {!hideFinanceBunkerAndAdminNav ? (
+                <SidebarNavLink
+                  href="/dashboard/mapa"
+                  active={active === "mapa"}
+                  icon={MapIcon}
+                  title={L.mapa[0]}
+                  subtitle={L.mapa[1]}
+                  {...p}
+                />
+              ) : null}
+            </>
+          )}
+          {showNavItem("sostenibilidad", role) && (
             <SidebarNavLink
-              id="tour-nav-portes"
-              href="/portes"
-              active={active === "portes"}
-              icon={Truck}
-              title={L.portes[0]}
-              subtitle={L.portes[1]}
-              className="nav-portes"
+              href="/sostenibilidad"
+              active={active === "sostenibilidad"}
+              icon={Leaf}
+              title={L.sostenibilidad[0]}
+              subtitle={L.sostenibilidad[1]}
               {...p}
             />
-            {showNavItem("flota", role) && (
-              <>
-                <SidebarNavLink
-                  id="tour-nav-flota"
-                  href="/flota"
-                  active={active === "flota"}
-                  icon={Car}
-                  title={L.flota[0]}
-                  subtitle={L.flota[1]}
-                  className="nav-flota"
-                  {...p}
-                />
-                <SidebarNavLink
-                  href="/flota/eficiencia"
-                  active={active === "eficiencia"}
-                  icon={Activity}
-                  title={L.eficiencia[0]}
-                  subtitle={L.eficiencia[1]}
-                  className="nav-flota-eficiencia"
-                  {...p}
-                />
-                {!hideFinanceBunkerAndAdminNav ? (
-                  <SidebarNavLink
-                    href="/dashboard/mapa"
-                    active={active === "mapa"}
-                    icon={MapIcon}
-                    title={L.mapa[0]}
-                    subtitle={L.mapa[1]}
-                    {...p}
-                  />
-                ) : null}
-              </>
-            )}
-            {showNavItem("sostenibilidad", role) && (
-              <SidebarNavLink
-                href="/sostenibilidad"
-                active={active === "sostenibilidad"}
-                icon={Leaf}
-                title={L.sostenibilidad[0]}
-                subtitle={L.sostenibilidad[1]}
-                {...p}
-              />
-            )}
-          </div>
-        </section>
+          )}
+        </SidebarNavCollapsible>
 
-        {/* FINANZAS & FISCAL (Búnker) — oculto explícitamente para traffic_manager */}
         {!hideFinanceBunkerAndAdminNav && showNavItem("finanzas", role) && (
-          <section className="mt-0">
-            <NavSectionHeader title={s.sections.finance.title} subtitle={s.sections.finance.subtitle} />
-            <div className="flex flex-col gap-0.5">
+          <SidebarNavCollapsible
+            sectionId="finance"
+            containsActive={financeContainsActive(navActive)}
+            title={s.sections.finance.title}
+            subtitle={s.sections.finance.subtitle}
+          >
+            <SidebarNavLink
+              href="/finanzas"
+              active={active === "finanzas"}
+              icon={Wallet}
+              title={L.finanzas[0]}
+              subtitle={L.finanzas[1]}
+              {...p}
+            />
+            {showNavItem("facturas", role) && (
               <SidebarNavLink
-                href="/finanzas"
-                active={active === "finanzas"}
-                icon={Wallet}
-                title={L.finanzas[0]}
-                subtitle={L.finanzas[1]}
+                href="/facturas"
+                active={active === "facturas"}
+                icon={Receipt}
+                title={L.facturacion[0]}
+                subtitle={L.facturacion[1]}
                 {...p}
               />
-              {showNavItem("facturas", role) && (
-                <SidebarNavLink
-                  href="/facturas"
-                  active={active === "facturas"}
-                  icon={Receipt}
-                  title={L.facturacion[0]}
-                  subtitle={L.facturacion[1]}
-                  {...p}
-                />
-              )}
-              {showNavItem("gastos", role) && (
-                <SidebarNavLink
-                  href="/gastos"
-                  active={active === "gastos"}
-                  icon={CreditCard}
-                  title={L.gastos[0]}
-                  subtitle={L.gastos[1]}
-                  {...p}
-                />
-              )}
+            )}
+            {showNavItem("gastos", role) && (
               <SidebarNavLink
-                href="/finanzas/conciliacion"
-                active={active === "conciliacion"}
-                icon={GitCompare}
-                title={L.conciliacion[0]}
-                subtitle={L.conciliacion[1]}
+                href="/gastos"
+                active={active === "gastos"}
+                icon={CreditCard}
+                title={L.gastos[0]}
+                subtitle={L.gastos[1]}
                 {...p}
               />
-              {isOwnerLike(role) && (
-                <SidebarNavLink
-                  id="tour-nav-finanzas"
-                  href="/dashboard/finanzas/tesoreria"
-                  active={active === "tesoreria"}
-                  icon={Landmark}
-                  title={L.tesoreria[0]}
-                  subtitle={L.tesoreria[1]}
-                  className="nav-finanzas"
-                  {...p}
-                />
-              )}
-              {isOwnerLike(role) && (
-                <SidebarNavLink
-                  href="/dashboard/finanzas/auditoria"
-                  active={active === "auditoria"}
-                  icon={FileSearch}
-                  title={L.auditoria[0]}
-                  subtitle={L.auditoria[1]}
-                  {...p}
-                />
-              )}
-              {isOwnerLike(role) && (
-                <SidebarNavLink
-                  href="/dashboard/certificaciones"
-                  active={active === "certificaciones"}
-                  icon={BadgeCheck}
-                  title={L.certificaciones[0]}
-                  subtitle={L.certificaciones[1]}
-                  {...p}
-                />
-              )}
-            </div>
-          </section>
+            )}
+            <SidebarNavLink
+              href="/finanzas/conciliacion"
+              active={active === "conciliacion"}
+              icon={GitCompare}
+              title={L.conciliacion[0]}
+              subtitle={L.conciliacion[1]}
+              {...p}
+            />
+            {isOwnerLike(role) && (
+              <SidebarNavLink
+                id="tour-nav-finanzas"
+                href="/dashboard/finanzas/tesoreria"
+                active={active === "tesoreria"}
+                icon={Landmark}
+                title={L.tesoreria[0]}
+                subtitle={L.tesoreria[1]}
+                className="nav-finanzas"
+                {...p}
+              />
+            )}
+            {isOwnerLike(role) && (
+              <SidebarNavLink
+                href="/dashboard/finanzas/auditoria"
+                active={active === "auditoria"}
+                icon={FileSearch}
+                title={L.auditoria[0]}
+                subtitle={L.auditoria[1]}
+                {...p}
+              />
+            )}
+            {isOwnerLike(role) && (
+              <SidebarNavLink
+                href="/dashboard/certificaciones"
+                active={active === "certificaciones"}
+                icon={BadgeCheck}
+                title={L.certificaciones[0]}
+                subtitle={L.certificaciones[1]}
+                {...p}
+              />
+            )}
+          </SidebarNavCollapsible>
         )}
 
-        {/* GESTIÓN */}
         {(showNavItem("clientes", role) || isOwnerLike(role)) && (
-          <section className="mt-0">
-            <NavSectionHeader title={s.sections.management.title} subtitle={s.sections.management.subtitle} />
-            <div className="flex flex-col gap-0.5">
-              {showNavItem("clientes", role) && (
-                <SidebarNavLink
-                  id="tour-nav-clientes"
-                  href="/clientes"
-                  active={active === "clientes"}
-                  icon={Users}
-                  title={L.clientes[0]}
-                  subtitle={L.clientes[1]}
-                  className="nav-clientes"
-                  {...p}
-                />
-              )}
-              {isOwnerLike(role) && (
-                <SidebarNavLink
-                  href="/dashboard/finanzas/simulador"
-                  active={active === "simulador"}
-                  icon={LineChart}
-                  title={L.simulador[0]}
-                  subtitle={L.simulador[1]}
-                  {...p}
-                />
-              )}
-            </div>
-          </section>
+          <SidebarNavCollapsible
+            sectionId="management"
+            containsActive={managementContainsActive(navActive)}
+            title={s.sections.management.title}
+            subtitle={s.sections.management.subtitle}
+          >
+            {showNavItem("clientes", role) && (
+              <SidebarNavLink
+                id="tour-nav-clientes"
+                href="/clientes"
+                active={active === "clientes"}
+                icon={Users}
+                title={L.clientes[0]}
+                subtitle={L.clientes[1]}
+                className="nav-clientes"
+                {...p}
+              />
+            )}
+            {isOwnerLike(role) && (
+              <SidebarNavLink
+                href="/dashboard/finanzas/simulador"
+                active={active === "simulador"}
+                icon={LineChart}
+                title={L.simulador[0]}
+                subtitle={L.simulador[1]}
+                {...p}
+              />
+            )}
+          </SidebarNavCollapsible>
         )}
 
-        {/* SISTEMA */}
-        <section className="mt-0">
-          <NavSectionHeader title={s.sections.system.title} subtitle={s.sections.system.subtitle} />
-          <div className="flex flex-col gap-0.5">
+        <SidebarNavCollapsible
+          sectionId="system"
+          containsActive={systemContainsActive(navActive)}
+          title={s.sections.system.title}
+          subtitle={s.sections.system.subtitle}
+        >
+          <SidebarNavLink
+            href="/#help"
+            active={false}
+            icon={LifeBuoy}
+            title={catalog.nav.help}
+            subtitle={catalog.nav.helpSub}
+            {...p}
+          />
+          {isOwnerLike(role) && (
             <SidebarNavLink
-              href="/#help"
-              active={false}
-              icon={LifeBuoy}
-              title={catalog.nav.help}
-              subtitle={catalog.nav.helpSub}
+              href="/dashboard/settings/billing"
+              active={active === "billing"}
+              icon={BadgeEuro}
+              title={catalog.nav.billing}
+              subtitle={catalog.nav.billingSub}
               {...p}
             />
-            {isOwnerLike(role) && (
-              <SidebarNavLink
-                href="/dashboard/settings/billing"
-                active={active === "billing"}
-                icon={BadgeEuro}
-                title={catalog.nav.billing}
-                subtitle={catalog.nav.billingSub}
-                {...p}
-              />
-            )}
-            {(isOwnerLike(role) || role === "developer") && (
-              <SidebarNavLink
-                href="/dashboard/settings/equipo"
-                active={active === "team"}
-                icon={UserPlus}
-                title={catalog.nav.team}
-                subtitle={catalog.nav.teamSub}
-                {...p}
-              />
-            )}
-            {!hideFinanceBunkerAndAdminNav && showNavItem("admin", role) && (
-              <SidebarNavLink
-                href="/admin"
-                active={active === "admin"}
-                icon={Settings}
-                title={L.configuracion[0]}
-                subtitle={L.configuracion[1]}
-                {...p}
-              />
-            )}
-            {isOwnerLike(role) && (
-              <SidebarNavLink
-                href="/settings/integrations"
-                active={active === "integrations"}
-                icon={Link2}
-                title={L.integraciones[0]}
-                subtitle={L.integraciones[1]}
-                {...p}
-              />
-            )}
-            {!hideFinanceBunkerAndAdminNav ? (
-              <ConfiguracionNavSection active={active} role={role} onNavLinkClick={onNavLinkClick} />
-            ) : null}
+          )}
+          {(isOwnerLike(role) || role === "developer") && (
             <SidebarNavLink
-              href="/perfil/seguridad"
-              active={active === "seguridad"}
-              icon={Shield}
-              title={L.seguridad[0]}
-              subtitle={L.seguridad[1]}
+              href="/dashboard/settings/equipo"
+              active={active === "team"}
+              icon={UserPlus}
+              title={catalog.nav.team}
+              subtitle={catalog.nav.teamSub}
               {...p}
             />
-            {!hideFinanceBunkerAndAdminNav && showNavItem("finanzas", role) && (
-              <SidebarNavLink
-                href="/finanzas/exportar"
-                active={active === "exportar"}
-                icon={FileDown}
-                title={L.exportar[0]}
-                subtitle={L.exportar[1]}
-                {...p}
-              />
-            )}
-          </div>
-        </section>
+          )}
+          {!hideFinanceBunkerAndAdminNav && showNavItem("admin", role) && (
+            <SidebarNavLink
+              href="/admin"
+              active={active === "admin"}
+              icon={Settings}
+              title={L.configuracion[0]}
+              subtitle={L.configuracion[1]}
+              {...p}
+            />
+          )}
+          {isOwnerLike(role) && (
+            <SidebarNavLink
+              href="/settings/integrations"
+              active={active === "integrations"}
+              icon={Link2}
+              title={L.integraciones[0]}
+              subtitle={L.integraciones[1]}
+              {...p}
+            />
+          )}
+          {!hideFinanceBunkerAndAdminNav ? (
+            <ConfiguracionNavSection active={active} role={role} onNavLinkClick={onNavLinkClick} />
+          ) : null}
+          <SidebarNavLink
+            href="/perfil/seguridad"
+            active={active === "seguridad"}
+            icon={Shield}
+            title={L.seguridad[0]}
+            subtitle={L.seguridad[1]}
+            {...p}
+          />
+          {!hideFinanceBunkerAndAdminNav && showNavItem("finanzas", role) && (
+            <SidebarNavLink
+              href="/finanzas/exportar"
+              active={active === "exportar"}
+              icon={FileDown}
+              title={L.exportar[0]}
+              subtitle={L.exportar[1]}
+              {...p}
+            />
+          )}
+        </SidebarNavCollapsible>
       </nav>
       <div className="shrink-0 px-4 pb-3">
         <QuotaStatusCard />
       </div>
       <SidebarUserSection />
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-zinc-800/80 p-4 text-xs text-zinc-500">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-zinc-200/90 p-4 text-xs text-zinc-500 dark:border-zinc-800/80">
         <div className="flex items-center gap-2">
           <Leaf className="h-4 w-4 text-emerald-500" aria-hidden />
           <span>{s.sidebarBrand}</span>
         </div>
-        <LocaleSwitcher />
+        <div className="flex flex-wrap items-center gap-2">
+          <ThemeModeControl
+            labels={{
+              appearance: s.themeAppearance,
+              light: s.themeLight,
+              dark: s.themeDark,
+              system: s.themeSystem,
+            }}
+          />
+          <LocaleSwitcher />
+        </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -592,11 +634,11 @@ export function AppShell({ children, active }: Props) {
   const closeMobile = () => setMobileOpen(false);
 
   return (
-    <div className="flex min-h-screen bg-zinc-950 font-sans text-zinc-100 overflow-x-hidden">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 text-zinc-300 lg:flex">
-        <div className="flex h-16 shrink-0 items-center border-b border-zinc-800 px-6">
+    <div className="flex min-h-screen bg-zinc-50 font-sans text-zinc-900 overflow-x-hidden dark:bg-zinc-950 dark:text-zinc-100">
+      <aside className="hidden min-h-0 w-64 shrink-0 flex-col border-r border-zinc-200 bg-white text-zinc-700 lg:flex dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+        <div className="flex h-16 shrink-0 items-center border-b border-zinc-200 px-6 dark:border-zinc-800">
           <BrandLogo className="mr-2 h-8 w-8" />
-          <span className="text-white font-bold text-lg tracking-tight">{s.sidebarBrand}</span>
+          <span className="font-bold text-lg tracking-tight text-zinc-900 dark:text-white">{s.sidebarBrand}</span>
         </div>
         <ShellNavAndFooter active={resolvedActive} />
       </aside>
@@ -604,18 +646,20 @@ export function AppShell({ children, active }: Props) {
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent
           side="left"
-          className="border-zinc-800 bg-zinc-950 text-zinc-300"
+          className="border-zinc-200 bg-white text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300"
           aria-label={s.mainNavSheetAria}
         >
-          <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-zinc-800 px-4">
+          <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-zinc-200 px-4 dark:border-zinc-800">
             <div className="flex min-w-0 items-center">
               <BrandLogo className="mr-2 h-8 w-8" />
-              <SheetTitle className="truncate border-0 p-0 text-sm font-bold text-white">{s.sidebarBrand}</SheetTitle>
+              <SheetTitle className="truncate border-0 p-0 text-sm font-bold text-zinc-900 dark:text-white">
+                {s.sidebarBrand}
+              </SheetTitle>
             </div>
             <button
               type="button"
               onClick={closeMobile}
-              className="shrink-0 rounded-lg p-2 text-zinc-400 transition-all duration-200 hover:bg-zinc-900/80 hover:text-white"
+              className="shrink-0 rounded-lg p-2 text-zinc-500 transition-all duration-200 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900/80 dark:hover:text-white"
               aria-label={s.closeMenu}
             >
               <X className="h-5 w-5" />
@@ -627,11 +671,11 @@ export function AppShell({ children, active }: Props) {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden px-3 pb-4 pt-0 sm:px-4 lg:px-0 lg:pb-0">
           <div
-          className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-zinc-800 bg-zinc-950 px-2 text-zinc-200 sm:px-3 lg:hidden"
+          className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-zinc-200 bg-white px-2 text-zinc-800 sm:px-3 lg:hidden dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200"
         >
           <button
             type="button"
-            className="rounded-lg p-2 transition-all duration-200 hover:bg-zinc-900/80"
+            className="rounded-lg p-2 transition-all duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-900/80"
             aria-label={s.openMenu}
             onClick={() => setMobileOpen(true)}
           >

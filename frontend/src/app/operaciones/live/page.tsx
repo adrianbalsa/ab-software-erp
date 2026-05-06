@@ -40,8 +40,8 @@ export default function OperacionesLivePage() {
       }
     >
       <AppShell active="operaciones">
-        <div className="flex min-h-0 flex-1 flex-col bg-[#0a0e18] text-zinc-100">
-          <header className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-800/90 px-4 md:px-6">
+        <div className="flex min-h-0 flex-1 flex-col bg-[#0a0e18] text-zinc-900 dark:text-zinc-100">
+          <header className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-200/90 dark:border-zinc-800/90 px-4 md:px-6">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400">
                 <Radio className="h-5 w-5" />
@@ -54,7 +54,7 @@ export default function OperacionesLivePage() {
             <button
               type="button"
               onClick={() => void refresh()}
-              className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-zinc-800"
+              className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-800"
             >
               Actualizar ahora
             </button>
@@ -62,7 +62,7 @@ export default function OperacionesLivePage() {
 
           <div className="flex min-h-0 min-h-[min(100dvh,720px)] flex-1 md:min-h-[calc(100dvh-3.5rem)]">
             <aside
-              className={`relative flex shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/90 transition-[width] duration-200 ease-out ${
+              className={`relative flex shrink-0 flex-col border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/90 transition-[width] duration-200 ease-out ${
                 panelOpen ? "w-[min(100%,320px)]" : "w-12"
               }`}
             >
@@ -70,14 +70,14 @@ export default function OperacionesLivePage() {
                 type="button"
                 aria-expanded={panelOpen}
                 onClick={() => setPanelOpen((o) => !o)}
-                className="absolute -right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900 text-zinc-300 shadow-lg hover:bg-zinc-800"
+                className="absolute -right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900 text-zinc-700 dark:text-zinc-300 shadow-lg hover:bg-zinc-800"
               >
                 {panelOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </button>
 
               {panelOpen ? (
                 <>
-                  <div className="border-b border-zinc-800 px-4 py-3">
+                  <div className="border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
                     <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
                       Vehículos ({vehicles.length})
                     </p>
@@ -102,7 +102,7 @@ export default function OperacionesLivePage() {
                                 className={`flex w-full flex-col rounded-xl border px-3 py-2.5 text-left transition-colors ${
                                   active
                                     ? "border-emerald-500/50 bg-emerald-500/10"
-                                    : "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700"
+                                    : "border-zinc-200 dark:border-zinc-800 bg-zinc-900/50 hover:border-zinc-700"
                                 }`}
                               >
                                 <div className="flex items-center justify-between gap-2">
@@ -113,7 +113,7 @@ export default function OperacionesLivePage() {
                                     {v.estado}
                                   </span>
                                 </div>
-                                <p className="mt-1 truncate text-xs text-zinc-400">
+                                <p className="mt-1 truncate text-xs text-zinc-600 dark:text-zinc-400">
                                   {v.conductor_nombre || "Sin conductor asignado"}
                                 </p>
                                 {!hasPos && (

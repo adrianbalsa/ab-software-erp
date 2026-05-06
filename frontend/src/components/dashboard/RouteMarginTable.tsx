@@ -50,16 +50,16 @@ export function RouteMarginTable({ rows }: Props) {
 
           return (
             <TableRow key={`${row.ruta}-${i}`}>
-              <TableCell className="max-w-[260px] truncate font-medium text-zinc-100" title={row.ruta}>
+              <TableCell className="max-w-[260px] truncate font-medium text-zinc-900 dark:text-zinc-100" title={row.ruta}>
                 {row.ruta}
               </TableCell>
-              <TableCell className="text-right tabular-nums text-zinc-300">
+              <TableCell className="text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                 {row.total_portes.toLocaleString("es-ES")}
               </TableCell>
-              <TableCell className="text-right tabular-nums text-zinc-300">
+              <TableCell className="text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                 {formatEUR2(row.ingresos_totales)}
               </TableCell>
-              <TableCell className="text-right tabular-nums text-zinc-300">
+              <TableCell className="text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                 {formatEUR2(row.costes_totales)}
               </TableCell>
               <TableCell
@@ -68,7 +68,7 @@ export function RouteMarginTable({ rows }: Props) {
                     ? "text-red-400"
                     : strongPositive
                       ? "text-emerald-500"
-                      : "text-zinc-100"
+                      : "text-zinc-900 dark:text-zinc-100"
                 }`}
               >
                 <span className="inline-flex items-center justify-end gap-1.5">
@@ -87,7 +87,7 @@ export function RouteMarginTable({ rows }: Props) {
                     ? "text-red-400"
                     : strongPositive
                       ? "text-emerald-500"
-                      : "text-zinc-300"
+                      : "text-zinc-700 dark:text-zinc-300"
                 }`}
               >
                 {formatPct(row.margen_porcentual)}

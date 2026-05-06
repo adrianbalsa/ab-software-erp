@@ -113,10 +113,10 @@ function FleetAdminAlertsStrip() {
   if (criticos === null || criticos === 0) return null;
 
   return (
-    <div className="dashboard-bento mb-4 flex flex-wrap items-center gap-2 px-4 py-3 text-sm text-zinc-300">
+    <div className="dashboard-bento mb-4 flex flex-wrap items-center gap-2 px-4 py-3 text-sm text-zinc-700 dark:text-zinc-300">
       <CalendarDays className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden />
       <span>
-        <strong className="text-zinc-100">{criticos}</strong> alerta(s) administrativa(s) crítica(s) (ITV / seguro / tacógrafo).
+        <strong className="text-zinc-900 dark:text-zinc-100">{criticos}</strong> alerta(s) administrativa(s) crítica(s) (ITV / seguro / tacógrafo).
       </span>
       <Link
         href="/flota/mantenimiento"
@@ -183,10 +183,10 @@ export function AdvancedCharts() {
   if (error) {
     return (
       <section className="dashboard-bento rounded-2xl px-4 py-4 text-sm text-zinc-500">
-        <p className="font-medium text-zinc-300">Métricas avanzadas no disponibles</p>
+        <p className="font-medium text-zinc-700 dark:text-zinc-300">Métricas avanzadas no disponibles</p>
         <p className="mt-2 text-xs text-zinc-600">
-          Requiere rol <code className="rounded bg-zinc-900 px-1 text-zinc-400">ADMIN</code> o{" "}
-          <code className="rounded bg-zinc-900 px-1 text-zinc-400">GESTOR</code> en el JWT (app_metadata.role). El detalle
+          Requiere rol <code className="rounded bg-zinc-900 px-1 text-zinc-600 dark:text-zinc-400">ADMIN</code> o{" "}
+          <code className="rounded bg-zinc-900 px-1 text-zinc-600 dark:text-zinc-400">GESTOR</code> en el JWT (app_metadata.role). El detalle
           del error aparece en el aviso.
         </p>
       </section>
@@ -198,7 +198,7 @@ export function AdvancedCharts() {
       <div>
         <h2
           id="advanced-charts-heading"
-          className="text-lg font-semibold tracking-tight text-zinc-100"
+          className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100"
         >
           Dashboard económico avanzado
         </h2>
@@ -217,7 +217,7 @@ export function AdvancedCharts() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-1 xl:grid-cols-3">
           <div className="dashboard-bento overflow-hidden rounded-2xl p-4 sm:p-6">
-            <h3 className="mb-1 text-sm font-semibold text-zinc-100">Margen de contribución</h3>
+            <h3 className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Margen de contribución</h3>
             <p className="mb-3 text-xs text-zinc-500">Ingresos (verde) vs gastos operativos (rojo)</p>
             <div className={chartWrap}>
               <ResponsiveContainer width="100%" height="100%">
@@ -256,7 +256,7 @@ export function AdvancedCharts() {
           </div>
 
           <div className="dashboard-bento overflow-hidden rounded-2xl p-4 sm:p-6">
-            <h3 className="mb-1 text-sm font-semibold text-zinc-100">Coste real por km</h3>
+            <h3 className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Coste real por km</h3>
             <p className="mb-3 text-xs text-zinc-500">(Combustible + peajes + mantenimiento) / km en portes</p>
             <div className={chartWrap}>
               <ResponsiveContainer width="100%" height="100%">
@@ -296,7 +296,7 @@ export function AdvancedCharts() {
           </div>
 
           <div className="dashboard-bento overflow-hidden rounded-2xl p-4 sm:p-6 xl:col-span-1">
-            <h3 className="mb-1 text-sm font-semibold text-zinc-100">EBITDA verde</h3>
+            <h3 className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">EBITDA verde</h3>
             <p className="mb-3 text-xs text-zinc-500">Ingresos (columnas) y emisiones CO₂ (línea)</p>
             <div className={chartWrap}>
               <ResponsiveContainer width="100%" height="100%">

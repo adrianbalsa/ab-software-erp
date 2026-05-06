@@ -23,9 +23,9 @@ export function ESGImpactCard({
 }: ESGImpactCardProps) {
   if (!esg) {
     return (
-      <Card className="bunker-card border-zinc-800">
+      <Card className="bunker-card border-zinc-200 dark:border-zinc-800">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-zinc-100">
+          <CardTitle className="flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
             <Leaf className="h-5 w-5 text-emerald-400" aria-hidden />
             {title}
           </CardTitle>
@@ -41,11 +41,11 @@ export function ESGImpactCard({
   return (
     <Card className="bunker-card border-emerald-900/40 bg-gradient-to-br from-emerald-950/30 to-zinc-950">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-zinc-100">
+        <CardTitle className="flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
           <Leaf className="h-5 w-5 text-emerald-400" aria-hidden />
           {title}
         </CardTitle>
-        <CardDescription className="text-zinc-400">
+        <CardDescription className="text-zinc-600 dark:text-zinc-400">
           Mes ancla {esg.anchor_month} vs {esg.previous_month}. Factor diésel ISO 14083:{" "}
           <span className="font-mono text-emerald-200/90">{fmt(factor, 2)} kg/L</span> (litros implícitos desde tickets
           combustible).
@@ -64,7 +64,7 @@ export function ESGImpactCard({
           </div>
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">CO₂ mes anterior</p>
-            <p className="mt-1 text-2xl font-semibold text-zinc-300">{fmt(esg.co2_kg_previous, 3)} kg</p>
+            <p className="mt-1 text-2xl font-semibold text-zinc-700 dark:text-zinc-300">{fmt(esg.co2_kg_previous, 3)} kg</p>
             <p className="mt-1 text-xs text-zinc-500">Litros implícitos: {fmt(esg.litros_implied_previous, 2)} L</p>
           </div>
         </div>

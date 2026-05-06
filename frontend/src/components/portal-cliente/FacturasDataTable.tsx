@@ -65,7 +65,7 @@ export function FacturasDataTable({ rows, className }: Props) {
             type="button"
             variant="ghost"
             size="sm"
-            className="-ml-2 h-8 text-zinc-300 hover:text-white"
+            className="-ml-2 h-8 text-zinc-700 dark:text-zinc-300 hover:text-white"
             aria-label={sortColumnAria(p, p.colNumber)}
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
@@ -74,7 +74,7 @@ export function FacturasDataTable({ rows, className }: Props) {
           </Button>
         ),
         cell: ({ row }) => (
-          <span className="font-mono text-xs font-medium text-zinc-100">{row.original.numero_factura}</span>
+          <span className="font-mono text-xs font-medium text-zinc-900 dark:text-zinc-100">{row.original.numero_factura}</span>
         ),
       },
       {
@@ -84,7 +84,7 @@ export function FacturasDataTable({ rows, className }: Props) {
             type="button"
             variant="ghost"
             size="sm"
-            className="-ml-2 h-8 text-zinc-300 hover:text-white"
+            className="-ml-2 h-8 text-zinc-700 dark:text-zinc-300 hover:text-white"
             aria-label={sortColumnAria(p, p.colEmission)}
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
@@ -98,7 +98,7 @@ export function FacturasDataTable({ rows, className }: Props) {
           return da.localeCompare(db);
         },
         cell: ({ row }) => (
-          <span className="text-zinc-400">{String(row.original.fecha_emision ?? "").slice(0, 10) || "—"}</span>
+          <span className="text-zinc-600 dark:text-zinc-400">{String(row.original.fecha_emision ?? "").slice(0, 10) || "—"}</span>
         ),
       },
       {
@@ -108,7 +108,7 @@ export function FacturasDataTable({ rows, className }: Props) {
             type="button"
             variant="ghost"
             size="sm"
-            className="-ml-2 h-8 text-zinc-300 hover:text-white"
+            className="-ml-2 h-8 text-zinc-700 dark:text-zinc-300 hover:text-white"
             aria-label={sortColumnAria(p, p.colAmount)}
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
@@ -117,7 +117,7 @@ export function FacturasDataTable({ rows, className }: Props) {
           </Button>
         ),
         cell: ({ row }) => (
-          <span className="tabular-nums text-zinc-200">{fmtMoney(Number(row.original.total_factura))}</span>
+          <span className="tabular-nums text-zinc-800 dark:text-zinc-200">{fmtMoney(Number(row.original.total_factura))}</span>
         ),
       },
       {
@@ -154,7 +154,7 @@ export function FacturasDataTable({ rows, className }: Props) {
                 type="button"
                 size="xs"
                 variant="outline"
-                className="border-zinc-600 bg-zinc-900/60 text-zinc-100 hover:bg-zinc-800"
+                className="border-zinc-600 bg-zinc-900/60 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-800"
                 disabled={busy === `${keyBase}-pdf`}
                 aria-busy={busy === `${keyBase}-pdf`}
                 aria-label={`${p.pdf} ${row.original.numero_factura}`}
@@ -177,7 +177,7 @@ export function FacturasDataTable({ rows, className }: Props) {
                 type="button"
                 size="xs"
                 variant="outline"
-                className="border-zinc-600 bg-zinc-900/60 text-zinc-100 hover:bg-zinc-800 disabled:opacity-40"
+                className="border-zinc-600 bg-zinc-900/60 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-800 disabled:opacity-40"
                 disabled={!hasXml || busy === `${keyBase}-xml`}
                 aria-busy={busy === `${keyBase}-xml`}
                 aria-label={hasXml ? `${p.xml} ${row.original.numero_factura}` : p.xmlUnavailable}
@@ -223,12 +223,12 @@ export function FacturasDataTable({ rows, className }: Props) {
   return (
     <div className={cn("space-y-3", className)}>
       {error ? <PortalClienteAlert variant="panel">{error}</PortalClienteAlert> : null}
-      <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/40 shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/40 shadow-sm">
         <Table>
           <caption className="sr-only">{p.tableCaption}</caption>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id} className="border-zinc-800 hover:bg-transparent">
+              <TableRow key={hg.id} className="border-zinc-200 dark:border-zinc-800 hover:bg-transparent">
                 {hg.headers.map((header) => {
                   const sorted = header.column.getIsSorted();
                   const ariaSort = header.column.getCanSort()
@@ -239,7 +239,7 @@ export function FacturasDataTable({ rows, className }: Props) {
                         : "none"
                     : undefined;
                   return (
-                    <TableHead key={header.id} className="text-zinc-400" aria-sort={ariaSort}>
+                    <TableHead key={header.id} className="text-zinc-600 dark:text-zinc-400" aria-sort={ariaSort}>
                       {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                     </TableHead>
                   );
@@ -250,7 +250,7 @@ export function FacturasDataTable({ rows, className }: Props) {
           <TableBody>
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} className="border-zinc-800/80">
+                <TableRow key={row.id} className="border-zinc-200/90 dark:border-zinc-800/80">
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                   ))}
@@ -263,7 +263,7 @@ export function FacturasDataTable({ rows, className }: Props) {
                     icon={Receipt}
                     title={p.empty}
                     description={p.emptyHint}
-                    className="text-zinc-400 [&_p]:text-zinc-400"
+                    className="text-zinc-600 dark:text-zinc-400 [&_p]:text-zinc-600 dark:text-zinc-400"
                   />
                 </TableCell>
               </TableRow>

@@ -19,7 +19,7 @@ export function LandingMarketingHero() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(39,39,42,0.4),transparent_50%)]" />
       <div className="relative mx-auto max-w-6xl">
         <motion.p
-          className="text-xs font-semibold uppercase tracking-widest text-zinc-400"
+          className="text-xs font-semibold uppercase tracking-widest text-zinc-600 dark:text-zinc-400"
           variants={fadeUp}
           initial="initial"
           animate="animate"
@@ -28,7 +28,7 @@ export function LandingMarketingHero() {
           {l.eyebrow}
         </motion.p>
         <motion.h1
-          className="mt-5 max-w-4xl text-balance text-3xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-[3.25rem] lg:leading-[1.1]"
+          className="mt-5 max-w-4xl text-balance text-3xl font-extrabold tracking-tight text-zinc-950 dark:text-white sm:text-5xl lg:text-[3.25rem] lg:leading-[1.1]"
           variants={fadeUp}
           initial="initial"
           animate="animate"
@@ -37,7 +37,7 @@ export function LandingMarketingHero() {
           {l.title}
         </motion.h1>
         <motion.p
-          className="mt-6 max-w-3xl text-pretty text-base leading-relaxed text-zinc-300 sm:text-lg"
+          className="mt-6 max-w-3xl text-pretty text-base leading-relaxed text-zinc-700 dark:text-zinc-300 sm:text-lg"
           variants={fadeUp}
           initial="initial"
           animate="animate"
@@ -60,7 +60,7 @@ export function LandingMarketingHero() {
           </Link>
           <Link
             href="#pricing"
-            className="inline-flex min-h-11 items-center justify-center rounded-full border border-zinc-700 bg-transparent px-8 py-3 text-sm font-semibold text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-900/50 hover:text-white"
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-zinc-300 dark:border-zinc-700 bg-transparent px-8 py-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300 transition hover:border-zinc-300 dark:border-zinc-600 hover:bg-zinc-100/80 dark:bg-zinc-900/50 hover:text-zinc-950 dark:hover:text-white"
           >
             {l.secondaryCta}
           </Link>

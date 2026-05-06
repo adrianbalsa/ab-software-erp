@@ -62,7 +62,7 @@ export function EconomicOverview() {
       <section className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Visión económica (Math Engine)</h2>
+            <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Visión económica (Math Engine)</h2>
             <p className="text-sm text-zinc-500">Costes por categoría, margen por cliente e ingresos vs gastos</p>
           </div>
         </div>
@@ -76,7 +76,7 @@ export function EconomicOverview() {
       <section className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Visión económica (Math Engine)</h2>
+            <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Visión económica (Math Engine)</h2>
             <p className="text-sm text-zinc-500">Requiere sesión y datos de finanzas, gastos y facturas</p>
           </div>
           <button
@@ -106,7 +106,7 @@ export function EconomicOverview() {
     <section className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Visión económica (Math Engine)</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Visión económica (Math Engine)</h2>
           <p className="text-sm text-zinc-500">
             EBITDA {formatEUR(data.dashboard.ebitda)} · margen estimado por cliente proporcional al ingreso
           </p>
@@ -122,7 +122,7 @@ export function EconomicOverview() {
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div className="dashboard-bento rounded-2xl p-6">
-          <h3 className="mb-1 text-sm font-semibold text-zinc-100">Distribución de costes</h3>
+          <h3 className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Distribución de costes</h3>
           <p className="mb-4 text-xs text-zinc-500">Gastos operativos por categoría (neto sin IVA)</p>
           <div className="h-[min(260px,40vh)] min-h-[220px] w-full min-w-0 sm:h-[280px] sm:min-h-[240px]">
             {donutData.length === 0 ? (
@@ -168,7 +168,7 @@ export function EconomicOverview() {
         </div>
 
         <div className="dashboard-bento rounded-2xl p-6">
-          <h3 className="mb-1 text-sm font-semibold text-zinc-100">Top 5 clientes por margen</h3>
+          <h3 className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Top 5 clientes por margen</h3>
           <p className="mb-4 text-xs text-zinc-500">Margen estimado = ingreso × (EBITDA ÷ ingresos)</p>
           <div className="h-[min(260px,40vh)] min-h-[220px] w-full min-w-0 sm:h-[280px] sm:min-h-[240px]">
             {barData.length === 0 ? (
@@ -216,7 +216,7 @@ export function EconomicOverview() {
       </div>
 
       <div className="dashboard-bento rounded-2xl p-6">
-        <h3 className="mb-1 text-sm font-semibold text-zinc-100">Histórico ingresos vs gastos</h3>
+        <h3 className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Histórico ingresos vs gastos</h3>
         <p className="mb-4 text-xs text-zinc-500">Últimos 6 meses (ingresos por facturas; gastos por tickets)</p>
         <div className="h-[min(280px,42vh)] min-h-[220px] w-full min-w-0 sm:h-[300px] sm:min-h-[260px]">
           {!hasAreaData ? (

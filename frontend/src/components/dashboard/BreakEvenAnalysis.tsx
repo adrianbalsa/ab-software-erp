@@ -58,7 +58,7 @@ export function BreakEvenAnalysis({ loading, monthly }: Props) {
 
   return (
     <div className="dashboard-bento rounded-2xl p-5">
-      <h3 className="text-base font-semibold text-zinc-100">Break-even Analysis</h3>
+      <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Break-even Analysis</h3>
       <p className="mt-1 text-xs text-zinc-500">Area: gastos acumulados · Línea: ingresos acumulados</p>
       <div className="mt-3 h-[300px]">
         {loading ? (

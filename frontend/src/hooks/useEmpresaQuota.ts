@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { API_BASE, apiFetch } from "@/lib/api";
+import { isLikelyNetworkFetchError, userFacingFetchFailureMessage } from "@/lib/api-base";
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, ms);
+  });
+}
 
 export type QuotaResponse = {
   plan: string;
@@ -29,36 +36,49 @@ export function useEmpresaQuota() {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch(`${API_BASE}/empresa/quota`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.detail || `HTTP ${res.status}`);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          if (attempt > 0) await delay(400);
+          const res = await apiFetch(`${API_BASE}/empresa/quota`, {
+            credentials: "include",
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(
+              typeof (err as { detail?: unknown }).detail === "string"
+                ? String((err as { detail: string }).detail)
+                : `HTTP ${res.status}`,
+            );
+          }
+          const json = (await res.json()) as Record<string, unknown>;
+          const planRaw = (json.plan_type ?? json.plan) as string | undefined;
+          const limiteFlota = (json.limite_vehiculos ?? json.limite_portes) as number | null | undefined;
+          const usadosFlota = (json.vehiculos_actuales ?? json.portes_actuales) as number | string | undefined;
+          const limiteTeam = json.limite_usuarios_equipo as number | null | undefined;
+          const usadosTeam = json.usuarios_equipo_actuales as number | string | undefined;
+          const limiteInv = json.limite_facturas_mes as number | null | undefined;
+          const usadosInv = json.facturas_emitidas_mes_actual as number | string | undefined;
+          setData({
+            plan: typeof planRaw === "string" ? planRaw : "",
+            limite_portes: limiteFlota == null ? null : Number(limiteFlota),
+            portes_actuales: Number(usadosFlota ?? 0),
+            porcentaje_uso: Number(json.porcentaje_uso ?? 0),
+            facturacion_actual: Number(json.facturacion_actual ?? 0),
+            limite_usuarios_equipo: limiteTeam == null ? null : Number(limiteTeam),
+            usuarios_equipo_actuales: Number(usadosTeam ?? 0),
+            limite_facturas_mes: limiteInv == null ? null : Number(limiteInv),
+            facturas_emitidas_mes_actual: Number(usadosInv ?? 0),
+            must_complete_checkout: Boolean(json.must_complete_checkout),
+            billing_suspended: Boolean(json.billing_suspended),
+          });
+          return;
+        } catch (e: unknown) {
+          if (attempt === 0 && isLikelyNetworkFetchError(e)) continue;
+          throw e;
+        }
       }
-      const json = (await res.json()) as Record<string, unknown>;
-      const planRaw = (json.plan_type ?? json.plan) as string | undefined;
-      const limiteFlota = (json.limite_vehiculos ?? json.limite_portes) as number | null | undefined;
-      const usadosFlota = (json.vehiculos_actuales ?? json.portes_actuales) as number | string | undefined;
-      const limiteTeam = json.limite_usuarios_equipo as number | null | undefined;
-      const usadosTeam = json.usuarios_equipo_actuales as number | string | undefined;
-      const limiteInv = json.limite_facturas_mes as number | null | undefined;
-      const usadosInv = json.facturas_emitidas_mes_actual as number | string | undefined;
-      setData({
-        plan: typeof planRaw === "string" ? planRaw : "",
-        limite_portes: limiteFlota == null ? null : Number(limiteFlota),
-        portes_actuales: Number(usadosFlota ?? 0),
-        porcentaje_uso: Number(json.porcentaje_uso ?? 0),
-        facturacion_actual: Number(json.facturacion_actual ?? 0),
-        limite_usuarios_equipo: limiteTeam == null ? null : Number(limiteTeam),
-        usuarios_equipo_actuales: Number(usadosTeam ?? 0),
-        limite_facturas_mes: limiteInv == null ? null : Number(limiteInv),
-        facturas_emitidas_mes_actual: Number(usadosInv ?? 0),
-        must_complete_checkout: Boolean(json.must_complete_checkout),
-        billing_suspended: Boolean(json.billing_suspended),
-      });
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Error");
+      setError(userFacingFetchFailureMessage(e));
       setData(null);
     } finally {
       setLoading(false);

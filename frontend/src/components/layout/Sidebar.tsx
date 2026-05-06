@@ -33,7 +33,7 @@ export function ConfiguracionNavSection({ active, role, onNavLinkClick }: Props)
       <Webhook className={sidebarNavIcon(isActive)} aria-hidden />
       <span className="flex min-w-0 flex-col gap-0.5">
         <span>{catalog.sidebar.developerApi}</span>
-        <span className="text-[11px] font-normal leading-snug text-zinc-500 group-hover:text-zinc-400">
+        <span className="text-[11px] font-normal leading-snug text-zinc-500 group-hover:text-zinc-600 dark:group-hover:text-zinc-600 dark:text-zinc-400">
           {catalog.sidebar.developerApiSub}
         </span>
       </span>
@@ -77,23 +77,23 @@ export function SidebarUserSection() {
   const initials = useMemo(() => initialsFromSubject(displayName), [displayName]);
 
   return (
-    <div className="border-t border-zinc-800/80 px-4 pt-4 pb-2 shrink-0">
+    <div className="shrink-0 border-t border-zinc-200/90 px-4 pt-4 pb-2 dark:border-zinc-800/80">
       <div className="flex items-start gap-3">
         <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-zinc-700/90 bg-zinc-800/90 text-xs font-semibold uppercase tracking-tight text-zinc-100 shadow-inner"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-zinc-300 bg-zinc-100 text-xs font-semibold uppercase tracking-tight text-zinc-800 shadow-inner dark:border-zinc-700/90 dark:bg-zinc-800/90 dark:text-zinc-100"
           aria-hidden
         >
           {initials}
         </div>
         <div className="min-w-0 flex-1 pt-0.5">
-          <p className="truncate text-sm font-medium text-zinc-100" title={displayName}>
+          <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100" title={displayName}>
             {displayName}
           </p>
           <p className="truncate text-[11px] font-medium uppercase tracking-wide text-zinc-500">
             {roleLabels[role] ?? role}
           </p>
           {isDemoMode && (
-            <span className="mt-1 inline-flex items-center rounded-md border border-amber-700/60 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
+            <span className="mt-1 inline-flex items-center rounded-md border border-amber-400/80 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-700/60 dark:text-amber-300">
               {catalog.sidebar.demoMode}
             </span>
           )}
@@ -102,7 +102,7 @@ export function SidebarUserSection() {
       <button
         type="button"
         onClick={() => logout()}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-700/80 bg-zinc-900/50 px-3 py-2 text-xs font-semibold text-zinc-200 transition-all duration-200 hover:border-zinc-600 hover:bg-zinc-800/90 hover:text-white"
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-800 transition-all duration-200 hover:border-zinc-400 hover:bg-zinc-200 hover:text-zinc-950 dark:border-zinc-700/80 dark:bg-zinc-900/50 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/90 dark:hover:text-white"
       >
         <LogOut className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
         {catalog.sidebar.logout}

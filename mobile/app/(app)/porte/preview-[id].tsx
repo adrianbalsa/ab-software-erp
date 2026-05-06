@@ -23,14 +23,14 @@ export default function PortePodPdfPreviewScreen() {
   if (token) headers.Authorization = `Bearer ${token}`;
 
   return (
-    <View className="flex-1 bg-slate-50">
+    <View className="flex-1 bg-slate-50 dark:bg-zinc-950">
       <WebView
         source={{ uri, headers }}
         startInLoadingState
         renderLoading={() => (
-          <View className="flex-1 items-center justify-center bg-slate-50">
+          <View className="flex-1 items-center justify-center bg-slate-50 dark:bg-zinc-950">
             <ActivityIndicator size="large" />
-            <Text className="mt-2 text-xs text-slate-500">Cargando albarán PDF...</Text>
+            <Text className="mt-2 text-xs text-slate-500 dark:text-zinc-500">Cargando albarán PDF...</Text>
           </View>
         )}
       />

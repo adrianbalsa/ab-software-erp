@@ -23,9 +23,9 @@ export function ConnectionProbe() {
   }, []);
 
   return (
-    <View className="rounded-xl border border-slate-200 bg-white p-4">
-      <Text className="text-sm font-semibold text-slate-800">Prueba de conexión</Text>
-      <Text className="mt-1 text-xs text-slate-500" numberOfLines={2}>
+    <View className="rounded-xl border border-slate-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+      <Text className="text-sm font-semibold text-slate-800 dark:text-zinc-200">Prueba de conexión</Text>
+      <Text className="mt-1 text-xs text-slate-500 dark:text-zinc-500" numberOfLines={2}>
         Base: {getApiBaseUrl()}
       </Text>
       <Pressable
@@ -39,7 +39,7 @@ export function ConnectionProbe() {
           <Text className="text-sm font-medium text-white">Ping GET /live</Text>
         )}
       </Pressable>
-      {last ? <Text className="mt-2 text-xs text-slate-600">{last}</Text> : null}
+      {last ? <Text className="mt-2 text-xs text-slate-600 dark:text-zinc-400">{last}</Text> : null}
     </View>
   );
 }

@@ -55,7 +55,7 @@ export function EfficiencyMatrix({
 
   return (
     <div className="dashboard-bento rounded-2xl p-5">
-      <h3 className="text-base font-semibold text-zinc-100">Efficiency Matrix (Margen vs CO2)</h3>
+      <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Efficiency Matrix (Margen vs CO2)</h3>
       <p className="mt-1 text-xs text-zinc-500">
         X: margen neto/km · Y: CO2 por ton-km · Burbuja: ingresos mensuales
       </p>

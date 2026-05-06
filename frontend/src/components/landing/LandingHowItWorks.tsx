@@ -19,7 +19,7 @@ export function LandingHowItWorks() {
       <div className="mx-auto max-w-5xl">
         <div className="text-center mb-12">
           <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{l.title}</h2>
-          <p className="mt-2 text-zinc-300 text-sm sm:text-base">{l.subtitle}</p>
+          <p className="mt-2 text-zinc-700 dark:text-zinc-300 text-sm sm:text-base">{l.subtitle}</p>
         </div>
 
         <div className="relative">
@@ -30,14 +30,14 @@ export function LandingHowItWorks() {
                 key={step.title}
                 className="relative flex flex-col items-center text-center md:pt-0"
               >
-                <div className="relative z-10 flex h-14 w-14 items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-900 text-blue-400 shadow-lg shadow-blue-500/10">
+                <div className="relative z-10 flex h-14 w-14 items-center justify-center rounded-2xl border border-zinc-300 dark:border-zinc-700 bg-zinc-900 text-blue-400 shadow-lg shadow-blue-500/10">
                   <step.icon className="h-7 w-7" />
                 </div>
                 <span className="mt-4 text-xs font-semibold uppercase tracking-widest text-emerald-500/90">
                   {l.stepLabel} {i + 1} · {step.time}
                 </span>
                 <h3 className="mt-2 text-lg font-bold tracking-tight text-white">{step.title}</h3>
-                <p className="mt-2 text-sm text-zinc-300 leading-relaxed max-w-xs">{step.desc}</p>
+                <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed max-w-xs">{step.desc}</p>
               </div>
             ))}
           </div>

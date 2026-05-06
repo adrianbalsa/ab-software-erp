@@ -35,7 +35,7 @@ export function FleetEfficiencyTable({ data }: FleetEfficiencyTableProps) {
   };
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40">
+    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40">
       <Table>
         <TableHeader>
           <TableRow>

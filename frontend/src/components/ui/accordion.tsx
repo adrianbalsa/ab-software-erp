@@ -14,7 +14,7 @@ const AccordionItem = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AccordionPrimitive.Item
     ref={ref}
-    className={cn("overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50", className)}
+    className={cn("overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/50", className)}
     {...props}
   />
 ));
@@ -34,7 +34,7 @@ const AccordionTrigger = React.forwardRef<
       {...props}
     >
       {children}
-      <ChevronDown className="h-5 w-5 shrink-0 transform-gpu text-zinc-400 transition-transform duration-200 will-change-transform" />
+      <ChevronDown className="h-5 w-5 shrink-0 transform-gpu text-zinc-600 dark:text-zinc-400 transition-transform duration-200 will-change-transform" />
     </AccordionPrimitive.Trigger>
   </AccordionPrimitive.Header>
 ));
@@ -47,7 +47,7 @@ const AccordionContent = React.forwardRef<
   <AccordionPrimitive.Content
     ref={ref}
     className={cn(
-      "overflow-hidden border-t border-zinc-800/80 text-sm text-muted-foreground will-change-[height] data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down motion-reduce:transition-none",
+      "overflow-hidden border-t border-zinc-200/90 dark:border-zinc-800/80 text-sm text-muted-foreground will-change-[height] data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down motion-reduce:transition-none",
       className,
     )}
     {...props}

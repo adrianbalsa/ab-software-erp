@@ -143,7 +143,7 @@ function SmartInsightCard({ kind, children }: { kind: InsightKind; children: Rea
       role="status"
       aria-label={title}
     >
-      <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-300">
+      <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">
         <Icon
           className={`h-4 w-4 shrink-0 ${
             kind === "vampiro" ? "text-red-400" : kind === "verifactu" ? "text-emerald-400" : "text-amber-400"
@@ -163,12 +163,12 @@ function MarkdownBlock({ content }: { content: string }) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          p: ({ children }) => <p className="mb-2 last:mb-0 text-zinc-200">{children}</p>,
+          p: ({ children }) => <p className="mb-2 last:mb-0 text-zinc-800 dark:text-zinc-200">{children}</p>,
           ul: ({ children }) => (
-            <ul className="list-disc pl-4 mb-2 space-y-0.5 text-zinc-200">{children}</ul>
+            <ul className="list-disc pl-4 mb-2 space-y-0.5 text-zinc-800 dark:text-zinc-200">{children}</ul>
           ),
           ol: ({ children }) => (
-            <ol className="list-decimal pl-4 mb-2 space-y-0.5 text-zinc-200">{children}</ol>
+            <ol className="list-decimal pl-4 mb-2 space-y-0.5 text-zinc-800 dark:text-zinc-200">{children}</ol>
           ),
           li: ({ children }) => <li className="leading-snug">{children}</li>,
           strong: ({ children }) => (
@@ -183,12 +183,12 @@ function MarkdownBlock({ content }: { content: string }) {
           ),
           thead: ({ children }) => <thead className="bg-zinc-800/90">{children}</thead>,
           th: ({ children }) => (
-            <th className="border border-zinc-600 px-2 py-1.5 text-left font-semibold text-zinc-100">
+            <th className="border border-zinc-600 px-2 py-1.5 text-left font-semibold text-zinc-900 dark:text-zinc-100">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className="border border-zinc-600 px-2 py-1.5 align-top text-zinc-200">{children}</td>
+            <td className="border border-zinc-600 px-2 py-1.5 align-top text-zinc-800 dark:text-zinc-200">{children}</td>
           ),
           code: ({ className, children, ...props }) => {
             const inline = !className;
@@ -201,7 +201,7 @@ function MarkdownBlock({ content }: { content: string }) {
             }
             return (
               <code
-                className="block bg-zinc-900 rounded-md p-2 text-[12px] overflow-x-auto text-zinc-200 border border-zinc-700"
+                className="block bg-zinc-900 rounded-md p-2 text-[12px] overflow-x-auto text-zinc-800 dark:text-zinc-200 border border-zinc-700"
                 {...props}
               >
                 {children}
@@ -249,7 +249,7 @@ function ResponseQuickLinks({ content }: { content: string }) {
   const links = resolveQuickLinks(content);
   if (links.length === 0) return null;
   return (
-    <div className="mt-2 flex flex-wrap gap-2 border-t border-zinc-800/80 pt-2">
+    <div className="mt-2 flex flex-wrap gap-2 border-t border-zinc-200/90 dark:border-zinc-800/80 pt-2">
       {links.map((l) => (
         <Link
           key={l.href}
@@ -424,18 +424,18 @@ export function LogisAdvisorChat() {
       {open && (
         <div
           id="logis-advisor-panel"
-          className="pointer-events-auto w-[min(100vw-2rem,420px)] max-h-[min(72vh,560px)] flex flex-col rounded-2xl border border-zinc-600/80 bg-zinc-950 shadow-2xl shadow-black/50 overflow-hidden"
+          className="pointer-events-auto w-[min(100vw-2rem,420px)] max-h-[min(72vh,560px)] flex flex-col rounded-2xl border border-zinc-600/80 bg-zinc-50 dark:bg-zinc-950 shadow-2xl shadow-black/50 overflow-hidden"
           role="dialog"
           aria-label="LogisAdvisor"
         >
-          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700/90 bg-gradient-to-r from-zinc-900 via-zinc-950 to-black text-zinc-100">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700/90 bg-gradient-to-r from-zinc-900 via-zinc-950 to-black text-zinc-900 dark:text-zinc-100">
             <div className="flex items-center gap-2.5">
               <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/15 p-2">
                 <Bot className="h-5 w-5 text-emerald-500" aria-hidden />
               </div>
               <div>
                 <p className="text-sm font-semibold tracking-tight">LogisAdvisor</p>
-                <p className="text-[11px] text-zinc-400 flex items-center gap-1">
+                <p className="text-[11px] text-zinc-600 dark:text-zinc-400 flex items-center gap-1">
                   <Sparkles className="h-3 w-3 text-emerald-500/90" />
                   Consultoría con tus datos financieros y ESG
                 </p>
@@ -444,7 +444,7 @@ export function LogisAdvisorChat() {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="p-2 rounded-lg hover:bg-zinc-800/80 transition-colors text-zinc-400 hover:text-zinc-200"
+              className="p-2 rounded-lg hover:bg-zinc-800/80 transition-colors text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:text-zinc-200"
               aria-label="Cerrar chat"
             >
               <X className="w-5 h-5" />
@@ -452,7 +452,7 @@ export function LogisAdvisorChat() {
           </div>
 
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <div className="px-3 pt-3 pb-2 flex flex-wrap gap-2 border-b border-zinc-800/90 bg-zinc-950/80">
+            <div className="px-3 pt-3 pb-2 flex flex-wrap gap-2 border-b border-zinc-200/90 dark:border-zinc-800/90 bg-zinc-50 dark:bg-zinc-950/80">
               <div className="w-full flex items-center gap-2">
                 <select
                   value={sessionId ?? ""}
@@ -462,7 +462,7 @@ export function LogisAdvisorChat() {
                     if (!sid) return;
                     void loadSessionHistory(sid);
                   }}
-                  className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-200"
+                  className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
                   aria-label="Sesiones de chat"
                 >
                   <option value="">
@@ -483,16 +483,16 @@ export function LogisAdvisorChat() {
                     setError(null);
                     setInput("");
                   }}
-                  className="rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-medium text-zinc-300 hover:border-emerald-500/50 hover:text-emerald-400 disabled:opacity-40"
+                  className="rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 dark:text-zinc-300 hover:border-emerald-500/50 hover:text-emerald-400 disabled:opacity-40"
                 >
                   Nueva sesión
                 </button>
               </div>
               {aiUsagePct !== null && (
                 <div className="w-full rounded-lg border border-zinc-700/80 bg-zinc-900/70 px-2.5 py-2">
-                  <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-400">
+                  <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-600 dark:text-zinc-400">
                     <span>Cuota IA mensual</span>
-                    <span className={aiUsagePct >= 85 ? "text-amber-400" : "text-zinc-400"}>
+                    <span className={aiUsagePct >= 85 ? "text-amber-400" : "text-zinc-600 dark:text-zinc-400"}>
                       {aiUsagePct}%
                     </span>
                   </div>
@@ -518,7 +518,7 @@ export function LogisAdvisorChat() {
                   type="button"
                   disabled={streaming || loadingHistory || aiCapped}
                   onClick={() => void runPrompt(a.prompt)}
-                  className="rounded-lg border border-zinc-700 bg-zinc-900/90 px-2.5 py-1.5 text-[11px] font-medium text-zinc-300 transition-colors hover:border-emerald-500/50 hover:text-emerald-400 disabled:opacity-40"
+                  className="rounded-lg border border-zinc-700 bg-zinc-900/90 px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 dark:text-zinc-300 transition-colors hover:border-emerald-500/50 hover:text-emerald-400 disabled:opacity-40"
                 >
                   {a.label}
                 </button>
@@ -527,7 +527,7 @@ export function LogisAdvisorChat() {
 
             <div
               ref={scrollRef}
-              className="flex-1 overflow-y-auto px-3 py-3 space-y-3 bg-zinc-950"
+              className="flex-1 overflow-y-auto px-3 py-3 space-y-3 bg-zinc-50 dark:bg-zinc-950"
             >
               {messages.length === 0 && !streaming && (
                 <p className="text-xs text-zinc-500 px-1 leading-relaxed">
@@ -556,7 +556,7 @@ export function LogisAdvisorChat() {
                         className={`max-w-[92%] rounded-2xl px-3 py-2 text-sm shadow-lg ${
                           m.role === "user"
                             ? "rounded-br-md bg-emerald-600 text-white"
-                            : "bg-zinc-900/95 border border-zinc-700/80 text-zinc-100 rounded-bl-md"
+                            : "bg-zinc-900/95 border border-zinc-700/80 text-zinc-900 dark:text-zinc-100 rounded-bl-md"
                         }`}
                       >
                         {m.role === "assistant" ? (
@@ -594,7 +594,7 @@ export function LogisAdvisorChat() {
               <div ref={endRef} />
             </div>
 
-            <div className="p-3 border-t border-zinc-800 bg-black/40 flex gap-2">
+            <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-black/40 flex gap-2">
               <input
                 type="text"
                 value={input}
@@ -606,7 +606,7 @@ export function LogisAdvisorChat() {
                   }
                 }}
                 placeholder="Escribe tu pregunta…"
-                className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900/90 px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
+                className="flex-1 rounded-xl border border-zinc-700 bg-zinc-900/90 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
                 disabled={streaming || aiCapped}
                 aria-label="Mensaje para LogisAdvisor"
               />
@@ -627,7 +627,7 @@ export function LogisAdvisorChat() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="pointer-events-auto flex items-center gap-2 rounded-full border border-zinc-600 bg-zinc-950 py-3 pl-4 pr-5 text-zinc-100 shadow-xl shadow-black/40 transition-colors hover:border-emerald-500/50 hover:bg-zinc-900"
+        className="pointer-events-auto flex items-center gap-2 rounded-full border border-zinc-600 bg-zinc-50 py-3 pl-4 pr-5 text-zinc-900 shadow-xl shadow-black/40 transition-colors hover:border-emerald-500/50 hover:bg-zinc-200 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
         aria-expanded={open}
         aria-controls="logis-advisor-panel"
       >

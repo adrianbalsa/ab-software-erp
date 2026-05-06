@@ -20,7 +20,7 @@ export default function HelpArticlePage() {
 
   if (!article) {
     return (
-      <div className="min-h-screen px-4 py-16 text-center text-zinc-400">
+      <div className="min-h-screen px-4 py-16 text-center text-zinc-600 dark:text-zinc-400">
         <p className="text-lg text-white">404</p>
         <Link href="/#help" className="mt-4 inline-block text-emerald-400 hover:text-emerald-300">
           {catalog.helpBilling.back}
@@ -33,8 +33,8 @@ export default function HelpArticlePage() {
   const body = locale === "en" ? article.body.en : article.body.es;
 
   return (
-    <div className="min-h-screen text-zinc-300">
-      <header className="border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-xl">
+    <div className="min-h-screen text-zinc-700 dark:text-zinc-300">
+      <header className="border-b border-zinc-200/90 dark:border-zinc-800/80 bg-zinc-50 dark:bg-zinc-950/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link href="/" className="flex items-center gap-3 text-white">
             <Image
@@ -68,7 +68,7 @@ export default function HelpArticlePage() {
           {h.updatedLabel} · {article.updated}
         </p>
 
-        <article className="prose prose-invert prose-sm mt-8 max-w-none prose-headings:scroll-mt-20 prose-a:text-emerald-400 prose-strong:text-zinc-100">
+        <article className="prose prose-invert prose-sm mt-8 max-w-none prose-headings:scroll-mt-20 prose-a:text-emerald-400 prose-strong:text-zinc-900 dark:text-zinc-100">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
         </article>
       </main>

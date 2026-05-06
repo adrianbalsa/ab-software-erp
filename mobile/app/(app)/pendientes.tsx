@@ -100,9 +100,9 @@ export default function PendientesScreen() {
   };
 
   return (
-    <View className="flex-1 bg-slate-50">
-      <View className="border-b border-slate-200 bg-white px-4 py-3">
-        <Text className="text-lg font-semibold text-slate-900">Sincronización pendiente</Text>
+    <View className="flex-1 bg-slate-50 dark:bg-zinc-950">
+      <View className="border-b border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 px-4 py-3">
+        <Text className="text-lg font-semibold text-slate-900 dark:text-zinc-100">Sincronización pendiente</Text>
         <View className="mt-2 flex-row flex-wrap gap-2">
           <Pressable onPress={() => void retryAll()} className="rounded-lg bg-indigo-600 px-3 py-2">
             <Text className="text-xs font-semibold text-white">{busyItem === "__all__" ? "Reintentando..." : "Forzar reintento global"}</Text>
@@ -111,7 +111,7 @@ export default function PendientesScreen() {
             <Text className="text-xs font-semibold text-white">{busyItem === "__clear__" ? "Moviendo..." : "Mover agotados a DLQ"}</Text>
           </Pressable>
         </View>
-        <Text className="mt-2 text-xs text-slate-500">
+        <Text className="mt-2 text-xs text-slate-500 dark:text-zinc-500">
           Cola activa: reintentos automáticos. DLQ: más de {MAX_TRIES} intentos fallidos; reencolar o descartar.
         </Text>
       </View>
@@ -121,7 +121,7 @@ export default function PendientesScreen() {
           <ActivityIndicator size="large" />
         </View>
       ) : items.length === 0 && dlq.length === 0 ? (
-        <Text className="py-10 text-center text-slate-500">No hay pendientes ni registros en DLQ.</Text>
+        <Text className="py-10 text-center text-slate-500 dark:text-zinc-500">No hay pendientes ni registros en DLQ.</Text>
       ) : (
         <FlatList
           data={rows}
@@ -130,7 +130,7 @@ export default function PendientesScreen() {
           renderItem={({ item: row }) => {
             if (row.kind === "header-active") {
               return (
-                <Text className="pt-2 text-sm font-semibold uppercase tracking-wide text-slate-600">
+                <Text className="pt-2 text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-zinc-400">
                   Cola activa ({items.length})
                 </Text>
               );
@@ -145,10 +145,10 @@ export default function PendientesScreen() {
             if (row.kind === "item") {
               const item = row.item;
               return (
-                <View className="rounded-xl border border-slate-200 bg-white p-4">
-                  <Text className="text-xs uppercase text-slate-500">{item.type}</Text>
-                  <Text className="mt-1 text-sm text-slate-800">Creado: {item.createdAt}</Text>
-                  <Text className="text-sm text-slate-800">Intentos: {item.tries}</Text>
+                <View className="rounded-xl border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 p-4">
+                  <Text className="text-xs uppercase text-slate-500 dark:text-zinc-500">{item.type}</Text>
+                  <Text className="mt-1 text-sm text-slate-800 dark:text-zinc-200">Creado: {item.createdAt}</Text>
+                  <Text className="text-sm text-slate-800 dark:text-zinc-200">Intentos: {item.tries}</Text>
                   {item.lastError ? <Text className="mt-1 text-xs text-amber-700">Último error: {item.lastError}</Text> : null}
                   <Pressable
                     onPress={() => void retryOne(item.id)}

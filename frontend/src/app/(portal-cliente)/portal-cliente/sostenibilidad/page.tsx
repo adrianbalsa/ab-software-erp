@@ -33,7 +33,7 @@ export default function SostenibilidadPage() {
     <div className="mx-auto max-w-6xl space-y-8">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{p.title}</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{p.subtitle}</p>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-600 dark:text-zinc-400">{p.subtitle}</p>
         <div className="mt-4">
           <Button
             type="button"
@@ -66,7 +66,7 @@ export default function SostenibilidadPage() {
               <Leaf className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden />
               <CardTitle className="text-lg text-zinc-900 dark:text-zinc-50">{p.co2Title}</CardTitle>
             </div>
-            <CardDescription className="dark:text-zinc-400">
+            <CardDescription className="dark:text-zinc-600 dark:text-zinc-400">
               {p.co2DescLead}
               {p.co2DescBody}
             </CardDescription>
@@ -137,7 +137,7 @@ export default function SostenibilidadPage() {
               <Award className="h-5 w-5 text-blue-600 dark:text-blue-400" aria-hidden />
               <CardTitle className="text-lg text-zinc-900 dark:text-zinc-50">{p.certTitle}</CardTitle>
             </div>
-            <CardDescription className="dark:text-zinc-400">{p.certDesc}</CardDescription>
+            <CardDescription className="dark:text-zinc-600 dark:text-zinc-400">{p.certDesc}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto rounded-lg border border-zinc-200/80 dark:border-zinc-800">
@@ -175,7 +175,7 @@ export default function SostenibilidadPage() {
                       <TableRow key={String(row.id)} className="border-zinc-100 dark:border-zinc-800/80">
                         <TableCell>
                           <p className="font-medium text-zinc-900 dark:text-zinc-100">{row.origen}</p>
-                          <p className="text-xs text-zinc-500 dark:text-zinc-400">→ {row.destino}</p>
+                          <p className="text-xs text-zinc-500 dark:text-zinc-600 dark:text-zinc-400">→ {row.destino}</p>
                         </TableCell>
                         <TableCell className="text-right">
                           <Button

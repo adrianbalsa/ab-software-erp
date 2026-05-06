@@ -4,10 +4,10 @@ import { PricingCheckout } from "./PricingCheckout";
 
 export default function PricingPage() {
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Suspense
         fallback={
-          <div className="flex min-h-[50vh] items-center justify-center text-sm text-zinc-400">Cargando…</div>
+          <div className="flex min-h-[50vh] items-center justify-center text-sm text-zinc-600 dark:text-zinc-400">Cargando…</div>
         }
       >
         <PricingCheckout />

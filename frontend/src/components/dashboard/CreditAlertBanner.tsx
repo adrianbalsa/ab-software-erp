@@ -63,8 +63,8 @@ export function CreditAlertBanner({ alerts }: { alerts: CreditAlert[] }) {
                 >
                   {message}
                 </p>
-                <p className="text-sm font-medium text-zinc-100">{a.nombre_cliente}</p>
-                <p className="text-xs text-zinc-400">
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{a.nombre_cliente}</p>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">
                   Pendiente {formatEUR2(a.saldo_pendiente)} · Límite {formatEUR2(a.limite_credito)} ·{" "}
                   <span className="font-medium tabular-nums">{a.porcentaje_consumo.toFixed(2)}%</span>
                 </p>

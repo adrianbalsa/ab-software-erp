@@ -49,11 +49,11 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
         <div>
           <h2
             id="dash-economic-advanced"
-            className="text-lg font-bold tracking-tight text-zinc-100"
+            className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100"
           >
             Vista económica avanzada
           </h2>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
             Math Engine · margen/km, combustible, equilibrio y rentabilidad por cliente (solo owner)
           </p>
         </div>
@@ -126,8 +126,8 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
 
             {/* KPI row — 1 col móvil, 2 tablet, 3 desktop (tres métricas) */}
             <div className="col-span-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
                 <Activity className="h-4 w-4 text-emerald-500" />
                 Coste medio / km (30d)
               </div>
@@ -141,8 +141,8 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
                 {formatEUR(data.gastos_operativos_ultimos_30d)} gastos
               </p>
             </div>
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
                 <Gauge className="h-4 w-4 text-amber-400" />
                 Punto equilibrio (mes)
               </div>
@@ -158,8 +158,8 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
                 · GF {formatEUR(data.punto_equilibrio_mensual.gastos_fijos_mes_eur)}
               </p>
             </div>
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-4 backdrop-blur-md transition-shadow hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
                 <TrendingUp className="h-4 w-4 text-emerald-500" />
                 Contribución
               </div>
@@ -177,8 +177,8 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
             </div>
 
             {/* Ingresos vs Gastos — áreas */}
-            <div className="col-span-12 min-h-[300px] rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 lg:col-span-7">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-300">
+            <div className="col-span-12 min-h-[300px] rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-4 lg:col-span-7">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
                 <BarChart3 className="h-4 w-4 text-emerald-500" />
                 Ingresos vs gastos (12 meses)
               </div>
@@ -226,8 +226,8 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
             </div>
 
             {/* Treemap categorías */}
-            <div className="col-span-12 min-h-[300px] rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 lg:col-span-5">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-300">
+            <div className="col-span-12 min-h-[300px] rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-4 lg:col-span-5">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
                 Gastos por categoría
               </div>
               <div className="h-[min(260px,40vh)] min-h-[220px] sm:h-[280px] sm:min-h-[240px] w-full min-w-0">
@@ -249,8 +249,8 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
             </div>
 
             {/* Margen/km vs gasoil/km */}
-            <div className="col-span-12 min-h-[320px] rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-300">
+            <div className="col-span-12 min-h-[320px] rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
                 Margen neto / km vs coste combustible / km
               </div>
               <p className="mb-2 text-xs text-zinc-500">
@@ -308,12 +308,12 @@ export function EconomicAdvancedDashboard({ enabled }: Props) {
             </div>
 
             {/* Top clientes */}
-            <div className="col-span-12 min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-              <div className="mb-3 text-sm font-semibold text-zinc-300">Top 5 rentabilidad (margen % · prorrateo)</div>
+            <div className="col-span-12 min-w-0 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-4">
+              <div className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Top 5 rentabilidad (margen % · prorrateo)</div>
               <div className="min-w-0 w-full overflow-x-auto">
-              <table className="w-full min-w-[800px] text-left text-sm text-zinc-300">
+              <table className="w-full min-w-[800px] text-left text-sm text-zinc-700 dark:text-zinc-300">
                 <thead>
-                  <tr className="border-b border-zinc-800 text-xs uppercase text-zinc-500">
+                  <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs uppercase text-zinc-500">
                     <th className="py-2 pr-4">Cliente</th>
                     <th className="py-2 pr-4">Ingreso neto</th>
                     <th className="py-2 pr-4">Gasto asignado</th>

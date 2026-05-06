@@ -87,7 +87,7 @@ export default function PortalClienteAnalyticsPage() {
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{p.title}</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{p.subtitle}</p>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-600 dark:text-zinc-400">{p.subtitle}</p>
       </div>
 
       {err ? <PortalClienteAlert>{err}</PortalClienteAlert> : null}
@@ -95,10 +95,10 @@ export default function PortalClienteAnalyticsPage() {
       <Card className="border-zinc-200/90 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
         <CardHeader>
           <CardTitle className="text-lg text-zinc-900 dark:text-zinc-50">{p.periodLabel}</CardTitle>
-          <CardDescription className="dark:text-zinc-400">{p.granularityLabel}</CardDescription>
+          <CardDescription className="dark:text-zinc-600 dark:text-zinc-400">{p.granularityLabel}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="flex flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-400">
+          <label className="flex flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-600 dark:text-zinc-400">
             Desde
             <Input
               type="date"
@@ -107,7 +107,7 @@ export default function PortalClienteAnalyticsPage() {
               className="dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-400">
+          <label className="flex flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-600 dark:text-zinc-400">
             Hasta
             <Input
               type="date"
@@ -116,7 +116,7 @@ export default function PortalClienteAnalyticsPage() {
               className="dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-400">
+          <label className="flex flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-600 dark:text-zinc-400">
             {p.granularityLabel}
             <select
               className="h-10 rounded-md border border-zinc-200 bg-white px-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
@@ -128,7 +128,7 @@ export default function PortalClienteAnalyticsPage() {
               <option value="week">{p.week}</option>
             </select>
           </label>
-          <label className="flex flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-400">
+          <label className="flex flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-600 dark:text-zinc-400">
             {p.vehiculoLabel}
             <Input
               value={vehiculoFilter}
@@ -148,7 +148,7 @@ export default function PortalClienteAnalyticsPage() {
         </p>
       ) : data ? (
         <div className="space-y-8">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 sm:p-6">
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4 sm:p-6">
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
               <MarginWaterfallChart
                 analytics={data}
@@ -160,11 +160,11 @@ export default function PortalClienteAnalyticsPage() {
           </div>
 
           {marginTrendData.length ? (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 sm:p-6">
-              <Card className="border-zinc-800 bg-transparent shadow-none">
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4 sm:p-6">
+              <Card className="border-zinc-200 dark:border-zinc-800 bg-transparent shadow-none">
                 <CardHeader>
                   <CardTitle className="text-lg text-zinc-50">{p.trendTitle}</CardTitle>
-                  <CardDescription className="text-zinc-400">{p.trendDesc}</CardDescription>
+                  <CardDescription className="text-zinc-600 dark:text-zinc-400">{p.trendDesc}</CardDescription>
                 </CardHeader>
                 <CardContent className="h-[min(45vh,360px)] min-h-[260px] w-full">
                   <div role="img" aria-label={p.trendTitle} className="h-full w-full">

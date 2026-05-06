@@ -248,11 +248,11 @@ function VampireMapInner({ portes, className, costEurPerKm }: VampireMapProps) {
     <div
       className={
         className ??
-        "relative h-[min(420px,55vh)] w-full min-h-[300px] overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950"
+        "relative h-[min(420px,55vh)] w-full min-h-[300px] overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950"
       }
     >
       {(resolving || geoErr) && (
-        <div className="absolute left-3 top-3 z-[1] rounded-md border border-zinc-700 bg-zinc-950/90 px-2 py-1 text-xs text-zinc-300">
+        <div className="absolute left-3 top-3 z-[1] rounded-md border border-zinc-700 bg-zinc-50 dark:bg-zinc-950/90 px-2 py-1 text-xs text-zinc-700 dark:text-zinc-300">
           {resolving ? "Geocodificando rutas…" : null}
           {geoErr ? <span className="text-red-300">{geoErr}</span> : null}
         </div>

@@ -122,22 +122,22 @@ export function LogisAdvisor() {
       )}
 
       {isOpen && (
-        <Card className="fixed bottom-6 right-6 z-50 flex h-[600px] w-[420px] flex-col overflow-hidden border border-zinc-800 bg-zinc-950 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-zinc-800 bg-gradient-to-r from-emerald-950 to-zinc-950 px-4 py-3">
+        <Card className="fixed bottom-6 right-6 z-50 flex h-[600px] w-[420px] flex-col overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-gradient-to-r from-emerald-950 to-zinc-950 px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600">
                 <MessageCircle className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-zinc-100">LogisAdvisor</h3>
-                <p className="text-xs text-zinc-400">Asistente de logística IA</p>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">LogisAdvisor</h3>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">Asistente de logística IA</p>
               </div>
             </div>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setIsOpen(false)}
-              className="h-8 w-8 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+              className="h-8 w-8 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-800 hover:text-zinc-900 dark:text-zinc-100"
             >
               <X className="h-4 w-4" />
             </Button>
@@ -149,8 +149,8 @@ export function LogisAdvisor() {
                 <MessageCircle className="h-8 w-8 text-emerald-500" />
               </div>
               <div>
-                <h4 className="text-base font-semibold text-zinc-200">¡Hola! Soy LogisAdvisor</h4>
-                <p className="mt-1 text-sm text-zinc-400">
+                <h4 className="text-base font-semibold text-zinc-800 dark:text-zinc-200">¡Hola! Soy LogisAdvisor</h4>
+                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                   Puedo ayudarte con insights financieros, eficiencia de rutas y sostenibilidad.
                 </p>
               </div>
@@ -161,7 +161,7 @@ export function LogisAdvisor() {
                     variant="outline"
                     size="sm"
                     onClick={() => handleQuickAction(action.query)}
-                    className="w-full justify-start gap-2 border-zinc-800 bg-zinc-900/60 text-left text-xs text-zinc-200 hover:bg-emerald-950/60 hover:border-emerald-800/60 hover:text-emerald-100"
+                    className="w-full justify-start gap-2 border-zinc-200 dark:border-zinc-800 bg-zinc-900/60 text-left text-xs text-zinc-800 dark:text-zinc-200 hover:bg-emerald-950/60 hover:border-emerald-800/60 hover:text-emerald-100"
                     disabled={isLoading}
                   >
                     {action.icon}
@@ -188,7 +188,7 @@ export function LogisAdvisor() {
                         "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm",
                         msg.role === "user"
                           ? "bg-emerald-600 text-white"
-                          : "border border-zinc-800 bg-zinc-900 text-zinc-100",
+                          : "border border-zinc-200 dark:border-zinc-800 bg-zinc-900 text-zinc-900 dark:text-zinc-100",
                       )}
                     >
                       {msg.content}
@@ -203,7 +203,7 @@ export function LogisAdvisor() {
                 ))}
                 {isLoading && (
                   <div className="flex items-start gap-2">
-                    <div className="max-w-[85%] rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-400">
+                    <div className="max-w-[85%] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-600 dark:text-zinc-400">
                       <div className="flex items-center gap-2">
                         <div className="flex gap-1">
                           <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
@@ -219,7 +219,7 @@ export function LogisAdvisor() {
             </ScrollArea>
           )}
 
-          <div className="border-t border-zinc-800 bg-zinc-950 p-4">
+          <div className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4">
             {messages.length > 0 && (
               <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
                 {QUICK_ACTIONS.map((action) => (
@@ -228,7 +228,7 @@ export function LogisAdvisor() {
                     variant="outline"
                     size="sm"
                     onClick={() => handleQuickAction(action.query)}
-                    className="shrink-0 gap-1.5 border-zinc-800 bg-zinc-900/60 text-xs text-zinc-300 hover:bg-emerald-950/60 hover:border-emerald-800/60 hover:text-emerald-100"
+                    className="shrink-0 gap-1.5 border-zinc-200 dark:border-zinc-800 bg-zinc-900/60 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-emerald-950/60 hover:border-emerald-800/60 hover:text-emerald-100"
                     disabled={isLoading}
                   >
                     {action.icon}
@@ -249,7 +249,7 @@ export function LogisAdvisor() {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Escribe tu pregunta..."
                 disabled={isLoading}
-                className="flex-1 border-zinc-800 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-emerald-600"
+                className="flex-1 border-zinc-200 dark:border-zinc-800 bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-emerald-600"
               />
               <Button
                 type="submit"

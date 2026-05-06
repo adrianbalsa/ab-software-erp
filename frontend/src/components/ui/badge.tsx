@@ -8,7 +8,7 @@ function joinClasses(...parts: Array<string | undefined>) {
 }
 
 const badgeVariantClasses: Record<BadgeVariant, string> = {
-  default: "border-zinc-700 bg-zinc-800/60 text-zinc-100",
+  default: "border-zinc-700 bg-zinc-800/60 text-zinc-900 dark:text-zinc-100",
   destructive: "border-red-500/60 bg-red-500/15 text-red-200",
   warning: "border-amber-500/60 bg-amber-500/15 text-amber-200",
   success: "border-emerald-500/60 bg-emerald-500/15 text-emerald-200",

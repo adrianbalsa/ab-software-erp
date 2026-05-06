@@ -201,7 +201,7 @@ function ChartSkeleton({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "flex min-h-[420px] w-full animate-pulse flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-6",
+        "flex min-h-[420px] w-full animate-pulse flex-col gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-6",
         className,
       )}
     >
@@ -217,7 +217,7 @@ function ChartSkeleton({ className }: { className?: string }) {
 
 function KpiSkeleton() {
   return (
-    <div className="h-[120px] animate-pulse rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+    <div className="h-[120px] animate-pulse rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-5">
       <div className="h-3 w-24 rounded bg-zinc-800" />
       <div className="mt-6 h-8 w-20 rounded bg-zinc-800" />
     </div>
@@ -246,14 +246,14 @@ function ProfitabilityTooltip({ active, payload }: ScatterTooltipProps) {
   return (
     <div
       className={cn(
-        "max-w-sm rounded-lg bg-zinc-950/95 p-4 text-sm shadow-xl shadow-black/40 backdrop-blur-sm",
+        "max-w-sm rounded-lg bg-zinc-50 dark:bg-zinc-950/95 p-4 text-sm shadow-xl shadow-black/40 backdrop-blur-sm",
         vampire
           ? "border-2 border-rose-500 ring-2 ring-rose-500/25"
           : "border border-zinc-700",
       )}
     >
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-2">
-        <p className="font-semibold text-zinc-100">Porte</p>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+        <p className="font-semibold text-zinc-900 dark:text-zinc-100">Porte</p>
         <div className="flex flex-wrap items-center gap-1.5">
           {estimated ? (
             <span className="rounded-full border border-amber-500/70 bg-amber-950/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
@@ -275,28 +275,28 @@ function ProfitabilityTooltip({ active, payload }: ScatterTooltipProps) {
           ) : null}
         </div>
       </div>
-      <dl className="space-y-1.5 text-zinc-300">
+      <dl className="space-y-1.5 text-zinc-700 dark:text-zinc-300">
         <div className="flex justify-between gap-6">
           <dt className="text-zinc-500">ID</dt>
-          <dd className="font-mono text-xs text-zinc-200">{d.porte_id}</dd>
+          <dd className="font-mono text-xs text-zinc-800 dark:text-zinc-200">{d.porte_id}</dd>
         </div>
         <div className="flex justify-between gap-6">
           <dt className="text-zinc-500">Cliente</dt>
-          <dd className="text-right text-zinc-100">{d.cliente?.trim() || "—"}</dd>
+          <dd className="text-right text-zinc-900 dark:text-zinc-100">{d.cliente?.trim() || "—"}</dd>
         </div>
         <div className="flex justify-between gap-6">
           <dt className="text-zinc-500">Vehículo</dt>
-          <dd className="text-right text-zinc-100">{d.vehiculo?.trim() || "—"}</dd>
+          <dd className="text-right text-zinc-900 dark:text-zinc-100">{d.vehiculo?.trim() || "—"}</dd>
         </div>
         <div className="flex justify-between gap-6">
           <dt className="text-zinc-500">Distancia</dt>
           <dd>{fmtDec(d.km, 1)} km</dd>
         </div>
-        <div className="border-t border-zinc-800 pt-2">
+        <div className="border-t border-zinc-200 dark:border-zinc-800 pt-2">
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Desglose coste</p>
           <div className="flex justify-between gap-6">
             <dt className="text-zinc-500">Ingreso</dt>
-            <dd className="text-zinc-100">{fmtEur(precio)}</dd>
+            <dd className="text-zinc-900 dark:text-zinc-100">{fmtEur(precio)}</dd>
           </div>
           {tieneReal ? (
             <>
@@ -316,7 +316,7 @@ function ProfitabilityTooltip({ active, payload }: ScatterTooltipProps) {
             </div>
           )}
         </div>
-        <div className="flex justify-between gap-6 border-t border-zinc-800 pt-2">
+        <div className="flex justify-between gap-6 border-t border-zinc-200 dark:border-zinc-800 pt-2">
           <dt className="text-zinc-500">Margen P&amp;L {estimated ? "(proxy)" : "real"}</dt>
           <dd className="font-medium text-emerald-400">{fmtEur(d.margin_eur)}</dd>
         </div>
@@ -328,7 +328,7 @@ function ProfitabilityTooltip({ active, payload }: ScatterTooltipProps) {
         ) : null}
         <div className="flex justify-between gap-6">
           <dt className="text-zinc-500">η (precio / km·coste)</dt>
-          <dd className="font-mono text-zinc-100">{fmtDec(d.eta, 2)}</dd>
+          <dd className="font-mono text-zinc-900 dark:text-zinc-100">{fmtDec(d.eta, 2)}</dd>
         </div>
       </dl>
     </div>
@@ -352,8 +352,8 @@ function TreemapBizTooltip({ active, payload }: TreemapTooltipProps) {
   if (!p) return null;
   const est = p.estimated_fallback === true;
   return (
-    <div className="rounded-lg border border-zinc-700 bg-zinc-950/95 p-3 text-xs shadow-lg backdrop-blur-sm">
-      <p className="font-semibold text-zinc-100">{p.name}</p>
+    <div className="rounded-lg border border-zinc-700 bg-zinc-50 dark:bg-zinc-950/95 p-3 text-xs shadow-lg backdrop-blur-sm">
+      <p className="font-semibold text-zinc-900 dark:text-zinc-100">{p.name}</p>
       {est ? (
         <p className="mt-1 text-amber-300/90">Margen proxy (sin ticket combustible vinculado)</p>
       ) : (
@@ -362,10 +362,10 @@ function TreemapBizTooltip({ active, payload }: TreemapTooltipProps) {
           P&amp;L con combustible real imputado
         </p>
       )}
-      <p className="mt-1 text-zinc-400">
+      <p className="mt-1 text-zinc-600 dark:text-zinc-400">
         CO₂: <span className="text-rose-300">{fmtDec(p.size, 2)} kg</span>
       </p>
-      <p className="text-zinc-400">
+      <p className="text-zinc-600 dark:text-zinc-400">
         Margen: <span className="text-emerald-400">{fmtEur(p.margen_estimado ?? 0)}</span>
       </p>
       {p.porte_id ? (
@@ -401,7 +401,7 @@ function BiDateRangePicker({ dateRange, onChange, isSyncing }: BiDateRangePicker
         variant="outline"
         size="sm"
         onClick={() => setOpen((o) => !o)}
-        className="h-9 gap-2 border-zinc-700 bg-zinc-900/80 text-zinc-100 hover:bg-zinc-800/90"
+        className="h-9 gap-2 border-zinc-700 bg-zinc-900/80 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-800/90"
         aria-expanded={open}
         aria-haspopup="dialog"
       >
@@ -420,34 +420,34 @@ function BiDateRangePicker({ dateRange, onChange, isSyncing }: BiDateRangePicker
         >
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Periodo (fecha porte)</p>
           <p className="mt-1 text-[11px] leading-snug text-zinc-500">
-            KPIs y gráficos usan portes cuya <strong className="text-zinc-400">fecha</strong> cae en el rango. DSO usa
+            KPIs y gráficos usan portes cuya <strong className="text-zinc-600 dark:text-zinc-400">fecha</strong> cae en el rango. DSO usa
             facturas emitidas en el mismo rango.
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label className="block text-xs text-zinc-400">
+            <label className="block text-xs text-zinc-600 dark:text-zinc-400">
               Desde
               <input
                 type="date"
-                className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2 text-sm text-zinc-100 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-2 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                 value={toDateOnlyLocal(dateRange.from)}
                 onChange={(e) => onChange({ ...dateRange, from: parseDateOnlyLocal(e.target.value) })}
               />
             </label>
-            <label className="block text-xs text-zinc-400">
+            <label className="block text-xs text-zinc-600 dark:text-zinc-400">
               Hasta
               <input
                 type="date"
-                className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2 text-sm text-zinc-100 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-2 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                 value={toDateOnlyLocal(dateRange.to)}
                 onChange={(e) => onChange({ ...dateRange, to: parseDateOnlyLocal(e.target.value) })}
               />
             </label>
           </div>
-          <div className="mt-3 flex items-center justify-between gap-2 border-t border-zinc-800 pt-3">
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-zinc-200 dark:border-zinc-800 pt-3">
             <span className={cn("text-xs", isSyncing ? "text-amber-400/90" : "text-zinc-600")}>
               {isSyncing ? "Sincronizando datos…" : "Listo"}
             </span>
-            <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-zinc-400" onClick={() => setOpen(false)}>
+            <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-zinc-600 dark:text-zinc-400" onClick={() => setOpen(false)}>
               Cerrar
             </Button>
           </div>
@@ -579,19 +579,19 @@ export default function BiDashboardPage() {
       <RoleGuard
         allowedRoles={["owner", "admin"]}
         fallback={
-          <main className="bg-zinc-950 p-8">
-            <p className="text-sm text-zinc-400">Acceso restringido: solo dirección.</p>
+          <main className="bg-zinc-50 dark:bg-zinc-950 p-8">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">Acceso restringido: solo dirección.</p>
           </main>
         }
       >
-        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-zinc-950">
-          <header className="flex min-h-16 shrink-0 flex-col gap-3 border-b border-zinc-800 bg-zinc-950/90 px-4 py-3 backdrop-blur-md sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-3">
+        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-zinc-50 dark:bg-zinc-950">
+          <header className="flex min-h-16 shrink-0 flex-col gap-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/90 px-4 py-3 backdrop-blur-md sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-3">
             <div className="min-w-0 flex-1">
-              <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-zinc-100 sm:text-2xl">
+              <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-2xl">
                 <Target className="h-6 w-6 shrink-0 text-emerald-500 sm:h-7 sm:w-7" aria-hidden />
                 Inteligencia de negocio
               </h1>
-              <p className="mt-0.5 text-xs text-zinc-400 sm:text-sm">
+              <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400 sm:text-sm">
                 DSO real, eficiencia por trayecto (η = precio / (km × {fmtDec(costeKm, 2)} €)) y huella vs margen —
                 filtrado por periodo.
               </p>
@@ -606,13 +606,13 @@ export default function BiDashboardPage() {
             <BiDateRangePicker dateRange={dateRange} onChange={setDateRange} isSyncing={isSyncing} />
           </header>
 
-          <div className="border-b border-zinc-800 bg-zinc-950/80 px-4 py-3 sm:px-6">
+          <div className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/80 px-4 py-3 sm:px-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Filtros BI (portes / gastos)</p>
             <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
-              <label className="flex min-w-[10rem] flex-col gap-1 text-xs text-zinc-400">
+              <label className="flex min-w-[10rem] flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-400">
                 Agrupación temporal
                 <select
-                  className="h-9 rounded-lg border border-zinc-700 bg-zinc-950 px-2 text-sm text-zinc-100 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                  className="h-9 rounded-lg border border-zinc-700 bg-zinc-50 dark:bg-zinc-950 px-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                   value={granularity}
                   onChange={(e) => setGranularity(e.target.value === "week" ? "week" : "month")}
                   aria-label="Agrupación temporal del margen"
@@ -621,24 +621,24 @@ export default function BiDashboardPage() {
                   <option value="week">Semana (ISO)</option>
                 </select>
               </label>
-              <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-xs text-zinc-400">
+              <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-400">
                 Vehículo (UUID flota)
                 <Input
                   value={vehiculoFilter}
                   onChange={(e) => setVehiculoFilter(e.target.value)}
                   placeholder="Opcional"
-                  className="h-9 border-zinc-700 bg-zinc-950 text-zinc-100"
+                  className="h-9 border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100"
                   aria-label="Filtrar por vehículo_id"
                   autoComplete="off"
                 />
               </label>
-              <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-xs text-zinc-400">
+              <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-400">
                 Cliente (UUID)
                 <Input
                   value={clienteFilter}
                   onChange={(e) => setClienteFilter(e.target.value)}
                   placeholder="Opcional"
-                  className="h-9 border-zinc-700 bg-zinc-950 text-zinc-100"
+                  className="h-9 border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100"
                   aria-label="Filtrar por cliente_id"
                   autoComplete="off"
                 />
@@ -663,7 +663,7 @@ export default function BiDashboardPage() {
                   <Card className="bunker-card border-emerald-500/20 bg-gradient-to-br from-emerald-950/35 to-zinc-950">
                     <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                       <div>
-                        <CardTitle className="flex items-center gap-2 text-sm font-medium text-zinc-200">
+                        <CardTitle className="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
                           <TrendingUp className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
                           Índice de Margen Real
                         </CardTitle>
@@ -690,7 +690,7 @@ export default function BiDashboardPage() {
                   <Card className="bunker-card border-amber-500/20 bg-gradient-to-br from-amber-950/25 to-zinc-950">
                     <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                       <div>
-                        <CardTitle className="flex items-center gap-2 text-sm font-medium text-zinc-200">
+                        <CardTitle className="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
                           <Zap className="h-5 w-5 shrink-0 text-amber-400" aria-hidden />
                           Ratio de Eficiencia de Combustible
                         </CardTitle>
@@ -729,9 +729,9 @@ export default function BiDashboardPage() {
                 </>
               ) : (
                 <>
-                  <Card className="bunker-card border-zinc-800 bg-gradient-to-br from-zinc-900/90 to-zinc-950">
+                  <Card className="bunker-card border-zinc-200 dark:border-zinc-800 bg-gradient-to-br from-zinc-900/90 to-zinc-950">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-zinc-200">DSO real</CardTitle>
+                      <CardTitle className="text-sm font-medium text-zinc-800 dark:text-zinc-200">DSO real</CardTitle>
                       <CalendarClock className="h-5 w-5 text-sky-400" aria-hidden />
                     </CardHeader>
                     <CardContent>
@@ -740,9 +740,9 @@ export default function BiDashboardPage() {
                       <p className="mt-2 text-[11px] text-zinc-600">Muestra: {fmtInt(summary?.dso_sample_size)} facturas</p>
                     </CardContent>
                   </Card>
-                  <Card className="bunker-card border-zinc-800 bg-gradient-to-br from-zinc-900/90 to-zinc-950">
+                  <Card className="bunker-card border-zinc-200 dark:border-zinc-800 bg-gradient-to-br from-zinc-900/90 to-zinc-950">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-zinc-200">Eficiencia media</CardTitle>
+                      <CardTitle className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Eficiencia media</CardTitle>
                       <Gauge className="h-5 w-5 text-amber-400" aria-hidden />
                     </CardHeader>
                     <CardContent>
@@ -751,9 +751,9 @@ export default function BiDashboardPage() {
                       <p className="mt-2 text-[11px] text-zinc-600">n = {fmtInt(summary?.efficiency_sample_size)} portes</p>
                     </CardContent>
                   </Card>
-                  <Card className="bunker-card border-zinc-800 bg-gradient-to-br from-zinc-900/90 to-zinc-950">
+                  <Card className="bunker-card border-zinc-200 dark:border-zinc-800 bg-gradient-to-br from-zinc-900/90 to-zinc-950">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-zinc-200">CO₂ ahorrado</CardTitle>
+                      <CardTitle className="text-sm font-medium text-zinc-800 dark:text-zinc-200">CO₂ ahorrado</CardTitle>
                       <Leaf className="h-5 w-5 text-emerald-400" aria-hidden />
                     </CardHeader>
                     <CardContent>
@@ -784,17 +784,17 @@ export default function BiDashboardPage() {
                   <ESGImpactCard esg={profitMargin.esg_month_over_month} />
                 </>
               ) : (
-                <div className="col-span-full rounded-lg border border-dashed border-zinc-800 bg-zinc-900/30 px-4 py-6 text-sm text-zinc-500">
+                <div className="col-span-full rounded-lg border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-900/30 px-4 py-6 text-sm text-zinc-500">
                   No se pudieron cargar los agregados de margen (compruebe permisos o inténtelo de nuevo).
                 </div>
               )}
             </div>
 
             {loadPm || !profitMargin?.series?.length ? null : (
-              <Card className="bunker-card overflow-hidden border-zinc-800">
+              <Card className="bunker-card overflow-hidden border-zinc-200 dark:border-zinc-800">
                 <CardHeader>
-                  <CardTitle className="text-zinc-100">Serie temporal — ingresos vs gastos</CardTitle>
-                  <CardDescription className="text-zinc-400">
+                  <CardTitle className="text-zinc-900 dark:text-zinc-100">Serie temporal — ingresos vs gastos</CardTitle>
+                  <CardDescription className="text-zinc-600 dark:text-zinc-400">
                     Barras apiladas: combustible, peajes y otros. Línea: ingresos de portes (mismo rango y filtros).
                   </CardDescription>
                 </CardHeader>
@@ -830,9 +830,9 @@ export default function BiDashboardPage() {
             )}
 
             {/* Scatter */}
-            <Card className="bunker-card overflow-hidden border-zinc-800">
+            <Card className="bunker-card overflow-hidden border-zinc-200 dark:border-zinc-800">
               <CardHeader>
-                <CardTitle className="flex flex-wrap items-center gap-2 text-zinc-100">
+                <CardTitle className="flex flex-wrap items-center gap-2 text-zinc-900 dark:text-zinc-100">
                   Rentabilidad por trayecto
                   <span
                     className="inline-flex text-zinc-500"
@@ -841,7 +841,7 @@ export default function BiDashboardPage() {
                     <Info className="size-4" aria-hidden />
                   </span>
                 </CardTitle>
-                <CardDescription className="text-zinc-400">
+                <CardDescription className="text-zinc-600 dark:text-zinc-400">
                   Eje Y: margen P&amp;L real (EUR) cuando hay combustible imputado; borde discontinuo = estimación (sin ticket).
                   Color η: precio / (km × coste) — &lt; 1 rosa, &gt; 1,2 esmeralda.
                 </CardDescription>
@@ -850,7 +850,7 @@ export default function BiDashboardPage() {
                 {loadProfit ? (
                   <ChartSkeleton className="min-h-[420px]" />
                 ) : scatterData.length === 0 ? (
-                  <div className="flex min-h-[420px] items-center justify-center rounded-xl border border-dashed border-zinc-800 bg-zinc-900/30 text-sm text-zinc-500">
+                  <div className="flex min-h-[420px] items-center justify-center rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-900/30 text-sm text-zinc-500">
                     No hay portes completados con km &gt; 0 para mostrar.
                   </div>
                 ) : (
@@ -905,10 +905,10 @@ export default function BiDashboardPage() {
             </Card>
 
             {/* Treemap */}
-            <Card className="bunker-card overflow-hidden border-zinc-800">
+            <Card className="bunker-card overflow-hidden border-zinc-200 dark:border-zinc-800">
               <CardHeader>
-                <CardTitle className="text-zinc-100">Impacto de carbono vs margen</CardTitle>
-                <CardDescription className="text-zinc-400">
+                <CardTitle className="text-zinc-900 dark:text-zinc-100">Impacto de carbono vs margen</CardTitle>
+                <CardDescription className="text-zinc-600 dark:text-zinc-400">
                   Superficie ∝ CO₂ (kg). Color ∝ margen P&amp;L (real o proxy). Borde discontinuo: sin ticket de combustible
                   vinculado.
                 </CardDescription>
@@ -917,7 +917,7 @@ export default function BiDashboardPage() {
                 {loadEsg ? (
                   <ChartSkeleton className="min-h-[400px]" />
                 ) : treemapLeaves.length === 0 ? (
-                  <div className="flex min-h-[400px] items-center justify-center rounded-xl border border-dashed border-zinc-800 bg-zinc-900/30 text-sm text-zinc-500">
+                  <div className="flex min-h-[400px] items-center justify-center rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-900/30 text-sm text-zinc-500">
                     No hay datos ESG agregados para treemap.
                   </div>
                 ) : (

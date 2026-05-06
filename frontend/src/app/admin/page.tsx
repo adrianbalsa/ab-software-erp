@@ -38,14 +38,14 @@ const BENTO =
   "rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-6 backdrop-blur-md shadow-2xl transition-all";
 
 const inputAdminClass =
-  "h-10 border-zinc-800 bg-zinc-900/50 text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-600 focus-visible:ring-zinc-600/30 md:text-sm";
+  "h-10 border-zinc-200 dark:border-zinc-800 bg-zinc-900/50 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-600 focus-visible:ring-zinc-600/30 md:text-sm";
 
 const btnPrimaryClass = "bg-emerald-600 text-white hover:bg-emerald-500 focus-visible:ring-emerald-500/40";
 
 const tableShell = "overflow-x-auto rounded-xl border border-zinc-800/60";
-const tableClass = "w-full text-sm text-zinc-300";
+const tableClass = "w-full text-sm text-zinc-700 dark:text-zinc-300";
 const tableHead =
-  "border-b border-zinc-800 bg-zinc-950/80 text-left text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500";
+  "border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/80 text-left text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500";
 const tableCell = "border-b border-zinc-800/40 px-4 py-3";
 
 type TabId = "empresas" | "usuarios" | "metricas" | "auditoria" | "facturacion";
@@ -289,7 +289,7 @@ export default function AdminPage() {
 
   if (!token) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-6">
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-6">
         <div
           className={cn(
             BENTO,
@@ -297,9 +297,9 @@ export default function AdminPage() {
           )}
         >
           <Shield className="mx-auto h-12 w-12 text-emerald-500/90" />
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-100">Panel de administración</h1>
-          <p className="text-sm text-zinc-400">
-            Inicia sesión en la aplicación y vuelve aquí con un usuario <strong className="text-zinc-200">rol admin</strong>.
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Panel de administración</h1>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Inicia sesión en la aplicación y vuelve aquí con un usuario <strong className="text-zinc-800 dark:text-zinc-200">rol admin</strong>.
           </p>
           <Link
             href="/portes"
@@ -321,7 +321,7 @@ export default function AdminPage() {
   ];
 
   return (
-    <div className="flex min-h-screen bg-zinc-950 font-sans text-zinc-100">
+    <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950 font-sans text-zinc-900 dark:text-zinc-100">
       <aside className="m-4 flex w-[15.5rem] shrink-0 flex-col rounded-2xl border border-zinc-800/50 bg-black shadow-2xl backdrop-blur-md">
         <div className="flex h-16 items-center border-b border-zinc-800/50 px-5">
           <Image
@@ -333,28 +333,28 @@ export default function AdminPage() {
             priority
           />
           <div>
-            <span className="block text-sm font-semibold tracking-tight text-zinc-100">AB Logistics</span>
+            <span className="block text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">AB Logistics</span>
             <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">Admin Console</span>
           </div>
         </div>
         <nav className="flex flex-1 flex-col gap-1 p-3">
           <Link
             href="/dashboard"
-            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-900/80 hover:text-zinc-100"
+            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-600 dark:text-zinc-400 transition-colors hover:bg-zinc-900/80 hover:text-zinc-900 dark:text-zinc-100"
           >
             <LayoutDashboard className="h-4 w-4" />
             Dashboard
           </Link>
           <Link
             href="/portes"
-            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-900/80 hover:text-zinc-100"
+            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-600 dark:text-zinc-400 transition-colors hover:bg-zinc-900/80 hover:text-zinc-900 dark:text-zinc-100"
           >
             <Truck className="h-4 w-4" />
             Portes
           </Link>
           <Link
             href="/admin/dashboard/map"
-            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-900/80 hover:text-zinc-100"
+            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-600 dark:text-zinc-400 transition-colors hover:bg-zinc-900/80 hover:text-zinc-900 dark:text-zinc-100"
           >
             <MapPin className="h-4 w-4" />
             Mapa actividad
@@ -369,8 +369,8 @@ export default function AdminPage() {
       <main className="flex min-w-0 flex-1 flex-col pr-4 pt-4 pb-4">
         <header className="flex h-16 shrink-0 items-center justify-between rounded-xl border border-zinc-800/50 bg-zinc-900/30 px-8 backdrop-blur-md">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-zinc-100">Panel de administración</h1>
-            <p className="text-xs text-zinc-400">Gestión global — equivalente al módulo Streamlit legacy</p>
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Panel de administración</h1>
+            <p className="text-xs text-zinc-600 dark:text-zinc-400">Gestión global — equivalente al módulo Streamlit legacy</p>
           </div>
         </header>
 
@@ -385,7 +385,7 @@ export default function AdminPage() {
                   "flex items-center gap-2 whitespace-nowrap rounded-t-lg border-b-2 px-4 py-3 text-sm font-medium transition-colors",
                   tab === t.id
                     ? "border-emerald-500 text-emerald-400"
-                    : "border-transparent text-zinc-500 hover:text-zinc-300"
+                    : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-300"
                 )}
               >
                 {t.icon}
@@ -399,12 +399,12 @@ export default function AdminPage() {
           {tab === "empresas" && (
             <div className="grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-2">
               <section className={cn(BENTO, "lg:col-span-2")}>
-                <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-100">Empresas registradas</h2>
-                <p className="mb-4 text-sm text-zinc-400">Listado de empresas dadas de alta en la plataforma.</p>
+                <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Empresas registradas</h2>
+                <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">Listado de empresas dadas de alta en la plataforma.</p>
                 {loading && empresas.length === 0 ? (
-                  <p className="text-sm text-zinc-400">Cargando…</p>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">Cargando…</p>
                 ) : empresas.length === 0 ? (
-                  <p className="text-sm text-zinc-400">No hay empresas.</p>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">No hay empresas.</p>
                 ) : (
                   <div className={tableShell}>
                     <table className={tableClass}>
@@ -420,10 +420,10 @@ export default function AdminPage() {
                       <tbody>
                         {empresas.map((e) => (
                           <tr key={e.id} className="hover:bg-zinc-800/30">
-                            <td className={cn(tableCell, "font-medium text-zinc-100")}>
+                            <td className={cn(tableCell, "font-medium text-zinc-900 dark:text-zinc-100")}>
                               {e.nombre_comercial || e.nombre_legal}
                             </td>
-                            <td className={cn(tableCell, "font-mono text-xs text-zinc-400")}>{e.nif}</td>
+                            <td className={cn(tableCell, "font-mono text-xs text-zinc-600 dark:text-zinc-400")}>{e.nif}</td>
                             <td className={tableCell}>
                               <span className="inline-flex rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300">
                                 {e.plan}
@@ -440,8 +440,8 @@ export default function AdminPage() {
               </section>
 
               <section className={BENTO}>
-                <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-100">Crear empresa</h2>
-                <p className="mb-4 text-sm text-zinc-400">Alta de nueva empresa en el sistema.</p>
+                <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Crear empresa</h2>
+                <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">Alta de nueva empresa en el sistema.</p>
                 <form onSubmit={onCreateEmpresa} className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <Input
                     className={inputAdminClass}
@@ -502,8 +502,8 @@ export default function AdminPage() {
 
               {empresas.length > 0 && (
                 <section className={cn(BENTO, "lg:col-span-2")}>
-                  <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-100">Plan y estado</h2>
-                  <p className="mb-4 text-sm text-zinc-400">Actualiza plan y visibilidad de la empresa seleccionada.</p>
+                  <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Plan y estado</h2>
+                  <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">Actualiza plan y visibilidad de la empresa seleccionada.</p>
                   <div className="flex flex-wrap items-end gap-4">
                     <div className="min-w-[200px] flex-1">
                       <label className="mb-1.5 block text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">
@@ -537,7 +537,7 @@ export default function AdminPage() {
                         ))}
                       </select>
                     </div>
-                    <label className="flex items-center gap-2 pb-2 text-sm text-zinc-300">
+                    <label className="flex items-center gap-2 pb-2 text-sm text-zinc-700 dark:text-zinc-300">
                       <input
                         type="checkbox"
                         className="rounded border-zinc-600 bg-zinc-900"
@@ -558,12 +558,12 @@ export default function AdminPage() {
           {tab === "usuarios" && (
             <div className="grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-2">
               <section className={cn(BENTO, "lg:col-span-2")}>
-                <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-100">Usuarios</h2>
-                <p className="mb-4 text-sm text-zinc-400">Usuarios registrados y su asignación por empresa.</p>
+                <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Usuarios</h2>
+                <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">Usuarios registrados y su asignación por empresa.</p>
                 {loading && usuarios.length === 0 ? (
-                  <p className="text-sm text-zinc-400">Cargando…</p>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">Cargando…</p>
                 ) : usuarios.length === 0 ? (
-                  <p className="text-sm text-zinc-400">No hay usuarios.</p>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">No hay usuarios.</p>
                 ) : (
                   <div className={tableShell}>
                     <table className={tableClass}>
@@ -579,7 +579,7 @@ export default function AdminPage() {
                       <tbody>
                         {usuarios.map((u) => (
                           <tr key={u.id} className="hover:bg-zinc-800/30">
-                            <td className={cn(tableCell, "font-medium text-zinc-100")}>{u.username}</td>
+                            <td className={cn(tableCell, "font-medium text-zinc-900 dark:text-zinc-100")}>{u.username}</td>
                             <td className={tableCell}>{u.email ?? "—"}</td>
                             <td className={tableCell}>
                               <span className="inline-flex rounded-full bg-indigo-500/15 px-2 py-0.5 text-xs font-medium text-indigo-300">
@@ -587,7 +587,7 @@ export default function AdminPage() {
                               </span>
                             </td>
                             <td className={tableCell}>{u.activo ? "Sí" : "No"}</td>
-                            <td className={cn(tableCell, "text-zinc-400")}>
+                            <td className={cn(tableCell, "text-zinc-600 dark:text-zinc-400")}>
                               {mapaEmpresaNombre.get(u.empresa_id) ?? u.empresa_id}
                             </td>
                           </tr>
@@ -600,8 +600,8 @@ export default function AdminPage() {
 
               {usuarios.length > 0 && (
                 <section className={cn(BENTO, "lg:col-span-2")}>
-                  <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-100">Editar usuario</h2>
-                  <p className="mb-4 text-sm text-zinc-400">Rol y estado del usuario seleccionado.</p>
+                  <h2 className="mb-1 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Editar usuario</h2>
+                  <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">Rol y estado del usuario seleccionado.</p>
                   <div className="flex flex-wrap items-end gap-4">
                     <div className="min-w-[240px] flex-1">
                       <label className="mb-1.5 block text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">
@@ -635,7 +635,7 @@ export default function AdminPage() {
                         ))}
                       </select>
                     </div>
-                    <label className="flex items-center gap-2 pb-2 text-sm text-zinc-300">
+                    <label className="flex items-center gap-2 pb-2 text-sm text-zinc-700 dark:text-zinc-300">
                       <input
                         type="checkbox"
                         className="rounded border-zinc-600 bg-zinc-900"
@@ -658,32 +658,32 @@ export default function AdminPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className={BENTO}>
                   <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">Ingresos brutos</p>
-                  <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-100">
+                  <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
                     {metricas ? formatEUR(metricas.total_bruto) : "—"}
                   </p>
                 </div>
                 <div className={BENTO}>
                   <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">IVA</p>
-                  <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-100">
+                  <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
                     {metricas ? formatEUR(metricas.total_iva) : "—"}
                   </p>
                 </div>
                 <div className={cn(BENTO, "border-emerald-500/30 bg-emerald-950/20")}>
-                  <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-400">Ingreso neto</p>
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">Ingreso neto</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight text-emerald-300">
                     {metricas ? formatEUR(metricas.ingreso_neto) : "—"}
                   </p>
                 </div>
                 <div className={BENTO}>
                   <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500">Facturas / ARPU</p>
-                  <p className="mt-2 text-lg font-semibold tracking-tight text-zinc-100">
+                  <p className="mt-2 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
                     {metricas ? `${metricas.n_facturas} · ${formatEUR(metricas.arpu)}` : "—"}
                   </p>
                 </div>
               </div>
               <p className="text-xs text-zinc-500">
                 Agregado global de tabla{" "}
-                <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-zinc-300">facturas</code> (panel SaaS).
+                <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-zinc-700 dark:text-zinc-300">facturas</code> (panel SaaS).
               </p>
             </div>
           )}
@@ -732,7 +732,7 @@ export default function AdminPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-10 border-zinc-700 bg-zinc-900/50 text-zinc-200 hover:bg-zinc-800"
+                  className="h-10 border-zinc-700 bg-zinc-900/50 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-800"
                   onClick={() => void loadAuditoria()}
                 >
                   Recargar
@@ -756,7 +756,7 @@ export default function AdminPage() {
                     <tbody>
                       {auditoriaFiltrada.map((r, i) => (
                         <tr key={r.id || i} className="hover:bg-zinc-800/30">
-                          <td className={cn(tableCell, "font-mono text-zinc-300")}>{r.accion}</td>
+                          <td className={cn(tableCell, "font-mono text-zinc-700 dark:text-zinc-300")}>{r.accion}</td>
                           <td className={tableCell}>{r.tabla}</td>
                           <td className={cn(tableCell, "max-w-[120px] truncate")}>{r.registro_id}</td>
                           <td className={cn(tableCell, "max-w-[100px] truncate")}>{r.empresa_id}</td>
@@ -774,8 +774,8 @@ export default function AdminPage() {
 
           {tab === "facturacion" && (
             <div className={cn(BENTO, "max-w-xl space-y-2")}>
-              <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Facturación</h2>
-              <p className="text-sm leading-relaxed text-zinc-400">
+              <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Facturación</h2>
+              <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
                 La emisión legal de facturas de transporte está en{" "}
                 <Link href="/portes" className="font-medium text-emerald-400 hover:text-emerald-300 hover:underline">
                   Portes

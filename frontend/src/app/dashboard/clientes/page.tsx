@@ -40,18 +40,18 @@ function KpiCard({
   icon: ComponentType<{ className?: string }>;
 }) {
   const tones = {
-    slate: "border-zinc-700 bg-zinc-900/60 text-zinc-300",
+    slate: "border-zinc-700 bg-zinc-900/60 text-zinc-700 dark:text-zinc-300",
     amber: "border-amber-500/35 bg-amber-950/40 text-amber-300",
     blue: "border-emerald-500/35 bg-emerald-950/40 text-emerald-400",
     emerald: "border-emerald-500/40 bg-emerald-950/50 text-emerald-400",
   } as const;
   const Icon = icon;
   return (
-    <article className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 backdrop-blur-sm">
+    <article className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-4 backdrop-blur-sm">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm font-medium text-zinc-400">{title}</p>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-100">{value}</p>
+          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{title}</p>
+          <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">{value}</p>
         </div>
         <div className={`rounded-lg border p-2.5 ${tones[tone]}`}>
           <Icon className="h-5 w-5" aria-hidden />
@@ -114,17 +114,17 @@ function OnboardingClientesDashboardContent() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl bg-zinc-950 p-6 md:p-8">
+    <div className="mx-auto w-full max-w-7xl bg-zinc-50 dark:bg-zinc-950 p-6 md:p-8">
       <ToastHost toast={toast} onDismiss={() => setToast(null)} durationMs={5200} />
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Onboarding Comercial de Clientes</h1>
-        <p className="mt-1 text-sm text-zinc-400">
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Onboarding Comercial de Clientes</h1>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           Seguimiento del embudo: invitación, aceptación de riesgo y activación SEPA.
         </p>
       </header>
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 py-16 text-zinc-400">
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 py-16 text-zinc-600 dark:text-zinc-400">
           <Loader2 className="h-5 w-5 animate-spin text-emerald-500" aria-hidden />
           Cargando dashboard de onboarding…
         </div>
@@ -160,7 +160,7 @@ function OnboardingClientesDashboardContent() {
                 className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                   activeTab === tab
                     ? "bg-emerald-600 text-zinc-950 shadow-sm"
-                    : "border border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600 hover:bg-zinc-800/40 hover:text-zinc-200"
+                    : "border border-zinc-700 bg-zinc-900/40 text-zinc-600 dark:text-zinc-400 hover:border-zinc-600 hover:bg-zinc-800/40 hover:text-zinc-800 dark:text-zinc-200"
                 }`}
               >
                 {tab}
@@ -168,15 +168,15 @@ function OnboardingClientesDashboardContent() {
             ))}
           </section>
 
-          <section className="mt-4 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/40">
-            <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
-              <h2 className="text-sm font-semibold text-zinc-100">Listado General de Clientes</h2>
+          <section className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-5 py-3">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Listado General de Clientes</h2>
               <span className="text-xs font-medium text-zinc-500">{rows.length} cliente(s) listados</span>
             </div>
             <div className="w-full overflow-x-auto">
               <table className="w-full min-w-0 text-left text-sm md:min-w-[860px]">
                 <thead>
-                  <tr className="border-b border-zinc-800 text-xs uppercase tracking-wide text-zinc-500">
+                  <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs uppercase tracking-wide text-zinc-500">
                     <th className="px-5 py-3 font-semibold">Cliente</th>
                     <th className="px-5 py-3 font-semibold">Email</th>
                     <th className="hidden px-5 py-3 font-semibold md:table-cell">Fecha invitación</th>
@@ -195,16 +195,16 @@ function OnboardingClientesDashboardContent() {
                   ) : (
                     rows.map((row) => (
                       <tr key={row.id} className="transition-colors hover:bg-zinc-800/30">
-                        <td className="px-5 py-3 font-medium text-zinc-100">{row.nombre || "—"}</td>
+                        <td className="px-5 py-3 font-medium text-zinc-900 dark:text-zinc-100">{row.nombre || "—"}</td>
                         <td className="max-w-[min(100vw,14rem)] px-5 py-3 md:max-w-none">
-                          <div className="truncate text-zinc-300" title={row.email || undefined}>
+                          <div className="truncate text-zinc-700 dark:text-zinc-300" title={row.email || undefined}>
                             {row.email || "—"}
                           </div>
                         </td>
-                        <td className="hidden px-5 py-3 text-zinc-400 md:table-cell">
+                        <td className="hidden px-5 py-3 text-zinc-600 dark:text-zinc-400 md:table-cell">
                           {getDaysAgo(row.fecha_invitacion)}
                         </td>
-                        <td className="px-5 py-3 text-zinc-300">{formatEUR(row.limite_credito ?? 0)}</td>
+                        <td className="px-5 py-3 text-zinc-700 dark:text-zinc-300">{formatEUR(row.limite_credito ?? 0)}</td>
                         <td className="px-5 py-3">
                           <OnboardingStatusBadge
                             riesgoAceptado={row.riesgo_aceptado}
@@ -219,7 +219,7 @@ function OnboardingClientesDashboardContent() {
                                 type="button"
                                 onClick={() => void handleResendInvite(row)}
                                 disabled={Boolean(resendingById[row.id])}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-800 dark:text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/50 disabled:cursor-not-allowed disabled:opacity-60"
                                 title="Reenviar invitación"
                                 aria-label={`Reenviar invitación por email a ${row.nombre || "cliente"}`}
                               >
@@ -233,7 +233,7 @@ function OnboardingClientesDashboardContent() {
                             )}
                             <Link
                               href={`/dashboard/clientes/${row.id}`}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-200 hover:border-emerald-500/50 hover:text-emerald-400"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900/60 px-2.5 py-1.5 text-xs font-medium text-zinc-800 dark:text-zinc-200 hover:border-emerald-500/50 hover:text-emerald-400"
                               aria-label={`Ver perfil de ${row.nombre || "cliente"}`}
                             >
                               <User className="h-3.5 w-3.5" />

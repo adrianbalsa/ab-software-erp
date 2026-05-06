@@ -52,7 +52,7 @@ export function CostBreakdownPie({ data, loading }: CostBreakdownPieProps) {
 
   return (
     <div className="dashboard-bento rounded-2xl p-6">
-      <h3 className="mb-1 text-sm font-semibold text-zinc-100">Desglose de gastos</h3>
+      <h3 className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Desglose de gastos</h3>
       <p className="mb-4 text-xs text-zinc-500">Últimos 6 meses · categorías operativas (neto sin IVA)</p>
       <div className="h-[min(260px,40vh)] min-h-[220px] w-full min-w-0 sm:h-[280px] sm:min-h-[240px]">
         {chartData.length === 0 ? (

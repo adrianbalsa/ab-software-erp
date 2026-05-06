@@ -90,13 +90,13 @@ function DashboardBillingGateInner({ children }: { children: ReactNode }) {
 
   if (splash) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-950 px-6 text-center">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-50 dark:bg-zinc-950 px-6 text-center">
         <div
           className="h-9 w-9 animate-spin rounded-full border-2 border-zinc-600 border-t-emerald-500"
           aria-hidden
         />
         <div className="max-w-sm space-y-2">
-          <p className="text-sm font-medium text-zinc-200">Preparando tu espacio de trabajo</p>
+          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Preparando tu espacio de trabajo</p>
           <p className="text-xs leading-relaxed text-zinc-500">
             Comprobamos tu suscripción. Si tarda más de unos segundos tras pagar en Stripe, espera un momento
             o abre Facturación.
@@ -120,8 +120,8 @@ export function DashboardBillingGate({ children }: { children: ReactNode }) {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
-          <p className="text-sm text-zinc-400">Cargando…</p>
+        <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">Cargando…</p>
         </div>
       }
     >

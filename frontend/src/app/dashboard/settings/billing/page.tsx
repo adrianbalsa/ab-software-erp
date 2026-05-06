@@ -43,18 +43,18 @@ export default function BillingSettingsPage() {
 
   return (
     <AppShell active="billing">
-      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-zinc-950">
-        <header className="z-10 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-4 border-b border-zinc-800 bg-zinc-950/90 px-6 py-4 backdrop-blur-md">
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-zinc-50 dark:bg-zinc-950">
+        <header className="z-10 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/90 px-6 py-4 backdrop-blur-md">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">{b.title}</h1>
-            <p className="mt-0.5 text-sm text-zinc-400">{b.subtitle}</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">{b.title}</h1>
+            <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">{b.subtitle}</p>
           </div>
           <LocaleSwitcher />
         </header>
 
         <div className="max-w-2xl space-y-8 p-6 sm:p-8">
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
-            <div className="flex items-center gap-2 text-zinc-200">
+          <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/40 p-6">
+            <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-200">
               <BadgeEuro className="h-5 w-5 text-emerald-500" aria-hidden />
               <h2 className="text-lg font-semibold">{b.planLabel}</h2>
             </div>
@@ -63,11 +63,11 @@ export default function BillingSettingsPage() {
             ) : error ? (
               <p className="mt-4 text-sm text-rose-400">{error}</p>
             ) : (
-              <p className="mt-4 text-sm capitalize text-zinc-300">{plan}</p>
+              <p className="mt-4 text-sm capitalize text-zinc-700 dark:text-zinc-300">{plan}</p>
             )}
             <p className="mt-2 text-xs text-zinc-500">
               {b.usageLabel}:{" "}
-              <span className="font-medium text-zinc-300">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
                 {used}
                 {limit != null ? ` / ${limit}` : " / ∞"}
               </span>
@@ -113,7 +113,7 @@ export default function BillingSettingsPage() {
             {plan !== "enterprise" ? (
               <Link
                 href="/payments/create-checkout?plan=enterprise"
-                className="rounded-xl border border-zinc-700 bg-zinc-900/50 px-4 py-3 text-center text-sm font-semibold text-zinc-200 transition hover:border-zinc-600"
+                className="rounded-xl border border-zinc-700 bg-zinc-900/50 px-4 py-3 text-center text-sm font-semibold text-zinc-800 dark:text-zinc-200 transition hover:border-zinc-600"
               >
                 {b.upgradeEnt}
               </Link>

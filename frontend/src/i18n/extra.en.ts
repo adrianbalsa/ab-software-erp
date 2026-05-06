@@ -357,6 +357,8 @@ export const extraEn = {
     mobileHeader: "Customer portal",
     themeLight: "Light mode",
     themeDark: "Dark mode",
+    themeSystem: "Match system",
+    themeAppearance: "Appearance",
     signOut: "Sign out",
     navShipments: "My shipments",
     navInvoices: "Invoices",

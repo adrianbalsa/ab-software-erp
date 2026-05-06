@@ -46,7 +46,7 @@ function MapaContent() {
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       <header className="pointer-events-none absolute left-0 right-0 top-0 z-20 flex flex-wrap items-start justify-between gap-3 px-4 pt-4 md:px-6">
-        <div className="pointer-events-auto max-w-xl rounded-xl border border-zinc-800/90 bg-zinc-950/90 px-4 py-3 shadow-xl backdrop-blur">
+        <div className="pointer-events-auto max-w-xl rounded-xl border border-zinc-200/90 dark:border-zinc-800/90 bg-zinc-50 dark:bg-zinc-950/90 px-4 py-3 shadow-xl backdrop-blur">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Flota · GIS</p>
           <h1 className="mt-1 font-serif text-xl font-semibold tracking-tight text-zinc-50 md:text-2xl">
             Mapa de inteligencia
@@ -75,7 +75,7 @@ export default function MapaPage() {
       <RoleGuard
         allowedRoles={["owner", "admin", "traffic_manager"]}
         fallback={
-          <main className="bg-zinc-950 p-8">
+          <main className="bg-zinc-50 dark:bg-zinc-950 p-8">
             <p className="text-sm text-zinc-500">No tienes permiso para ver el mapa operativo.</p>
           </main>
         }

@@ -41,26 +41,26 @@ const CustomTooltip = ({ active, payload }: CipScatterTooltipProps) => {
     const data = first?.payload;
     if (!data) return null;
     return (
-      <div className="rounded-lg border border-zinc-700 bg-zinc-950/95 p-4 shadow-xl shadow-black/40 backdrop-blur-sm">
-        <p className="mb-3 border-b border-zinc-800 pb-2 font-semibold text-zinc-100">
+      <div className="rounded-lg border border-zinc-700 bg-zinc-50 dark:bg-zinc-950/95 p-4 shadow-xl shadow-black/40 backdrop-blur-sm">
+        <p className="mb-3 border-b border-zinc-200 dark:border-zinc-800 pb-2 font-semibold text-zinc-900 dark:text-zinc-100">
           {data.ruta}
         </p>
         <div className="space-y-1.5 text-sm">
           <div className="flex justify-between gap-4">
-            <span className="text-zinc-400">Margen Neto:</span>
+            <span className="text-zinc-600 dark:text-zinc-400">Margen Neto:</span>
             <span className="font-medium text-emerald-500">
               {formatCurrency(data.margen_neto)}
             </span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-zinc-400">Emisiones CO₂:</span>
+            <span className="text-zinc-600 dark:text-zinc-400">Emisiones CO₂:</span>
             <span className="font-medium text-rose-400">
               {formatNumber(data.emisiones_co2)} kg
             </span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-zinc-400">Volumen:</span>
-            <span className="font-medium text-zinc-200">
+            <span className="text-zinc-600 dark:text-zinc-400">Volumen:</span>
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">
               {data.total_portes} portes
             </span>
           </div>
@@ -114,8 +114,8 @@ export function CIPMatrixChart({ className }: CIPMatrixChartProps) {
 
   if (error || !data || data.length === 0) {
     return shell(
-      <div className="flex min-h-[400px] w-full items-center justify-center rounded-xl border border-dashed border-zinc-800 bg-zinc-900/30">
-        <p className="text-sm text-zinc-400">
+      <div className="flex min-h-[400px] w-full items-center justify-center rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-900/30">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
           {error || "No hay suficientes datos (se requieren rutas con múltiples portes)."}
         </p>
       </div>,

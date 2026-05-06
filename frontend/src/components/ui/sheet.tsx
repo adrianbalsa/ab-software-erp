@@ -58,7 +58,7 @@ export function SheetContent({
         aria-label={ariaLabel}
         style={style}
         className={joinClasses(
-          "fixed inset-y-0 z-[70] flex w-[min(100%,20rem)] max-w-[100vw] flex-col overflow-hidden shadow-2xl lg:hidden",
+          "fixed inset-y-0 z-[70] flex h-full max-h-[100dvh] w-[min(100%,20rem)] max-w-[100vw] min-h-0 flex-col overflow-hidden shadow-2xl lg:hidden",
           side === "left" ? "left-0 border-r" : "right-0 border-l",
           "border-slate-800/80",
           className,

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AB Logistics OS — One-pager comercial</title>
+  <style>
+    :root {
+      --ink: #0f172a;
+      --muted: #475569;
+      --accent: #059669;
+      --border: #e2e8f0;
+      --bg: #fafafa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.45;
+      font-size: 11pt;
+    }
+    .sheet {
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 14mm 16mm;
+      background: #fff;
+      min-height: 297mm;
+    }
+    header {
+      border-bottom: 3px solid var(--accent);
+      padding-bottom: 10px;
+      margin-bottom: 14px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 22pt;
+      letter-spacing: -0.02em;
+      font-weight: 750;
+    }
+    .tagline {
+      margin: 6px 0 0;
+      font-size: 11.5pt;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    h2 {
+      margin: 14px 0 6px;
+      font-size: 10.5pt;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    p { margin: 0 0 8px; color: var(--ink); }
+    ul {
+      margin: 4px 0 10px;
+      padding-left: 18px;
+    }
+    li { margin-bottom: 4px; }
+    .cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 640px) {
+      .cols { grid-template-columns: 1fr; }
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9.5pt;
+      margin: 6px 0 10px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 7px 8px;
+      vertical-align: top;
+    }
+    th {
+      background: #f8fafc;
+      text-align: left;
+      font-weight: 650;
+    }
+    .price { font-weight: 700; white-space: nowrap; }
+    footer {
+      margin-top: 18px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 8pt;
+      color: var(--muted);
+    }
+    .footnote {
+      font-size: 8.5pt;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    @media print {
+      body { background: #fff; }
+      .sheet {
+        max-width: none;
+        margin: 0;
+        padding: 12mm;
+        min-height: auto;
+      }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <article class="sheet">
+    <header>
+      <h1>AB Logistics OS</h1>
+      <p class="tagline">
+        Plataforma SaaS para transporte: operación, margen y cumplimiento fiscal español (VeriFactu) en un solo sistema multitenant.
+      </p>
+    </header>
+
+    <section>
+      <h2>Problema → Solución</h2>
+      <div class="cols">
+        <div>
+          <p><strong>El problema:</strong> procesos en Excel y herramientas desconectadas, riesgo fiscal y poca visibilidad de rentabilidad por cliente y ruta.</p>
+        </div>
+        <div>
+          <p><strong>La solución:</strong> portes y flota conectados a facturación sellada e inmutable, cadena de huellas, firma XAdES-BES y reporting financiero y ESG según plan.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Propuesta de valor</h2>
+      <ul>
+        <li><strong>Cumplimiento VeriFactu (ES):</strong> software diseñado para encadenamiento de registros, QR y envío a la AEAT conforme al marco español (la conformidad efectiva depende de datos del cliente, certificados y procedimiento operativo).</li>
+        <li><strong>Operación + finanzas:</strong> EBITDA operativo, tesorería y riesgo de cliente sin duplicar ERP donde no hace falta.</li>
+        <li><strong>Seguridad enterprise:</strong> aislamiento por empresa (RLS), auditoría, backups y paquete de evidencias para due diligence del comprador.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Planes orientativos (EUR/mes, IVA aparte)</h2>
+      <p class="footnote">Importes de catálogo; el cargo efectivo lo define el Price configurado en Stripe.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Plan</th>
+            <th>Precio ref.</th>
+            <th>Ideal para</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Compliance</strong></td>
+            <td class="price">149 €</td>
+            <td>VeriFactu serio, equipos pequeños (tope operativo de catálogo: 5 vehículos / 5 usuarios panel / 150 facturas selladas·mes).</td>
+          </tr>
+          <tr>
+            <td><strong>Operational</strong></td>
+            <td class="price">449 €</td>
+            <td>Motor financiero y escala media (hasta 30 vehículos y 30 usuarios panel en catálogo).</td>
+          </tr>
+          <tr>
+            <td><strong>Institutional</strong></td>
+            <td class="price">desde 1.200 €+</td>
+            <td>Flota y usuarios ilimitados, capa ESG avanzada (certificados, APIs), acompañamiento enterprise.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="footnote">Add-ons opcionales: OCR Pack, Webhooks B2B Premium, LogisAdvisor IA Pro (según contratación).</p>
+    </section>
+
+    <section>
+      <h2>Roadmap comercial (mensajes honestos)</h2>
+      <ul>
+        <li><strong>VeriFactu:</strong> núcleo técnico ya integrado; mensaje comercial = “preparado para el régimen español”, más revisión legal/contable por cuenta del cliente.</li>
+        <li><strong>Certificados ESG:</strong> certificados con QR, registro y verificación pública están habilitados para clientes en plan <strong>Institutional</strong>; lo pendiente suele ser texto legal (alcance / no sustituye certificación de organismo acreditado salvo acuerdo) y decidir si el catálogo comercial abre parte del módulo a Operational.</li>
+        <li><strong>Portugal e Italia (facturación local):</strong> requiere capa fiscal distinta (no es configuración trivial); horizonte típico multi‑trimestre / año+ por país si incluye equivalencia VeriFactu/e‑factura local.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Contacto</h2>
+      <p>Propuesta y demo bajo cita · Documentación técnica y data room bajo NDA.</p>
+    </section>
+
+    <footer>
+      AB Logistics OS — One-pager comercial. Para exportar a PDF: navegador → Imprimir → Guardar como PDF (recomendado A4, márgenes estándar).
+      No incluye valoración de empresa ni compromisos legales sustitutivos del asesoramiento fiscal del cliente.
+    </footer>
+  </article>
+</body>
+</html>

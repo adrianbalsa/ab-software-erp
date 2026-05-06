@@ -13,7 +13,7 @@ export function LandingFAQ() {
       <div className="mx-auto max-w-3xl">
         <div className="text-center mb-10">
           <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{l.title}</h2>
-          <p className="mt-2 text-zinc-300 text-sm">{l.subtitle}</p>
+          <p className="mt-2 text-zinc-700 dark:text-zinc-300 text-sm">{l.subtitle}</p>
         </div>
         <Accordion type="single" collapsible defaultValue="faq-0" className="space-y-3">
           {l.items.map((item, i) => {

@@ -44,7 +44,7 @@ function WaterfallTooltip({ active, payload }: TooltipProps) {
   const p = payload[0]?.payload as WaterfallRow | undefined;
   if (!p) return null;
   return (
-    <div className="rounded-lg border border-zinc-700 bg-zinc-950/95 p-3 text-xs text-zinc-100 shadow-lg">
+    <div className="rounded-lg border border-zinc-700 bg-zinc-50 dark:bg-zinc-950/95 p-3 text-xs text-zinc-900 dark:text-zinc-100 shadow-lg">
       <p className="font-semibold">{p.step}</p>
       <p className="mt-1 font-mono text-emerald-200">{fmtEur(p.value)}</p>
     </div>
@@ -75,17 +75,17 @@ export function MarginWaterfallChart({
   }, [analytics.totals_rango]);
 
   return (
-    <Card className="bunker-card border-zinc-800">
+    <Card className="bunker-card border-zinc-200 dark:border-zinc-800">
       <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <CardTitle className="text-zinc-100">{title}</CardTitle>
-          <CardDescription className="text-zinc-400">{description}</CardDescription>
+          <CardTitle className="text-zinc-900 dark:text-zinc-100">{title}</CardTitle>
+          <CardDescription className="text-zinc-600 dark:text-zinc-400">{description}</CardDescription>
         </div>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="shrink-0 border-zinc-600 text-zinc-200 hover:bg-zinc-800"
+          className="shrink-0 border-zinc-600 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-800"
           onClick={() => downloadProfitMarginCsv(analytics, csvFilename)}
           aria-label="Exportar serie de márgenes y totales a CSV para integraciones y webhooks"
         >

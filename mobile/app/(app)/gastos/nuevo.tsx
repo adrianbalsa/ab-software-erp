@@ -114,12 +114,12 @@ export default function NuevoGastoScreen() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-slate-50" contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
-      <View className="rounded-xl border border-slate-200 bg-white p-4">
-        <Text className="text-base font-semibold text-slate-900">Escaneo OCR de ticket</Text>
-        <Text className="mt-1 text-xs text-slate-500">Captura y compresión optimizada para ahorrar datos.</Text>
+    <ScrollView className="flex-1 bg-slate-50 dark:bg-zinc-950" contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
+      <View className="rounded-xl border border-slate-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+        <Text className="text-base font-semibold text-slate-900 dark:text-zinc-100">Escaneo OCR de ticket</Text>
+        <Text className="mt-1 text-xs text-slate-500 dark:text-zinc-500">Captura y compresión optimizada para ahorrar datos.</Text>
 
-        <View className="mt-3 overflow-hidden rounded-lg border border-slate-200">
+        <View className="mt-3 overflow-hidden rounded-lg border border-slate-200 dark:border-zinc-600">
           <CameraView ref={cameraRef} style={{ height: 230 }} facing="back" />
         </View>
         <Pressable onPress={() => void captureAndScan()} className="mt-3 items-center rounded-lg bg-indigo-600 py-3">
@@ -128,36 +128,91 @@ export default function NuevoGastoScreen() {
         {ticketUri ? <Image source={{ uri: ticketUri }} style={{ height: 130, marginTop: 10, borderRadius: 8 }} /> : null}
       </View>
 
-      <View className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-        <Text className="text-base font-semibold text-slate-900">Confirma datos del gasto</Text>
+      <View className="mt-4 rounded-xl border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 p-4">
+        <Text className="text-base font-semibold text-slate-900 dark:text-zinc-100">Confirma datos del gasto</Text>
         {error ? (
           <View className="mt-2 rounded-lg bg-red-50 px-3 py-2">
             <Text className="text-sm text-red-800">{error}</Text>
           </View>
         ) : null}
 
-        <TextInput value={proveedor} onChangeText={setProveedor} placeholder="Proveedor" className="mt-3 rounded-lg border border-slate-200 px-3 py-3" />
-        <TextInput value={cif} onChangeText={setCif} placeholder="CIF/NIF" className="mt-2 rounded-lg border border-slate-200 px-3 py-3" />
-        <TextInput value={base} onChangeText={setBase} placeholder="Base imponible" keyboardType="decimal-pad" className="mt-2 rounded-lg border border-slate-200 px-3 py-3" />
-        <TextInput value={iva} onChangeText={setIva} placeholder="IVA" keyboardType="decimal-pad" className="mt-2 rounded-lg border border-slate-200 px-3 py-3" />
-        <TextInput value={total} onChangeText={setTotal} placeholder="Total" keyboardType="decimal-pad" className="mt-2 rounded-lg border border-slate-200 px-3 py-3" />
-        <TextInput value={fecha} onChangeText={setFecha} placeholder="YYYY-MM-DD" className="mt-2 rounded-lg border border-slate-200 px-3 py-3" />
-        <View className="mt-2 rounded-lg border border-slate-200 px-2 py-2">
-          <Text className="mb-2 text-xs uppercase text-slate-500">Categoría</Text>
+        <TextInput
+          value={proveedor}
+          onChangeText={setProveedor}
+          placeholder="Proveedor"
+          placeholderTextColor="#71717a"
+          className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-3 text-slate-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+        />
+        <TextInput
+          value={cif}
+          onChangeText={setCif}
+          placeholder="CIF/NIF"
+          placeholderTextColor="#71717a"
+          className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-slate-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+        />
+        <TextInput
+          value={base}
+          onChangeText={setBase}
+          placeholder="Base imponible"
+          keyboardType="decimal-pad"
+          placeholderTextColor="#71717a"
+          className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-slate-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+        />
+        <TextInput
+          value={iva}
+          onChangeText={setIva}
+          placeholder="IVA"
+          keyboardType="decimal-pad"
+          placeholderTextColor="#71717a"
+          className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-slate-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+        />
+        <TextInput
+          value={total}
+          onChangeText={setTotal}
+          placeholder="Total"
+          keyboardType="decimal-pad"
+          placeholderTextColor="#71717a"
+          className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-slate-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+        />
+        <TextInput
+          value={fecha}
+          onChangeText={setFecha}
+          placeholder="YYYY-MM-DD"
+          placeholderTextColor="#71717a"
+          className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-slate-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+        />
+        <View className="mt-2 rounded-lg border border-slate-200 px-2 py-2 dark:border-zinc-600">
+          <Text className="mb-2 text-xs uppercase text-slate-500 dark:text-zinc-500">Categoría</Text>
           <View className="flex-row flex-wrap gap-2">
             {(["combustible", "materiales", "servicios", "otros"] as const).map((c) => (
               <Pressable
                 key={c}
                 onPress={() => setCategoria(c)}
-                className={`rounded-md px-3 py-2 ${categoria === c ? "bg-indigo-600" : "bg-slate-100"}`}
+                className={`rounded-md px-3 py-2 ${categoria === c ? "bg-indigo-600" : "bg-slate-100 dark:bg-zinc-800"}`}
               >
-                <Text className={`text-xs font-medium ${categoria === c ? "text-white" : "text-slate-700"}`}>{c}</Text>
+                <Text
+                  className={`text-xs font-medium ${categoria === c ? "text-white" : "text-slate-700 dark:text-zinc-300"}`}
+                >
+                  {c}
+                </Text>
               </Pressable>
             ))}
           </View>
         </View>
-        <TextInput value={concepto} onChangeText={setConcepto} placeholder="Concepto" className="mt-2 rounded-lg border border-slate-200 px-3 py-3" />
-        <TextInput value={porteId} onChangeText={setPorteId} placeholder="porte_id (opcional)" className="mt-2 rounded-lg border border-slate-200 px-3 py-3" />
+        <TextInput
+          value={concepto}
+          onChangeText={setConcepto}
+          placeholder="Concepto"
+          placeholderTextColor="#71717a"
+          className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-slate-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+        />
+        <TextInput
+          value={porteId}
+          onChangeText={setPorteId}
+          placeholder="porte_id (opcional)"
+          placeholderTextColor="#71717a"
+          className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-slate-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+        />
 
         <Pressable onPress={() => void save()} disabled={busy} className="mt-4 items-center rounded-lg bg-emerald-600 py-3 disabled:opacity-50">
           {busy ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">Guardar gasto</Text>}

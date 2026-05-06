@@ -37,9 +37,9 @@ export default function GastosScreen() {
   );
 
   return (
-    <View className="flex-1 bg-slate-50">
-      <View className="flex-row items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-        <Text className="text-lg font-semibold text-slate-900">Gastos recientes</Text>
+    <View className="flex-1 bg-slate-50 dark:bg-zinc-950">
+      <View className="flex-row items-center justify-between border-b border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 px-4 py-3">
+        <Text className="text-lg font-semibold text-slate-900 dark:text-zinc-100">Gastos recientes</Text>
         <Pressable onPress={() => router.push("/(app)/gastos/nuevo")} className="rounded-lg bg-indigo-600 px-3 py-2">
           <Text className="text-sm font-semibold text-white">Nuevo</Text>
         </Pressable>
@@ -54,7 +54,7 @@ export default function GastosScreen() {
           data={items}
           keyExtractor={(i) => i.id}
           contentContainerStyle={{ padding: 16, gap: 10 }}
-          ListEmptyComponent={<Text className="py-10 text-center text-slate-500">No hay gastos registrados.</Text>}
+          ListEmptyComponent={<Text className="py-10 text-center text-slate-500 dark:text-zinc-500">No hay gastos registrados.</Text>}
           ListHeaderComponent={
             error ? (
               <View className="mb-2 rounded-lg bg-amber-50 px-3 py-2">
@@ -63,13 +63,15 @@ export default function GastosScreen() {
             ) : null
           }
           renderItem={({ item }) => (
-            <View className="rounded-xl border border-slate-200 bg-white p-4">
-              <Text className="text-xs uppercase text-slate-500">{item.fecha}</Text>
-              <Text className="mt-1 text-base font-semibold text-slate-900">{item.proveedor}</Text>
-              <Text className="mt-1 text-sm text-slate-600">
+            <View className="rounded-xl border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 p-4">
+              <Text className="text-xs uppercase text-slate-500 dark:text-zinc-500">{item.fecha}</Text>
+              <Text className="mt-1 text-base font-semibold text-slate-900 dark:text-zinc-100">{item.proveedor}</Text>
+              <Text className="mt-1 text-sm text-slate-600 dark:text-zinc-400">
                 {item.categoria} · {item.total_chf} {item.moneda}
               </Text>
-              {item.porte_id ? <Text className="mt-1 text-xs text-indigo-700">Porte vinculado: {item.porte_id}</Text> : null}
+              {item.porte_id ? (
+                <Text className="mt-1 text-xs text-indigo-700 dark:text-indigo-400">Porte vinculado: {item.porte_id}</Text>
+              ) : null}
             </View>
           )}
         />

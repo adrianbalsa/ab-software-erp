@@ -77,8 +77,8 @@ export function TreasuryRiskCharts({
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <Card className="bunker-card">
         <CardHeader>
-          <CardTitle className="text-zinc-100">Exposicion de la Deuda</CardTitle>
-          <CardDescription className="text-zinc-400">
+          <CardTitle className="text-zinc-900 dark:text-zinc-100">Exposicion de la Deuda</CardTitle>
+          <CardDescription className="text-zinc-600 dark:text-zinc-400">
             Pendiente segmentado entre SEPA garantizado, riesgo alto y moderado.
           </CardDescription>
         </CardHeader>
@@ -125,8 +125,8 @@ export function TreasuryRiskCharts({
 
       <Card className="bunker-card">
         <CardHeader>
-          <CardTitle className="text-zinc-100">Proyeccion de Cash Flow</CardTitle>
-          <CardDescription className="text-zinc-400">
+          <CardTitle className="text-zinc-900 dark:text-zinc-100">Proyeccion de Cash Flow</CardTitle>
+          <CardDescription className="text-zinc-600 dark:text-zinc-400">
             Evolucion mensual en barras apiladas: cobrado y pendiente.
           </CardDescription>
         </CardHeader>

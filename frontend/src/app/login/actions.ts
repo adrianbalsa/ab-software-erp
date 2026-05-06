@@ -3,14 +3,9 @@
 import { cookies } from "next/headers";
 
 import { getAblAuthCookieSetOptions } from "@/lib/auth-cookie";
+import { resolveApiBase } from "@/lib/api-base";
 import { apiFetch } from "@/lib/api";
 import { parseLoginApiFailure } from "@/lib/loginResponseErrors";
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE ||
-  "https://api.ablogistics-os.com";
 
 export type LoginActionState =
   | { error: string; resetRequired?: boolean }
@@ -35,7 +30,7 @@ export async function loginAction(
 
   let res: Response;
   try {
-    res = await apiFetch(`${API_BASE.replace(/\/$/, "")}/auth/login`, {
+    res = await apiFetch(`${resolveApiBase().replace(/\/$/, "")}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body.toString(),

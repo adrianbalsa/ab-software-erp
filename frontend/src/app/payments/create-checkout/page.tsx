@@ -66,8 +66,8 @@ function CheckoutRedirect() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-6">
-        <div className="max-w-md space-y-5 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-8 text-center shadow-xl">
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-6">
+        <div className="max-w-md space-y-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/80 p-8 text-center shadow-xl">
           <p className="text-sm leading-relaxed text-rose-300">{error}</p>
           <p className="text-xs text-zinc-500">
             Si el pago no está disponible en este entorno, contacta con soporte o revisa la configuración de
@@ -82,11 +82,11 @@ function CheckoutRedirect() {
             </Link>
             <Link
               href="/dashboard/settings/billing"
-              className="inline-flex justify-center rounded-xl border border-zinc-600 bg-zinc-800/60 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-500"
+              className="inline-flex justify-center rounded-xl border border-zinc-600 bg-zinc-800/60 px-4 py-2.5 text-sm font-semibold text-zinc-800 dark:text-zinc-200 transition hover:border-zinc-500"
             >
               Ir a facturación
             </Link>
-            <Link href="/dashboard" className="inline-flex justify-center text-sm font-medium text-zinc-400 hover:text-zinc-200">
+            <Link href="/dashboard" className="inline-flex justify-center text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:text-zinc-200">
               Volver al panel
             </Link>
           </div>
@@ -96,13 +96,13 @@ function CheckoutRedirect() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-950 px-6 text-center">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-50 dark:bg-zinc-950 px-6 text-center">
       <div
         className="h-9 w-9 animate-spin rounded-full border-2 border-zinc-600 border-t-emerald-500"
         aria-hidden
       />
       <div className="max-w-sm space-y-2">
-        <p className="text-sm font-medium text-zinc-200">Abriendo Stripe…</p>
+        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Abriendo Stripe…</p>
         <p className="text-xs leading-relaxed text-zinc-500">
           {fromOnboarding
             ? "Tras el alta de empresa, activa tu suscripción en la pasarela segura. No guardamos tu tarjeta en nuestros servidores."
@@ -119,7 +119,7 @@ export default function CreateCheckoutPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-sm text-zinc-500">
+        <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950 text-sm text-zinc-500">
           Cargando…
         </div>
       }
