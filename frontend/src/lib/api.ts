@@ -5,6 +5,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import { z, type ZodSchema } from "zod";
 import { getAuthToken as getAuthTokenFromStore } from "@/lib/auth";
 import { resolveApiBase } from "@/lib/api-base";
+import { userFacingFetchFailureMessage } from "@/lib/api-base";
 
 export const API_BASE = resolveApiBase();
 
@@ -407,14 +408,23 @@ export async function apiFetch<T>(
   const token = await resolveAccessToken();
   if (token && !omitAuthBearer) headers.set("Authorization", `Bearer ${token}`);
 
-  let response = await fetch(input, { ...init, credentials, headers });
+  let response: Response;
+  try {
+    response = await fetch(input, { ...init, credentials, headers });
+  } catch (e) {
+    throw new Error(userFacingFetchFailureMessage(e));
+  }
 
   if (shouldRetry401AfterAuth(input, init, response)) {
     await wait(450);
     const token2 = await resolveAccessToken();
     if (token2 && !omitAuthBearer) {
       headers.set("Authorization", `Bearer ${token2}`);
-      response = await fetch(input, { ...init, credentials, headers });
+      try {
+        response = await fetch(input, { ...init, credentials, headers });
+      } catch (e) {
+        throw new Error(userFacingFetchFailureMessage(e));
+      }
     }
   }
 
