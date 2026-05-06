@@ -18,7 +18,7 @@ export type SidebarSectionStorageKey =
 
 type Props = {
   sectionId: SidebarSectionStorageKey;
-  /** Si la ruta activa pertenece a esta sección, permanece expandida (no se puede colapsar). */
+  /** Si la ruta activa pertenece a esta sección, arranca expandida si no hay preferencia guardada. */
   containsActive: boolean;
   title: string;
   subtitle: string;
@@ -27,14 +27,15 @@ type Props = {
   children: ReactNode;
 };
 
-function readStoredExpanded(sectionId: SidebarSectionStorageKey): boolean {
-  if (typeof window === "undefined") return true;
+function readStoredExpanded(sectionId: SidebarSectionStorageKey): boolean | null {
+  if (typeof window === "undefined") return null;
   try {
     const v = sessionStorage.getItem(`${STORAGE_PREFIX}${sectionId}`);
+    if (v == null) return null;
     if (v === "0") return false;
     return true;
   } catch {
-    return true;
+    return null;
   }
 }
 
@@ -47,9 +48,11 @@ export function SidebarNavCollapsible({
   children,
 }: Props) {
   const storageKey = `${STORAGE_PREFIX}${sectionId}`;
-  const [userExpanded, setUserExpanded] = useState(() => readStoredExpanded(sectionId));
-
-  const open = containsActive || userExpanded;
+  const [userExpanded, setUserExpanded] = useState(() => {
+    const stored = readStoredExpanded(sectionId);
+    if (stored == null) return containsActive;
+    return stored;
+  });
 
   function persist(next: boolean) {
     try {
@@ -60,13 +63,12 @@ export function SidebarNavCollapsible({
   }
 
   function onOpenChange(next: boolean) {
-    if (containsActive && !next) return;
     setUserExpanded(next);
     persist(next);
   }
 
   return (
-    <Collapsible.Root open={open} onOpenChange={onOpenChange}>
+    <Collapsible.Root open={userExpanded} onOpenChange={onOpenChange}>
       <section className="mt-0">
         <Collapsible.Trigger
           type="button"
@@ -78,7 +80,7 @@ export function SidebarNavCollapsible({
           <ChevronDown
             className={cn(
               "mt-0.5 h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-200 dark:text-zinc-500",
-              open ? "rotate-0" : "-rotate-90",
+              userExpanded ? "rotate-0" : "-rotate-90",
             )}
             aria-hidden
           />

@@ -71,7 +71,7 @@ export default function EsgCalidadKmPage() {
       allowedRoles={ALLOWED}
       fallback={
         <AppShell active="sostenibilidad">
-          <div className="mx-auto mt-10 max-w-md rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/60 p-8 text-center">
+          <div className="mx-auto mt-10 max-w-md rounded-2xl border border-zinc-200 bg-white/90 p-8 text-center dark:border-zinc-800 dark:bg-zinc-900/60">
             <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Acceso restringido</h1>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
               Solo owner, traffic_manager o admin pueden ver el reporte de calidad km ESG.
@@ -85,7 +85,7 @@ export default function EsgCalidadKmPage() {
           <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-emerald-500/90">ESG · Trazabilidad</p>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-zinc-50">Calidad de datos km</h1>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Calidad de datos km</h1>
               <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
                 Portes facturados del mes: cobertura por fuente, km medido vs estimado (misma lógica que el cierre
                 mensual). API:{" "}
@@ -96,7 +96,7 @@ export default function EsgCalidadKmPage() {
               <nav className="mt-3 flex flex-wrap gap-2 text-sm">
                 <Link
                   href="/sostenibilidad/auditoria"
-                  className="rounded-lg border border-zinc-700 bg-zinc-900/50 px-3 py-1.5 text-zinc-700 dark:text-zinc-300 transition hover:border-zinc-600 hover:text-white"
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-zinc-700 transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:text-white"
                 >
                   ← Auditoría de huella
                 </Link>
@@ -115,7 +115,7 @@ export default function EsgCalidadKmPage() {
                   max={2100}
                   value={year}
                   onChange={(e) => setYear(Number(e.target.value) || year)}
-                  className="w-24 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100"
+                  className="w-24 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                 />
               </div>
               <div>
@@ -125,7 +125,7 @@ export default function EsgCalidadKmPage() {
                 <select
                   value={month}
                   onChange={(e) => setMonth(Number(e.target.value))}
-                  className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100"
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                 >
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                     <option key={m} value={m}>
@@ -159,12 +159,12 @@ export default function EsgCalidadKmPage() {
               </p>
 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Card className="border-zinc-200 dark:border-zinc-800 bg-zinc-900/40">
+                <Card className="border-zinc-200 bg-white/90 dark:border-zinc-800 dark:bg-zinc-900/40">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Km actividad (suma)</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-2xl font-semibold tabular-nums text-zinc-50">
+                    <p className="text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
                       {data.km_coverage.total_km_activity.toLocaleString("es-ES", {
                         maximumFractionDigits: 2,
                       })}
@@ -172,7 +172,7 @@ export default function EsgCalidadKmPage() {
                     <CardDescription className="mt-1">Peso operativo por porte</CardDescription>
                   </CardContent>
                 </Card>
-                <Card className="border-zinc-200 dark:border-zinc-800 bg-zinc-900/40">
+                <Card className="border-zinc-200 bg-white/90 dark:border-zinc-800 dark:bg-zinc-900/40">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Km medido</CardTitle>
                   </CardHeader>
@@ -183,7 +183,7 @@ export default function EsgCalidadKmPage() {
                     <CardDescription className="mt-1">No estimado (rutas + carretera + telemetría)</CardDescription>
                   </CardContent>
                 </Card>
-                <Card className="border-zinc-200 dark:border-zinc-800 bg-zinc-900/40">
+                <Card className="border-zinc-200 bg-white/90 dark:border-zinc-800 dark:bg-zinc-900/40">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Km estimado</CardTitle>
                   </CardHeader>
@@ -194,12 +194,12 @@ export default function EsgCalidadKmPage() {
                     <CardDescription className="mt-1">Sobre km de actividad del mes</CardDescription>
                   </CardContent>
                 </Card>
-                <Card className="border-zinc-200 dark:border-zinc-800 bg-zinc-900/40">
+                <Card className="border-zinc-200 bg-white/90 dark:border-zinc-800 dark:bg-zinc-900/40">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Fuentes (porte)</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-2xl font-semibold tabular-nums text-zinc-50">
+                    <p className="text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
                       {Object.values(data.portes_by_source).reduce((a, b) => a + b, 0)}
                     </p>
                     <CardDescription className="mt-1">Conteo por clasificación inferida</CardDescription>
@@ -207,7 +207,7 @@ export default function EsgCalidadKmPage() {
                 </Card>
               </div>
 
-              <Card className="border-zinc-200 dark:border-zinc-800 bg-zinc-900/40">
+              <Card className="border-zinc-200 bg-white/90 dark:border-zinc-800 dark:bg-zinc-900/40">
                 <CardHeader>
                   <CardTitle className="text-zinc-900 dark:text-zinc-100">Cobertura por fuente (% del km de actividad)</CardTitle>
                   <CardDescription>Coherente con el payload del cierre ESG mensual</CardDescription>
@@ -234,12 +234,12 @@ export default function EsgCalidadKmPage() {
                 </CardContent>
               </Card>
 
-              <Card className="border-zinc-200 dark:border-zinc-800 bg-zinc-900/40">
+              <Card className="border-zinc-200 bg-white/90 dark:border-zinc-800 dark:bg-zinc-900/40">
                 <CardHeader>
                   <CardTitle className="text-zinc-900 dark:text-zinc-100">Portes por fuente</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="divide-y divide-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-800">
+                  <ul className="divide-y divide-zinc-200 dark:divide-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-800">
                     {Object.entries(data.portes_by_source).map(([key, n]) => (
                       <li key={key} className="flex justify-between px-4 py-2.5 text-sm">
                         <span className="text-zinc-600 dark:text-zinc-400">{SOURCE_LABELS[key] ?? key}</span>
@@ -250,7 +250,7 @@ export default function EsgCalidadKmPage() {
                 </CardContent>
               </Card>
 
-              <Card className="border-zinc-200 dark:border-zinc-800 bg-zinc-900/40">
+              <Card className="border-zinc-200 bg-white/90 dark:border-zinc-800 dark:bg-zinc-900/40">
                 <CardHeader>
                   <CardTitle className="text-zinc-900 dark:text-zinc-100">Gaps y alertas</CardTitle>
                   <CardDescription>

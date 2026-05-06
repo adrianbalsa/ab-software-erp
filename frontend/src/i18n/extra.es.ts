@@ -24,26 +24,26 @@ export const extraEs = {
       secondaryCta: "Ver planes y precios",
     },
     bento: {
-      eyebrow: "Arquitectura",
-      title: "Una plataforma, cuatro ventajas",
+      eyebrow: "Resultados",
+      title: "Una plataforma, cuatro palancas de crecimiento",
       subtitle:
         "Diseñada para equipos que exigen trazabilidad fiscal, sostenibilidad medible y tesorería sin fricción.",
       cards: [
         {
-          title: "Blindaje fiscal (VeriFactu)",
-          body: "Firma XAdES-BES y encadenamiento de hashes. 100% compliant con la Ley Antifraude de la AEAT.",
+          title: "Cumplimiento sin sustos",
+          body: "Factura con tranquilidad y reduce riesgo en inspecciones, sin depender de procesos manuales.",
         },
         {
-          title: "Matriz CIP & ESG",
-          body: "Algoritmo GLEC para alinear el margen operativo con la reducción de la huella de carbono.",
+          title: "Rentabilidad + ESG en una vista",
+          body: "Detecta rutas con fuga de margen y mejora tu huella con decisiones operativas accionables.",
         },
         {
-          title: "Reconciliación bancaria",
-          body: "Integración nativa con Stripe y GoCardless para automatizar el cashflow.",
+          title: "Caja al día",
+          body: "Automatiza cobros y conciliación para ganar visibilidad real de tesorería semana a semana.",
         },
         {
-          title: "Inteligencia autónoma (Roadmap)",
-          body: "Preparado para el futuro con LogisAdvisor (IA) y enrutamiento dinámico mediante Google Maps.",
+          title: "Decisiones más rápidas",
+          body: "Prioriza acciones con recomendaciones guiadas para operaciones, finanzas y crecimiento comercial.",
         },
       ],
     },
@@ -58,7 +58,7 @@ export const extraEs = {
       ],
       title: "Planes publicados = planes de Stripe",
       subtitle:
-        "Inversión mensual orientada a ROI operativo: cada euro debe volver en eficiencia y control de margen. Tres segmentos — Compliance (149 €), Operational (449 €) e Institutional (desde 1.200 €+) al mes + IVA — con los mismos slugs en producto y en Stripe Billing. Add-ons opcionales (OCR Pack, Webhooks B2B Premium, LogisAdvisor IA Pro) se contratan desde el panel.",
+        "Planes diseñados para recuperar margen y reducir horas administrativas desde el primer mes. Elige el nivel que encaja con tu volumen y evoluciona sin fricción conforme crece tu operativa.",
       recommended: "Recomendado",
       connecting: "Conectando...",
       requestAccess: "Siguiente: registro y checkout",
@@ -70,7 +70,7 @@ export const extraEs = {
       pricingHelpBillingLink: "Centro de ayuda — Facturación y Stripe",
       vatExcluded: "IVA no incluido",
       missingStripeConfig:
-        "Falta configurar los Price IDs públicos de Stripe en el despliegue (variables NEXT_PUBLIC_STRIPE_PRICE_*). Tu equipo técnico puede completarlo en unos minutos.",
+        "La contratación online no está disponible temporalmente en este entorno. Te ayudamos a activarla o te enviamos enlace directo.",
       pricingStripeFallbackTitle: "Contratación en línea en preparación",
       pricingStripeFallbackBody:
         "En este entorno los enlaces de pago no están activos todavía. Puedes revisar el catálogo y los límites por plan; nuestro equipo comercial puede activar el checkout o enviarte un enlace de suscripción.",
@@ -82,13 +82,13 @@ export const extraEs = {
     pricingPage: {
       title: "Contratar Compliance, Operational o Institutional",
       subtitle:
-        "Precios de catálogo alineados con el backend y Stripe Billing. Si aún no tienes empresa_id, crea la cuenta, completa el onboarding y vuelve aquí o usa «Suscripción» en el panel.",
+        "Elige plan y activa tu suscripción en pocos pasos. Si aún no tienes cuenta, regístrate y vuelve para continuar el alta.",
       empresaRequiredHint:
         "Sin empresa_id en la URL no se puede asociar el cobro. Tras registrarte, abre el enlace del correo de bienvenida o inicia sesión y ve a Suscripción.",
       stripeEnvHint:
-        "En producción deben existir los tres NEXT_PUBLIC_STRIPE_PRICE_* (Compliance vía BASIC/STARTER/COMPLIANCE, FINANCE/PRO, ENTERPRISE).",
+        "Si necesitas ayuda para activar la contratación online, nuestro equipo te acompaña en el proceso.",
       envVarsList:
-        "Variables típicas: NEXT_PUBLIC_STRIPE_PRICE_BASIC o STARTER o COMPLIANCE, NEXT_PUBLIC_STRIPE_PRICE_PRO o FINANCE, NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE.",
+        "¿Prefieres asistencia? Te guiamos para dejar la suscripción operativa en una llamada corta.",
       funnelHint:
         "Flujo self-serve: registro → empresa creada → checkout Stripe desde esta página (con ?empresa_id=) o desde el menú Suscripción.",
       loginCta: "Iniciar sesión para pagar",
@@ -102,23 +102,23 @@ export const extraEs = {
         "Pensado para empresas de transporte que ya facturan en serie y no pueden permitirse duplicar datos entre Excel, el ERP y el correo del gestor.",
       stats: [
         { value: "VeriFactu", label: "Registro fiscal con foco en trazabilidad e integridad" },
-        { value: "RLS", label: "Cada tenant aislado a nivel de base de datos" },
+        { value: "ROI", label: "Impacto medible en margen, tiempo de cierre y control de caja" },
         { value: "Stripe", label: "Misma jerarquía Compliance / Operational / Institutional en checkout y producto" },
       ],
     },
     trustStrip: {
       eyebrow: "Cumplimiento y seguridad",
-      title: "VeriFactu: cadena de hashes y disciplina operativa",
+      title: "Cumplimiento y control para crecer con confianza",
       subtitle:
-        "La prioridad del producto es la integridad del registro fiscal y la coherencia entre operación y facturación. Sin atajos que comprometan una inspección.",
+        "Combina operación, finanzas y cumplimiento en un único flujo para reducir errores, acelerar cierres y dar visibilidad a dirección.",
       bullets: [
         {
           title: "Trazabilidad fiscal",
-          body: "Diseñado para encadenamiento de registros y requisitos de facturación electrónica; QR y remisión cuando aplique normativa.",
+          body: "Flujo de facturación preparado para normativa vigente, con trazabilidad clara para auditoría y gestoría.",
         },
         {
           title: "Seguridad por capas",
-          body: "TLS en tránsito, RLS en PostgreSQL por empresa y gestión de secretos alineada con buenas prácticas (sin credenciales en código).",
+          body: "Seguridad por capas y separación de datos por empresa para operar con tranquilidad a medida que escalas.",
         },
         {
           title: "Cobro transparente",
@@ -127,7 +127,7 @@ export const extraEs = {
       ],
     },
     techSpecs: {
-      items: ["VeriFactu-ready", "TLS + RLS PostgreSQL", "Stripe Billing", "GoCardless / SEPA"],
+      items: ["Cumplimiento VeriFactu", "Cobros y suscripción integrados", "Conciliación y tesorería", "Escalado para flotas en crecimiento"],
     },
     faq: {
       title: "Preguntas clave antes de implantar AB Logistics OS",
@@ -144,11 +144,11 @@ export const extraEs = {
         },
         {
           q: "¿Cómo garantiza exactamente el software el cumplimiento de la ley VeriFactu?",
-          a: "Operamos como un \"búnker fiscal\". El motor de AB Logistics OS genera automáticamente el encadenamiento de facturas (hashes), emite el código QR reglamentario, garantiza la inmutabilidad de los registros y está preparado para la remisión automática a la AEAT.",
+          a: "Te ayudamos a cumplir VeriFactu con un flujo guiado de facturación, trazabilidad de registros y evidencias listas para auditoría, reduciendo el trabajo manual del equipo.",
         },
         {
           q: "¿Están seguros mis datos financieros y los de mis clientes?",
-          a: "La seguridad es de nivel bancario. Utilizamos encriptación AES-128 para datos sensibles y Row Level Security (RLS) estricto en PostgreSQL. Esto significa que a nivel de base de datos es físicamente imposible que un cliente acceda a la información de otro.",
+          a: "Sí. Aplicamos seguridad por capas y aislamiento de datos por empresa para que tu información financiera y operativa esté protegida en todo momento.",
         },
         {
           q: "¿El sistema se integra con mis bancos para la conciliación y los cobros?",
@@ -160,7 +160,7 @@ export const extraEs = {
         },
         {
           q: "Si mi empresa crece rápidamente, ¿el software podrá soportarlo?",
-          a: "AB Logistics OS nace en la nube con una arquitectura serverless capaz de escalar dinámicamente. Ya sea que gestiones 10 portes al mes o 10.000, el rendimiento del sistema (Plan Institutional) se mantiene intacto sin tiempos de latencia.",
+          a: "Sí. Puedes empezar con una operativa pequeña y crecer sin migraciones traumáticas: el producto está pensado para escalar contigo en volumen y complejidad.",
         },
         {
           q: "¿Qué nivel de soporte técnico incluye la suscripción?",
@@ -184,7 +184,7 @@ export const extraEs = {
         },
         {
           q: "Trabajamos con subcontratistas y agencias: ¿el sistema sirve para flotas mixtas?",
-          a: "Sí. La arquitectura multi-tenant y los roles están pensados para que cada empresa vea solo su mundo (RLS). Puedes modelar clientes, rutas recurrentes y operativa interna; para modelos complejos de subcontratación en cadena, Operational e Institutional amplían capacidades de análisis y certificación.",
+          a: "Sí. Puedes trabajar con estructura mixta (propia y subcontratada), mantener visibilidad por cliente/ruta y ampliar capacidades conforme aumente la complejidad operativa.",
         },
         {
           q: "¿Qué ocurre si AEAT cambia requisitos técnicos después de contratar?",

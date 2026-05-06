@@ -29,7 +29,7 @@ export function LandingROISimulator() {
     <FadeInSection id="roi-simulator" className="scroll-mt-24 px-4 py-24 sm:px-6 sm:py-28">
       <div className="mx-auto max-w-5xl">
         <div className="text-center mb-10">
-          <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{l.title}</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-3xl">{l.title}</h2>
           <p className="mt-2 text-zinc-700 dark:text-zinc-300 max-w-xl mx-auto text-sm sm:text-base">{l.subtitle}</p>
         </div>
 
@@ -78,7 +78,7 @@ export function LandingROISimulator() {
                 </div>
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-zinc-700 dark:text-zinc-300">{l.adminSaved}</p>
-                  <p className="text-2xl font-bold text-white tabular-nums">
+                  <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
                     {hoursSaved} <span className="text-sm font-normal text-zinc-700 dark:text-zinc-300">{l.hoursPerMonth}</span>
                   </p>
                   <p className="text-xs text-zinc-700 dark:text-zinc-300 mt-1">{l.adminSavedHint}</p>
@@ -107,7 +107,7 @@ export function LandingROISimulator() {
                 </div>
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-zinc-700 dark:text-zinc-300">{l.trackedEsg}</p>
-                  <p className="text-2xl font-bold text-white tabular-nums">
+                  <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">
                     {esgKg.toLocaleString(localeTag, { maximumFractionDigits: 0 })}{" "}
                     <span className="text-sm font-normal text-zinc-700 dark:text-zinc-300">{l.kgPerMonth}</span>
                   </p>

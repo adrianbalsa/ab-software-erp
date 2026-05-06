@@ -24,26 +24,26 @@ export const extraEn = {
       secondaryCta: "See plans and pricing",
     },
     bento: {
-      eyebrow: "Architecture",
-      title: "One platform, four advantages",
+      eyebrow: "Outcomes",
+      title: "One platform, four growth levers",
       subtitle:
         "Built for teams that require fiscal traceability, measurable sustainability, and frictionless treasury operations.",
       cards: [
         {
-          title: "Fiscal hardening (VeriFactu)",
-          body: "XAdES-BES signature and chained hashes. 100% compliant with Spain's anti-fraud regulation.",
+          title: "Compliance without surprises",
+          body: "Invoice with confidence and reduce inspection risk without manual, fragile processes.",
         },
         {
-          title: "CIP & ESG matrix",
-          body: "GLEC algorithm to align operational margin with carbon footprint reduction.",
+          title: "Margin + ESG in one view",
+          body: "Spot margin leaks by route while improving footprint with actionable operational decisions.",
         },
         {
-          title: "Bank reconciliation",
-          body: "Native Stripe and GoCardless integrations to automate cashflow.",
+          title: "Cash visibility, every week",
+          body: "Automate collections and reconciliation to keep treasury under control.",
         },
         {
-          title: "Autonomous intelligence (Roadmap)",
-          body: "Future-ready with LogisAdvisor (AI) and dynamic routing powered by Google Maps.",
+          title: "Faster decisions",
+          body: "Prioritised recommendations for operations, finance and commercial growth.",
         },
       ],
     },
@@ -58,7 +58,7 @@ export const extraEn = {
       ],
       title: "Published plans = Stripe plans",
       subtitle:
-        "Monthly investment focused on operational ROI: every euro should return as efficiency and margin control. Three segments — Compliance (€149), Operational (€449) and Institutional (from €1,200+) per month + VAT — with the same slugs in product and Stripe Billing. Optional add-ons (OCR Pack, Webhooks B2B Premium, LogisAdvisor IA Pro) are purchased from the app.",
+        "Plans designed to recover margin and cut admin time from month one. Start with the tier that matches your volume and scale without friction.",
       recommended: "Recommended",
       connecting: "Connecting...",
       requestAccess: "Next: sign up and checkout",
@@ -70,7 +70,7 @@ export const extraEn = {
       pricingHelpBillingLink: "Help centre — Billing and Stripe",
       vatExcluded: "VAT excluded",
       missingStripeConfig:
-        "Public Stripe Price IDs are missing in this deployment (NEXT_PUBLIC_STRIPE_PRICE_*). Your technical team can complete this in minutes.",
+        "Online checkout is temporarily unavailable in this environment. We can enable it for you or send a direct subscription link.",
       pricingStripeFallbackTitle: "Online checkout not enabled yet",
       pricingStripeFallbackBody:
         "Payment links are not active in this environment. You can still review plans and per-plan limits; our sales team can enable checkout or send a subscription link.",
@@ -82,13 +82,13 @@ export const extraEn = {
     pricingPage: {
       title: "Subscribe to Compliance, Operational or Institutional",
       subtitle:
-        "List prices aligned with the backend and Stripe Billing. If you do not have an empresa_id yet, create your account, finish onboarding and return here or use Subscription in the app.",
+        "Choose your plan and activate your subscription in a few steps. If you do not have an account yet, sign up first and continue after onboarding.",
       empresaRequiredHint:
         "Without empresa_id in the URL we cannot attach the charge. After sign-up, open your welcome email link or sign in and go to Subscription.",
       stripeEnvHint:
-        "Production builds should define all three NEXT_PUBLIC_STRIPE_PRICE_* values (Compliance via BASIC/STARTER/COMPLIANCE, FINANCE/PRO, ENTERPRISE).",
+        "Need help enabling online checkout? Our team can guide setup with you quickly.",
       envVarsList:
-        "Typical variables: NEXT_PUBLIC_STRIPE_PRICE_BASIC or STARTER or COMPLIANCE, NEXT_PUBLIC_STRIPE_PRICE_PRO or FINANCE, NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE.",
+        "Prefer support? We can leave subscription live with a short enablement call.",
       funnelHint:
         "Self-serve flow: sign up → company created → Stripe checkout from this page (with ?empresa_id=) or from the Subscription menu.",
       loginCta: "Sign in to pay",
@@ -102,23 +102,23 @@ export const extraEn = {
         "Built for carriers that already invoice at scale and cannot afford to duplicate data across spreadsheets, ERP and the accountant’s inbox.",
       stats: [
         { value: "VeriFactu", label: "Fiscal logging focused on traceability and integrity" },
-        { value: "RLS", label: "Each tenant isolated at the database layer" },
+        { value: "ROI", label: "Measured impact on margin, close time and cash visibility" },
         { value: "Stripe", label: "Same Compliance / Operational / Institutional hierarchy in checkout and product" },
       ],
     },
     trustStrip: {
       eyebrow: "Compliance and security",
-      title: "VeriFactu: hash chains and operational discipline",
+      title: "Compliance and control for confident growth",
       subtitle:
-        "Product priority is fiscal record integrity and coherence between operations and billing. No shortcuts that weaken an inspection story.",
+        "Bring operations, finance and compliance into a single flow to reduce errors, speed up closing and improve management visibility.",
       bullets: [
         {
           title: "Fiscal traceability",
-          body: "Designed for chained records and e-invoicing requirements; QR and submission flows when regulation applies.",
+          body: "Invoicing flow aligned with current regulation and clear traceability for audits and accounting teams.",
         },
         {
           title: "Layered security",
-          body: "TLS in transit, PostgreSQL RLS per company and secret handling aligned with best practices (no credentials in code).",
+          body: "Layered security and company-level data isolation so you can operate safely as volume grows.",
         },
         {
           title: "Transparent billing",
@@ -127,7 +127,7 @@ export const extraEn = {
       ],
     },
     techSpecs: {
-      items: ["VeriFactu-ready", "TLS + RLS PostgreSQL", "Stripe Billing", "GoCardless / SEPA"],
+      items: ["VeriFactu compliance ready", "Integrated billing and subscriptions", "Reconciliation and treasury control", "Built to scale with your fleet"],
     },
     faq: {
       title: "Key questions before rolling out AB Logistics OS",
@@ -143,11 +143,11 @@ export const extraEn = {
         },
         {
           q: "How exactly does the software guarantee VeriFactu compliance?",
-          a: "We operate like a fiscal bunker. The AB Logistics OS engine automatically chains invoice hashes, issues the mandatory QR code, guarantees immutable records, and is ready for automatic submission to AEAT.",
+          a: "We help you meet VeriFactu with a guided invoicing flow, clear traceability and audit-ready evidence while reducing manual workload.",
         },
         {
           q: "Are my financial data and customer records secure?",
-          a: "Security is banking-grade. We use AES-128 encryption for sensitive data and strict PostgreSQL Row Level Security (RLS). At the database level, this makes it physically impossible for one customer to access another customer's data.",
+          a: "Yes. We apply layered security and company-level data isolation so financial and operational information stays protected.",
         },
         {
           q: "Does the system integrate with my banks for reconciliation and collections?",
@@ -159,7 +159,7 @@ export const extraEn = {
         },
         {
           q: "If my company grows fast, can the software keep up?",
-          a: "AB Logistics OS is cloud-native with a serverless architecture that scales dynamically. Whether you manage 10 shipments a month or 10,000, system performance on the Institutional plan remains consistent with no latency bottlenecks.",
+          a: "Yes. You can start small and scale without painful migrations; the product is designed to grow with your shipment volume and process complexity.",
         },
         {
           q: "What level of technical support is included in the subscription?",
@@ -183,7 +183,7 @@ export const extraEn = {
         },
         {
           q: "We use subcontractors and agencies — does it work for mixed fleets?",
-          a: "Yes. Multi-tenant architecture and roles are designed so each company only sees its own world (RLS). You can model customers, recurring routes and internal ops; for complex subcontract chains, Operational and Institutional add analytics and certification depth.",
+          a: "Yes. You can run mixed operations (own fleet + subcontractors), keep visibility by customer/route, and unlock deeper capabilities as complexity increases.",
         },
         {
           q: "What if AEAT changes technical requirements after we subscribe?",

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { API_BASE, apiFetch, parseApiError } from "@/lib/api";
+import { userFacingFetchFailureMessage } from "@/lib/api-base";
 
 type Monthly = {
   mes: string;
@@ -42,7 +43,7 @@ export function EmissionBadge({ year }: { year?: number }) {
       setData((await res.json()) as AnnualResponse);
     } catch (e: unknown) {
       setData(null);
-      setError(e instanceof Error ? e.message : "Error");
+      setError(userFacingFetchFailureMessage(e));
     } finally {
       setLoading(false);
     }
@@ -74,17 +75,17 @@ export function EmissionBadge({ year }: { year?: number }) {
 
   if (loading) {
     return (
-      <div className="dashboard-bento animate-pulse rounded-2xl border border-zinc-800/50 p-6">
-        <div className="mb-3 h-4 w-1/2 rounded bg-zinc-800" />
-        <div className="mb-2 h-10 w-2/3 rounded bg-zinc-800/80" />
-        <div className="h-3 w-1/3 rounded bg-zinc-800/60" />
+      <div className="dashboard-bento animate-pulse rounded-2xl border border-zinc-200/90 p-6 dark:border-zinc-800/50">
+        <div className="mb-3 h-4 w-1/2 rounded bg-zinc-200 dark:bg-zinc-800" />
+        <div className="mb-2 h-10 w-2/3 rounded bg-zinc-300/80 dark:bg-zinc-800/80" />
+        <div className="h-3 w-1/3 rounded bg-zinc-200/90 dark:bg-zinc-800/60" />
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="dashboard-bento rounded-2xl border border-zinc-800/50 p-6">
+      <div className="dashboard-bento rounded-2xl border border-zinc-200/90 p-6 dark:border-zinc-800/50">
         <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Ahorro verde (CO₂)</p>
         <p className="mt-1 text-xs text-zinc-500">Datos no disponibles. Revisa el aviso en pantalla.</p>
       </div>

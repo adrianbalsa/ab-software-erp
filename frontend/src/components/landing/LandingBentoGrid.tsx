@@ -86,7 +86,7 @@ function BentoCard({
           <Icon className="h-5 w-5" strokeWidth={1.75} />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold tracking-tight text-white">{item.title}</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">{item.title}</h2>
           <p className="mt-2 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{item.body}</p>
         </div>
       </div>
@@ -109,7 +109,7 @@ export function LandingBentoGrid() {
     <section id="plataforma" className="scroll-mt-24 px-4 pb-24 sm:px-6 sm:pb-28">
       <div className="mx-auto max-w-6xl">
         <p className="text-xs font-semibold uppercase tracking-widest text-zinc-600 dark:text-zinc-400">{l.eyebrow}</p>
-        <h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">{l.title}</h2>
+        <h2 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-3xl">{l.title}</h2>
         <p className="mt-2 max-w-2xl text-sm text-zinc-700 dark:text-zinc-300 sm:text-base">{l.subtitle}</p>
         <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
           {items.map((item, i) => (

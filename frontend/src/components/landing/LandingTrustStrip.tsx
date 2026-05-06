@@ -16,7 +16,7 @@ export function LandingTrustStrip() {
     <FadeInSection id="trust" className="scroll-mt-24 px-4 py-24 sm:px-6 sm:py-28">
       <div className="mx-auto max-w-6xl">
         <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-500">{l.eyebrow}</p>
-        <h2 className="mt-2 max-w-3xl text-balance text-2xl font-bold tracking-tight text-white sm:text-3xl">{l.title}</h2>
+        <h2 className="mt-2 max-w-3xl text-balance text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-3xl">{l.title}</h2>
         <p className="mt-3 max-w-2xl text-pretty text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 sm:text-base">{l.subtitle}</p>
         <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-3">
           {l.bullets.map((b, i) => {
@@ -33,7 +33,7 @@ export function LandingTrustStrip() {
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-surface-icon text-emerald-500 dark:border-zinc-800">
                   <Icon className="h-5 w-5" strokeWidth={1.75} aria-hidden />
                 </span>
-                <h3 className="mt-4 text-lg font-semibold tracking-tight text-white">{b.title}</h3>
+                <h3 className="mt-4 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">{b.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{b.body}</p>
               </motion.article>
             );

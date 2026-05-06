@@ -22,7 +22,7 @@ export default function SostenibilidadPage() {
 
   return (
     <AppShell active="sostenibilidad">
-      <div className="mx-auto mt-10 max-w-3xl rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-900/60 p-6">
+      <div className="mx-auto mt-10 max-w-3xl rounded-2xl border border-zinc-200 bg-white/90 p-6 dark:border-zinc-800 dark:bg-zinc-900/60">
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Sostenibilidad ESG</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           Redirigiendo al módulo ESG correspondiente según tu perfil de acceso.
