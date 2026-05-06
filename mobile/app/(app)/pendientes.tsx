@@ -137,7 +137,7 @@ export default function PendientesScreen() {
             }
             if (row.kind === "header-dlq") {
               return (
-                <Text className="pt-4 text-sm font-semibold uppercase tracking-wide text-rose-700">
+                <Text className="pt-4 text-sm font-semibold uppercase tracking-wide text-rose-800 dark:text-rose-300">
                   Cola muerta — DLQ ({dlq.length})
                 </Text>
               );
@@ -149,7 +149,9 @@ export default function PendientesScreen() {
                   <Text className="text-xs uppercase text-slate-500 dark:text-zinc-500">{item.type}</Text>
                   <Text className="mt-1 text-sm text-slate-800 dark:text-zinc-200">Creado: {item.createdAt}</Text>
                   <Text className="text-sm text-slate-800 dark:text-zinc-200">Intentos: {item.tries}</Text>
-                  {item.lastError ? <Text className="mt-1 text-xs text-amber-700">Último error: {item.lastError}</Text> : null}
+                  {item.lastError ? (
+                    <Text className="mt-1 text-xs text-amber-900 dark:text-amber-200">Último error: {item.lastError}</Text>
+                  ) : null}
                   <Pressable
                     onPress={() => void retryOne(item.id)}
                     disabled={busyItem === item.id}
@@ -162,11 +164,13 @@ export default function PendientesScreen() {
             }
             const d = row.item;
             return (
-              <View className="rounded-xl border border-rose-200 bg-rose-50/80 p-4">
-                <Text className="text-xs font-semibold uppercase text-rose-800">{d.type} · DLQ</Text>
-                <Text className="mt-1 text-xs text-rose-900">En DLQ: {d.deadletteredAt}</Text>
-                <Text className="mt-1 text-sm text-rose-950">Intentos finales: {d.tries}</Text>
-                {d.lastError ? <Text className="mt-1 text-xs text-rose-800">Error: {d.lastError}</Text> : null}
+              <View className="rounded-xl border border-rose-200 bg-rose-50/90 p-4 dark:border-rose-900/45 dark:bg-rose-950/35">
+                <Text className="text-xs font-semibold uppercase text-rose-900 dark:text-rose-200">{d.type} · DLQ</Text>
+                <Text className="mt-1 text-xs text-rose-950 dark:text-rose-100">En DLQ: {d.deadletteredAt}</Text>
+                <Text className="mt-1 text-sm text-rose-950 dark:text-rose-50">Intentos finales: {d.tries}</Text>
+                {d.lastError ? (
+                  <Text className="mt-1 text-xs text-rose-900 dark:text-rose-200">Error: {d.lastError}</Text>
+                ) : null}
                 <View className="mt-3 flex-row flex-wrap gap-2">
                   <Pressable
                     onPress={() => void reviveOne(d.id)}
@@ -178,9 +182,11 @@ export default function PendientesScreen() {
                   <Pressable
                     onPress={() => void discardDlq(d.id)}
                     disabled={busyItem === `rm:${d.id}`}
-                    className="rounded-lg border border-rose-400 bg-white px-3 py-2 disabled:opacity-50"
+                    className="rounded-lg border border-rose-400 bg-white px-3 py-2 disabled:opacity-50 dark:border-rose-700 dark:bg-zinc-900"
                   >
-                    <Text className="text-xs font-semibold text-rose-900">{busyItem === `rm:${d.id}` ? "…" : "Descartar"}</Text>
+                    <Text className="text-xs font-semibold text-rose-950 dark:text-rose-100">
+                      {busyItem === `rm:${d.id}` ? "…" : "Descartar"}
+                    </Text>
                   </Pressable>
                 </View>
               </View>

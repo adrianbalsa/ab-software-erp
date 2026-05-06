@@ -87,7 +87,7 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
               priority
             />
             <div className="min-w-0">
-              <p className="truncate text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-600 dark:text-zinc-400">
+              <p className="truncate text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                 {p.badge}
               </p>
               <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">AB Logistics OS</p>
@@ -130,14 +130,14 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
                 <Link
                   key={href}
                   href={href}
-                  className="text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-600 dark:text-zinc-400 dark:hover:text-zinc-900 dark:text-zinc-100"
+                  className="text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
                 >
                   {label}
                 </Link>
               ))}
               <a
                 href={portalSupportMailto()}
-                className="text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-600 dark:text-zinc-400 dark:hover:text-zinc-900 dark:text-zinc-100"
+                className="text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
               >
                 {p.footer.support}
               </a>
@@ -148,7 +148,7 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
                 {apiHostShort}
               </p>
             ) : (
-              <p className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-600 dark:text-zinc-400">{p.footer.productNote}</p>
+              <p className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">{p.footer.productNote}</p>
             )}
           </div>
         </aside>
@@ -197,7 +197,9 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
                     href={href}
                     className={cn(
                       "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium",
-                      active ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-600",
+                      active
+                        ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                        : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/80",
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" />
@@ -234,7 +236,7 @@ export function PortalClienteAppShell({ children }: { children: ReactNode }) {
                 {apiHostShort}
               </p>
             ) : (
-              <p className="mt-2 text-[10px] leading-snug text-zinc-500 dark:text-zinc-600 dark:text-zinc-400">{p.footer.productNote}</p>
+              <p className="mt-2 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">{p.footer.productNote}</p>
             )}
           </footer>
         </div>

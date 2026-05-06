@@ -35,18 +35,18 @@ const ROLES = ["user", "manager", "admin", "empleado", "gestor"] as const;
 
 /** Bento / terminal-style containers (admin dashboard) */
 const BENTO =
-  "rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-6 backdrop-blur-md shadow-2xl transition-all";
+  "rounded-xl border border-zinc-200 bg-white p-6 shadow-sm backdrop-blur-md transition-all dark:border-zinc-800/60 dark:bg-zinc-900/40 dark:shadow-2xl";
 
 const inputAdminClass =
-  "h-10 border-zinc-200 dark:border-zinc-800 bg-zinc-900/50 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus-visible:border-zinc-600 focus-visible:ring-zinc-600/30 md:text-sm";
+  "h-10 border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-500 focus-visible:border-zinc-600 focus-visible:ring-zinc-600/30 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-100 md:text-sm";
 
 const btnPrimaryClass = "bg-emerald-600 text-white hover:bg-emerald-500 focus-visible:ring-emerald-500/40";
 
-const tableShell = "overflow-x-auto rounded-xl border border-zinc-800/60";
+const tableShell = "overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800/60";
 const tableClass = "w-full text-sm text-zinc-700 dark:text-zinc-300";
 const tableHead =
-  "border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/80 text-left text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500";
-const tableCell = "border-b border-zinc-800/40 px-4 py-3";
+  "border-b border-zinc-200 bg-zinc-50 text-left text-[0.65rem] font-semibold uppercase tracking-wider text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/80";
+const tableCell = "border-b border-zinc-200 px-4 py-3 dark:border-zinc-800/40";
 
 type TabId = "empresas" | "usuarios" | "metricas" | "auditoria" | "facturacion";
 
@@ -322,8 +322,8 @@ export default function AdminPage() {
 
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950 font-sans text-zinc-900 dark:text-zinc-100">
-      <aside className="m-4 flex w-[15.5rem] shrink-0 flex-col rounded-2xl border border-zinc-800/50 bg-black shadow-2xl backdrop-blur-md">
-        <div className="flex h-16 items-center border-b border-zinc-800/50 px-5">
+      <aside className="m-4 flex w-[15.5rem] shrink-0 flex-col rounded-2xl border border-zinc-200 bg-white shadow-lg backdrop-blur-md dark:border-zinc-800/50 dark:bg-black dark:shadow-2xl">
+        <div className="flex h-16 items-center border-b border-zinc-200 px-5 dark:border-zinc-800/50">
           <Image
             src="/logo.png"
             alt="AB Logistics logo"
@@ -334,32 +334,34 @@ export default function AdminPage() {
           />
           <div>
             <span className="block text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">AB Logistics</span>
-            <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">Admin Console</span>
+            <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 dark:text-zinc-500">
+              Admin Console
+            </span>
           </div>
         </div>
         <nav className="flex flex-1 flex-col gap-1 p-3">
           <Link
             href="/dashboard"
-            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-600 dark:text-zinc-400 transition-colors hover:bg-zinc-900/80 hover:text-zinc-900 dark:text-zinc-100"
+            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900/80 dark:hover:text-zinc-100"
           >
             <LayoutDashboard className="h-4 w-4" />
             Dashboard
           </Link>
           <Link
             href="/portes"
-            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-600 dark:text-zinc-400 transition-colors hover:bg-zinc-900/80 hover:text-zinc-900 dark:text-zinc-100"
+            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900/80 dark:hover:text-zinc-100"
           >
             <Truck className="h-4 w-4" />
             Portes
           </Link>
           <Link
             href="/admin/dashboard/map"
-            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-600 dark:text-zinc-400 transition-colors hover:bg-zinc-900/80 hover:text-zinc-900 dark:text-zinc-100"
+            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900/80 dark:hover:text-zinc-100"
           >
             <MapPin className="h-4 w-4" />
             Mapa actividad
           </Link>
-          <div className="flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2.5 text-sm font-medium text-emerald-300">
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-medium text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300">
             <Shield className="h-4 w-4" />
             Administración
           </div>
@@ -367,14 +369,14 @@ export default function AdminPage() {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col pr-4 pt-4 pb-4">
-        <header className="flex h-16 shrink-0 items-center justify-between rounded-xl border border-zinc-800/50 bg-zinc-900/30 px-8 backdrop-blur-md">
+        <header className="flex h-16 shrink-0 items-center justify-between rounded-xl border border-zinc-200 bg-white/95 px-8 backdrop-blur-md dark:border-zinc-800/50 dark:bg-zinc-900/30">
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Panel de administración</h1>
             <p className="text-xs text-zinc-600 dark:text-zinc-400">Gestión global — equivalente al módulo Streamlit legacy</p>
           </div>
         </header>
 
-        <div className="mt-4 rounded-xl border border-zinc-800/50 bg-zinc-900/20 px-4 pt-2 backdrop-blur-sm">
+        <div className="mt-4 rounded-xl border border-zinc-200 bg-white/90 px-4 pt-2 backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/20">
           <div className="flex gap-1 overflow-x-auto pb-0">
             {tabs.map((t) => (
               <button
@@ -384,8 +386,8 @@ export default function AdminPage() {
                 className={cn(
                   "flex items-center gap-2 whitespace-nowrap rounded-t-lg border-b-2 px-4 py-3 text-sm font-medium transition-colors",
                   tab === t.id
-                    ? "border-emerald-500 text-emerald-400"
-                    : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-300"
+                    ? "border-emerald-600 text-emerald-700 dark:border-emerald-500 dark:text-emerald-400"
+                    : "border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-300 dark:hover:text-zinc-100"
                 )}
               >
                 {t.icon}

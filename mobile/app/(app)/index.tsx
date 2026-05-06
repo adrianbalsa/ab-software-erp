@@ -13,6 +13,7 @@ import { ConnectionProbe } from "../../src/components/ConnectionProbe";
 import { ThemeModePicker } from "../../src/components/ThemeModePicker";
 import { useAuth } from "../../src/context/AuthContext";
 import { ApiError } from "../../src/lib/api";
+import { userFacingFetchFailureMessage } from "../../src/lib/networkMessages";
 import { fetchRecentGastos } from "../../src/services/gastosApi";
 import { fetchPortesPendientes } from "../../src/services/portesApi";
 import {
@@ -54,10 +55,8 @@ export default function PortesScreen() {
     } catch (e) {
       if (e instanceof ApiError) {
         setError(formatDetail(e.body));
-      } else if (e instanceof Error) {
-        setError(e.message);
       } else {
-        setError("No se pudieron cargar los portes");
+        setError(userFacingFetchFailureMessage(e));
       }
     } finally {
       setLoading(false);
@@ -158,10 +157,10 @@ export default function PortesScreen() {
       </View>
 
       {error ? (
-        <View className="mx-4 mt-3 rounded-lg bg-amber-50 px-3 py-2">
-          <Text className="text-sm text-amber-900">{error}</Text>
+        <View className="mx-4 mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-900/50 dark:bg-amber-950/35">
+          <Text className="text-sm text-amber-950 dark:text-amber-100">{error}</Text>
           <Pressable onPress={() => void load()} className="mt-2 self-start">
-            <Text className="text-sm font-medium text-amber-950 underline">Reintentar</Text>
+            <Text className="text-sm font-medium text-amber-950 underline dark:text-amber-200">Reintentar</Text>
           </Pressable>
         </View>
       ) : null}
@@ -173,14 +172,14 @@ export default function PortesScreen() {
       </View>
 
       {queueSize > 0 || dlqSize > 0 ? (
-        <View className="mx-4 mt-3 rounded-lg bg-indigo-50 px-3 py-2">
+        <View className="mx-4 mt-3 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 dark:border-indigo-900/45 dark:bg-indigo-950/30">
           {queueSize > 0 ? (
-            <Text className="text-xs text-indigo-900">
+            <Text className="text-xs text-indigo-950 dark:text-indigo-100">
               Sincronizando ítems pendientes… ({queueSize}) {isSyncing ? "en curso" : "en cola"}
             </Text>
           ) : null}
           {dlqSize > 0 ? (
-            <Text className={`text-xs text-rose-800 ${queueSize > 0 ? "mt-1" : ""}`}>
+            <Text className={`text-xs text-rose-900 dark:text-rose-200 ${queueSize > 0 ? "mt-1" : ""}`}>
               DLQ local: {dlqSize} {dlqSize === 1 ? "ítem" : "ítems"} atascado{dlqSize === 1 ? "" : "s"} — abre Pendientes para reencolar o descartar.
             </Text>
           ) : null}
@@ -217,8 +216,8 @@ export default function PortesScreen() {
                 <Text className="text-xs text-slate-700 dark:text-zinc-300">{item.km_estimados} km</Text>
               </View>
               {item.precio_pactado != null ? (
-                <View className="rounded-md bg-emerald-50 px-2 py-1">
-                  <Text className="text-xs font-medium text-emerald-900">{item.precio_pactado} €</Text>
+                <View className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 dark:border-emerald-800 dark:bg-emerald-950/40">
+                  <Text className="text-xs font-medium text-emerald-950 dark:text-emerald-100">{item.precio_pactado} €</Text>
                 </View>
               ) : null}
             </View>

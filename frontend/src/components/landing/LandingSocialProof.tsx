@@ -32,7 +32,7 @@ export function LandingSocialProof() {
               transition={{ duration: 0.45, delay: i * 0.06, ease: [0.25, 0.1, 0.25, 1] }}
               className="rounded-2xl border border-zinc-200/90 dark:border-zinc-800/90 bg-zinc-50/95 dark:bg-zinc-900/40 p-6"
             >
-              <p className="text-2xl font-bold tracking-tight text-emerald-400">{stat.value}</p>
+              <p className="text-2xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">{stat.value}</p>
               <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{stat.label}</p>
             </motion.div>
           ))}

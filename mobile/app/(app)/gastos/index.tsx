@@ -3,13 +3,13 @@ import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
 
 import { ApiError } from "../../../src/lib/api";
+import { userFacingFetchFailureMessage } from "../../../src/lib/networkMessages";
 import { fetchRecentGastos } from "../../../src/services/gastosApi";
 import type { GastoRecent } from "../../../src/types/gasto";
 
-function fmtDetail(error: unknown): string {
+function formatLoadError(error: unknown): string {
   if (error instanceof ApiError) return typeof error.body === "string" ? error.body : JSON.stringify(error.body);
-  if (error instanceof Error) return error.message;
-  return "Error al cargar gastos";
+  return userFacingFetchFailureMessage(error);
 }
 
 export default function GastosScreen() {
@@ -24,7 +24,7 @@ export default function GastosScreen() {
       const out = await fetchRecentGastos();
       setItems(out);
     } catch (e) {
-      setError(fmtDetail(e));
+      setError(formatLoadError(e));
     } finally {
       setLoading(false);
     }
@@ -57,8 +57,8 @@ export default function GastosScreen() {
           ListEmptyComponent={<Text className="py-10 text-center text-slate-500 dark:text-zinc-500">No hay gastos registrados.</Text>}
           ListHeaderComponent={
             error ? (
-              <View className="mb-2 rounded-lg bg-amber-50 px-3 py-2">
-                <Text className="text-sm text-amber-900">{error}</Text>
+              <View className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-900/50 dark:bg-amber-950/35">
+                <Text className="text-sm text-amber-950 dark:text-amber-100">{error}</Text>
               </View>
             ) : null
           }

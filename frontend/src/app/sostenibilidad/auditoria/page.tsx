@@ -202,17 +202,17 @@ export default function EsgAuditoriaPage() {
     <RoleGuard
       allowedRoles={ALLOWED}
       fallback={
-        <div className="min-h-screen bg-zinc-50 text-zinc-800 dark:bg-zinc-50 dark:bg-[#0a0e17] dark:text-zinc-800 dark:text-slate-200 flex items-center justify-center p-8">
-          <div className="max-w-md text-center space-y-3 border border-zinc-200 dark:border-zinc-200 dark:border-slate-800 rounded-2xl p-8 bg-white dark:bg-white dark:bg-[#0f1623]">
-            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-900 dark:text-white">Acceso restringido</h1>
-            <p className="text-sm text-zinc-600 dark:text-zinc-500 dark:text-slate-400">
+        <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-8 text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+          <div className="max-w-md space-y-3 rounded-2xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
+            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Acceso restringido</h1>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
               Solo usuarios con rol owner o traffic_manager pueden generar auditorías ESG Enterprise.
             </p>
           </div>
         </div>
       }
     >
-      <div className="min-h-screen bg-zinc-50 text-zinc-800 dark:bg-zinc-50 dark:bg-[#0a0e17] dark:text-zinc-800 dark:text-slate-200">
+      <div className="min-h-screen bg-zinc-50 text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
         <style
           dangerouslySetInnerHTML={{
             __html: `
@@ -225,16 +225,16 @@ export default function EsgAuditoriaPage() {
           }}
         />
 
-        <header className="border-b border-zinc-200 dark:border-zinc-200 dark:border-slate-800/80 bg-white/95 dark:bg-white dark:bg-[#0f1623]/90 backdrop-blur">
+        <header className="border-b border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-900/90">
           <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400/90">
                 Enterprise ESG
               </p>
-              <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-900 dark:text-white tracking-tight">
+              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
                 Auditoría de huella de carbono
               </h1>
-              <p className="text-sm text-zinc-600 dark:text-zinc-600 dark:text-slate-500 mt-1">
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                 Portes facturados · certificación de flota · escenario de optimización
               </p>
               <nav className="mt-3 flex flex-wrap gap-2 text-sm">
@@ -243,7 +243,7 @@ export default function EsgAuditoriaPage() {
                 </span>
                 <Link
                   href="/sostenibilidad/calidad-km"
-                  className="rounded-lg border border-zinc-300 dark:border-slate-700 px-3 py-1.5 text-zinc-700 dark:text-slate-300 transition hover:border-emerald-700 hover:text-zinc-900 dark:text-white"
+                  className="rounded-lg border border-zinc-300 px-3 py-1.5 text-zinc-700 transition hover:border-emerald-600 hover:text-zinc-900 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-emerald-500 dark:hover:text-zinc-100"
                 >
                   Calidad km (mes)
                 </Link>
@@ -251,28 +251,28 @@ export default function EsgAuditoriaPage() {
             </div>
             <div className="flex flex-wrap gap-3 items-end">
               <div>
-                <label className="block text-[10px] uppercase text-zinc-600 dark:text-slate-500 mb-1">Desde</label>
+                <label className="mb-1 block text-[10px] uppercase text-zinc-600 dark:text-zinc-500">Desde</label>
                 <input
                   type="date"
                   value={fechaInicio}
                   onChange={(e) => setFechaInicio(e.target.value)}
-                  className="bg-zinc-50 dark:bg-[#0a0e17] border border-zinc-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white"
+                  className="rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
                 />
               </div>
               <div>
-                <label className="block text-[10px] uppercase text-zinc-600 dark:text-slate-500 mb-1">Hasta</label>
+                <label className="mb-1 block text-[10px] uppercase text-zinc-600 dark:text-zinc-500">Hasta</label>
                 <input
                   type="date"
                   value={fechaFin}
                   onChange={(e) => setFechaFin(e.target.value)}
-                  className="bg-zinc-50 dark:bg-[#0a0e17] border border-zinc-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white"
+                  className="rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
                 />
               </div>
               <button
                 type="button"
                 onClick={() => void load()}
                 disabled={loading}
-                className="mt-5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-zinc-900 dark:text-white text-sm font-semibold disabled:opacity-50"
+                className="mt-5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
               >
                 {loading ? "Actualizando…" : "Actualizar"}
               </button>
@@ -282,48 +282,48 @@ export default function EsgAuditoriaPage() {
 
         <main className="max-w-6xl mx-auto px-6 py-8 space-y-8 print:hidden">
           {error && (
-            <div className="rounded-xl border border-red-900/50 bg-red-950/40 text-red-200 px-4 py-3 text-sm">
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
               {error}
             </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="rounded-2xl border border-zinc-200 dark:border-slate-800 bg-gradient-to-br from-[#111827] to-[#0f1623] p-5 shadow-lg shadow-black/40">
-              <p className="text-xs uppercase tracking-wide text-zinc-600 dark:text-slate-500">Total huella</p>
-              <p className="text-3xl font-bold text-zinc-900 dark:text-white mt-1 tabular-nums">
+            <div className="rounded-2xl border border-zinc-700 bg-gradient-to-br from-[#111827] to-[#0f1623] p-5 shadow-lg shadow-black/40">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Total huella</p>
+              <p className="mt-1 text-3xl font-bold tabular-nums text-white">
                 {data ? data.total_huella_carbono_kg.toLocaleString("es-ES", { maximumFractionDigits: 2 }) : "—"}
               </p>
-              <p className="text-xs text-zinc-600 dark:text-slate-500 mt-2">kg CO₂ (periodo)</p>
+              <p className="mt-2 text-xs text-slate-400">kg CO₂ (periodo)</p>
             </div>
-            <div className="rounded-2xl border border-zinc-200 dark:border-slate-800 bg-white dark:bg-[#0f1623] p-5">
-              <p className="text-xs uppercase tracking-wide text-zinc-600 dark:text-slate-500">Emisiones Euro V</p>
+            <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+              <p className="text-xs uppercase tracking-wide text-zinc-600 dark:text-zinc-500">Emisiones Euro V</p>
               <p className="text-3xl font-bold text-orange-400 mt-1 tabular-nums">
                 {data ? `${data.porcentaje_emisiones_euro_v.toFixed(1)}%` : "—"}
               </p>
-              <p className="text-xs text-zinc-600 dark:text-slate-500 mt-2">del total en el periodo</p>
+              <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-500">del total en el periodo</p>
             </div>
-            <div className="rounded-2xl border border-zinc-200 dark:border-slate-800 bg-white dark:bg-[#0f1623] p-5">
-              <p className="text-xs uppercase tracking-wide text-zinc-600 dark:text-slate-500">Emisiones Euro VI</p>
+            <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+              <p className="text-xs uppercase tracking-wide text-zinc-600 dark:text-zinc-500">Emisiones Euro VI</p>
               <p className="text-3xl font-bold text-emerald-400 mt-1 tabular-nums">
                 {data ? `${data.porcentaje_emisiones_euro_vi.toFixed(1)}%` : "—"}
               </p>
-              <p className="text-xs text-zinc-600 dark:text-slate-500 mt-2">del total en el periodo</p>
+              <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-500">del total en el periodo</p>
             </div>
-            <div className="rounded-2xl border border-emerald-900/40 bg-emerald-950/20 p-5">
-              <p className="text-xs uppercase tracking-wide text-emerald-400/80">Ahorro escenario</p>
-              <p className="text-3xl font-bold text-emerald-300 mt-1 tabular-nums">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+              <p className="text-xs uppercase tracking-wide text-emerald-800 dark:text-emerald-400/80">Ahorro escenario</p>
+              <p className="mt-1 text-3xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
                 {data ? data.co2_ahorro_escenario_kg.toLocaleString("es-ES", { maximumFractionDigits: 2 }) : "—"}
               </p>
-              <p className="text-xs text-zinc-600 dark:text-slate-500 mt-2">
+              <p className="mt-2 text-xs text-emerald-800/90 dark:text-zinc-500">
                 kg CO₂ (escenario {data ? Math.round(data.escenario_optimizacion_pct) : 25}% Euro V → Euro VI)
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <section className="rounded-2xl border border-zinc-200 dark:border-slate-800 bg-white dark:bg-[#0f1623] p-6">
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-white mb-1">Desglose por certificación de flota</h2>
-              <p className="text-sm text-zinc-600 dark:text-slate-500 mb-4">Distribución % de la huella por norma de emisiones</p>
+            <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+              <h2 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">Desglose por certificación de flota</h2>
+              <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">Distribución % de la huella por norma de emisiones</p>
               <div className="h-[320px] w-full">
                 {pieData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -358,50 +358,50 @@ export default function EsgAuditoriaPage() {
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex items-center justify-center text-zinc-600 dark:text-slate-500 text-sm">
+                  <div className="flex h-full items-center justify-center text-sm text-zinc-600 dark:text-zinc-500">
                     Sin datos para el periodo seleccionado
                   </div>
                 )}
               </div>
             </section>
 
-            <section className="rounded-2xl border border-zinc-200 dark:border-slate-800 bg-white dark:bg-[#0f1623] p-6 flex flex-col">
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-white mb-1">Top 5 clientes (huella)</h2>
-              <p className="text-sm text-zinc-600 dark:text-slate-500 mb-4">Mayor impacto asociado en kg CO₂</p>
+            <section className="flex flex-col rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+              <h2 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">Top 5 clientes (huella)</h2>
+              <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">Mayor impacto asociado en kg CO₂</p>
               <ul className="space-y-3 flex-1">
                 {(data?.top_clientes ?? []).map((c, i) => (
                   <li
                     key={c.cliente_id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-slate-800/80 bg-zinc-50 dark:bg-[#0a0e17] px-4 py-3"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800/80 dark:bg-zinc-950"
                   >
                     <div className="min-w-0">
-                      <span className="text-xs text-zinc-600 dark:text-slate-500">#{i + 1}</span>
-                      <p className="text-sm font-medium text-zinc-900 dark:text-slate-100 truncate">
+                      <span className="text-xs text-zinc-600 dark:text-zinc-500">#{i + 1}</span>
+                      <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
                         {c.cliente_nombre || c.cliente_id.slice(0, 8) + "…"}
                       </p>
                     </div>
-                    <span className="text-sm font-semibold text-emerald-400/90 tabular-nums shrink-0">
+                    <span className="shrink-0 text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400/90">
                       {c.co2_kg.toLocaleString("es-ES", { maximumFractionDigits: 2 })} kg
                     </span>
                   </li>
                 ))}
                 {data && data.top_clientes.length === 0 && (
-                  <li className="text-sm text-zinc-600 dark:text-slate-500">Sin clientes en el periodo.</li>
+                  <li className="text-sm text-zinc-600 dark:text-zinc-500">Sin clientes en el periodo.</li>
                 )}
               </ul>
             </section>
           </div>
 
-          <section className="rounded-2xl border border-zinc-200 dark:border-slate-800 bg-gradient-to-r from-[#0f1623] to-[#111827] p-6">
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white mb-2">Insight de optimización</h2>
-            <p className="text-zinc-700 dark:text-slate-300 leading-relaxed text-sm md:text-base">
+          <section className="rounded-2xl border border-zinc-700 bg-gradient-to-r from-[#0f1623] to-[#111827] p-6">
+            <h2 className="mb-2 text-lg font-semibold text-white">Insight de optimización</h2>
+            <p className="text-sm leading-relaxed text-slate-200 md:text-base">
               {data?.insight_optimizacion ?? "Carga el informe para ver el insight."}
             </p>
           </section>
 
-          <section className="rounded-2xl border border-zinc-200 dark:border-slate-800 bg-white dark:bg-[#0f1623] p-6 space-y-4 esg-no-print">
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Verificación externa y export ISO (sin PII)</h2>
-            <p className="text-sm text-zinc-600 dark:text-slate-500">
+          <section className="esg-no-print space-y-4 rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Verificación externa y export ISO (sin PII)</h2>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
               Registro de certificados con QR público, export agregado ISO 14083 para terceros y cierre manual{" "}
               <span className="text-emerald-400 font-mono text-xs">externally_verified</span> (solo propietario).
               Documentación en{" "}
@@ -409,8 +409,8 @@ export default function EsgAuditoriaPage() {
                 /help/esg-external-verification
               </Link>
               . Webhook para certificadora:{" "}
-              <code className="text-xs text-zinc-500 dark:text-slate-400">POST /api/v1/webhooks/esg-external-verify</code> con firma{" "}
-              <code className="text-xs text-zinc-500 dark:text-slate-400">X-ABL-ESG-Signature</code>.
+              <code className="text-xs text-zinc-500 dark:text-zinc-400">POST /api/v1/webhooks/esg-external-verify</code> con firma{" "}
+              <code className="text-xs text-zinc-500 dark:text-zinc-400">X-ABL-ESG-Signature</code>.
             </p>
 
             {flowErr ? <p className="text-xs text-rose-400">{flowErr}</p> : null}
@@ -420,7 +420,7 @@ export default function EsgAuditoriaPage() {
                 type="button"
                 disabled={exportBusy !== null}
                 onClick={() => void onExportIso("csv", false)}
-                className="px-4 py-2 rounded-lg bg-zinc-900 text-zinc-100 text-sm font-medium border border-zinc-700 hover:bg-zinc-800 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600 dark:hover:bg-slate-700 disabled:opacity-50"
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-800 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:bg-zinc-700"
               >
                 {exportBusy === "csv" ? "Generando…" : "Descargar CSV ISO (periodo)"}
               </button>
@@ -428,7 +428,7 @@ export default function EsgAuditoriaPage() {
                 type="button"
                 disabled={exportBusy !== null}
                 onClick={() => void onExportIso("json", false)}
-                className="px-4 py-2 rounded-lg bg-zinc-900 text-zinc-100 text-sm font-medium border border-zinc-700 hover:bg-zinc-800 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600 dark:hover:bg-slate-700 disabled:opacity-50"
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-800 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:bg-zinc-700"
               >
                 {exportBusy === "json" ? "Generando…" : "Descargar JSON ISO (periodo)"}
               </button>
@@ -443,32 +443,32 @@ export default function EsgAuditoriaPage() {
             </div>
 
             {jwtRbacRole() === "owner" ? (
-              <div className="rounded-xl border border-zinc-200 dark:border-slate-800 bg-zinc-50 dark:bg-[#0a0e17] p-4 space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-slate-500">Cerrar verificación (owner)</p>
+              <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-500">Cerrar verificación (owner)</p>
                 <div className="flex flex-wrap gap-2 items-center">
                   <input
                     type="text"
                     value={verifyCode}
                     onChange={(e) => setVerifyCode(e.target.value)}
                     placeholder="verification_code (UUID)"
-                    className="min-w-[240px] flex-1 bg-white dark:bg-[#0f1623] border border-zinc-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white placeholder:text-slate-600"
+                    className="min-w-[240px] flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-600"
                   />
                   <button
                     type="button"
                     disabled={verifyLoading}
                     onClick={() => void onVerifyExternal()}
-                    className="px-4 py-2 rounded-lg bg-emerald-600 text-zinc-900 dark:text-white text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50"
+                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
                   >
                     {verifyLoading ? "Actualizando…" : "Marcar externally_verified"}
                   </button>
                 </div>
-                {verifyMsg ? <p className="text-xs text-zinc-500 dark:text-slate-400">{verifyMsg}</p> : null}
+                {verifyMsg ? <p className="text-xs text-zinc-500 dark:text-zinc-400">{verifyMsg}</p> : null}
               </div>
             ) : null}
 
             <div>
               <div className="flex items-center justify-between gap-2 mb-2">
-                <h3 className="text-sm font-semibold text-zinc-800 dark:text-slate-200">Certificados recientes</h3>
+                <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Certificados recientes</h3>
                 <button
                   type="button"
                   onClick={() => void loadRegistry()}
@@ -481,9 +481,9 @@ export default function EsgAuditoriaPage() {
               {registryErr ? (
                 <p className="text-xs text-rose-400 mb-2">{registryErr}</p>
               ) : null}
-              <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-slate-800">
-                <table className="w-full text-left text-xs text-zinc-700 dark:text-slate-300">
-                  <thead className="bg-zinc-100 dark:bg-slate-900/80 text-zinc-600 dark:text-slate-500 uppercase tracking-wide">
+              <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+                <table className="w-full text-left text-xs text-zinc-700 dark:text-zinc-300">
+                  <thead className="bg-zinc-100 uppercase tracking-wide text-zinc-600 dark:bg-zinc-900/80 dark:text-zinc-500">
                     <tr>
                       <th className="px-3 py-2">Código (QR)</th>
                       <th className="px-3 py-2">Estado</th>
@@ -493,18 +493,18 @@ export default function EsgAuditoriaPage() {
                   </thead>
                   <tbody>
                     {registry.map((r) => (
-                      <tr key={r.verification_code} className="border-t border-zinc-200 dark:border-slate-800/80">
+                      <tr key={r.verification_code} className="border-t border-zinc-200 dark:border-zinc-800/80">
                         <td className="px-3 py-2 font-mono text-[11px] break-all">{r.verification_code}</td>
                         <td className="px-3 py-2">{r.verification_status}</td>
                         <td className="px-3 py-2">{r.subject_type}</td>
-                        <td className="px-3 py-2 text-zinc-600 dark:text-slate-500">
+                        <td className="px-3 py-2 text-zinc-600 dark:text-zinc-500">
                           {r.created_at ? r.created_at.slice(0, 19).replace("T", " ") : "—"}
                         </td>
                       </tr>
                     ))}
                     {!registryLoading && registry.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-3 py-4 text-zinc-600 dark:text-slate-500 text-center">
+                        <td colSpan={4} className="px-3 py-4 text-center text-zinc-600 dark:text-zinc-500">
                           Sin certificados registrados.
                         </td>
                       </tr>
@@ -519,7 +519,7 @@ export default function EsgAuditoriaPage() {
             <button
               type="button"
               onClick={() => setCertOpen(true)}
-              className="px-5 py-2.5 rounded-xl bg-zinc-100 text-zinc-900 font-semibold text-sm hover:bg-white dark:bg-slate-100 dark:text-slate-900 transition-colors"
+              className="rounded-xl bg-zinc-100 px-5 py-2.5 text-sm font-semibold text-zinc-900 transition-colors hover:bg-white dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
             >
               Descargar Certificado ESG (PDF)
             </button>
@@ -534,13 +534,13 @@ export default function EsgAuditoriaPage() {
               className="esg-no-print absolute inset-0 bg-black/70"
               onClick={() => setCertOpen(false)}
             />
-            <div className="esg-modal-shell relative bg-white dark:bg-[#0f1623] border border-zinc-300 dark:border-slate-700 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl z-10 print:max-h-none print:overflow-visible print:border-0 print:shadow-none print:bg-white">
-              <div className="esg-no-print flex justify-between items-center px-6 py-4 border-b border-zinc-200 dark:border-slate-800">
-                <h3 className="text-zinc-900 dark:text-white font-semibold">Certificado ESG (vista previa)</h3>
+            <div className="esg-modal-shell relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-300 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900 print:max-h-none print:overflow-visible print:border-0 print:bg-white print:shadow-none">
+              <div className="esg-no-print flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
+                <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">Certificado ESG (vista previa)</h3>
                 <button
                   type="button"
                   onClick={() => setCertOpen(false)}
-                  className="text-zinc-500 dark:text-slate-400 hover:text-zinc-900 dark:text-white text-sm"
+                  className="text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                 >
                   Cerrar
                 </button>
@@ -552,7 +552,7 @@ export default function EsgAuditoriaPage() {
                 >
                   <div className="flex justify-between items-start border-b border-slate-200 pb-4 mb-6">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.25em] text-zinc-600 dark:text-slate-500">Certificado</p>
+                      <p className="text-xs uppercase tracking-[0.25em] text-zinc-600 dark:text-zinc-500">Certificado</p>
                       <h4 className="text-xl font-bold text-slate-900 mt-1">Auditoría de huella de carbono</h4>
                       <p className="text-sm text-slate-600 mt-1">AB Logistics OS · Enterprise ESG</p>
                     </div>
@@ -564,7 +564,7 @@ export default function EsgAuditoriaPage() {
                   </div>
                   <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div>
-                      <dt className="text-zinc-600 dark:text-slate-500">Huella total declarada</dt>
+                      <dt className="text-zinc-600 dark:text-zinc-500">Huella total declarada</dt>
                       <dd className="font-semibold text-lg">
                         {data != null
                           ? `${data.total_huella_carbono_kg.toLocaleString("es-ES", { maximumFractionDigits: 2 })} kg CO₂`
@@ -572,7 +572,7 @@ export default function EsgAuditoriaPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-zinc-600 dark:text-slate-500">Euro V / Euro VI (% sobre total)</dt>
+                      <dt className="text-zinc-600 dark:text-zinc-500">Euro V / Euro VI (% sobre total)</dt>
                       <dd className="font-semibold">
                         {data != null
                           ? `${data.porcentaje_emisiones_euro_v.toFixed(1)}% / ${data.porcentaje_emisiones_euro_vi.toFixed(1)}%`
@@ -580,11 +580,11 @@ export default function EsgAuditoriaPage() {
                       </dd>
                     </div>
                     <div className="sm:col-span-2">
-                      <dt className="text-zinc-600 dark:text-slate-500">Insight de optimización</dt>
+                      <dt className="text-zinc-600 dark:text-zinc-500">Insight de optimización</dt>
                       <dd className="mt-1 text-slate-800">{data?.insight_optimizacion ?? "—"}</dd>
                     </div>
                   </dl>
-                  <p className="mt-8 text-xs text-zinc-600 dark:text-slate-500 border-t border-slate-200 pt-4">
+                  <p className="mt-8 border-t border-slate-200 pt-4 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-500">
                     Documento generado para fines de auditoría interna. Los cálculos se basan en portes facturados y
                     certificación de flota registrada en el sistema.
                   </p>
@@ -593,14 +593,14 @@ export default function EsgAuditoriaPage() {
                   <button
                     type="button"
                     onClick={() => setCertOpen(false)}
-                    className="px-4 py-2 rounded-lg border border-slate-600 text-zinc-700 dark:text-slate-300 text-sm"
+                    className="rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-700 dark:border-zinc-600 dark:text-zinc-300"
                   >
                     Cerrar
                   </button>
                   <button
                     type="button"
                     onClick={handlePrintCert}
-                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-zinc-900 dark:text-white text-sm font-semibold"
+                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
                   >
                     Imprimir / Guardar como PDF
                   </button>

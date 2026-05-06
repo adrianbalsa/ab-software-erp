@@ -18,6 +18,7 @@ import {
   jwtEmpresaId,
   notifyJwtUpdated,
 } from "@/lib/api";
+import { userFacingFetchFailureMessage } from "@/lib/api-base";
 import { setAuthToken } from "@/lib/auth";
 import { ClienteSchema, PorteSchema, type Cliente, type Porte } from "@/lib/schemas";
 type PorteOut = Porte;
@@ -156,7 +157,7 @@ export default function PortesPage() {
       setPortes(data.filter((p) => p.estado === "pendiente"));
       setSelectedIds(new Set());
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Error");
+      setError(userFacingFetchFailureMessage(e));
     } finally {
       setLoading(false);
     }
@@ -247,7 +248,7 @@ export default function PortesPage() {
       setFormKey((k) => k + 1);
       await loadPortes();
     } catch (e: unknown) {
-      setFormError(e instanceof Error ? e.message : "Error al crear porte");
+      setFormError(userFacingFetchFailureMessage(e));
     } finally {
       setFormBusy(false);
     }
@@ -377,23 +378,23 @@ export default function PortesPage() {
 
   if (!token) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white border rounded-2xl p-6 space-y-4 shadow-sm">
-          <h1 className="text-xl font-bold text-slate-800">Portes — Login</h1>
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-6 dark:bg-zinc-950">
+        <div className="w-full max-w-md space-y-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Portes — Login</h1>
           <input
-            className="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none"
+            className="w-full rounded-lg border border-zinc-200 bg-white p-2.5 text-sm text-zinc-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
             placeholder="Usuario"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
           />
           <input
-            className="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none"
+            className="w-full rounded-lg border border-zinc-200 bg-white p-2.5 text-sm text-zinc-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
             type="password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          {authError && <p className="text-sm text-red-600">{authError}</p>}
+          {authError && <p className="text-sm text-red-700 dark:text-red-400">{authError}</p>}
           <button
             onClick={login}
             disabled={authBusy}
@@ -401,7 +402,7 @@ export default function PortesPage() {
           >
             {authBusy ? "…" : "Entrar"}
           </button>
-          <Link href="/dashboard" className="block text-center text-sm text-blue-600 hover:underline">
+          <Link href="/dashboard" className="block text-center text-sm text-blue-600 hover:underline dark:text-blue-400">
             Volver al dashboard
           </Link>
         </div>
@@ -416,10 +417,8 @@ export default function PortesPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              Portes pendientes
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Portes pendientes</h1>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               Selecciona filas y factura con encadenamiento VeriFactu.
             </p>
           </div>
@@ -428,13 +427,13 @@ export default function PortesPage() {
               type="button"
               onClick={() => loadPortes()}
               disabled={loading}
-              className="text-sm px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
             >
               {loading ? "Actualizando…" : "Actualizar"}
             </button>
             <Link
               href="/dashboard"
-              className="text-sm font-medium text-blue-600 hover:text-blue-700"
+              className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
             >
               Dashboard
             </Link>
@@ -444,23 +443,23 @@ export default function PortesPage() {
         {successBanner && (
           <div
             role="status"
-            className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/90 p-4 shadow-sm"
+            className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/90 p-4 shadow-sm dark:border-emerald-900/40 dark:bg-emerald-950/25"
           >
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-2">
-                <p className="text-sm font-semibold text-emerald-900">
+                <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
                   Factura emitida correctamente
                 </p>
                 <dl className="grid gap-1 text-sm">
                   <div className="flex flex-wrap gap-x-2">
-                    <dt className="text-emerald-700/90">Nº factura</dt>
-                    <dd className="font-mono font-medium text-emerald-950">
+                    <dt className="text-emerald-700/90 dark:text-emerald-400/90">Nº factura</dt>
+                    <dd className="font-mono font-medium text-emerald-950 dark:text-emerald-50">
                       {successBanner.numFactura}
                     </dd>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <dt className="text-emerald-700/90">Hash VeriFactu</dt>
-                    <dd className="font-mono text-xs break-all text-emerald-950 bg-white/60 rounded-lg px-2 py-1.5 border border-emerald-100">
+                    <dt className="text-emerald-700/90 dark:text-emerald-400/90">Hash VeriFactu</dt>
+                    <dd className="break-all rounded-lg border border-emerald-100 bg-white/60 px-2 py-1.5 font-mono text-xs text-emerald-950 dark:border-emerald-800 dark:bg-zinc-900/60 dark:text-emerald-100">
                       {successBanner.hash}
                     </dd>
                   </div>
@@ -469,7 +468,7 @@ export default function PortesPage() {
               <button
                 type="button"
                 onClick={() => setSuccessBanner(null)}
-                className="shrink-0 text-sm text-emerald-800 hover:underline self-start"
+                className="shrink-0 self-start text-sm text-emerald-800 hover:underline dark:text-emerald-300"
               >
                 Cerrar
               </button>
@@ -478,7 +477,7 @@ export default function PortesPage() {
         )}
 
         {error && (
-          <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-3">
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/35 dark:text-red-100">
             {error}
           </div>
         )}

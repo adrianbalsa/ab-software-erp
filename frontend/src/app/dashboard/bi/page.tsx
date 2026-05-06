@@ -38,6 +38,7 @@ import {
   type BiTreemapNode,
   type ProfitMarginAnalytics,
 } from "@/lib/api";
+import { userFacingFetchFailureMessage } from "@/lib/api-base";
 import { publicOperationalCostEurKmDefault } from "@/lib/operationalPricing";
 import { cn } from "@/lib/utils";
 
@@ -517,7 +518,7 @@ export default function BiDashboardPage() {
           setProfitMargin(pm);
         }
       } catch (e: unknown) {
-        if (!cancelled) setErr(e instanceof Error ? e.message : "Error al cargar datos BI");
+        if (!cancelled) setErr(userFacingFetchFailureMessage(e) || "Error al cargar datos BI");
       } finally {
         if (!cancelled) {
           setLoadSummary(false);

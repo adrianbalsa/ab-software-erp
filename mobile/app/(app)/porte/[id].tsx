@@ -15,6 +15,7 @@ import {
 } from "react-native";
 
 import { ApiError } from "../../../src/lib/api";
+import { userFacingFetchFailureMessage } from "../../../src/lib/networkMessages";
 import { fetchPorteDetail } from "../../../src/services/portesApi";
 import { registerPOD } from "../../../src/services/sync_service";
 import type { PodGeoStamp, PorteDetail } from "../../../src/types/porte";
@@ -58,8 +59,7 @@ export default function PorteDetailScreen() {
       if (out.nombre_consignatario_final) setConsignatario(out.nombre_consignatario_final);
     } catch (e) {
       if (e instanceof ApiError) setError(formatDetail(e.body));
-      else if (e instanceof Error) setError(e.message);
-      else setError("No se pudo cargar el detalle del porte");
+      else setError(userFacingFetchFailureMessage(e));
     } finally {
       setLoading(false);
     }
@@ -176,8 +176,8 @@ export default function PorteDetailScreen() {
 
   if (!porte) {
     return (
-      <View className="flex-1 items-center justify-center bg-slate-50 px-5">
-        <Text className="text-center text-slate-700">No se encontró el porte.</Text>
+      <View className="flex-1 items-center justify-center bg-slate-50 px-5 dark:bg-zinc-950">
+        <Text className="text-center text-slate-700 dark:text-zinc-300">No se encontró el porte.</Text>
       </View>
     );
   }
@@ -193,7 +193,9 @@ export default function PorteDetailScreen() {
           Estado: {porte.estado} · {porte.km_estimados} km
         </Text>
         {porte.fecha_entrega_real ? (
-          <Text className="mt-1 text-sm text-emerald-700">Entregado en: {porte.fecha_entrega_real}</Text>
+          <Text className="mt-1 text-sm text-emerald-800 dark:text-emerald-300">
+            Entregado en: {porte.fecha_entrega_real}
+          </Text>
         ) : null}
         {porte.estado.toLowerCase() === "entregado" ? (
           <View className="mt-3 flex-row gap-2">
@@ -242,7 +244,9 @@ export default function PorteDetailScreen() {
               {signatureDataUrl ? "Repetir firma" : "Capturar firma"}
             </Text>
           </Pressable>
-          {signatureDataUrl ? <Text className="text-xs text-emerald-700">Firma capturada</Text> : null}
+          {signatureDataUrl ? (
+            <Text className="text-xs text-emerald-800 dark:text-emerald-300">Firma capturada</Text>
+          ) : null}
           {geostamp ? (
             <Text className="text-xs text-slate-600 dark:text-zinc-400">
               Geostamp: {geostamp.lat.toFixed(5)}, {geostamp.lng.toFixed(5)}
@@ -287,13 +291,13 @@ export default function PorteDetailScreen() {
         ) : null}
 
         {error ? (
-          <View className="mt-4 rounded-lg bg-red-50 px-3 py-2">
-            <Text className="text-sm text-red-800">{error}</Text>
+          <View className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/50 dark:bg-red-950/35">
+            <Text className="text-sm text-red-900 dark:text-red-100">{error}</Text>
           </View>
         ) : null}
         {success ? (
-          <View className="mt-4 rounded-lg bg-emerald-50 px-3 py-2">
-            <Text className="text-sm text-emerald-800">{success}</Text>
+          <View className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900/40 dark:bg-emerald-950/35">
+            <Text className="text-sm text-emerald-950 dark:text-emerald-100">{success}</Text>
           </View>
         ) : null}
 

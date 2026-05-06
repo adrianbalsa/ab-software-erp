@@ -120,6 +120,10 @@ body {
   background: linear-gradient(165deg, #f0f4ff 0%, #f8fafc 40%, #eef2ff 100%);
 }
 
+.dark .ab-app-gradient {
+  background: linear-gradient(165deg, #0f172a 0%, #020617 45%, #0c1222 100%);
+}
+
 .ab-sidebar {
   background: linear-gradient(180deg, var(--ab-sidebar) 0%, #060a14 100%);
 }
@@ -251,11 +255,19 @@ body {
   color: #64748b;
   margin-bottom: 0.35rem;
 }
+
+.dark .ab-kpi-label {
+  color: #a1a1aa;
+}
 .ab-kpi-value {
   font-size: 1.5rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #0f172a;
+}
+
+.dark .ab-kpi-value {
+  color: #f4f4f5;
 }
 
 /* Cuadro de Mando / tarjetas — light por defecto, búnker en .dark */

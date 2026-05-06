@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "../../../src/lib/api";
+import { userFacingFetchFailureMessage } from "../../../src/lib/networkMessages";
 import { ocrGastoFromTicket } from "../../../src/services/gastosApi";
 import { saveGasto } from "../../../src/services/sync_service";
 import type { GastoCategoria, GastoOcrExtract } from "../../../src/types/gasto";
@@ -15,8 +16,7 @@ function todayIso(): string {
 
 function errText(e: unknown): string {
   if (e instanceof ApiError) return typeof e.body === "string" ? e.body : JSON.stringify(e.body);
-  if (e instanceof Error) return e.message;
-  return "Error inesperado";
+  return userFacingFetchFailureMessage(e);
 }
 
 export default function NuevoGastoScreen() {
@@ -131,8 +131,8 @@ export default function NuevoGastoScreen() {
       <View className="mt-4 rounded-xl border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 p-4">
         <Text className="text-base font-semibold text-slate-900 dark:text-zinc-100">Confirma datos del gasto</Text>
         {error ? (
-          <View className="mt-2 rounded-lg bg-red-50 px-3 py-2">
-            <Text className="text-sm text-red-800">{error}</Text>
+          <View className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/50 dark:bg-red-950/35">
+            <Text className="text-sm text-red-900 dark:text-red-100">{error}</Text>
           </View>
         ) : null}
 

@@ -91,10 +91,10 @@ function PlaceholderWelcomeChart({
           </AreaChart>
         </ResponsiveContainer>
       </div>
-      <div className="absolute inset-0 flex items-center justify-center bg-zinc-50 dark:bg-zinc-950/55 backdrop-blur-[1px]">
-        <div className="rounded-xl border border-emerald-500/30 bg-zinc-900/90 px-4 py-3 text-center shadow-lg shadow-emerald-500/10">
-          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{overlayTitle}</p>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400">{overlayHint}</p>
+      <div className="absolute inset-0 flex items-center justify-center bg-zinc-50/90 dark:bg-zinc-950/55 backdrop-blur-[1px]">
+        <div className="rounded-xl border border-emerald-500/30 bg-zinc-900/92 px-4 py-3 text-center shadow-lg shadow-emerald-500/10">
+          <p className="text-sm font-semibold text-zinc-50">{overlayTitle}</p>
+          <p className="text-xs text-zinc-300">{overlayHint}</p>
         </div>
       </div>
     </div>
@@ -401,7 +401,7 @@ export default function Dashboard() {
             {todayLabel && <span className="text-sm font-medium text-zinc-500">{todayLabel}</span>}
             <button
               type="button"
-              className="rounded-full bg-zinc-900/80 p-2 text-zinc-600 dark:text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-800 dark:text-zinc-200"
+              className="rounded-full border border-zinc-200 bg-white p-2 text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
               aria-label={p.dashboard.notifications}
             >
               <Bell className="h-5 w-5" />
@@ -539,7 +539,9 @@ export default function Dashboard() {
                   </div>
                   <p className="mt-4 text-sm text-zinc-500">
                     {p.dashboard.ingresosFoot}{" "}
-                    <code className="text-xs text-zinc-600 dark:text-zinc-400">GET /finance/dashboard</code>
+                    <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    GET /finance/dashboard
+                  </code>
                   </p>
                 </div>
 
@@ -582,7 +584,7 @@ export default function Dashboard() {
                 </h2>
                 <p className="text-sm text-zinc-500">
                   {p.dashboard.sectionTreasurySub}{" "}
-                  <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+                  <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
                     GET /finance/dashboard
                   </code>
                 </p>
@@ -626,10 +628,10 @@ export default function Dashboard() {
                 </h2>
                 <p className="text-sm text-zinc-500">
                   {p.dashboard.sectionAdvancedSub}
-                  <code className="ml-1 rounded bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+                  <code className="ml-1 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
                     GET /finance/dashboard
                   </code>
-                  <code className="ml-1 rounded bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+                  <code className="ml-1 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
                     GET /eco/dashboard/
                   </code>
                 </p>
@@ -692,11 +694,13 @@ export default function Dashboard() {
                 </div>
                 <p className="mt-4 text-sm text-zinc-500">
                   {p.dashboard.kmFootPrefix}{" "}
-                  <code className="rounded bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+                  <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
                     km_estimados
                   </code>{" "}
                   {p.dashboard.kmFootMid}{" "}
-                  <code className="text-xs text-zinc-600 dark:text-zinc-400">GET /dashboard/stats</code>
+                  <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    GET /dashboard/stats
+                  </code>
                 </p>
               </div>
 
@@ -727,7 +731,7 @@ export default function Dashboard() {
           )}
 
           <div className="dashboard-bento overflow-hidden">
-            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-zinc-900/30 px-6 py-5 backdrop-blur-sm">
+            <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-100/90 px-6 py-5 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-900/30">
               <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">{p.dashboard.quickLinks}</h2>
               <div className="flex flex-wrap gap-4">
                 <Link

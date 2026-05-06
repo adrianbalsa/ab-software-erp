@@ -2,6 +2,7 @@ import { Redirect, Stack } from "expo-router";
 
 import { useAuth } from "../../src/context/AuthContext";
 import { useThemePreference } from "../../src/context/ThemePreferenceContext";
+import { appStackScreenOptions } from "../../src/theme/navigation";
 
 export default function AppGroupLayout() {
   const { token, isReady } = useAuth();
@@ -12,13 +13,7 @@ export default function AppGroupLayout() {
   if (!token) return <Redirect href="/(auth)/login" />;
 
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: isDark ? "#18181b" : "#f8fafc" },
-        headerTintColor: isDark ? "#fafafa" : "#0f172a",
-        headerTitleStyle: { fontWeight: "600", color: isDark ? "#fafafa" : "#0f172a" },
-      }}
-    >
+    <Stack screenOptions={appStackScreenOptions(isDark)}>
       <Stack.Screen name="index" options={{ title: "Portes" }} />
       <Stack.Screen name="pendientes" options={{ title: "Pendientes de Sync" }} />
       <Stack.Screen name="gastos/index" options={{ title: "Gastos" }} />
