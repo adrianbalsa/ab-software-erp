@@ -17,7 +17,7 @@ export function LandingSocialProof() {
         <p className="text-xs font-semibold uppercase tracking-widest text-emerald-500/90">{l.eyebrow}</p>
         <h2
           id="social-proof-heading"
-          className="mt-2 max-w-3xl text-balance text-2xl font-bold tracking-tight text-white sm:text-3xl"
+          className="mt-2 max-w-3xl text-balance text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-3xl"
         >
           {l.title}
         </h2>
